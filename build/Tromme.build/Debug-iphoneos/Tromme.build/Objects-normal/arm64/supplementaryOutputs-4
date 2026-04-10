@@ -1,0 +1,23 @@
+{
+  "/Users/kylemcclain/Tromme/Tromme/Auth/LibraryPickerView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryPickerView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryPickerView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryPickerView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryPickerView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryPickerView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Auth/LoginView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LoginView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LoginView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LoginView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LoginView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LoginView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Library/LibraryView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/LibraryView.swiftdeps"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "/Users/kylemcclain/Tromme/Tromme/Library/ArtistDetailView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistDetailView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistDetailView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistDetailView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistDetailView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistDetailView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Library/ArtistsView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistsView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistsView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistsView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistsView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtistsView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Library/ArtworkView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtworkView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtworkView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtworkView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtworkView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ArtworkView.swiftdeps"
+  }
+}

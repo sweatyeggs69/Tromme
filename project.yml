@@ -1,0 +1,51 @@
+name: Tromme
+options:
+  bundleIdPrefix: com.kylemcclain
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+targets:
+  Tromme:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Tromme
+    settings:
+      base:
+        SWIFT_VERSION: 6.0
+        SWIFT_STRICT_CONCURRENCY: complete
+        PRODUCT_BUNDLE_IDENTIFIER: com.kylemcclain.Tromme
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Tromme/Info.plist
+      properties:
+        CFBundleDisplayName: Tromme
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - audio
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - tromme
+            CFBundleURLName: com.kylemcclain.Tromme
+
+  TrommeTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: TrommeTests
+    dependencies:
+      - target: Tromme
+    settings:
+      base:
+        SWIFT_VERSION: 6.0

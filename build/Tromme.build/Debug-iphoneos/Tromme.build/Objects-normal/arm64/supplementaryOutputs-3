@@ -1,0 +1,23 @@
+{
+  "/Users/kylemcclain/Tromme/Tromme/ContentView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ContentView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ContentView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Library/HomeView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/HomeView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/HomeView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/HomeView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/HomeView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/HomeView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Player/AudioPlayerService.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/AudioPlayerService.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/AudioPlayerService.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/AudioPlayerService.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/AudioPlayerService.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/AudioPlayerService.swiftdeps"
+  }
+}

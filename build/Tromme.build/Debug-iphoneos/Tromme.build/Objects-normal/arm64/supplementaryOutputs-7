@@ -1,0 +1,23 @@
+{
+  "/Users/kylemcclain/Tromme/Tromme/Auth/ServerPickerView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerPickerView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerPickerView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerPickerView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerPickerView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerPickerView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Core/ServerConnectionManager.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerConnectionManager.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerConnectionManager.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerConnectionManager.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerConnectionManager.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/ServerConnectionManager.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Search/SearchView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.swiftdeps"
+  }
+}

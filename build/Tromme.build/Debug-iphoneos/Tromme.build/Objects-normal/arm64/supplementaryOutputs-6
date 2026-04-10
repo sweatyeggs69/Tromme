@@ -1,0 +1,23 @@
+{
+  "/Users/kylemcclain/Tromme/Tromme/Auth/PlexAuthService.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlexAuthService.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlexAuthService.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlexAuthService.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlexAuthService.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlexAuthService.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Playlists/PlaylistsView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlaylistsView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlaylistsView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlaylistsView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlaylistsView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/PlaylistsView.swiftdeps"
+  },
+  "/Users/kylemcclain/Tromme/Tromme/Search/SearchView.swift" : {
+    "const-values" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.swiftconstvalues",
+    "dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.d",
+    "diagnostics" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.dia",
+    "object" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.o",
+    "swift-dependencies" : "/Users/kylemcclain/Tromme/build/Tromme.build/Debug-iphoneos/Tromme.build/Objects-normal/arm64/SearchView.swiftdeps"
+  }
+}
