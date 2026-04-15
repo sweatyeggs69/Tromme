@@ -30,7 +30,37 @@ enum DevelopmentMockData {
             grandparentRatingKey: "artist-preview",
             leafCount: nil,
             viewedLeafCount: nil,
-            media: nil,
+            media: [
+                PlexMedia(
+                    id: index,
+                    duration: 180000,
+                    bitrate: 320,
+                    audioChannels: 2,
+                    audioCodec: "flac",
+                    container: "flac",
+                    part: [
+                        PlexPart(
+                            id: index,
+                            key: "/library/parts/\(index)",
+                            duration: 180000,
+                            file: nil,
+                            size: nil,
+                            container: "flac",
+                            stream: [
+                                PlexStream(
+                                    id: index,
+                                    streamType: 2,
+                                    codec: "flac",
+                                    channels: 2,
+                                    bitrate: 320,
+                                    bitDepth: 24,
+                                    samplingRate: 96000
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ],
             genre: nil,
             country: nil
         )

@@ -127,6 +127,29 @@ extension PlexAPIClient {
         return hubs
     }
 
+    // MARK: - Cached Metadata (single item)
+
+    func cachedMetadata(server: PlexServer, ratingKey: String) async throws -> PlexMetadata? {
+        let key = CacheKey.metadata(ratingKey: ratingKey)
+
+        if let cached = await LibraryCache.shared.get(PlexMetadata.self, forKey: key) {
+            if !cached.isStale { return cached.value }
+            Task { try? await refreshMetadata(server: server, ratingKey: ratingKey, key: key) }
+            return cached.value
+        }
+
+        return try await refreshMetadata(server: server, ratingKey: ratingKey, key: key)
+    }
+
+    @discardableResult
+    private func refreshMetadata(server: PlexServer, ratingKey: String, key: String) async throws -> PlexMetadata? {
+        let item = try await getMetadata(server: server, ratingKey: ratingKey)
+        if let item {
+            await LibraryCache.shared.set(item, forKey: key)
+        }
+        return item
+    }
+
     // MARK: - Private Helper
 
     private func cachedLibraryContents(server: PlexServer, sectionId: String, type: Int, key: String) async throws -> [PlexMetadata] {

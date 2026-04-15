@@ -48,6 +48,13 @@
 - use structured concurrency (TaskGroup) over manual task management
 - Error handling: use typed throws where supported
 
+## Plex Audio Streaming
+- ALWAYS use the universal transcode HLS endpoint (`/music/:/transcode/universal/start.m3u8`) for audio playback
+- NEVER direct-stream raw audio files via the part key URL — AVPlayer cannot reliably track time, seek, or report duration on raw FLAC/WAV over HTTP
+- Use `directStreamAudio=1` so Plex wraps the original audio in a proper HLS container without re-encoding
+- `AVPlayerItem(url:)` works directly with HLS URLs — no custom HTTP headers needed
+- If audio playback issues arise, check the stream URL first before adding complexity to AudioPlayerService
+
 ## Code Style
 - All new views must include a #Preview Block
 - Use SF symbols for icons - reference by exact name

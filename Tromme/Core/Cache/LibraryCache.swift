@@ -12,6 +12,7 @@ actor LibraryCache {
     private let diskURL: URL
     private let defaultTTL: TimeInterval = 300 // 5 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
+    private let maxDiskSize: Int = 50 * 1024 * 1024 // 50 MB
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -86,6 +87,33 @@ actor LibraryCache {
         let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
         guard let data = try? JSONEncoder().encode(entry) else { return }
         try? data.write(to: fileURL, options: .atomic)
+        evictIfNeeded()
+    }
+
+    /// Remove oldest files if disk cache exceeds size limit.
+    private func evictIfNeeded() {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: diskURL, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
+
+        var totalSize = 0
+        var fileInfos: [(url: URL, size: Int, date: Date)] = []
+        for file in files {
+            guard let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = values.fileSize,
+                  let date = values.contentModificationDate else { continue }
+            totalSize += size
+            fileInfos.append((file, size, date))
+        }
+
+        guard totalSize > maxDiskSize else { return }
+
+        // Evict oldest files first
+        fileInfos.sort { $0.date < $1.date }
+        for info in fileInfos {
+            try? fm.removeItem(at: info.url)
+            totalSize -= info.size
+            if totalSize <= maxDiskSize { break }
+        }
     }
 }
 
@@ -129,6 +157,9 @@ enum CacheKey {
     }
     static func children(ratingKey: String) -> String {
         "children_\(ratingKey)"
+    }
+    static func metadata(ratingKey: String) -> String {
+        "metadata_\(ratingKey)"
     }
     static func playlists(serverId: String) -> String {
         "playlists_\(serverId)"

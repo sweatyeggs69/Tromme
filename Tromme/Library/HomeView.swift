@@ -4,6 +4,7 @@ struct HomeView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
 
+    @State private var favoriteTracks: [PlexMetadata]
     @State private var recentTracks: [PlexMetadata]
     @State private var recentAlbums: [PlexMetadata]
     @State private var isLoading: Bool
@@ -17,6 +18,7 @@ struct HomeView: View {
     ) {
         self.previewRecentTracks = previewRecentTracks
         self.previewRecentAlbums = previewRecentAlbums
+        _favoriteTracks = State(initialValue: Array((previewRecentTracks ?? []).prefix(10)))
         _recentTracks = State(initialValue: previewRecentTracks ?? [])
         _recentAlbums = State(initialValue: previewRecentAlbums ?? [])
         _isLoading = State(initialValue: previewRecentTracks == nil && previewRecentAlbums == nil)
@@ -25,8 +27,9 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                recentlyPlayedSection
+                favoritesSection
                 recentlyAddedSection
+                recentlyPlayedSection
             }
             .padding(.vertical, 8)
         }
@@ -37,6 +40,27 @@ struct HomeView: View {
         .refreshable {
             guard previewRecentTracks == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent()
+        }
+    }
+
+    private var favoritesSection: some View {
+        VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
+            Text("Favorites")
+                .appSectionTitleStyle()
+
+            if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 120)
+            } else if favoriteTracks.isEmpty {
+                ContentUnavailableView(
+                    "No Favorites",
+                    systemImage: "heart",
+                    description: Text("Favorite songs in Plex to see them here.")
+                )
+                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+            } else {
+                tracksHorizontalRow(tracks: favoriteTracks)
+            }
         }
     }
 
@@ -56,37 +80,41 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHGrid(
-                        rows: [
-                            GridItem(.fixed(46), spacing: 10),
-                            GridItem(.fixed(46), spacing: 10)
-                        ],
-                        spacing: AppStyle.Spacing.listItemGap
-                    ) {
-                        ForEach(Array(recentTracks.enumerated()), id: \.element.id) { index, track in
-                            TrackRowView(
-                                track: track,
-                                tracks: recentTracks,
-                                index: index,
-                                showArtwork: true,
-                                showArtist: true,
-                                showTrackNumber: false,
-                                artworkSize: 46,
-                                showsMenu: false,
-                                isCompact: true,
-                                titleFont: AppStyle.Typography.itemTitle,
-                                artistFont: AppStyle.Typography.itemSubtitle
-                            )
-                            .frame(width: 300, alignment: .leading)
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-                }
-                .scrollTargetBehavior(.viewAligned)
+                tracksHorizontalRow(tracks: recentTracks)
             }
         }
+    }
+
+    private func tracksHorizontalRow(tracks: [PlexMetadata]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHGrid(
+                rows: [
+                    GridItem(.fixed(46), spacing: 10),
+                    GridItem(.fixed(46), spacing: 10)
+                ],
+                spacing: AppStyle.Spacing.listItemGap
+            ) {
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    TrackRowView(
+                        track: track,
+                        tracks: tracks,
+                        index: index,
+                        showArtwork: true,
+                        showArtist: true,
+                        showTrackNumber: false,
+                        artworkSize: 46,
+                        showsMenu: false,
+                        isCompact: true,
+                        titleFont: AppStyle.Typography.itemTitle,
+                        artistFont: AppStyle.Typography.itemSubtitle
+                    )
+                    .frame(width: 300, alignment: .leading)
+                }
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+        }
+        .scrollTargetBehavior(.viewAligned)
     }
 
     private var recentlyAddedSection: some View {
@@ -143,6 +171,7 @@ struct HomeView: View {
     private func loadHomeContent() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else {
+            favoriteTracks = []
             recentTracks = []
             recentAlbums = []
             isLoading = false
@@ -155,6 +184,22 @@ struct HomeView: View {
 
             let allTracks = try await tracksReq
             let allAlbums = try await albumsReq
+            let plexFavorites = (try? await client.getFavoriteTracks(server: server, sectionId: sectionId)) ?? []
+
+            let resolvedFavorites = plexFavorites.isEmpty
+                ? allTracks.filter { ($0.userRating ?? 0) > 0 }
+                : plexFavorites
+
+            favoriteTracks = Array(
+                resolvedFavorites
+                    .sorted {
+                        if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
+                            return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
+                        }
+                        return ($0.userRating ?? 0) > ($1.userRating ?? 0)
+                    }
+                    .prefix(10)
+            )
 
             recentTracks = Array(
                 allTracks
@@ -169,6 +214,7 @@ struct HomeView: View {
                     .prefix(10)
             )
         } catch {
+            favoriteTracks = []
             recentTracks = []
             recentAlbums = []
         }

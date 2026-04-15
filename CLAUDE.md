@@ -73,6 +73,18 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - All designs should look and feel like a stock iOS 26 app
 - Only use .glassEffect on custom views that need glass treatment and aren't already system-managed
 
+## Plex Audio Streaming
+- FLAC files use the universal transcode endpoint to convert FLAC→ALAC (Apple Lossless) via HLS
+  - ALAC is lossless — identical decoded audio to FLAC — with proper AVPlayer seeking/timeline
+  - Flow: decision endpoint → master playlist → resolve variant playlist URL → play variant directly
+  - Bypassing the master playlist avoids HLS BANDWIDTH mismatch that stalls AVPlayer
+  - Profile: `add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=alac)`
+  - Key params: `directPlay=0`, `directStreamAudio=0`, `X-Plex-Client-Profile-Name: Generic`
+- Non-FLAC formats use direct stream via part key URL
+- NEVER direct-stream raw FLAC files — AVPlayer audio drifts out of sync over time due to FLAC's variable bitrate
+- HLS+MPEGTS cannot carry FLAC (Apple only supports AAC/MP3/AC3 in MPEGTS)
+- Always send `X-Plex-Client-Profile-Extra` header — without it PMS returns 400 ("client provided bad data")
+
 ## Code Style
 - All new views must include a #Preview Block
 - Use SF symbols for icons - reference by exact name

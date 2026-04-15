@@ -6,146 +6,389 @@ struct AlbumDetailView: View {
     @Environment(AudioPlayerService.self) private var player
 
     let album: PlexMetadata
+    @State private var albumDetails: PlexMetadata
+    @State private var tracks: [PlexMetadata]
+    @State private var firstTrackDetails: PlexMetadata?
+    @State private var isLoadingTracks: Bool
 
-    @State private var tracks: [PlexMetadata] = []
-    @State private var isLoading = true
+    private var thumbPath: String? {
+        album.thumb
+    }
 
-    var body: some View {
-        List {
-            // Header
-            Section {
-                VStack(spacing: 12) {
-                    ArtworkView(thumbPath: album.thumb, size: 220, cornerRadius: 10)
-                        .shadow(radius: 12, y: 6)
+    private var artworkColor: Color {
+        ArtworkColorCache.shared.color(for: thumbPath) ?? .gray
+    }
 
-                    Text(album.title)
-                        .font(.title3.bold())
-                        .multilineTextAlignment(.center)
+    private var titleColor: Color {
+        artworkColor.isLightColor ? .black : .white
+    }
 
-                    if let artistName = album.parentTitle {
-                        Text(artistName)
-                            .font(.body)
-                            .foregroundStyle(Color.accentColor)
-                    }
+    private var secondaryTextColor: Color {
+        titleColor.opacity(0.78)
+    }
 
-                    HStack(spacing: 4) {
-                        if let genre = album.genre?.first?.tag {
-                            Text(genre)
-                        }
-                        if album.genre?.first?.tag != nil && album.year != nil {
-                            Text("·")
-                        }
-                        if let year = album.year {
-                            Text(String(year))
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .listRowSeparator(.hidden)
-            }
+    private var tertiaryTextColor: Color {
+        titleColor.opacity(0.65)
+    }
 
-            // Play / Shuffle
-            Section {
-                HStack(spacing: 12) {
-                    Button {
-                        player.play(tracks: tracks)
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(tracks.isEmpty)
+    private var controlForegroundColor: Color {
+        artworkColor.isLightColor ? .white : .black
+    }
 
-                    Button {
-                        var shuffled = tracks
-                        shuffled.shuffle()
-                        player.play(tracks: shuffled)
-                    } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(tracks.isEmpty)
-                }
-                .listRowSeparator(.hidden)
-            }
+    private var controlBackgroundColor: Color {
+        artworkColor.isLightColor ? Color.black.opacity(0.75) : Color.white.opacity(0.82)
+    }
 
-            // Tracks
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .listRowSeparator(.hidden)
+    private var controlShadowColor: Color {
+        artworkColor.isLightColor ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
+    }
+
+    private var iconForegroundColor: Color {
+        artworkColor.isLightColor ? .black : .white
+    }
+
+    private var controlsDisabled: Bool {
+        tracks.isEmpty
+    }
+
+    private var albumFooterRight: String {
+        var parts: [String] = []
+        let count = tracks.count
+        if count > 0 {
+            parts.append("\(count) \(count == 1 ? "song" : "songs")")
+        }
+        let totalMs = tracks.compactMap(\.duration).reduce(0, +)
+        if totalMs > 0 {
+            let totalSeconds = totalMs / 1000
+            let minutes = totalSeconds / 60
+            let hours = minutes / 60
+            let remainingMinutes = minutes % 60
+            if hours > 0 {
+                parts.append("\(hours) hr \(remainingMinutes) min")
             } else {
-                let discNumbers = Set(tracks.compactMap(\.parentIndex)).sorted()
-                let multiDisc = discNumbers.count > 1
-
-                ForEach(discNumbers.isEmpty ? [1] : discNumbers, id: \.self) { disc in
-                    let discTracks = multiDisc ? tracks.filter { $0.parentIndex == disc } : tracks
-
-                    if multiDisc {
-                        Section("Disc \(disc)") {
-                            trackRows(discTracks)
-                        }
-                    } else {
-                        Section {
-                            trackRows(discTracks)
-                        }
-                    }
-                }
-
-                // Footer
-                Section {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let year = album.year {
-                            Text("Released \(String(year))")
-                        }
-                        if !tracks.isEmpty {
-                            let totalMin = tracks.compactMap(\.duration).reduce(0, +) / 60000
-                            Text("\(tracks.count) songs, \(totalMin) minutes")
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .listRowSeparator(.hidden)
-                }
+                parts.append("\(minutes) min")
             }
         }
-        .navigationTitle(album.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await loadTracks() }
+        return parts.joined(separator: ", ")
     }
 
-    private func trackRows(_ discTracks: [PlexMetadata]) -> some View {
-        ForEach(Array(discTracks.enumerated()), id: \.element.id) { index, track in
-            let globalIndex = tracks.firstIndex(where: { $0.ratingKey == track.ratingKey }) ?? index
-            TrackRowView(track: track, tracks: tracks, index: globalIndex)
+    private var albumInfoLine: String? {
+        var components: [String] = []
+
+        if let genre = albumDetails.genre?.first?.tag, !genre.isEmpty {
+            components.append(genre)
         }
+
+        if let year = albumDetails.year {
+            components.append(String(year))
+        }
+
+        if let plexStyle = plexAudioStyleText {
+            components.append(plexStyle)
+        }
+
+        return components.isEmpty ? nil : components.joined(separator: " · ")
     }
 
-    private func loadTracks() async {
+    private var plexAudioStyleText: String? {
+        let media = firstTrackDetails?.media?.first
+            ?? tracks.compactMap(\.media?.first).first
+            ?? albumDetails.media?.first
+            ?? album.media?.first
+        guard let media else { return nil }
+
+        let audioStream = media.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+
+        let codec = (audioStream?.codec ?? media.audioCodec)?.uppercased()
+        let bitrateText = (audioStream?.bitrate ?? media.bitrate).map { "\($0) kbps" }
+
+        let parts = [codec, bitrateText].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    private let isPreviewMode: Bool
+
+    init(album: PlexMetadata, previewTracks: [PlexMetadata]? = nil) {
+        self.album = album
+        _albumDetails = State(initialValue: album)
+        _tracks = State(initialValue: previewTracks ?? [])
+        _isLoadingTracks = State(initialValue: previewTracks == nil)
+        self.isPreviewMode = previewTracks != nil
+    }
+
+    @MainActor
+    private func loadAlbumDetails() async {
         guard let server = serverConnection.currentServer else { return }
         do {
+            albumDetails = try await client.cachedMetadata(server: server, ratingKey: album.ratingKey) ?? album
+        } catch {
+            albumDetails = album
+        }
+    }
+
+    @MainActor
+    private func loadTracks() async {
+        guard let server = serverConnection.currentServer else {
+            isLoadingTracks = false
+            return
+        }
+        do {
             tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey)
-        } catch {}
-        isLoading = false
+            if let firstTrack = tracks.first {
+                firstTrackDetails = try await client.cachedMetadata(server: server, ratingKey: firstTrack.ratingKey)
+            } else {
+                firstTrackDetails = nil
+            }
+        } catch {
+            tracks = []
+            firstTrackDetails = nil
+        }
+        isLoadingTracks = false
+    }
+
+    private func playAlbumNext() {
+        guard !tracks.isEmpty else { return }
+        // Insert in reverse so the first album track appears next in original order.
+        for track in tracks.reversed() {
+            player.addToQueue(track)
+        }
+    }
+
+    private func addAlbumToQueueEnd() {
+        guard !tracks.isEmpty else { return }
+        for track in tracks {
+            player.addToEndOfQueue(track)
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            artworkColor
+                .ignoresSafeArea()
+
+            List {
+                Section {
+                    VStack {
+                        ArtworkView(thumbPath: album.thumb, size: 300, cornerRadius: 12)
+                            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                            .padding(.top, 12)
+
+                        Text(album.title)
+                            .font(.title2.weight(.semibold))
+                            .foregroundStyle(titleColor)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 12)
+                            .padding(.horizontal, 20)
+
+                        if let artist = album.parentTitle, !artist.isEmpty {
+                            Text(artist)
+                                .font(.title3)
+                                .foregroundStyle(secondaryTextColor)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 20)
+                        }
+
+                        if let infoLine = albumInfoLine {
+                            Text(infoLine)
+                                .font(.caption)
+                                .foregroundStyle(tertiaryTextColor)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 0.5)
+                                .padding(.horizontal, 20)
+                        }
+
+                        HStack(spacing: 14) {
+                            Button {
+                                guard !controlsDisabled else { return }
+                                var shuffled = tracks
+                                shuffled.shuffle()
+                                player.play(tracks: shuffled, startingAt: 0)
+                            } label: {
+                                Image(systemName: "shuffle")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(iconForegroundColor)
+                                    .frame(width: 52, height: 52)
+                                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+                            }
+                            .disabled(controlsDisabled)
+                            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+                            Button {
+                                guard !controlsDisabled else { return }
+                                player.play(tracks: tracks, startingAt: 0)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "play.fill")
+                                    Text("Play")
+                                }
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(artworkColor)
+                                .padding(.horizontal, 56)
+                                .padding(.vertical, 14)
+                                .background(
+                                    Capsule().fill(artworkColor.isLightColor ? Color.black : Color.white)
+                                )
+                            }
+                            .disabled(controlsDisabled)
+                            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+                            Menu {
+                                Button("Play Next", systemImage: "text.insert") {
+                                    playAlbumNext()
+                                }
+
+                                Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                                    addAlbumToQueueEnd()
+                                }
+
+                                Button("Add to Playlist", systemImage: "text.badge.plus") {
+                                    // Placeholder for album playlist picker flow.
+                                }
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(iconForegroundColor)
+                                    .frame(width: 52, height: 52)
+                                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+                            }
+                            .disabled(controlsDisabled)
+                            .opacity(controlsDisabled ? 0.45 : 1.0)
+                        }
+                        .padding(.top, 6)
+                        .padding(.bottom, 20)
+
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowSeparator(.hidden, edges: .top)
+                    .listRowSeparator(.visible, edges: .bottom)
+                    .listRowSeparatorTint(titleColor.opacity(0.22))
+                    .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + 20 }
+                    .listRowBackground(Color.clear)
+                }
+
+                if isLoadingTracks {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                        HStack(spacing: 12) {
+                            ZStack {
+                                if player.currentTrack?.ratingKey == track.ratingKey && player.isPlaying {
+                                    NowPlayingBarsView(color: tertiaryTextColor)
+                                        .frame(width: 22, height: 14)
+                                } else {
+                                    Text("\(index + 1)")
+                                        .font(.body)
+                                        .foregroundStyle(tertiaryTextColor)
+                                }
+                            }
+                            .frame(width: 22, alignment: .trailing)
+
+                            Text(track.title)
+                                .foregroundStyle(titleColor)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Menu {
+                                Button("Play Next", systemImage: "text.insert") {
+                                    player.addToQueue(track)
+                                }
+
+                                Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                                    player.addToEndOfQueue(track)
+                                }
+
+                                Button("Add to Playlist", systemImage: "text.badge.plus") {
+                                    // Placeholder for playlist picker flow.
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.callout.weight(.semibold))
+                                    .foregroundStyle(tertiaryTextColor)
+                                    .frame(width: 28, height: 28)
+                            }
+                            .menuStyle(.button)
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            player.play(tracks: tracks, startingAt: index)
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparatorTint(titleColor.opacity(0.22))
+                    }
+
+                    HStack {
+                        if let studio = albumDetails.studio {
+                            Text(studio)
+                        }
+
+                        Spacer()
+
+                        Text(albumFooterRight)
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(tertiaryTextColor)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .listStyle(.plain)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: thumbPath) {
+            guard !isPreviewMode else { return }
+            guard let server = serverConnection.currentServer else { return }
+            await ArtworkColorCache.shared.resolveColor(
+                for: thumbPath,
+                using: client,
+                server: server
+            )
+        }
+        .task {
+            guard !isPreviewMode else { return }
+            await loadAlbumDetails()
+            await loadTracks()
+        }
+    }
+}
+
+private extension Color {
+    var isLightColor: Bool {
+        let uiColor = UIColor(self)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
+        let luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
+        return luminance > 0.58
     }
 }
 
 #Preview {
     NavigationStack {
-        AlbumDetailView(album: PlexMetadata(
-            ratingKey: "1", key: nil, type: "album", title: "Midnights",
-            titleSort: nil, originalTitle: nil, summary: nil, year: 2022,
-            index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-            updatedAt: nil, viewCount: nil, lastViewedAt: nil,
-            thumb: nil, art: nil, parentThumb: nil, grandparentThumb: nil,
-            grandparentArt: nil, parentTitle: "Taylor Swift",
-            grandparentTitle: nil, parentRatingKey: nil,
-            grandparentRatingKey: nil, leafCount: 13, viewedLeafCount: nil,
-            media: nil, genre: [PlexTag(tag: "Pop")], country: nil
-        ))
+        AlbumDetailView(
+            album: DevelopmentMockData.recentAlbums.first ?? PlexMetadata(
+                ratingKey: "album-1", key: nil, type: "album", title: "Album",
+                titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
+                index: nil, parentIndex: nil, duration: nil, addedAt: nil,
+                updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
+                thumb: nil, art: nil, parentThumb: nil, grandparentThumb: nil,
+                grandparentArt: nil, parentTitle: "Preview Artist",
+                grandparentTitle: nil, parentRatingKey: nil,
+                grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
+                media: nil, genre: nil, country: nil
+            ),
+            previewTracks: DevelopmentMockData.recentTracks
+        )
     }
     .environment(AudioPlayerService())
 }

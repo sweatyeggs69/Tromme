@@ -121,13 +121,14 @@ struct TrackRowView: View {
 // MARK: - Now Playing Bars Animation (Apple Music equalizer indicator)
 
 struct NowPlayingBarsView: View {
+    var color: Color = .accentColor
     @State private var isAnimating = false
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(0..<4, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(Color.accentColor)
+                    .fill(color)
                     .frame(width: 3)
                     .scaleEffect(y: isAnimating ? CGFloat.random(in: 0.3...1.0) : 0.4, anchor: .bottom)
                     .animation(

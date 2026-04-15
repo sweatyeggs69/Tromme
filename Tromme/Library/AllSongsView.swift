@@ -35,8 +35,11 @@ struct AllSongsView: View {
                             showArtist: true,
                             showTrackNumber: false
                         )
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     }
                 }
+                .listStyle(.plain)
+                .listRowSpacing(2)
                 .searchable(text: $searchText, prompt: "Find in Songs")
             }
         }

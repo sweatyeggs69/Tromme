@@ -1,11 +1,20 @@
 import SwiftUI
 import UIKit
+import CryptoKit
 
 @Observable @MainActor
 final class ArtworkColorCache {
     static let shared = ArtworkColorCache()
 
     private var cache: [String: Color] = [:]
+    private let diskURL: URL
+
+    private init() {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        diskURL = caches.appendingPathComponent("TrommeColorCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        loadFromDisk()
+    }
 
     func color(for thumbPath: String?) -> Color? {
         guard let thumbPath else { return nil }
@@ -17,7 +26,33 @@ final class ArtworkColorCache {
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 50, height: 50) else { return }
         guard let image = await ImageCache.shared.image(for: url) else { return }
         let dominant = image.dominantColor
-        cache[thumbPath] = Color(dominant)
+        let color = Color(dominant)
+        cache[thumbPath] = color
+        saveToDisk(thumbPath: thumbPath, r: dominant.rgbComponents.r, g: dominant.rgbComponents.g, b: dominant.rgbComponents.b)
+    }
+
+    // MARK: - Disk Persistence
+
+    private func loadFromDisk() {
+        let fileURL = diskURL.appendingPathComponent("colors.json")
+        guard let data = try? Data(contentsOf: fileURL),
+              let entries = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) else { return }
+        for (key, rgb) in entries where rgb.count == 3 {
+            cache[key] = Color(red: rgb[0], green: rgb[1], blue: rgb[2])
+        }
+    }
+
+    private func saveToDisk(thumbPath: String, r: CGFloat, g: CGFloat, b: CGFloat) {
+        let fileURL = diskURL.appendingPathComponent("colors.json")
+        var entries: [String: [CGFloat]] = [:]
+        if let data = try? Data(contentsOf: fileURL),
+           let existing = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) {
+            entries = existing
+        }
+        entries[thumbPath] = [r, g, b]
+        if let data = try? JSONEncoder().encode(entries) {
+            try? data.write(to: fileURL, options: .atomic)
+        }
     }
 }
 
@@ -61,5 +96,13 @@ private extension UIImage {
             blue: totalB / (n * 255),
             alpha: 1
         )
+    }
+}
+
+private extension UIColor {
+    var rgbComponents: (r: CGFloat, g: CGFloat, b: CGFloat) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        getRed(&r, green: &g, blue: &b, alpha: nil)
+        return (r, g, b)
     }
 }

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct QueueView: View {
     var player: AudioPlayerService
-    @State private var magicWardPulse = false
 
     var body: some View {
         List {
@@ -57,15 +56,8 @@ struct QueueView: View {
             }
             .frame(maxWidth: .infinity)
 
-            QueueActionPill(systemImage: "wand.and.stars", isActive: magicWardPulse) {
-                player.shuffleUpcomingQueue()
-                magicWardPulse = true
-                Task {
-                    try? await Task.sleep(nanoseconds: 700_000_000)
-                    await MainActor.run {
-                        magicWardPulse = false
-                    }
-                }
+            QueueActionPill(systemImage: "wand.and.stars", isActive: false) {
+                // Placeholder action for future Magic Ward behavior.
             }
             .frame(maxWidth: .infinity)
         }

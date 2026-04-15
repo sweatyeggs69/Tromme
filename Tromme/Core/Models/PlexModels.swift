@@ -100,6 +100,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let titleSort: String?
     let originalTitle: String?
     let summary: String?
+    var studio: String? = nil
     let year: Int?
     let index: Int?
     let parentIndex: Int?
@@ -108,6 +109,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let updatedAt: Int?
     let viewCount: Int?
     let lastViewedAt: Int?
+    var userRating: Double? = nil
     let thumb: String?
     let art: String?
     let parentThumb: String?
@@ -144,9 +146,9 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
 
 extension PlexMetadata {
     enum CodingKeys: String, CodingKey {
-        case ratingKey, key, type, title, titleSort, originalTitle, summary
+        case ratingKey, key, type, title, titleSort, originalTitle, summary, studio
         case year, index, parentIndex, duration, addedAt, updatedAt
-        case viewCount, lastViewedAt
+        case viewCount, lastViewedAt, userRating
         case thumb, art, parentThumb, grandparentThumb, grandparentArt
         case parentTitle, grandparentTitle, parentRatingKey, grandparentRatingKey
         case leafCount, viewedLeafCount
@@ -162,6 +164,14 @@ extension PlexMetadata {
         return nil
     }
 
+    /// Decode a numeric value Plex may return as Double, Int, or String.
+    private static func decodeFlexibleDouble(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
+        if let value = try? container.decode(Double.self, forKey: key) { return value }
+        if let value = try? container.decode(Int.self, forKey: key) { return Double(value) }
+        if let value = try? container.decode(String.self, forKey: key) { return Double(value) }
+        return nil
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         ratingKey = Self.decodeFlexibleString(from: c, forKey: .ratingKey) ?? ""
@@ -171,6 +181,7 @@ extension PlexMetadata {
         titleSort = try? c.decodeIfPresent(String.self, forKey: .titleSort)
         originalTitle = try? c.decodeIfPresent(String.self, forKey: .originalTitle)
         summary = try? c.decodeIfPresent(String.self, forKey: .summary)
+        studio = try? c.decodeIfPresent(String.self, forKey: .studio)
         year = try? c.decodeIfPresent(Int.self, forKey: .year)
         index = try? c.decodeIfPresent(Int.self, forKey: .index)
         parentIndex = try? c.decodeIfPresent(Int.self, forKey: .parentIndex)
@@ -179,6 +190,7 @@ extension PlexMetadata {
         updatedAt = try? c.decodeIfPresent(Int.self, forKey: .updatedAt)
         viewCount = try? c.decodeIfPresent(Int.self, forKey: .viewCount)
         lastViewedAt = try? c.decodeIfPresent(Int.self, forKey: .lastViewedAt)
+        userRating = Self.decodeFlexibleDouble(from: c, forKey: .userRating)
         thumb = try? c.decodeIfPresent(String.self, forKey: .thumb)
         art = try? c.decodeIfPresent(String.self, forKey: .art)
         parentThumb = try? c.decodeIfPresent(String.self, forKey: .parentThumb)
@@ -220,6 +232,80 @@ struct PlexPart: Codable, Sendable, Hashable {
     let file: String?
     let size: Int?
     let container: String?
+    let stream: [PlexStream]?
+
+    enum CodingKeys: String, CodingKey {
+        case id, key, duration, file, size, container
+        case stream = "Stream"
+    }
+
+    init(
+        id: Int? = nil,
+        key: String? = nil,
+        duration: Int? = nil,
+        file: String? = nil,
+        size: Int? = nil,
+        container: String? = nil,
+        stream: [PlexStream]? = nil
+    ) {
+        self.id = id
+        self.key = key
+        self.duration = duration
+        self.file = file
+        self.size = size
+        self.container = container
+        self.stream = stream
+    }
+}
+
+struct PlexStream: Codable, Sendable, Hashable {
+    let id: Int?
+    let streamType: Int?
+    let codec: String?
+    let channels: Int?
+    let bitrate: Int?
+    let bitDepth: Int?
+    let samplingRate: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, streamType, codec, channels, bitrate, bitDepth, samplingRate
+    }
+
+    init(
+        id: Int? = nil,
+        streamType: Int? = nil,
+        codec: String? = nil,
+        channels: Int? = nil,
+        bitrate: Int? = nil,
+        bitDepth: Int? = nil,
+        samplingRate: Int? = nil
+    ) {
+        self.id = id
+        self.streamType = streamType
+        self.codec = codec
+        self.channels = channels
+        self.bitrate = bitrate
+        self.bitDepth = bitDepth
+        self.samplingRate = samplingRate
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        func decodeFlexibleInt(_ key: CodingKeys) -> Int? {
+            if let value = try? c.decode(Int.self, forKey: key) { return value }
+            if let value = try? c.decode(String.self, forKey: key), let intValue = Int(value) { return intValue }
+            return nil
+        }
+
+        id = decodeFlexibleInt(.id)
+        streamType = decodeFlexibleInt(.streamType)
+        codec = try? c.decodeIfPresent(String.self, forKey: .codec)
+        channels = decodeFlexibleInt(.channels)
+        bitrate = decodeFlexibleInt(.bitrate)
+        bitDepth = decodeFlexibleInt(.bitDepth)
+        samplingRate = decodeFlexibleInt(.samplingRate)
+    }
 }
 
 struct PlexTag: Codable, Sendable, Hashable {

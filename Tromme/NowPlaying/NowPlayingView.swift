@@ -100,10 +100,10 @@ struct NowPlayingView: View {
                                         .mask(
                                             VStack(spacing: 0) {
                                                 LinearGradient(colors: [.clear, .white], startPoint: .top, endPoint: .bottom)
-                                                    .frame(height: 40)
+                                                    .frame(height: 80)
                                                 Color.white
                                                 LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .bottom)
-                                                    .frame(height: 40)
+                                                    .frame(height: 80)
                                             }
                                         )
                                         .transition(.opacity)
@@ -342,40 +342,53 @@ struct NowPlayingView: View {
 struct TimelineSlider: View {
     @Environment(AudioPlayerService.self) private var player
     @State private var isDragging = false
-    @State private var dragTime: TimeInterval = 0
-
-    private var displayTime: TimeInterval {
-        isDragging ? dragTime : player.currentTime
-    }
+    @State private var sliderValue: TimeInterval = 0
 
     var body: some View {
+        let duration = max(player.duration, 1)
+        let isReady = player.isReadyToPlay
+
         VStack(spacing: 6) {
             Slider(
-                value: Binding(
-                    get: { displayTime },
-                    set: { dragTime = $0 }
-                ),
-                in: 0...max(player.duration, 1),
+                value: $sliderValue,
+                in: 0...duration,
                 onEditingChanged: { editing in
-                    if editing {
-                        dragTime = player.currentTime
-                        isDragging = true
-                    } else {
-                        player.seek(to: dragTime)
-                        isDragging = false
+                    isDragging = editing
+                    if !editing {
+                        player.seek(to: sliderValue)
                     }
                 }
             )
             .tint(.white)
+            .disabled(!isReady)
+            .opacity(isReady ? 1 : 0.5)
 
             HStack {
-                Text(formatTime(displayTime))
+                Text(formatTime(sliderValue))
                 Spacer()
-                Text("-\(formatTime(max(0, player.duration - displayTime)))")
+                Text("-\(formatTime(max(0, duration - sliderValue)))")
             }
             .font(.caption2)
             .foregroundStyle(.white.opacity(0.45))
             .monospacedDigit()
+        }
+        .onChange(of: player.currentTime) { _, newValue in
+            if !isDragging {
+                sliderValue = newValue
+            }
+        }
+        .onChange(of: player.currentTrack?.ratingKey) { _, _ in
+            if !isDragging {
+                sliderValue = player.currentTime
+            }
+        }
+        .onChange(of: player.duration) { _, newDuration in
+            if !isDragging {
+                sliderValue = min(sliderValue, max(newDuration, 0))
+            }
+        }
+        .onAppear {
+            sliderValue = player.currentTime
         }
     }
 

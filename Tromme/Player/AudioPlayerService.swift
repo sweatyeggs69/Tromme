@@ -1,5 +1,6 @@
 import AVFoundation
 import MediaPlayer
+import Network
 import Observation
 
 @Observable
@@ -12,8 +13,10 @@ final class AudioPlayerService {
     var duration: TimeInterval = 0
     var isShuffled = false
     var repeatMode: RepeatMode = .off
+    /// True once the current item's status is .readyToPlay.
+    var isReadyToPlay = false
 
-    enum RepeatMode: Sendable {
+    enum RepeatMode: String, Sendable {
         case off, all, one
 
         var iconName: String {
@@ -28,11 +31,24 @@ final class AudioPlayerService {
 
     private var player: AVPlayer?
     private var timeObserver: Any?
+    private var statusObservation: NSKeyValueObservation?
+    private var timeControlObservation: NSKeyValueObservation?
+    private var errorLogObserver: Any?
+    private var trackEndObserver: Any?
     private var playbackGeneration: Int = 0
-    private var isSeeking = false
+    private var lastNowPlayingInfoSyncTime: TimeInterval = 0
     private var server: PlexServer?
     private var client: PlexAPIClient?
     private var originalQueue: [PlexMetadata] = []
+    private var directFallbackURLForCurrentItem: URL?
+    private var didFallbackToDirectForCurrentItem = false
+    private var universalCandidatesForCurrentItem: [URL] = []
+    private var universalCandidateIndexForCurrentItem = 0
+    private var universalHeadersForCurrentItem: [String: String] = [:]
+    private var currentSessionID: String?
+    private let networkMonitor = NWPathMonitor()
+    private var isCellular = false
+    private var isSeeking = false
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -45,6 +61,12 @@ final class AudioPlayerService {
     init() {
         setupAudioSession()
         setupRemoteCommands()
+        restorePlaybackState()
+        nonisolated(unsafe) let weakSelf = self
+        networkMonitor.pathUpdateHandler = { path in
+            weakSelf.isCellular = path.usesInterfaceType(.cellular)
+        }
+        networkMonitor.start(queue: .global(qos: .utility))
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -52,7 +74,7 @@ final class AudioPlayerService {
         self.client = client
     }
 
-// MARK: - Playback Control
+    // MARK: - Playback Control
 
     func play(tracks: [PlexMetadata], startingAt index: Int = 0) {
         originalQueue = tracks
@@ -72,12 +94,29 @@ final class AudioPlayerService {
 
     func togglePlayPause() {
         guard let player else { return }
-        if isPlaying {
+        if player.timeControlStatus == .playing {
             player.pause()
+            isPlaying = false
+            reportTimelineState("paused")
         } else {
             player.play()
+            isPlaying = true
+            reportTimelineState("playing")
         }
-        isPlaying.toggle()
+        updateNowPlayingInfo()
+    }
+
+    private func playCurrent() {
+        guard let player else { return }
+        player.play()
+        isPlaying = true
+        updateNowPlayingInfo()
+    }
+
+    private func pauseCurrent() {
+        guard let player else { return }
+        player.pause()
+        isPlaying = false
         updateNowPlayingInfo()
     }
 
@@ -92,6 +131,10 @@ final class AudioPlayerService {
         } else if repeatMode == .all {
             currentIndex = 0
         } else {
+            player?.pause()
+            isPlaying = false
+            currentTime = duration
+            updateNowPlayingInfo()
             return
         }
         loadAndPlay(queue[currentIndex])
@@ -112,13 +155,26 @@ final class AudioPlayerService {
     }
 
     func seek(to time: TimeInterval) {
-        isSeeking = true
-        currentTime = time
-        nonisolated(unsafe) let weakSelf = self
-        player?.seek(to: CMTime(seconds: time, preferredTimescale: 600)) { _ in
-            weakSelf.isSeeking = false
+        guard isReadyToPlay, let player else {
+            print("[AudioPlayer] Seek blocked: not ready")
+            return
         }
-        updateNowPlayingInfo()
+        let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
+        isSeeking = true
+        currentTime = boundedTime
+
+        let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
+        let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+        nonisolated(unsafe) let weakSelf = self
+        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { finished in
+            DispatchQueue.main.async {
+                weakSelf.isSeeking = false
+                guard finished else { return }
+                weakSelf.currentTime = boundedTime
+                weakSelf.updateNowPlayingInfo()
+                weakSelf.reportTimelineState(weakSelf.isPlaying ? "playing" : "paused")
+            }
+        }
     }
 
     func seekToProgress(_ progress: Double) {
@@ -179,6 +235,7 @@ final class AudioPlayerService {
                 currentIndex = idx
             }
         }
+        savePlaybackState()
     }
 
     func cycleRepeatMode() {
@@ -187,6 +244,7 @@ final class AudioPlayerService {
         case .all: repeatMode = .one
         case .one: repeatMode = .off
         }
+        savePlaybackState()
     }
 
     func shuffleUpcomingQueue() {
@@ -205,44 +263,369 @@ final class AudioPlayerService {
 
     // MARK: - Private
 
-    /// Creates an AVPlayerItem with the full set of required Plex headers, including a
-    /// per-session identifier. AVPlayer(url:) cannot send custom headers; AVURLAsset is
-    /// required so that X-Plex-Token and X-Plex-Session-Identifier reach the server.
-    private func makePlayerItem(url: URL, server: PlexServer) -> AVPlayerItem {
-        let headers: [String: String] = [
-            "X-Plex-Token": server.accessToken,
-            "X-Plex-Client-Identifier": PlexAPIClient.clientIdentifier,
-            "X-Plex-Product": PlexAPIClient.product,
-            "X-Plex-Platform": PlexAPIClient.platform,
-            "X-Plex-Version": PlexAPIClient.version,
-            "X-Plex-Session-Identifier": UUID().uuidString,
-        ]
+    private func makePlayerItem(url: URL, headers: [String: String]? = nil) -> AVPlayerItem {
+        guard let headers, !headers.isEmpty else {
+            return AVPlayerItem(url: url)
+        }
         let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
         return AVPlayerItem(asset: asset)
     }
 
     private func loadAndPlay(_ track: PlexMetadata) {
-        currentTrack = track
+        // Report stopped for the previous track before switching
+        if currentTrack != nil {
+            reportTimelineState("stopped", continuing: true)
+        }
 
-        // Bump generation before removing the observer so any already-enqueued
-        // callbacks from the previous track are ignored.
+        currentTrack = track
         playbackGeneration += 1
+        isReadyToPlay = false
         currentTime = 0
         duration = Double(track.duration ?? 0) / 1000.0
+        lastNowPlayingInfoSyncTime = 0
+        didFallbackToDirectForCurrentItem = false
+        universalCandidatesForCurrentItem = []
+        universalCandidateIndexForCurrentItem = 0
+        universalHeadersForCurrentItem = [:]
+        currentSessionID = UUID().uuidString
 
         guard let server, let client,
               let partKey = track.media?.first?.part?.first?.key,
-              let url = client.streamURL(server: server, partKey: partKey) else { return }
+              let directURL = client.streamURL(server: server, partKey: partKey) else { return }
 
-        removeTimeObserver()
-        player = AVPlayer(playerItem: makePlayerItem(url: url, server: server))
+        tearDownObservers()
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+
+        if shouldUseUniversalHLS(for: track) {
+            // Transcode via HLS for formats AVPlayer can't handle natively or reliably.
+            let sessionID = currentSessionID!
+            let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
+            let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
+            let mediaPathCandidates = [normalizedPath]
+            let cellular = isCellular
+            let headers = client.playbackHeaders(server: server, sessionID: sessionID, cellular: cellular)
+            universalHeadersForCurrentItem = headers
+            directFallbackURLForCurrentItem = directURL
+            let generation = playbackGeneration
+            let capturedClient = client
+            let capturedServer = server
+
+            nonisolated(unsafe) let weakSelf = self
+            Task {
+                // Step 1: Authorize the transcode session
+                do {
+                    try await capturedClient.universalDecision(
+                        server: capturedServer,
+                        metadataPath: normalizedPath,
+                        sessionID: sessionID,
+                        headers: headers,
+                        cellular: cellular
+                    )
+                } catch {
+                    guard weakSelf.playbackGeneration == generation else { return }
+                    print("[AudioPlayer] Decision failed: \(error.localizedDescription). Using direct stream.")
+                    weakSelf.startPlayback(url: directURL)
+                    return
+                }
+
+                guard weakSelf.playbackGeneration == generation else { return }
+
+                // Step 2: Fetch master playlist and resolve variant URL
+                let universalCandidates = capturedClient.universalStreamURLCandidates(
+                    server: capturedServer,
+                    mediaPathCandidates: mediaPathCandidates,
+                    sessionID: sessionID,
+                    cellular: cellular
+                )
+                weakSelf.universalCandidatesForCurrentItem = universalCandidates
+
+                guard let masterURL = universalCandidates.first else {
+                    print("[AudioPlayer] Universal URL unavailable. Using direct stream.")
+                    weakSelf.startPlayback(url: directURL)
+                    return
+                }
+
+                do {
+                    let variantURL = try await capturedClient.resolveVariantPlaylistURL(
+                        masterURL: masterURL,
+                        server: capturedServer,
+                        headers: headers
+                    )
+                    guard weakSelf.playbackGeneration == generation else { return }
+                    weakSelf.startPlayback(url: variantURL, headers: weakSelf.universalHeadersForCurrentItem)
+                } catch {
+                    guard weakSelf.playbackGeneration == generation else { return }
+                    print("[AudioPlayer] Variant resolve failed: \(error.localizedDescription). Using direct stream.")
+                    weakSelf.startPlayback(url: directURL)
+                }
+            }
+        } else {
+            directFallbackURLForCurrentItem = nil
+            universalCandidatesForCurrentItem = []
+            universalCandidateIndexForCurrentItem = 0
+            universalHeadersForCurrentItem = [:]
+            startPlayback(url: directURL)
+        }
+    }
+
+    private func startPlayback(url: URL, headers: [String: String]? = nil) {
+        let item = makePlayerItem(url: url, headers: headers)
+        player = AVPlayer(playerItem: item)
         player?.play()
         isPlaying = true
 
+        observeItemStatus(item)
+        observePlayerState()
+        observeErrorLog(item)
         addTimeObserver()
         observeTrackEnd()
         updateNowPlayingInfo()
         prefetchUpcomingArtwork()
+        reportTimelineState("playing")
+        savePlaybackState()
+    }
+
+    /// Formats that need the universal transcode path:
+    /// - FLAC/WAV: AVPlayer plays them but seeking drifts out of sync over time
+    /// - OGG/Opus/WMA/WavPack/Musepack: AVPlayer can't play these at all
+    private static let universalTranscodeCodecs: Set<String> = [
+        "flac", "wav", "ogg", "vorbis", "opus", "wma", "wmav2", "wavpack", "wv", "musepack", "mpc",
+    ]
+    private static let universalTranscodeContainers: Set<String> = [
+        "flac", "wav", "ogg", "wma", "wv", "mpc",
+    ]
+    private static let universalTranscodeExtensions: Set<String> = [
+        ".flac", ".wav", ".ogg", ".opus", ".wma", ".wv", ".mpc",
+    ]
+
+    private func shouldUseUniversalHLS(for track: PlexMetadata) -> Bool {
+        track.media?.contains { media in
+            let codec = media.audioCodec?.lowercased() ?? ""
+            let container = media.container?.lowercased() ?? ""
+            if Self.universalTranscodeCodecs.contains(codec) || Self.universalTranscodeContainers.contains(container) {
+                return true
+            }
+            return media.part?.contains { part in
+                let partContainer = part.container?.lowercased() ?? ""
+                let filePath = part.file?.lowercased() ?? ""
+                return Self.universalTranscodeContainers.contains(partContainer)
+                    || Self.universalTranscodeExtensions.contains(where: { filePath.hasSuffix($0) })
+            } ?? false
+        } ?? false
+    }
+
+
+    // MARK: - Observers
+
+    /// Watches the player item's status. Once .readyToPlay fires, loads the
+    /// authoritative duration from the parsed STREAMINFO / container header.
+    private func observeItemStatus(_ item: AVPlayerItem) {
+        nonisolated(unsafe) let weakSelf = self
+        statusObservation = item.observe(\.status, options: [.new]) { observedItem, _ in
+            DispatchQueue.main.async {
+                switch observedItem.status {
+                case .readyToPlay:
+                    weakSelf.isReadyToPlay = true
+                    let assetDuration = observedItem.duration.seconds
+                    if assetDuration.isFinite && assetDuration > 0 {
+                        weakSelf.duration = assetDuration
+                    }
+                    weakSelf.updateNowPlayingInfo()
+                case .failed:
+                    weakSelf.isReadyToPlay = false
+                    let nsError = observedItem.error as NSError?
+                    print("[AudioPlayer] Item failed: \(observedItem.error?.localizedDescription ?? "unknown")")
+                    let nextUniversalIndex = weakSelf.universalCandidateIndexForCurrentItem + 1
+                    if weakSelf.universalCandidatesForCurrentItem.indices.contains(nextUniversalIndex) {
+                        weakSelf.universalCandidateIndexForCurrentItem = nextUniversalIndex
+                        let nextURL = weakSelf.universalCandidatesForCurrentItem[nextUniversalIndex]
+
+
+                        weakSelf.startPlayback(url: nextURL, headers: weakSelf.universalHeadersForCurrentItem)
+                        return
+                    }
+                    if !weakSelf.didFallbackToDirectForCurrentItem,
+                       let fallbackURL = weakSelf.directFallbackURLForCurrentItem {
+                        weakSelf.didFallbackToDirectForCurrentItem = true
+                        weakSelf.directFallbackURLForCurrentItem = nil
+                        weakSelf.universalHeadersForCurrentItem = [:]
+                        print("[AudioPlayer] Universal stream failed. Using direct stream.")
+                        weakSelf.startPlayback(url: fallbackURL)
+                    }
+                default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// Listens for error-log entries the server may emit (e.g. seek failures
+    /// on servers that don't support HTTP Range requests).
+    private func observeErrorLog(_ item: AVPlayerItem) {
+        errorLogObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemNewErrorLogEntry,
+            object: item,
+            queue: .main
+        ) { notification in
+            guard let item = notification.object as? AVPlayerItem,
+                  let event = item.errorLog()?.events.last else { return }
+            // Non-fatal HLS error log entries (e.g. bandwidth mismatch) — no action needed
+        }
+    }
+
+    private func tearDownObservers() {
+        removeTimeObserver()
+        statusObservation?.invalidate()
+        statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
+        if let errorLogObserver {
+            NotificationCenter.default.removeObserver(errorLogObserver)
+        }
+        errorLogObserver = nil
+        if let trackEndObserver {
+            NotificationCenter.default.removeObserver(trackEndObserver)
+        }
+        trackEndObserver = nil
+    }
+
+    // MARK: - Time Tracking
+
+    private func addTimeObserver() {
+        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let generation = playbackGeneration
+        nonisolated(unsafe) let weakSelf = self
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+            guard weakSelf.playbackGeneration == generation else {
+                return
+            }
+            guard !weakSelf.isSeeking else { return }
+            let seconds = time.seconds
+            guard seconds.isFinite && seconds >= 0 else { return }
+
+            // Keep duration in sync with the player item.
+            if let itemDuration = weakSelf.player?.currentItem?.duration.seconds,
+               itemDuration.isFinite && itemDuration > 0 {
+                weakSelf.duration = itemDuration
+            }
+
+            weakSelf.currentTime = weakSelf.duration > 0 ? min(seconds, weakSelf.duration) : seconds
+
+            if abs(weakSelf.currentTime - weakSelf.lastNowPlayingInfoSyncTime) >= 1 {
+                weakSelf.lastNowPlayingInfoSyncTime = weakSelf.currentTime
+                weakSelf.updateNowPlayingInfo()
+            }
+        }
+    }
+
+    private func removeTimeObserver() {
+        if let observer = timeObserver {
+            player?.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+    }
+
+    // MARK: - Track End
+
+    private func observePlayerState() {
+        nonisolated(unsafe) let weakSelf = self
+        timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { observedPlayer, _ in
+            DispatchQueue.main.async {
+                // Treat both .playing and .waitingToPlayAtSpecifiedRate as "playing"
+                // to avoid UI flicker during buffering transitions.
+                let playing = observedPlayer.timeControlStatus != .paused
+                weakSelf.isPlaying = playing
+                weakSelf.updateNowPlayingInfo()
+            }
+        }
+    }
+
+    private func observeTrackEnd() {
+        if let trackEndObserver {
+            NotificationCenter.default.removeObserver(trackEndObserver)
+            self.trackEndObserver = nil
+        }
+        if let item = player?.currentItem {
+            nonisolated(unsafe) let weakSelf = self
+            trackEndObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { _ in
+                weakSelf.handleTrackEnd()
+            }
+        }
+    }
+
+    private func handleTrackEnd() {
+        let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
+        reportTimelineState("stopped", continuing: hasNext)
+        if let currentTrack, let client, let server {
+            Task {
+                try? await client.scrobble(server: server, ratingKey: currentTrack.ratingKey)
+            }
+        }
+        next()
+    }
+
+    // MARK: - Timeline Reporting
+
+    private func reportTimelineState(_ state: String, continuing: Bool = false) {
+        guard let currentTrack, let client, let server else { return }
+        let key = currentTrack.key ?? "/library/metadata/\(currentTrack.ratingKey)"
+        let timeMs = Int(currentTime * 1000)
+        let durationMs = Int(duration * 1000)
+        let sessionID = currentSessionID
+        Task {
+            try? await client.reportTimeline(
+                server: server,
+                ratingKey: currentTrack.ratingKey,
+                key: key,
+                state: state,
+                timeMs: timeMs,
+                durationMs: durationMs,
+                sessionID: sessionID,
+                continuing: continuing
+            )
+        }
+    }
+
+    // MARK: - State Persistence
+
+    private static let lastTrackKey = "lastPlayingTrackRatingKey"
+    private static let shuffleKey = "playbackShuffle"
+    private static let repeatKey = "playbackRepeatMode"
+
+    private func savePlaybackState() {
+        let defaults = UserDefaults.standard
+        defaults.set(currentTrack?.ratingKey, forKey: Self.lastTrackKey)
+        defaults.set(isShuffled, forKey: Self.shuffleKey)
+        defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
+    }
+
+    func restorePlaybackState() {
+        let defaults = UserDefaults.standard
+        isShuffled = defaults.bool(forKey: Self.shuffleKey)
+        if let raw = defaults.string(forKey: Self.repeatKey),
+           let mode = RepeatMode(rawValue: raw) {
+            repeatMode = mode
+        }
+    }
+
+    var lastPlayingTrackRatingKey: String? {
+        UserDefaults.standard.string(forKey: Self.lastTrackKey)
+    }
+
+    // MARK: - Audio Session
+
+    private func setupAudioSession() {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Audio session setup failed
+        }
     }
 
     private func prefetchUpcomingArtwork() {
@@ -255,65 +638,16 @@ final class AudioPlayerService {
         Task { await ImageCache.shared.prefetch(urls: urls) }
     }
 
-    private func setupAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            // Audio session setup failed
-        }
-    }
-
-    private func addTimeObserver() {
-        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
-        let generation = playbackGeneration
-        nonisolated(unsafe) let weakSelf = self
-        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            guard weakSelf.playbackGeneration == generation, !weakSelf.isSeeking else { return }
-            weakSelf.currentTime = min(time.seconds, weakSelf.duration)
-        }
-    }
-
-    private func removeTimeObserver() {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
-        }
-    }
-
-    private func observeTrackEnd() {
-        NotificationCenter.default.removeObserver(self, name: .AVPlayerItemDidPlayToEndTime, object: nil)
-        if let item = player?.currentItem {
-            nonisolated(unsafe) let weakSelf = self
-            NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: item,
-                queue: .main
-            ) { _ in
-                weakSelf.handleTrackEnd()
-            }
-        }
-    }
-
-    private func handleTrackEnd() {
-        if let currentTrack, let client, let server {
-            Task {
-                try? await client.scrobble(server: server, ratingKey: currentTrack.ratingKey)
-            }
-        }
-        next()
-    }
-
     // MARK: - Now Playing Info & Remote Commands
 
     private func setupRemoteCommands() {
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
+            self?.playCurrent()
             return .success
         }
         center.pauseCommand.addTarget { [weak self] _ in
-            self?.togglePlayPause()
+            self?.pauseCurrent()
             return .success
         }
         center.nextTrackCommand.addTarget { [weak self] _ in

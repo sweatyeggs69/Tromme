@@ -10,8 +10,8 @@ struct ArtistsView: View {
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
     private let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
     ]
 
     var body: some View {
@@ -45,13 +45,14 @@ struct ArtistsView: View {
         case .list:
             List(filteredArtists) { artist in
                 NavigationLink(value: artist) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 10) {
                         ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
 
                         Text(artist.title)
                             .font(.body)
                     }
                 }
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
             .listStyle(.plain)
 

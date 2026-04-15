@@ -12,8 +12,8 @@ struct AllAlbumsView: View {
     private let previewAlbums: [PlexMetadata]?
 
     private let columns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
     ]
 
     init(previewAlbums: [PlexMetadata]? = nil) {
@@ -58,7 +58,7 @@ struct AllAlbumsView: View {
         switch viewMode {
         case .grid:
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(filteredAlbums) { album in
                         NavigationLink(value: album) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -82,7 +82,7 @@ struct AllAlbumsView: View {
         case .list:
             List(filteredAlbums) { album in
                 NavigationLink(value: album) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         ArtworkView(thumbPath: album.thumb, size: 64, cornerRadius: 8)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -93,9 +93,10 @@ struct AllAlbumsView: View {
                                 .appItemSubtitleStyle()
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 1)
                 }
                 .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
             }
             .listStyle(.plain)
         }
