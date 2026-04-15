@@ -75,8 +75,13 @@ final class ServerConnectionManager {
     }
 
     func selectLibrary(_ sectionId: String) {
+        let changed = currentLibrarySectionId != sectionId
         currentLibrarySectionId = sectionId
         UserDefaults.standard.set(sectionId, forKey: Self.libraryKey)
+        if changed {
+            UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
+            Task { await LibraryCache.shared.clearAll() }
+        }
     }
 
     func disconnect() {
@@ -86,6 +91,8 @@ final class ServerConnectionManager {
         reprobeTask = nil
         UserDefaults.standard.removeObject(forKey: Self.serverKey)
         UserDefaults.standard.removeObject(forKey: Self.libraryKey)
+        UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
+        Task { await LibraryCache.shared.clearAll() }
     }
 
     var isConnected: Bool {

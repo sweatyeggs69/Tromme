@@ -127,7 +127,7 @@ private extension View {
                 NavigationLink {
                     SettingsView(onSignOut: signOut)
                 } label: {
-                    Image(systemName: "person.circle")
+                    Image(systemName: "gear")
                 }
             }
         }

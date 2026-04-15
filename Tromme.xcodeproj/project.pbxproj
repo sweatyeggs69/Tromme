@@ -22,6 +22,7 @@
 		4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */; };
 		4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB138EDD82605DC91055038 /* MiniPlayerView.swift */; };
 		608A51EB1C84A6D4D7A7CF03 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B253DB5DE822A11676ACFE3B /* SettingsView.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* ServerSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6071829A1B2C3A4B5C6 /* ServerSettingsView.swift */; };
 		616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866C87D0462783ACE391CDD2 /* QueueView.swift */; };
 		65BE712C4B25685082310E7A /* ArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C81C2D359056960A39D0007 /* ArtworkView.swift */; };
 		74402BEBDBD8A049EA6A574A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 570A2B691FCC5F218BF6D09D /* HomeView.swift */; };
@@ -85,6 +86,7 @@
 		9C23DAD78F3BE61712D65856 /* ArtistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistDetailView.swift; sourceTree = "<group>"; };
 		A73935816F396307CD214867 /* CachedAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAPIClient.swift; sourceTree = "<group>"; };
 		B253DB5DE822A11676ACFE3B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D4E5F6071829A1B2C3A4B5C6 /* ServerSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSettingsView.swift; sourceTree = "<group>"; };
 		BA85F5DB7B8B5101F16F21E5 /* ArtistsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistsView.swift; sourceTree = "<group>"; };
 		BD07CDF3D202FA07BFACD86F /* AllAlbumsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllAlbumsView.swift; sourceTree = "<group>"; };
 		BDEFE1EDC3B807A75155156D /* AllSongsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllSongsView.swift; sourceTree = "<group>"; };
@@ -241,6 +243,7 @@
 		DA5245E2F3569ECC1F19E424 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				D4E5F6071829A1B2C3A4B5C6 /* ServerSettingsView.swift */,
 				B253DB5DE822A11676ACFE3B /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -383,6 +386,7 @@
 				01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */,
 				3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */,
 				AE8F9BC18E978DFB09C39BE5 /* ServerConnectionManager.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* ServerSettingsView.swift in Sources */,
 				608A51EB1C84A6D4D7A7CF03 /* SettingsView.swift in Sources */,
 				8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */,
 				A899BD0511C9508A9C09BE45 /* TrommeApp.swift in Sources */,

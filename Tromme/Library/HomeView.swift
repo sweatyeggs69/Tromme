@@ -35,11 +35,11 @@ struct HomeView: View {
         }
         .task {
             guard previewRecentTracks == nil && previewRecentAlbums == nil else { return }
-            await loadHomeContent()
+            await loadHomeContent(forceRefresh: false)
         }
         .refreshable {
             guard previewRecentTracks == nil && previewRecentAlbums == nil else { return }
-            await loadHomeContent()
+            await loadHomeContent(forceRefresh: true)
         }
     }
 
@@ -134,18 +134,13 @@ struct HomeView: View {
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHGrid(
-                        rows: [
-                            GridItem(.fixed(220), spacing: 20)
-                        ],
-                        spacing: 12
-                    ) {
+                    LazyHStack(spacing: 12) {
                         ForEach(recentAlbums) { album in
                             NavigationLink(value: album) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     ArtworkView(
                                         thumbPath: album.thumb,
-                                        size: 150,
+                                        size: 170,
                                         cornerRadius: AppStyle.Radius.card
                                     )
 
@@ -155,7 +150,7 @@ struct HomeView: View {
                                     Text(album.parentTitle ?? "")
                                         .appItemSubtitleStyle()
                                 }
-                                .frame(width: 150, height: 220, alignment: .topLeading)
+                                .frame(width: 170, alignment: .topLeading)
                             }
                             .buttonStyle(.plain)
                         }
@@ -168,7 +163,7 @@ struct HomeView: View {
         }
     }
 
-    private func loadHomeContent() async {
+    private func loadHomeContent(forceRefresh: Bool) async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else {
             favoriteTracks = []
@@ -178,48 +173,63 @@ struct HomeView: View {
             return
         }
 
+        let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
+        let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
+
+        // Show cached data instantly
+        let cachedTracksResult = await LibraryCache.shared.get([PlexMetadata].self, forKey: tracksKey)
+        if let cachedTracksResult {
+            applyTracks(cachedTracksResult.value)
+        }
+        let cachedAlbumsResult = await LibraryCache.shared.get([PlexMetadata].self, forKey: albumsKey)
+        if let cachedAlbumsResult {
+            recentAlbums = Array(cachedAlbumsResult.value.sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }.prefix(10))
+        }
+        isLoading = false
+
+        // Only fetch from server if forced or cache is stale
+        let needsRefresh = forceRefresh
+            || cachedTracksResult == nil || cachedTracksResult!.isStale
+            || cachedAlbumsResult == nil || cachedAlbumsResult!.isStale
+
+        guard needsRefresh else { return }
+
         do {
             async let tracksReq = client.cachedTracks(server: server, sectionId: sectionId)
-            async let albumsReq = client.cachedAlbums(server: server, sectionId: sectionId)
+            async let albumsReq = client.getRecentlyAdded(server: server, sectionId: sectionId)
+            async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
 
             let allTracks = try await tracksReq
-            let allAlbums = try await albumsReq
-            let plexFavorites = (try? await client.getFavoriteTracks(server: server, sectionId: sectionId)) ?? []
+            let freshAlbums = try await albumsReq
+            let plexFavorites = (try? await favoritesReq) ?? []
 
-            let resolvedFavorites = plexFavorites.isEmpty
-                ? allTracks.filter { ($0.userRating ?? 0) > 0 }
-                : plexFavorites
+            applyTracks(allTracks, plexFavorites: plexFavorites)
+            recentAlbums = freshAlbums
+        } catch {}
+    }
 
-            favoriteTracks = Array(
-                resolvedFavorites
-                    .sorted {
-                        if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
-                            return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
-                        }
-                        return ($0.userRating ?? 0) > ($1.userRating ?? 0)
+    private func applyTracks(_ allTracks: [PlexMetadata], plexFavorites: [PlexMetadata]? = nil) {
+        let resolvedFavorites = (plexFavorites ?? []).isEmpty
+            ? allTracks.filter { ($0.userRating ?? 0) > 0 }
+            : (plexFavorites ?? [])
+
+        favoriteTracks = Array(
+            resolvedFavorites
+                .sorted {
+                    if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
+                        return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
                     }
-                    .prefix(10)
-            )
+                    return ($0.userRating ?? 0) > ($1.userRating ?? 0)
+                }
+                .prefix(10)
+        )
 
-            recentTracks = Array(
-                allTracks
-                    .filter { ($0.lastViewedAt ?? 0) > 0 }
-                    .sorted { ($0.lastViewedAt ?? 0) > ($1.lastViewedAt ?? 0) }
-                    .prefix(10)
-            )
-
-            recentAlbums = Array(
-                allAlbums
-                    .sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }
-                    .prefix(10)
-            )
-        } catch {
-            favoriteTracks = []
-            recentTracks = []
-            recentAlbums = []
-        }
-
-        isLoading = false
+        recentTracks = Array(
+            allTracks
+                .filter { ($0.lastViewedAt ?? 0) > 0 }
+                .sorted { ($0.lastViewedAt ?? 0) > ($1.lastViewedAt ?? 0) }
+                .prefix(10)
+        )
     }
 }
 

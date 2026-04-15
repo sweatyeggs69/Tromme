@@ -10,7 +10,7 @@ actor LibraryCache {
 
     private let memoryCache = NSCache<NSString, CacheEntry>()
     private let diskURL: URL
-    private let defaultTTL: TimeInterval = 300 // 5 minutes for memory freshness
+    private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
     private let maxDiskSize: Int = 50 * 1024 * 1024 // 50 MB
 
