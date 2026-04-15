@@ -46,6 +46,8 @@ final class AudioPlayerService {
     private var universalCandidateIndexForCurrentItem = 0
     private var universalHeadersForCurrentItem: [String: String] = [:]
     private var currentSessionID: String?
+    private var cachedArtwork: MPMediaItemArtwork?
+    private var cachedArtworkThumbPath: String?
     private let networkMonitor = NWPathMonitor()
     private var isCellular = false
     private var isSeeking = false
@@ -93,6 +95,12 @@ final class AudioPlayerService {
     }
 
     func togglePlayPause() {
+        if player == nil, let track = currentTrack {
+            queue = [track]
+            currentIndex = 0
+            loadAndPlay(track)
+            return
+        }
         guard let player else { return }
         if player.timeControlStatus == .playing {
             player.pause()
@@ -434,7 +442,7 @@ final class AudioPlayerService {
                     weakSelf.updateNowPlayingInfo()
                 case .failed:
                     weakSelf.isReadyToPlay = false
-                    let nsError = observedItem.error as NSError?
+                    _ = observedItem.error as NSError?
                     print("[AudioPlayer] Item failed: \(observedItem.error?.localizedDescription ?? "unknown")")
                     let nextUniversalIndex = weakSelf.universalCandidateIndexForCurrentItem + 1
                     if weakSelf.universalCandidatesForCurrentItem.indices.contains(nextUniversalIndex) {
@@ -469,7 +477,7 @@ final class AudioPlayerService {
             queue: .main
         ) { notification in
             guard let item = notification.object as? AVPlayerItem,
-                  let event = item.errorLog()?.events.last else { return }
+                  let _ = item.errorLog()?.events.last else { return }
             // Non-fatal HLS error log entries (e.g. bandwidth mismatch) — no action needed
         }
     }
@@ -593,13 +601,16 @@ final class AudioPlayerService {
 
     // MARK: - State Persistence
 
-    private static let lastTrackKey = "lastPlayingTrackRatingKey"
+    private static let trackKey = "playbackTrack"
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
 
     private func savePlaybackState() {
         let defaults = UserDefaults.standard
-        defaults.set(currentTrack?.ratingKey, forKey: Self.lastTrackKey)
+        if let track = currentTrack,
+           let data = try? JSONEncoder().encode(track) {
+            defaults.set(data, forKey: Self.trackKey)
+        }
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
     }
@@ -611,10 +622,11 @@ final class AudioPlayerService {
            let mode = RepeatMode(rawValue: raw) {
             repeatMode = mode
         }
-    }
-
-    var lastPlayingTrackRatingKey: String? {
-        UserDefaults.standard.string(forKey: Self.lastTrackKey)
+        if let data = defaults.data(forKey: Self.trackKey),
+           let track = try? JSONDecoder().decode(PlexMetadata.self, from: data) {
+            currentTrack = track
+            duration = Double(track.duration ?? 0) / 1000.0
+        }
     }
 
     // MARK: - Audio Session
@@ -674,15 +686,25 @@ final class AudioPlayerService {
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+
+        let thumbPath = currentTrack?.thumb ?? currentTrack?.parentThumb
+
+        if let cachedArtwork {
+            info[MPMediaItemPropertyArtwork] = cachedArtwork
+        }
+
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
 
-        if let client, let server {
-            let thumbPath = currentTrack?.thumb ?? currentTrack?.parentThumb
-            let url = client.artworkURL(server: server, path: thumbPath, width: 1000, height: 1000)
-            if let url {
+        if thumbPath != cachedArtworkThumbPath {
+            cachedArtworkThumbPath = thumbPath
+            cachedArtwork = nil
+            if let client, let server,
+               let url = client.artworkURL(server: server, path: thumbPath, width: 1000, height: 1000) {
+                nonisolated(unsafe) let weakSelf = self
                 Task {
                     guard let image = await ImageCache.shared.image(for: url) else { return }
                     let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                    weakSelf.cachedArtwork = artwork
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
                 }
             }

@@ -19,10 +19,10 @@ struct NowPlayingView: View {
 
     private let bottomActionsLeadingButtonPadding: CGFloat = 48
     private let bottomActionsTrailingButtonPadding: CGFloat = 48
-    private let actionIconActiveOpacity: Double = 0.92
-    private let actionIconInactiveOpacity: Double = 0.62
+    private let actionIconActiveOpacity: Double = 0.82
+    private let actionIconInactiveOpacity: Double = 0.45
     private let actionBackgroundOpacity: Double = 0.12
-    private let controlTintOpacity: Double = 0.82
+    private let controlTintOpacity: Double = 0.45
 
     // MARK: - Computed Properties
 
@@ -346,7 +346,7 @@ struct TimelineSlider: View {
 
     var body: some View {
         let duration = max(player.duration, 1)
-        let isReady = player.isReadyToPlay
+        let isReady = player.isReadyToPlay || player.hasTrack
 
         VStack(spacing: 6) {
             Slider(
@@ -419,16 +419,21 @@ struct AirPlayButton: UIViewRepresentable {
 
 // MARK: - Volume Slider
 
-struct VolumeSlider: UIViewRepresentable {
-    func makeUIView(context: Context) -> MPVolumeView {
+@MainActor
+private enum SharedVolumeView {
+    static let shared: MPVolumeView = {
         let view = MPVolumeView(frame: .zero)
         view.tintColor = .white.withAlphaComponent(0.38)
-        DispatchQueue.main.async {
-            for subview in view.subviews where subview is UIButton {
-                subview.removeFromSuperview()
-            }
+        for subview in view.subviews where subview is UIButton {
+            subview.removeFromSuperview()
         }
         return view
+    }()
+}
+
+struct VolumeSlider: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        SharedVolumeView.shared
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {}
