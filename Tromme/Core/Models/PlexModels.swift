@@ -96,6 +96,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let ratingKey: String
     let key: String?
     let type: String?
+    let subtype: String?
     let title: String
     let titleSort: String?
     let originalTitle: String?
@@ -123,9 +124,32 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let viewedLeafCount: Int?
     let media: [PlexMedia]?
     let genre: [PlexTag]?
+    let style: [PlexTag]?
     let country: [PlexTag]?
+    let subformat: [PlexTag]?
+    let originallyAvailableAt: String?
 
     var id: String { ratingKey }
+
+    /// The release format label (e.g. "Single", "EP"). Returns nil for standard albums.
+    var formatLabel: String? {
+        guard let tag = subformat?.first?.tag, !tag.isEmpty else { return nil }
+        let lower = tag.lowercased()
+        if lower == "album" { return nil }
+        return tag.capitalized
+    }
+
+    /// Whether this release is a single or EP, based on subformat tag or track count heuristic.
+    var isSingleOrEP: Bool {
+        if let tag = subformat?.first?.tag?.lowercased() {
+            return tag == "single" || tag == "ep"
+        }
+        // Heuristic: releases with 1-6 tracks are likely singles/EPs
+        if let count = leafCount {
+            return count <= 6
+        }
+        return false
+    }
 
     var durationFormatted: String {
         guard let duration else { return "" }
@@ -133,6 +157,13 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
         let min = seconds / 60
         let sec = seconds % 60
         return String(format: "%d:%02d", min, sec)
+    }
+
+    var releaseYear: String {
+        if let date = originallyAvailableAt, date.count >= 4 {
+            return String(date.prefix(4))
+        }
+        return year.map(String.init) ?? "Unknown Year"
     }
 
     var artistName: String {
@@ -146,15 +177,34 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
 
 extension PlexMetadata {
     enum CodingKeys: String, CodingKey {
-        case ratingKey, key, type, title, titleSort, originalTitle, summary, studio
+        case ratingKey, key, type, subtype, title, titleSort, originalTitle, summary, studio
         case year, index, parentIndex, duration, addedAt, updatedAt
         case viewCount, lastViewedAt, userRating
         case thumb, art, parentThumb, grandparentThumb, grandparentArt
         case parentTitle, grandparentTitle, parentRatingKey, grandparentRatingKey
-        case leafCount, viewedLeafCount
+        case leafCount, viewedLeafCount, originallyAvailableAt
         case media = "Media"
+        case subformat = "Subformat"
         case genre = "Genre"
+        case style = "Style"
         case country = "Country"
+    }
+
+    init(ratingKey: String, title: String, type: String? = nil, thumb: String? = nil) {
+        self.ratingKey = ratingKey
+        self.title = title
+        self.type = type
+        self.thumb = thumb
+        self.subtype = nil
+        self.key = nil; self.titleSort = nil; self.originalTitle = nil; self.summary = nil
+        self.studio = nil; self.year = nil; self.index = nil; self.parentIndex = nil
+        self.duration = nil; self.addedAt = nil; self.updatedAt = nil; self.viewCount = nil
+        self.lastViewedAt = nil; self.userRating = nil; self.art = nil; self.parentThumb = nil
+        self.grandparentThumb = nil; self.grandparentArt = nil; self.parentTitle = nil
+        self.grandparentTitle = nil; self.parentRatingKey = nil; self.grandparentRatingKey = nil
+        self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
+        self.genre = nil; self.style = nil; self.country = nil
+        self.subformat = nil; self.originallyAvailableAt = nil
     }
 
     /// Decode a value that Plex may return as either String or Int.
@@ -177,6 +227,7 @@ extension PlexMetadata {
         ratingKey = Self.decodeFlexibleString(from: c, forKey: .ratingKey) ?? ""
         key = try? c.decodeIfPresent(String.self, forKey: .key)
         type = try? c.decodeIfPresent(String.self, forKey: .type)
+        subtype = try? c.decodeIfPresent(String.self, forKey: .subtype)
         title = (try? c.decode(String.self, forKey: .title)) ?? ""
         titleSort = try? c.decodeIfPresent(String.self, forKey: .titleSort)
         originalTitle = try? c.decodeIfPresent(String.self, forKey: .originalTitle)
@@ -204,7 +255,10 @@ extension PlexMetadata {
         viewedLeafCount = try? c.decodeIfPresent(Int.self, forKey: .viewedLeafCount)
         media = try? c.decodeIfPresent([PlexMedia].self, forKey: .media)
         genre = try? c.decodeIfPresent([PlexTag].self, forKey: .genre)
+        style = try? c.decodeIfPresent([PlexTag].self, forKey: .style)
         country = try? c.decodeIfPresent([PlexTag].self, forKey: .country)
+        subformat = try? c.decodeIfPresent([PlexTag].self, forKey: .subformat)
+        originallyAvailableAt = try? c.decodeIfPresent(String.self, forKey: .originallyAvailableAt)
     }
 }
 
@@ -321,7 +375,15 @@ struct Hub: Codable, Sendable, Identifiable {
     let size: Int?
     let metadata: [PlexMetadata]?
 
-    var id: String { hubIdentifier ?? UUID().uuidString }
+    var id: String { hubIdentifier ?? (type ?? "hub") + "_" + (title ?? "unknown") }
+
+    init(hubIdentifier: String?, title: String?, type: String?, size: Int?, metadata: [PlexMetadata]?) {
+        self.hubIdentifier = hubIdentifier
+        self.title = title
+        self.type = type
+        self.size = size
+        self.metadata = metadata
+    }
 
     enum CodingKeys: String, CodingKey {
         case hubIdentifier, title, type, size

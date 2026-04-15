@@ -11,7 +11,12 @@ final class PlexAuthService {
     private var pollTask: Task<Void, Never>?
 
     init() {
-        authToken = UserDefaults.standard.string(forKey: Self.tokenKey)
+        // Migrate from UserDefaults to Keychain if needed
+        if let legacy = UserDefaults.standard.string(forKey: Self.tokenKey) {
+            KeychainHelper.save(legacy, forKey: Self.tokenKey)
+            UserDefaults.standard.removeObject(forKey: Self.tokenKey)
+        }
+        authToken = KeychainHelper.load(forKey: Self.tokenKey)
     }
 
     var isAuthenticated: Bool { authToken != nil }
@@ -35,7 +40,7 @@ final class PlexAuthService {
                 do {
                     let token = try await pollForToken(client: client, pinId: pin.id)
                     self.authToken = token
-                    UserDefaults.standard.set(token, forKey: Self.tokenKey)
+                    KeychainHelper.save(token, forKey: Self.tokenKey)
                 } catch is CancellationError {
                     // User dismissed — no error
                 } catch {
@@ -62,7 +67,7 @@ final class PlexAuthService {
 
     func signOut() {
         authToken = nil
-        UserDefaults.standard.removeObject(forKey: Self.tokenKey)
+        KeychainHelper.delete(forKey: Self.tokenKey)
     }
 
     // MARK: - Token Polling

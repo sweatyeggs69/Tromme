@@ -3,16 +3,19 @@ import SwiftUI
 struct ArtistsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
     @State private var searchText = ""
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
+    }
 
     var body: some View {
         Group {
@@ -36,6 +39,7 @@ struct ArtistsView: View {
         }
         .searchable(text: $searchText, prompt: "Find in Artists")
         .task { await loadArtists() }
+        .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
         .refreshable { await loadArtists() }
     }
 
@@ -83,16 +87,72 @@ struct ArtistsView: View {
         return artists.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
+    private var artworkPrefetchKey: String {
+        "\(viewMode.rawValue)|\(searchText)|\(filteredArtists.count)"
+    }
+
     private func loadArtists() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
-            artists = try await client.cachedArtists(server: server, sectionId: sectionId)
-            artists.sort { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
-        } catch {
-            // Handle error
-        }
+            var result = try await client.cachedArtists(server: server, sectionId: sectionId)
+            let knownKeys = Set(result.map(\.ratingKey))
+
+            // Discover artists that only have singles/tracks but no artist entry
+            let tracks = try await client.cachedTracks(server: server, sectionId: sectionId)
+            var seen = Set<String>()
+            for track in tracks {
+                guard let key = track.grandparentRatingKey,
+                      !knownKeys.contains(key),
+                      seen.insert(key).inserted,
+                      let name = track.grandparentTitle else { continue }
+                result.append(PlexMetadata(
+                    ratingKey: key,
+                    title: name,
+                    type: "artist",
+                    thumb: track.grandparentThumb
+                ))
+            }
+
+            result.sort {
+                artistSortKey(for: $0.title) < artistSortKey(for: $1.title)
+            }
+            artists = result
+        } catch {}
         isLoading = false
+    }
+
+    private func prefetchVisibleArtwork() async {
+        guard !isLoading, let server = serverConnection.currentServer else { return }
+        let prefetchCount = viewMode == .grid ? 60 : 80
+        let pointSize: CGFloat = viewMode == .grid ? 184 : 48
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
+        let urls = filteredArtists.prefix(prefetchCount).compactMap { artist in
+            client.artworkURL(server: server, path: artist.thumb, width: pixelSize, height: pixelSize)
+        }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
+    }
+
+    private func artistSortKey(for title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+
+        let withoutThe: String
+        if lower.hasPrefix("the ") {
+            withoutThe = String(trimmed.dropFirst(4))
+        } else if lower.hasSuffix(", the") {
+            withoutThe = String(trimmed.dropLast(5))
+        } else {
+            withoutThe = trimmed
+        }
+
+        let normalized = withoutThe.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let firstWord = normalized
+            .split(whereSeparator: \.isWhitespace)
+            .first.map(String.init) ?? normalized
+
+        return "\(firstWord.lowercased())|\(normalized.lowercased())"
     }
 }
 

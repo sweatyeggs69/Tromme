@@ -25,7 +25,7 @@ struct LibraryPickerView: View {
                 } else {
                     List(sections) { section in
                         Button {
-                            serverConnection.selectLibrary(section.key)
+                            serverConnection.selectLibrary(section.key, client: client)
                             onLibrarySelected()
                         } label: {
                             HStack {
@@ -71,9 +71,9 @@ struct LibraryPickerView: View {
         isLoading = true
         error = nil
         do {
-            sections = try await client.cachedLibrarySections(server: server)
+            sections = try await client.cachedLibrarySections(server: server).filter(\.isMusicLibrary)
             if sections.count == 1, let first = sections.first {
-                serverConnection.selectLibrary(first.key)
+                serverConnection.selectLibrary(first.key, client: client)
                 onLibrarySelected()
             }
         } catch {

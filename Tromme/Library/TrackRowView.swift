@@ -8,6 +8,7 @@ struct TrackRowView: View {
     let index: Int
     var showArtwork: Bool = false
     var showArtist: Bool = false
+    var subtitle: String? = nil
     var showTrackNumber: Bool = true
     var artworkSize: CGFloat = 42
     var showsMenu: Bool = true
@@ -22,7 +23,7 @@ struct TrackRowView: View {
             HStack(spacing: isCompact ? 8 : 10) {
                 // Leading: track number or artwork
                 if showArtwork {
-                    ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: 7)
+                    ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: 8)
                 } else if showTrackNumber {
                     ZStack {
                         if isCurrentTrack && player.isPlaying {
@@ -45,7 +46,12 @@ struct TrackRowView: View {
                         .lineLimit(1)
                         .foregroundStyle(isCurrentTrack ? Color.accentColor : .primary)
 
-                    if showArtist {
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(artistFont ?? (isCompact ? .caption2 : .caption))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else if showArtist {
                         Text(track.artistName)
                             .font(artistFont ?? (isCompact ? .caption2 : .caption))
                             .foregroundStyle(.secondary)
@@ -145,7 +151,7 @@ struct NowPlayingBarsView: View {
 
 #Preview {
     let track = PlexMetadata(
-        ratingKey: "1", key: nil, type: "track", title: "Test Song",
+        ratingKey: "1", key: nil, type: "track", subtype: nil, title: "Test Song",
         titleSort: nil, originalTitle: nil, summary: nil, year: nil,
         index: 1, parentIndex: nil, duration: 234000, addedAt: nil,
         updatedAt: nil, viewCount: nil, lastViewedAt: nil,
@@ -153,7 +159,8 @@ struct NowPlayingBarsView: View {
         grandparentArt: nil, parentTitle: "Test Album",
         grandparentTitle: "Test Artist", parentRatingKey: nil,
         grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-        media: nil, genre: nil, country: nil
+        media: nil, genre: nil, style: nil, country: nil,
+        subformat: nil, originallyAvailableAt: nil
     )
     TrackRowView(track: track, tracks: [track], index: 0)
         .environment(AudioPlayerService())

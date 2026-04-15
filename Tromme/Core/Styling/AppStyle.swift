@@ -9,12 +9,36 @@ enum AppStyle {
         static let sectionGap: CGFloat = 12
         static let cardGap: CGFloat = 16
         static let pageHorizontal: CGFloat = 20
+        static let nowPlayingHorizontal: CGFloat = 32
         static let listItemGap: CGFloat = 0
     }
 
     enum Radius {
-        static let card: CGFloat = 10
+        static let card: CGFloat = 8
         static let avatar: CGFloat = 60
+    }
+
+    enum TrackGrid {
+        static let artworkSize: CGFloat = 46
+        static let rowSpacing: CGFloat = 8
+        static let itemWidth: CGFloat = 325
+    }
+
+    enum AlbumLayout {
+        static let gridVerticalPadding: CGFloat = 8
+
+        static let listArtworkSize: CGFloat = 64
+        static let listArtworkCornerRadius: CGFloat = 8
+        static let listTextSpacing: CGFloat = 2
+        static let listRowVerticalPadding: CGFloat = 1
+        static let listRowInsets = EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)
+    }
+
+    enum ArtistDetailAlbumGrid {
+        static let itemSpacing: CGFloat = 20
+        static let rowSpacing: CGFloat = 20
+        static let itemContentSpacing: CGFloat = 4
+        static let artworkCornerRadius: CGFloat = 8
     }
 
     enum Typography {

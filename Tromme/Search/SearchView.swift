@@ -3,12 +3,12 @@ import SwiftUI
 struct SearchView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
 
     @State private var searchText = ""
     @State private var hubs: [Hub] = []
-    @State private var isSearching = false
-
+    @State private var searchTask: Task<Void, Never>?
     var body: some View {
         Group {
             if searchText.isEmpty && hubs.isEmpty {
@@ -17,9 +17,6 @@ struct SearchView: View {
                     systemImage: "magnifyingglass",
                     description: Text("Search for artists, albums, and songs.")
                 )
-            } else if isSearching {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if hubs.isEmpty && !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
@@ -39,7 +36,12 @@ struct SearchView: View {
         .navigationTitle("Search")
         .searchable(text: $searchText, prompt: "Artists, Songs, Albums & More")
         .onChange(of: searchText) { _, newValue in
-            Task { await performSearch(query: newValue) }
+            searchTask?.cancel()
+            searchTask = Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled else { return }
+                await performSearch(query: newValue)
+            }
         }
     }
 
@@ -59,7 +61,7 @@ struct SearchView: View {
         case "album":
             NavigationLink(value: item) {
                 HStack(spacing: 12) {
-                    ArtworkView(thumbPath: item.thumb, size: 44, cornerRadius: 6)
+                    ArtworkView(thumbPath: item.thumb, size: 44, cornerRadius: 8)
                     VStack(alignment: .leading) {
                         Text(item.title).lineLimit(1)
                         Text(item.parentTitle ?? "Album").font(.caption).foregroundStyle(.secondary)
@@ -85,19 +87,71 @@ struct SearchView: View {
             hubs = []
             return
         }
-        guard let server = serverConnection.currentServer else { return }
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
 
-        isSearching = true
-        do {
-            hubs = try await client.cachedSearch(
-                server: server,
-                query: query,
-                sectionId: serverConnection.currentLibrarySectionId
-            )
-        } catch {
-            hubs = []
+        let lowered = query.lowercased()
+
+        let artists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
+        let albums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
+        let tracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
+
+        var matchedArtists = artists.filter { $0.title.lowercased().contains(lowered) }
+
+        // Include artists found via tracks that aren't in the artists list
+        let matchedArtistNames = Set(matchedArtists.map { $0.title.lowercased() })
+        let trackArtistKeys = Set(tracks.compactMap { track -> String? in
+            guard let artistName = track.grandparentTitle,
+                  artistName.lowercased().contains(lowered),
+                  !matchedArtistNames.contains(artistName.lowercased()),
+                  let key = track.grandparentRatingKey else { return nil }
+            return key
+        })
+        for key in trackArtistKeys {
+            if let track = tracks.first(where: { $0.grandparentRatingKey == key }),
+               let artistName = track.grandparentTitle {
+                matchedArtists.append(PlexMetadata(
+                    ratingKey: key,
+                    title: artistName,
+                    type: "artist",
+                    thumb: track.grandparentThumb
+                ))
+            }
         }
-        isSearching = false
+        let matchedAlbums = albums.filter { $0.title.lowercased().contains(lowered) || ($0.parentTitle?.lowercased().contains(lowered) ?? false) }
+        let matchedTracks = tracks.filter {
+            $0.title.lowercased().contains(lowered)
+            || ($0.grandparentTitle?.lowercased().contains(lowered) ?? false)
+            || ($0.parentTitle?.lowercased().contains(lowered) ?? false)
+        }
+
+        var results: [Hub] = []
+        if !matchedArtists.isEmpty {
+            results.append(Hub(hubIdentifier: "artists", title: "Artists", type: "artist", size: matchedArtists.count, metadata: Array(matchedArtists.prefix(5))))
+        }
+        if !matchedAlbums.isEmpty {
+            results.append(Hub(hubIdentifier: "albums", title: "Albums", type: "album", size: matchedAlbums.count, metadata: Array(matchedAlbums.prefix(5))))
+        }
+        if !matchedTracks.isEmpty {
+            results.append(Hub(hubIdentifier: "tracks", title: "Songs", type: "track", size: matchedTracks.count, metadata: Array(matchedTracks.prefix(10))))
+        }
+        hubs = results
+        await prefetchArtwork(for: results, server: server)
+    }
+
+    private func prefetchArtwork(for hubs: [Hub], server: PlexServer) async {
+        var seen = Set<String>()
+        let pointSize: CGFloat = 44
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
+        let urls = hubs
+            .flatMap { $0.metadata ?? [] }
+            .compactMap { $0.thumb ?? $0.parentThumb }
+            .filter { seen.insert($0).inserted }
+            .prefix(40)
+            .compactMap { path in
+                client.artworkURL(server: server, path: path, width: pixelSize, height: pixelSize)
+            }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
     }
 }
 

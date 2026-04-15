@@ -5,6 +5,9 @@ import Foundation
 ///
 /// Strategy: return cached data immediately, then refresh in background.
 /// Views call `get()` for cache-first, or `fetch()` to force refresh.
+///
+/// In-flight deduplication: concurrent requests for the same key share
+/// one network fetch via `withFetch(_:forKey:)`.
 actor LibraryCache {
     static let shared = LibraryCache()
 
@@ -13,6 +16,12 @@ actor LibraryCache {
     private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
     private let maxDiskSize: Int = 50 * 1024 * 1024 // 50 MB
+
+    /// Tracks in-flight fetch tasks by cache key so concurrent callers
+    /// share one network request instead of firing duplicates.
+    private var inFlightFetches: [String: Any] = [:]
+    /// Incremented on clearAll to invalidate in-progress fetches.
+    private var generation: Int = 0
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -65,7 +74,9 @@ actor LibraryCache {
 
     /// Clear all cached data.
     func clearAll() {
+        generation += 1
         memoryCache.removeAllObjects()
+        inFlightFetches.removeAll()
         try? FileManager.default.removeItem(at: diskURL)
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
     }
@@ -73,6 +84,95 @@ actor LibraryCache {
     /// Clear only memory cache (keeps disk).
     func clearMemory() {
         memoryCache.removeAllObjects()
+    }
+
+    // MARK: - Cached Fetch (single entry point)
+
+    /// The single entry point for all cache-first data access. Encapsulates
+    /// the entire stale-while-revalidate + request coalescing pattern:
+    ///
+    /// 1. If cached and fresh → return immediately
+    /// 2. If cached but stale → return immediately, background refresh
+    /// 3. If not cached → fetch, cache, and return
+    ///
+    /// Concurrent callers for the same key share one in-flight request.
+    func cachedFetch<T: Codable & Sendable>(
+        _ type: T.Type = T.self,
+        forKey key: String,
+        policy: CachePolicy = .detail,
+        fetch: @Sendable @escaping () async throws -> T
+    ) async throws -> T {
+        // Check cache with policy-specific TTLs
+        if let cached = get(type, forKey: key, policy: policy) {
+            if !cached.isStale { return cached.value }
+            // Stale — return cached value, refresh in background
+            Task { try? await coalescedFetch(fetch, forKey: key) }
+            return cached.value
+        }
+        // No cache — fetch synchronously
+        return try await coalescedFetch(fetch, forKey: key)
+    }
+
+    // MARK: - In-Flight Deduplication
+
+    /// Execute a fetch closure, deduplicating concurrent requests for the same key.
+    /// If another caller is already fetching for this key, this call joins that
+    /// in-flight request rather than starting a duplicate network call.
+    func withFetch<T: Codable & Sendable>(
+        _ fetch: @Sendable @escaping () async throws -> T,
+        forKey key: String
+    ) async throws -> T {
+        try await coalescedFetch(fetch, forKey: key)
+    }
+
+    private func coalescedFetch<T: Codable & Sendable>(
+        _ fetch: @Sendable @escaping () async throws -> T,
+        forKey key: String
+    ) async throws -> T {
+        // If there's already an in-flight fetch for this key, join it
+        if let existing = inFlightFetches[key] as? Task<T, Error> {
+            return try await existing.value
+        }
+
+        let startGeneration = generation
+        let task = Task<T, Error> {
+            try await fetch()
+        }
+        inFlightFetches[key] = task
+
+        do {
+            let result = try await task.value
+            inFlightFetches[key] = nil
+            // Only write to cache if it wasn't cleared during the fetch
+            if generation == startGeneration {
+                set(result, forKey: key)
+            }
+            return result
+        } catch {
+            inFlightFetches[key] = nil
+            throw error
+        }
+    }
+
+    // MARK: - Policy-Aware Get
+
+    private func get<T: Codable & Sendable>(_ type: T.Type, forKey key: String, policy: CachePolicy) -> CachedResult<T>? {
+        // 1. Memory cache
+        if let entry = memoryCache.object(forKey: key as NSString),
+           let value = entry.decode(as: T.self) {
+            let fresh = Date().timeIntervalSince(entry.timestamp) < policy.memoryTTL
+            return CachedResult(value: value, isStale: !fresh)
+        }
+
+        // 2. Disk cache
+        if let entry = loadFromDisk(key: key),
+           let value = entry.decode(as: T.self) {
+            memoryCache.setObject(entry, forKey: key as NSString)
+            let stale = Date().timeIntervalSince(entry.timestamp) > policy.diskTTL
+            return CachedResult(value: value, isStale: stale)
+        }
+
+        return nil
     }
 
     // MARK: - Disk Persistence
@@ -133,6 +233,48 @@ final class CacheEntry: NSObject, Codable {
     }
 }
 
+// MARK: - Cache Policy
+
+/// Per-data-type freshness windows. Different data changes at different rates,
+/// so a one-size-fits-all TTL leaves some data stale and over-fetches others.
+enum CachePolicy: Sendable {
+    /// Large, rarely-changing lists (all artists, all albums, all tracks).
+    /// Memory: 1 hour, Disk: 7 days.
+    case library
+    /// Detail pages, children, top tracks — moderate change frequency.
+    /// Memory: 30 min, Disk: 24 hours.
+    case detail
+    /// Playlists, favorites — user-editable, changes more often.
+    /// Memory: 15 min, Disk: 12 hours.
+    case userContent
+    /// Search results — short-lived, mostly just deduplication.
+    /// Memory: 5 min, Disk: 1 hour.
+    case search
+    /// Album styles — very stable metadata.
+    /// Memory: 2 hours, Disk: 7 days.
+    case styles
+
+    var memoryTTL: TimeInterval {
+        switch self {
+        case .library:     return 3600      // 1 hour
+        case .detail:      return 1800      // 30 min
+        case .userContent: return 900       // 15 min
+        case .search:      return 300       // 5 min
+        case .styles:      return 7200      // 2 hours
+        }
+    }
+
+    var diskTTL: TimeInterval {
+        switch self {
+        case .library:     return 604_800   // 7 days
+        case .detail:      return 86400     // 24 hours
+        case .userContent: return 43200     // 12 hours
+        case .search:      return 3600      // 1 hour
+        case .styles:      return 604_800   // 7 days
+        }
+    }
+}
+
 // MARK: - Cache Result
 
 struct CachedResult<T: Sendable>: Sendable {
@@ -152,6 +294,9 @@ enum CacheKey {
     static func albums(serverId: String, sectionId: String) -> String {
         "albums_\(serverId)_\(sectionId)"
     }
+    static func albumStyles(serverId: String, sectionId: String) -> String {
+        "album_styles_\(serverId)_\(sectionId)"
+    }
     static func tracks(serverId: String, sectionId: String) -> String {
         "tracks_\(serverId)_\(sectionId)"
     }
@@ -169,6 +314,9 @@ enum CacheKey {
     }
     static func search(query: String, sectionId: String?) -> String {
         "search_\(query)_\(sectionId ?? "all")"
+    }
+    static func topTracks(artistRatingKey: String) -> String {
+        "top_tracks_\(artistRatingKey)"
     }
     static func lyrics(title: String, artist: String) -> String {
         "lyrics_\(artist)_\(title)"

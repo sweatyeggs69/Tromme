@@ -6,174 +6,391 @@ struct ArtistDetailView: View {
     @Environment(AudioPlayerService.self) private var player
 
     let artist: PlexMetadata
-
-    @State private var albums: [PlexMetadata] = []
+    @State private var resolvedArtist: PlexMetadata?
+    @State private var artistTracks: [PlexMetadata] = []
     @State private var topTracks: [PlexMetadata] = []
-    @State private var isLoading = true
-    @State private var showAllTopSongs = false
-    @AppStorage("artistDetailAlbumViewMode") private var albumViewMode: ArtistDetailAlbumViewMode = .list
+    @State private var artistAlbums: [PlexMetadata] = []
+    @State private var selectedAlbum: PlexMetadata?
+    @State private var heroMinY: CGFloat = 0
+    @State private var showsBioSheet = false
 
-    private let albumGridColumns = [
-        GridItem(.flexible(), spacing: 10),
-        GridItem(.flexible(), spacing: 10)
-    ]
+    private var displayArtist: PlexMetadata {
+        resolvedArtist ?? artist
+    }
+
+    private var showsCollapsedTitle: Bool {
+        heroMinY < -80
+    }
+
+    private let heroHeight: CGFloat = 350
+    private let previewData: PreviewData?
+
+    struct PreviewData {
+        let resolvedArtist: PlexMetadata?
+        let artistTracks: [PlexMetadata]
+        let topTracks: [PlexMetadata]
+        let artistAlbums: [PlexMetadata]
+    }
+
+    init(artist: PlexMetadata, previewData: PreviewData? = nil) {
+        self.artist = artist
+        self.previewData = previewData
+        _resolvedArtist = State(initialValue: previewData?.resolvedArtist)
+        _artistTracks = State(initialValue: previewData?.artistTracks ?? [])
+        _topTracks = State(initialValue: previewData?.topTracks ?? [])
+        _artistAlbums = State(initialValue: previewData?.artistAlbums ?? [])
+    }
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var albumGridColumns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
+    }
+
+    private var albums: [PlexMetadata] {
+        artistAlbums.filter { !$0.isSingleOrEP }
+    }
+
+    private var singlesAndEPs: [PlexMetadata] {
+        artistAlbums.filter { $0.isSingleOrEP }
+    }
+
+    private func releaseGrid(_ releases: [PlexMetadata]) -> some View {
+        LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+            ForEach(releases) { album in
+                Button {
+                    selectedAlbum = album
+                } label: {
+                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                        GeometryReader { geo in
+                            ArtworkView(
+                                thumbPath: album.thumb,
+                                size: geo.size.width,
+                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                            )
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                        Text(album.title)
+                            .appItemTitleStyle()
+
+                        Text(album.releaseYear)
+                            .appItemSubtitleStyle()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 24)
+        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowSeparator(.hidden)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
+            .listRowSeparator(.hidden)
+    }
 
     var body: some View {
         List {
-            // Play / Shuffle
-            Section {
-                HStack(spacing: 12) {
-                    Button {
-                        if !topTracks.isEmpty { player.play(tracks: topTracks) }
-                    } label: {
-                        Label("Play", systemImage: "play.fill")
-                            .frame(maxWidth: .infinity)
+            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear
+                            .preference(
+                                key: ArtistHeroMinYPreferenceKey.self,
+                                value: proxy.frame(in: .named("artistDetailScroll")).minY
+                            )
                     }
-                    .buttonStyle(.bordered)
+                )
 
-                    Button {
-                        if !topTracks.isEmpty {
-                            var shuffled = topTracks
-                            shuffled.shuffle()
-                            player.play(tracks: shuffled)
+            if let latestAlbum = artistAlbums.first {
+                sectionHeader("Latest")
+
+                Button {
+                    selectedAlbum = latestAlbum
+                } label: {
+                    HStack(spacing: 14) {
+                        ArtworkView(
+                            thumbPath: latestAlbum.thumb,
+                            size: 120,
+                            cornerRadius: AppStyle.Radius.card
+                        )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 4) {
+                                Text(latestAlbum.releaseYear)
+                                if let format = latestAlbum.formatLabel {
+                                    Text("·")
+                                    Text(format)
+                                }
+                            }
+                            .appItemSubtitleStyle()
+
+                            Text(latestAlbum.title)
+                                .appItemTitleStyle()
+                                .lineLimit(2)
+
+                            if let count = latestAlbum.leafCount {
+                                Text("\(count) \(count == 1 ? "song" : "songs")")
+                                    .appItemSubtitleStyle()
+                            }
                         }
-                    } label: {
-                        Label("Shuffle", systemImage: "shuffle")
-                            .frame(maxWidth: .infinity)
+
+                        Spacer()
                     }
-                    .buttonStyle(.bordered)
                 }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
                 .listRowSeparator(.hidden)
             }
 
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-            } else {
-                // Top Songs
-                if !topTracks.isEmpty {
-                    Section("Top Songs") {
-                        let displayTracks = showAllTopSongs ? topTracks : Array(topTracks.prefix(5))
-                        ForEach(Array(displayTracks.enumerated()), id: \.element.id) { index, track in
-                            let globalIndex = topTracks.firstIndex(where: { $0.ratingKey == track.ratingKey }) ?? index
-                            TrackRowView(
-                                track: track,
-                                tracks: topTracks,
-                                index: globalIndex,
-                                showArtwork: true,
-                                showTrackNumber: false
-                            )
-                        }
-                        if topTracks.count > 5 {
-                            Button(showAllTopSongs ? "Show Less" : "See All") {
-                                withAnimation { showAllTopSongs.toggle() }
-                            }
-                        }
+            if !topTracks.isEmpty {
+                sectionHeader("Top Songs")
+
+                HorizontalTrackGrid(
+                    tracks: Array(topTracks.prefix(10)),
+                    rowCount: min(5, topTracks.count),
+                    showArtist: false,
+                    subtitleProvider: { track in
+                        let albumYear = artistAlbums.first(where: { $0.ratingKey == track.parentRatingKey })?.year
+                        return [track.parentTitle, albumYear.map(String.init)]
+                            .compactMap { $0 }
+                            .joined(separator: " · ")
                     }
-                }
-
-                // Albums
-                if !albums.isEmpty {
-                    Section("Albums") {
-                        switch albumViewMode {
-                        case .list:
-                            ForEach(albums) { album in
-                                NavigationLink(value: album) {
-                                    HStack(spacing: 12) {
-                                        ArtworkView(thumbPath: album.thumb, size: 64, cornerRadius: 8)
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(album.title)
-                                                .appItemTitleStyle()
-                                            if let year = album.year {
-                                                Text(String(year))
-                                                    .appItemSubtitleStyle()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                        case .grid:
-                            LazyVGrid(columns: albumGridColumns, spacing: 10) {
-                                ForEach(albums) { album in
-                                    NavigationLink(value: album) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            ArtworkView(thumbPath: album.thumb, size: 160, cornerRadius: 8)
-
-                                            Text(album.title)
-                                                .appItemTitleStyle()
-
-                                            if let year = album.year {
-                                                Text(String(year))
-                                                    .appItemSubtitleStyle()
-                                            }
-                                        }
-                                        .frame(width: 160, alignment: .leading)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                }
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
             }
+
+            if !albums.isEmpty {
+                sectionHeader("Albums")
+                releaseGrid(albums)
+            }
+
+            if !singlesAndEPs.isEmpty {
+                sectionHeader("Singles & EPs")
+                releaseGrid(singlesAndEPs)
+            }
+
         }
-        .navigationTitle(artist.title)
+        .coordinateSpace(name: "artistDetailScroll")
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedAlbum) { album in
+            AlbumDetailView(album: album)
+        }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(displayArtist.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(showsCollapsedTitle ? 1 : 0)
+            }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    albumViewMode = albumViewMode == .grid ? .list : .grid
-                } label: {
-                    Image(systemName: albumViewMode == .grid ? "list.bullet" : "square.grid.2x2")
+                HStack {
+                    Button {
+                        guard !artistTracks.isEmpty else { return }
+                        player.play(tracks: artistTracks)
+                        if !player.isShuffled {
+                            player.toggleShuffle()
+                        }
+                    } label: {
+                        Image(systemName: "shuffle")
+                            .padding(.leading, 10)
+                            .padding(.trailing, 3)
+                    }
+
+                    if displayArtist.summary != nil {
+                        Menu {
+                            Button {
+                                showsBioSheet = true
+                            } label: {
+                                Label("Artist Info", systemImage: "info.circle")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .padding(.leading, 3)
+                                .padding(.trailing, 10)
+                        }
+                    }
                 }
-                .accessibilityLabel(albumViewMode == .grid ? "Show albums as list" : "Show albums as grid")
             }
         }
-        .task { await loadContent() }
-    }
+        .listStyle(.plain)
+        .ignoresSafeArea(edges: .top)
+        .onPreferenceChange(ArtistHeroMinYPreferenceKey.self) { value in
+            heroMinY = value
+        }
+        .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
+        .task {
+            guard previewData == nil else { return }
+            guard let server = serverConnection.currentServer,
+                  let sectionId = serverConnection.currentLibrarySectionId else { return }
 
-    private func loadContent() async {
-        guard let server = serverConnection.currentServer,
-              serverConnection.currentLibrarySectionId != nil else { return }
+            // Load all data in parallel instead of sequentially
+            async let metadataReq = client.cachedMetadata(server: server, ratingKey: artist.ratingKey)
+            async let topTracksReq = client.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
+            async let childrenReq = client.cachedChildren(server: server, ratingKey: artist.ratingKey)
+            async let allTracksReq = client.cachedTracks(server: server, sectionId: sectionId)
 
-        do {
-            albums = try await client.cachedChildren(server: server, ratingKey: artist.ratingKey)
-            albums.sort { ($0.year ?? 0) > ($1.year ?? 0) }
+            resolvedArtist = try? await metadataReq
 
-            var allTracks: [PlexMetadata] = []
-            for album in albums.prefix(5) {
-                let tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey)
-                allTracks.append(contentsOf: tracks)
+            let fetchedTopTracks = (try? await topTracksReq) ?? []
+
+            var children = (try? await childrenReq) ?? []
+
+            let allTracks = (try? await allTracksReq) ?? []
+            artistTracks = allTracks.filter {
+                $0.grandparentRatingKey == artist.ratingKey
+                || $0.grandparentTitle?.localizedCaseInsensitiveCompare(artist.title) == .orderedSame
             }
-            topTracks = allTracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
-        } catch {}
 
-        isLoading = false
+            // Find releases referenced by tracks but missing from children
+            let childrenKeys = Set(children.map(\.ratingKey))
+            let missingKeys = Set(artistTracks.compactMap(\.parentRatingKey))
+                .subtracting(childrenKeys)
+
+            if !missingKeys.isEmpty {
+                let missing = await withTaskGroup(of: PlexMetadata?.self) { group in
+                    for key in missingKeys {
+                        group.addTask { try? await client.cachedMetadata(server: server, ratingKey: key) }
+                    }
+                    var results: [PlexMetadata] = []
+                    for await item in group {
+                        if let item { results.append(item) }
+                    }
+                    return results
+                }
+                children.append(contentsOf: missing)
+            }
+
+            artistAlbums = children.sorted {
+                let date0 = $0.originallyAvailableAt ?? ""
+                let date1 = $1.originallyAvailableAt ?? ""
+                if date0 != date1 { return date0 > date1 }
+                if ($0.year ?? 0) != ($1.year ?? 0) { return ($0.year ?? 0) > ($1.year ?? 0) }
+                return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
+            }
+
+            // Fallback: if Plex returned no top tracks, use local sort by viewCount
+            topTracks = fetchedTopTracks.isEmpty
+                ? artistTracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
+                : fetchedTopTracks
+        }
+        .sheet(isPresented: $showsBioSheet) {
+            if let summary = displayArtist.summary, !summary.isEmpty {
+                NavigationStack {
+                    ScrollView {
+                        Text(summary)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                    }
+                    .navigationTitle("Biography")
+                    .navigationBarTitleDisplayMode(.inline)
+                }
+            }
+        }
     }
 }
 
-private enum ArtistDetailAlbumViewMode: String {
-    case list
-    case grid
+private struct ArtistHeroHeaderView: View {
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
+
+    let artist: PlexMetadata
+    let heroHeight: CGFloat
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            let minY = geo.frame(in: .global).minY
+            let isOverscrolling = minY > 0
+            let stretchHeight = isOverscrolling ? heroHeight + minY : heroHeight
+            let stretchOffset = isOverscrolling ? -minY : 0
+
+            ZStack(alignment: .bottomLeading) {
+                Group {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Rectangle()
+                            .fill(.quaternary)
+                    }
+                }
+                .frame(width: geo.size.width, height: stretchHeight, alignment: .top)
+                .clipped()
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.45)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                Text(artist.title)
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+            }
+            .offset(y: stretchOffset)
+        }
+        .frame(height: heroHeight)
+        .task(id: artist.art ?? artist.thumb) {
+            await loadImage()
+        }
+    }
+
+    private func loadImage() async {
+        guard let server = serverConnection.currentServer else {
+            image = nil
+            return
+        }
+        let artworkPath = artist.art ?? artist.thumb
+        guard let url = client.artworkURL(server: server, path: artworkPath, width: 1000, height: 1000) else {
+            image = nil
+            return
+        }
+        let resolvedImage = await ImageCache.shared.image(for: url)
+        guard !Task.isCancelled else { return }
+        image = resolvedImage
+    }
 }
 
+private struct ArtistHeroMinYPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+#if DEBUG
 #Preview {
     NavigationStack {
-        ArtistDetailView(artist: PlexMetadata(
-            ratingKey: "1", key: nil, type: "artist", title: "Radiohead",
-            titleSort: nil, originalTitle: nil, summary: nil,
-            year: nil, index: nil, parentIndex: nil, duration: nil,
-            addedAt: nil, updatedAt: nil, viewCount: nil, lastViewedAt: nil,
-            thumb: nil, art: nil, parentThumb: nil, grandparentThumb: nil,
-            grandparentArt: nil, parentTitle: nil, grandparentTitle: nil,
-            parentRatingKey: nil, grandparentRatingKey: nil,
-            leafCount: nil, viewedLeafCount: nil, media: nil,
-            genre: [PlexTag(tag: "Alternative")], country: nil
-        ))
+        ArtistDetailView(
+            artist: DevelopmentMockData.previewArtist,
+            previewData: .init(
+                resolvedArtist: DevelopmentMockData.previewArtist,
+                artistTracks: DevelopmentMockData.artistAllTracks,
+                topTracks: DevelopmentMockData.artistTopTracks,
+                artistAlbums: DevelopmentMockData.artistAlbums
+            )
+        )
     }
     .environment(AudioPlayerService())
 }
+#endif

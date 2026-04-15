@@ -8,6 +8,13 @@ struct AllSongsView: View {
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
     @State private var searchText = ""
+    private let previewTracks: [PlexMetadata]?
+
+    init(previewTracks: [PlexMetadata]? = nil) {
+        self.previewTracks = previewTracks
+        _tracks = State(initialValue: previewTracks ?? [])
+        _isLoading = State(initialValue: previewTracks == nil)
+    }
 
     var body: some View {
         Group {
@@ -44,8 +51,14 @@ struct AllSongsView: View {
             }
         }
         .navigationTitle("Songs")
-        .task { await loadTracks() }
-        .refreshable { await loadTracks() }
+        .task {
+            guard previewTracks == nil else { return }
+            await loadTracks()
+        }
+        .refreshable {
+            guard previewTracks == nil else { return }
+            await loadTracks()
+        }
     }
 
     private var filteredTracks: [PlexMetadata] {
@@ -69,9 +82,11 @@ struct AllSongsView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
-        AllSongsView()
+        AllSongsView(previewTracks: DevelopmentMockData.allSongs)
     }
     .environment(AudioPlayerService())
 }
+#endif

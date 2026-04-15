@@ -8,6 +8,8 @@ final class ArtworkColorCache {
 
     private var cache: [String: Color] = [:]
     private let diskURL: URL
+    private var pendingSaves = false
+    private var saveTask: Task<Void, Never>?
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
@@ -26,9 +28,8 @@ final class ArtworkColorCache {
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 50, height: 50) else { return }
         guard let image = await ImageCache.shared.image(for: url) else { return }
         let dominant = image.dominantColor
-        let color = Color(dominant)
-        cache[thumbPath] = color
-        saveToDisk(thumbPath: thumbPath, r: dominant.rgbComponents.r, g: dominant.rgbComponents.g, b: dominant.rgbComponents.b)
+        cache[thumbPath] = Color(dominant)
+        scheduleSave()
     }
 
     // MARK: - Disk Persistence
@@ -42,14 +43,24 @@ final class ArtworkColorCache {
         }
     }
 
-    private func saveToDisk(thumbPath: String, r: CGFloat, g: CGFloat, b: CGFloat) {
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            flushToDisk()
+        }
+    }
+
+    private func flushToDisk() {
         let fileURL = diskURL.appendingPathComponent("colors.json")
         var entries: [String: [CGFloat]] = [:]
-        if let data = try? Data(contentsOf: fileURL),
-           let existing = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) {
-            entries = existing
+        for (key, color) in cache {
+            let uiColor = UIColor(color)
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+            uiColor.getRed(&r, green: &g, blue: &b, alpha: nil)
+            entries[key] = [r, g, b]
         }
-        entries[thumbPath] = [r, g, b]
         if let data = try? JSONEncoder().encode(entries) {
             try? data.write(to: fileURL, options: .atomic)
         }

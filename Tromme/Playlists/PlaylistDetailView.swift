@@ -9,6 +9,14 @@ struct PlaylistDetailView: View {
 
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
+    private let previewTracks: [PlexMetadata]?
+
+    init(playlist: PlexPlaylist, previewTracks: [PlexMetadata]? = nil) {
+        self.playlist = playlist
+        self.previewTracks = previewTracks
+        _tracks = State(initialValue: previewTracks ?? [])
+        _isLoading = State(initialValue: previewTracks == nil)
+    }
 
     var body: some View {
         List {
@@ -78,7 +86,10 @@ struct PlaylistDetailView: View {
         }
         .navigationTitle(playlist.title)
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadTracks() }
+        .task {
+            guard previewTracks == nil else { return }
+            await loadTracks()
+        }
     }
 
     private func loadTracks() async {
@@ -90,13 +101,14 @@ struct PlaylistDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
-        PlaylistDetailView(playlist: PlexPlaylist(
-            ratingKey: "1", key: nil, type: "playlist", title: "Favorites",
-            summary: nil, smart: false, playlistType: "audio",
-            composite: nil, duration: nil, leafCount: 24, addedAt: nil, updatedAt: nil
-        ))
+        PlaylistDetailView(
+            playlist: DevelopmentMockData.previewPlaylist,
+            previewTracks: DevelopmentMockData.previewPlaylistTracks
+        )
     }
     .environment(AudioPlayerService())
 }
+#endif

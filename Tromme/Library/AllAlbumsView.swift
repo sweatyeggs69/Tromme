@@ -3,6 +3,7 @@ import SwiftUI
 struct AllAlbumsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
@@ -11,10 +12,12 @@ struct AllAlbumsView: View {
 
     private let previewAlbums: [PlexMetadata]?
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
+    }
 
     init(previewAlbums: [PlexMetadata]? = nil) {
         self.previewAlbums = previewAlbums
@@ -47,6 +50,9 @@ struct AllAlbumsView: View {
             guard previewAlbums == nil else { return }
             await loadAlbums()
         }
+        .task(id: artworkPrefetchKey) {
+            await prefetchVisibleArtwork()
+        }
         .refreshable {
             guard previewAlbums == nil else { return }
             await loadAlbums()
@@ -58,11 +64,18 @@ struct AllAlbumsView: View {
         switch viewMode {
         case .grid:
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 8) {
+                LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
                     ForEach(filteredAlbums) { album in
                         NavigationLink(value: album) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ArtworkView(thumbPath: album.thumb, size: 184, cornerRadius: 8)
+                            VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                GeometryReader { geo in
+                                    ArtworkView(
+                                        thumbPath: album.thumb,
+                                        size: geo.size.width,
+                                        cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                    )
+                                }
+                                .aspectRatio(1, contentMode: .fit)
 
                                 Text(album.title)
                                     .appItemTitleStyle()
@@ -70,22 +83,26 @@ struct AllAlbumsView: View {
                                 Text(album.parentTitle ?? "")
                                     .appItemSubtitleStyle()
                             }
-                            .frame(width: 184, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                .padding(.vertical, AppStyle.AlbumLayout.gridVerticalPadding)
             }
 
         case .list:
             List(filteredAlbums) { album in
                 NavigationLink(value: album) {
                     HStack(spacing: 10) {
-                        ArtworkView(thumbPath: album.thumb, size: 64, cornerRadius: 8)
+                        ArtworkView(
+                            thumbPath: album.thumb,
+                            size: AppStyle.AlbumLayout.listArtworkSize,
+                            cornerRadius: AppStyle.AlbumLayout.listArtworkCornerRadius
+                        )
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: AppStyle.AlbumLayout.listTextSpacing) {
                             Text(album.title)
                                 .appItemTitleStyle()
 
@@ -93,10 +110,10 @@ struct AllAlbumsView: View {
                                 .appItemSubtitleStyle()
                         }
                     }
-                    .padding(.vertical, 1)
+                    .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
                 }
                 .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
             }
             .listStyle(.plain)
         }
@@ -110,6 +127,10 @@ struct AllAlbumsView: View {
         }
     }
 
+    private var artworkPrefetchKey: String {
+        "\(viewMode.rawValue)|\(searchText)|\(filteredAlbums.count)"
+    }
+
     private func loadAlbums() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
@@ -121,6 +142,21 @@ struct AllAlbumsView: View {
         }
         isLoading = false
     }
+
+    private func prefetchVisibleArtwork() async {
+        guard !isLoading, let server = serverConnection.currentServer else { return }
+        let prefetchCount = viewMode == .grid ? 80 : 60
+        let pointSize: CGFloat = if viewMode == .grid {
+            horizontalSizeClass == .regular ? 220 : 180
+        } else {
+            AppStyle.AlbumLayout.listArtworkSize
+        }
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
+        let urls = filteredAlbums.prefix(prefetchCount).compactMap { album in
+            client.artworkURL(server: server, path: album.thumb, width: pixelSize, height: pixelSize)
+        }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
+    }
 }
 
 private enum AlbumViewMode: String {
@@ -128,8 +164,10 @@ private enum AlbumViewMode: String {
     case list
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
         AllAlbumsView(previewAlbums: DevelopmentMockData.allAlbums)
     }
 }
+#endif

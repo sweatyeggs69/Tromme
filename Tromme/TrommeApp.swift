@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct TrommeApp: App {
@@ -14,14 +15,25 @@ struct TrommeApp: App {
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)
-                .tint(AppStyle.Colors.tint)
                 .onChange(of: serverConnection.currentServer, initial: true) { _, server in
                     if let server {
                         audioPlayer.configure(server: server, client: plexClient)
                     }
                 }
+                .task {
+                    // Warm cache on launch if already signed in
+                    guard let server = serverConnection.currentServer,
+                          let sectionId = serverConnection.currentLibrarySectionId else { return }
+                    serverConnection.warmCache(server: server, sectionId: sectionId, client: plexClient)
+                }
+                .task {
+                    await observeMemoryWarnings()
+                }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                Task { await ImageCache.shared.clearMemory() }
+            }
             if phase == .active {
                 Task {
                     guard let server = serverConnection.currentServer,
@@ -34,10 +46,17 @@ struct TrommeApp: App {
                     guard serverUpdatedAt > lastUpdatedAt else { return }
                     UserDefaults.standard.set(serverUpdatedAt, forKey: "lastLibraryUpdatedAt")
                     await LibraryCache.shared.clearAll()
-                    _ = try? await plexClient.cachedTracks(server: server, sectionId: sectionId)
-                    _ = try? await plexClient.cachedAlbums(server: server, sectionId: sectionId)
+                    await plexClient.warmCache(server: server, sectionId: sectionId)
                 }
             }
+        }
+    }
+
+    private func observeMemoryWarnings() async {
+        for await _ in NotificationCenter.default.notifications(
+            named: UIApplication.didReceiveMemoryWarningNotification
+        ) {
+            await ImageCache.shared.clearMemory()
         }
     }
 }

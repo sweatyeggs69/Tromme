@@ -21,6 +21,11 @@ final class LyricsService {
 
     private static let lyricsTTL: TimeInterval = 7 * 24 * 60 * 60 // 7 days
 
+    var isInstrumental: Bool {
+        guard let plainLyrics else { return false }
+        return Self.looksInstrumental(plainLyrics)
+    }
+
     func fetch(track: PlexMetadata) async {
         if isLoading, inFlightTrackKey == track.ratingKey {
             return
@@ -134,6 +139,16 @@ final class LyricsService {
     private func completeIfCurrent(_ requestID: UUID) {
         guard isCurrentRequest(requestID) else { return }
         isLoading = false
+    }
+
+    private static func looksInstrumental(_ text: String) -> Bool {
+        let normalized = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z\\s]", with: "", options: .regularExpression)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        return normalized == "instrumental"
     }
 }
 

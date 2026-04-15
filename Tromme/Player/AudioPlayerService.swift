@@ -1,10 +1,9 @@
 import AVFoundation
 import MediaPlayer
-import Network
 import Observation
 
-@Observable
-final class AudioPlayerService {
+@Observable @MainActor
+final class AudioPlayerService: @unchecked Sendable {
     var currentTrack: PlexMetadata?
     var queue: [PlexMetadata] = []
     var currentIndex: Int = 0
@@ -13,6 +12,8 @@ final class AudioPlayerService {
     var duration: TimeInterval = 0
     var isShuffled = false
     var repeatMode: RepeatMode = .off
+    var isMagicMixActive = false
+    var isInfiniteModeActive = false
     /// True once the current item's status is .readyToPlay.
     var isReadyToPlay = false
 
@@ -48,8 +49,7 @@ final class AudioPlayerService {
     private var currentSessionID: String?
     private var cachedArtwork: MPMediaItemArtwork?
     private var cachedArtworkThumbPath: String?
-    private let networkMonitor = NWPathMonitor()
-    private var isCellular = false
+    private var isCellular: Bool { NetworkStatus.shared.isCellular }
     private var isSeeking = false
 
     /// Progress from 0 to 1
@@ -64,11 +64,6 @@ final class AudioPlayerService {
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()
-        nonisolated(unsafe) let weakSelf = self
-        networkMonitor.pathUpdateHandler = { path in
-            weakSelf.isCellular = path.usesInterfaceType(.cellular)
-        }
-        networkMonitor.start(queue: .global(qos: .utility))
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -79,6 +74,7 @@ final class AudioPlayerService {
     // MARK: - Playback Control
 
     func play(tracks: [PlexMetadata], startingAt index: Int = 0) {
+        guard !tracks.isEmpty, tracks.indices.contains(index) else { return }
         originalQueue = tracks
         if isShuffled {
             var shuffled = tracks
@@ -96,9 +92,12 @@ final class AudioPlayerService {
 
     func togglePlayPause() {
         if player == nil, let track = currentTrack {
-            queue = [track]
-            currentIndex = 0
-            loadAndPlay(track)
+            if queue.isEmpty {
+                queue = [track]
+                currentIndex = 0
+            }
+            guard currentIndex < queue.count else { return }
+            loadAndPlay(queue[currentIndex])
             return
         }
         guard let player else { return }
@@ -107,6 +106,21 @@ final class AudioPlayerService {
             isPlaying = false
             reportTimelineState("paused")
         } else {
+            // If the item has finished playing, seek to start before resuming
+            if let item = player.currentItem,
+               item.status == .readyToPlay,
+               item.duration.seconds.isFinite,
+               CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
+                currentTime = 0
+                let currentPlayer = player
+                currentPlayer.seek(to: .zero) { _ in
+                    currentPlayer.play()
+                }
+                isPlaying = true
+                reportTimelineState("playing")
+                updateNowPlayingInfo()
+                return
+            }
             player.play()
             isPlaying = true
             reportTimelineState("playing")
@@ -115,6 +129,20 @@ final class AudioPlayerService {
     }
 
     private func playCurrent() {
+        // If the player item has ended (song finished), re-seek to start before playing
+        if let item = player?.currentItem,
+           item.status == .readyToPlay,
+           item.duration.seconds.isFinite,
+           CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
+            guard let currentPlayer = player else { return }
+            currentPlayer.seek(to: .zero) { _ in
+                currentPlayer.play()
+            }
+            isPlaying = true
+            currentTime = 0
+            updateNowPlayingInfo()
+            return
+        }
         guard let player else { return }
         player.play()
         isPlaying = true
@@ -141,8 +169,10 @@ final class AudioPlayerService {
         } else {
             player?.pause()
             isPlaying = false
-            currentTime = duration
+            currentTime = 0
+            player?.seek(to: .zero)
             updateNowPlayingInfo()
+            reportTimelineState("stopped")
             return
         }
         loadAndPlay(queue[currentIndex])
@@ -173,14 +203,16 @@ final class AudioPlayerService {
 
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
         let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
-        nonisolated(unsafe) let weakSelf = self
-        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { finished in
-            DispatchQueue.main.async {
-                weakSelf.isSeeking = false
-                guard finished else { return }
-                weakSelf.currentTime = boundedTime
-                weakSelf.updateNowPlayingInfo()
-                weakSelf.reportTimelineState(weakSelf.isPlaying ? "playing" : "paused")
+        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.isSeeking = false
+                    guard finished else { return }
+                    self.currentTime = boundedTime
+                    self.updateNowPlayingInfo()
+                    self.reportTimelineState(self.isPlaying ? "playing" : "paused")
+                }
             }
         }
     }
@@ -226,6 +258,12 @@ final class AudioPlayerService {
     }
 
     func toggleShuffle() {
+        // If queue is empty but we have a current track (e.g. restored state), seed the queue
+        if queue.isEmpty, let track = currentTrack {
+            queue = [track]
+            originalQueue = [track]
+            currentIndex = 0
+        }
         guard !queue.isEmpty else { return }
         isShuffled.toggle()
         if isShuffled {
@@ -269,6 +307,12 @@ final class AudioPlayerService {
         return Array(queue[(currentIndex + 1)...])
     }
 
+    func clearQueue() {
+        guard !queue.isEmpty else { return }
+        queue = Array(queue.prefix(currentIndex + 1))
+        originalQueue = queue
+    }
+
     // MARK: - Private
 
     private func makePlayerItem(url: URL, headers: [String: String]? = nil) -> AVPlayerItem {
@@ -280,6 +324,11 @@ final class AudioPlayerService {
     }
 
     private func loadAndPlay(_ track: PlexMetadata) {
+        guard server != nil, client != nil else {
+            print("[AudioPlayer] Cannot play: server/client not configured")
+            return
+        }
+
         // Report stopped for the previous track before switching
         if currentTrack != nil {
             reportTimelineState("stopped", continuing: true)
@@ -319,7 +368,6 @@ final class AudioPlayerService {
             let capturedClient = client
             let capturedServer = server
 
-            nonisolated(unsafe) let weakSelf = self
             Task {
                 // Step 1: Authorize the transcode session
                 do {
@@ -331,13 +379,13 @@ final class AudioPlayerService {
                         cellular: cellular
                     )
                 } catch {
-                    guard weakSelf.playbackGeneration == generation else { return }
+                    guard self.playbackGeneration == generation else { return }
                     print("[AudioPlayer] Decision failed: \(error.localizedDescription). Using direct stream.")
-                    weakSelf.startPlayback(url: directURL)
+                    self.startPlayback(url: directURL)
                     return
                 }
 
-                guard weakSelf.playbackGeneration == generation else { return }
+                guard self.playbackGeneration == generation else { return }
 
                 // Step 2: Fetch master playlist and resolve variant URL
                 let universalCandidates = capturedClient.universalStreamURLCandidates(
@@ -346,11 +394,11 @@ final class AudioPlayerService {
                     sessionID: sessionID,
                     cellular: cellular
                 )
-                weakSelf.universalCandidatesForCurrentItem = universalCandidates
+                self.universalCandidatesForCurrentItem = universalCandidates
 
                 guard let masterURL = universalCandidates.first else {
                     print("[AudioPlayer] Universal URL unavailable. Using direct stream.")
-                    weakSelf.startPlayback(url: directURL)
+                    self.startPlayback(url: directURL)
                     return
                 }
 
@@ -360,12 +408,12 @@ final class AudioPlayerService {
                         server: capturedServer,
                         headers: headers
                     )
-                    guard weakSelf.playbackGeneration == generation else { return }
-                    weakSelf.startPlayback(url: variantURL, headers: weakSelf.universalHeadersForCurrentItem)
+                    guard self.playbackGeneration == generation else { return }
+                    self.startPlayback(url: variantURL, headers: self.universalHeadersForCurrentItem)
                 } catch {
-                    guard weakSelf.playbackGeneration == generation else { return }
+                    guard self.playbackGeneration == generation else { return }
                     print("[AudioPlayer] Variant resolve failed: \(error.localizedDescription). Using direct stream.")
-                    weakSelf.startPlayback(url: directURL)
+                    self.startPlayback(url: directURL)
                 }
             }
         } else {
@@ -429,40 +477,41 @@ final class AudioPlayerService {
     /// Watches the player item's status. Once .readyToPlay fires, loads the
     /// authoritative duration from the parsed STREAMINFO / container header.
     private func observeItemStatus(_ item: AVPlayerItem) {
-        nonisolated(unsafe) let weakSelf = self
-        statusObservation = item.observe(\.status, options: [.new]) { observedItem, _ in
-            DispatchQueue.main.async {
-                switch observedItem.status {
-                case .readyToPlay:
-                    weakSelf.isReadyToPlay = true
-                    let assetDuration = observedItem.duration.seconds
-                    if assetDuration.isFinite && assetDuration > 0 {
-                        weakSelf.duration = assetDuration
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
+            let status = observedItem.status
+            let assetDuration = observedItem.duration.seconds
+            let errorDesc = observedItem.error?.localizedDescription
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    switch status {
+                    case .readyToPlay:
+                        self.isReadyToPlay = true
+                        if assetDuration.isFinite && assetDuration > 0 {
+                            self.duration = assetDuration
+                        }
+                        self.updateNowPlayingInfo()
+                    case .failed:
+                        self.isReadyToPlay = false
+                        print("[AudioPlayer] Item failed: \(errorDesc ?? "unknown")")
+                        let nextIndex = self.universalCandidateIndexForCurrentItem + 1
+                        if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
+                            self.universalCandidateIndexForCurrentItem = nextIndex
+                            let nextURL = self.universalCandidatesForCurrentItem[nextIndex]
+                            self.startPlayback(url: nextURL, headers: self.universalHeadersForCurrentItem)
+                            return
+                        }
+                        if !self.didFallbackToDirectForCurrentItem,
+                           let fallbackURL = self.directFallbackURLForCurrentItem {
+                            self.didFallbackToDirectForCurrentItem = true
+                            self.directFallbackURLForCurrentItem = nil
+                            self.universalHeadersForCurrentItem = [:]
+                            print("[AudioPlayer] Universal stream failed. Using direct stream.")
+                            self.startPlayback(url: fallbackURL)
+                        }
+                    default:
+                        break
                     }
-                    weakSelf.updateNowPlayingInfo()
-                case .failed:
-                    weakSelf.isReadyToPlay = false
-                    _ = observedItem.error as NSError?
-                    print("[AudioPlayer] Item failed: \(observedItem.error?.localizedDescription ?? "unknown")")
-                    let nextUniversalIndex = weakSelf.universalCandidateIndexForCurrentItem + 1
-                    if weakSelf.universalCandidatesForCurrentItem.indices.contains(nextUniversalIndex) {
-                        weakSelf.universalCandidateIndexForCurrentItem = nextUniversalIndex
-                        let nextURL = weakSelf.universalCandidatesForCurrentItem[nextUniversalIndex]
-
-
-                        weakSelf.startPlayback(url: nextURL, headers: weakSelf.universalHeadersForCurrentItem)
-                        return
-                    }
-                    if !weakSelf.didFallbackToDirectForCurrentItem,
-                       let fallbackURL = weakSelf.directFallbackURLForCurrentItem {
-                        weakSelf.didFallbackToDirectForCurrentItem = true
-                        weakSelf.directFallbackURLForCurrentItem = nil
-                        weakSelf.universalHeadersForCurrentItem = [:]
-                        print("[AudioPlayer] Universal stream failed. Using direct stream.")
-                        weakSelf.startPlayback(url: fallbackURL)
-                    }
-                default:
-                    break
                 }
             }
         }
@@ -503,26 +552,26 @@ final class AudioPlayerService {
     private func addTimeObserver() {
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         let generation = playbackGeneration
-        nonisolated(unsafe) let weakSelf = self
-        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            guard weakSelf.playbackGeneration == generation else {
-                return
-            }
-            guard !weakSelf.isSeeking else { return }
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
-            guard seconds.isFinite && seconds >= 0 else { return }
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, self.playbackGeneration == generation else { return }
+                    guard !self.isSeeking else { return }
+                    guard seconds.isFinite && seconds >= 0 else { return }
 
-            // Keep duration in sync with the player item.
-            if let itemDuration = weakSelf.player?.currentItem?.duration.seconds,
-               itemDuration.isFinite && itemDuration > 0 {
-                weakSelf.duration = itemDuration
-            }
+                    if let itemDuration = self.player?.currentItem?.duration.seconds,
+                       itemDuration.isFinite && itemDuration > 0 {
+                        self.duration = itemDuration
+                    }
 
-            weakSelf.currentTime = weakSelf.duration > 0 ? min(seconds, weakSelf.duration) : seconds
+                    self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
 
-            if abs(weakSelf.currentTime - weakSelf.lastNowPlayingInfoSyncTime) >= 1 {
-                weakSelf.lastNowPlayingInfoSyncTime = weakSelf.currentTime
-                weakSelf.updateNowPlayingInfo()
+                    if abs(self.currentTime - self.lastNowPlayingInfoSyncTime) >= 1 {
+                        self.lastNowPlayingInfoSyncTime = self.currentTime
+                        self.updateNowPlayingInfo()
+                    }
+                }
             }
         }
     }
@@ -537,14 +586,14 @@ final class AudioPlayerService {
     // MARK: - Track End
 
     private func observePlayerState() {
-        nonisolated(unsafe) let weakSelf = self
-        timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { observedPlayer, _ in
-            DispatchQueue.main.async {
-                // Treat both .playing and .waitingToPlayAtSpecifiedRate as "playing"
-                // to avoid UI flicker during buffering transitions.
-                let playing = observedPlayer.timeControlStatus != .paused
-                weakSelf.isPlaying = playing
-                weakSelf.updateNowPlayingInfo()
+        timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { [weak self] observedPlayer, _ in
+            let playing = observedPlayer.timeControlStatus != .paused
+            DispatchQueue.main.async { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.isPlaying = playing
+                    self.updateNowPlayingInfo()
+                }
             }
         }
     }
@@ -555,13 +604,16 @@ final class AudioPlayerService {
             self.trackEndObserver = nil
         }
         if let item = player?.currentItem {
-            nonisolated(unsafe) let weakSelf = self
             trackEndObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: item,
                 queue: .main
-            ) { _ in
-                weakSelf.handleTrackEnd()
+            ) { [weak self] _ in
+                DispatchQueue.main.async { [weak self] in
+                    MainActor.assumeIsolated {
+                        self?.handleTrackEnd()
+                    }
+                }
             }
         }
     }
@@ -569,11 +621,6 @@ final class AudioPlayerService {
     private func handleTrackEnd() {
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
         reportTimelineState("stopped", continuing: hasNext)
-        if let currentTrack, let client, let server {
-            Task {
-                try? await client.scrobble(server: server, ratingKey: currentTrack.ratingKey)
-            }
-        }
         next()
     }
 
@@ -629,6 +676,10 @@ final class AudioPlayerService {
         }
     }
 
+    nonisolated private static func makeArtwork(from image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }
+
     // MARK: - Audio Session
 
     private func setupAudioSession() {
@@ -644,8 +695,8 @@ final class AudioPlayerService {
         guard let client, let server else { return }
         let upcoming = queue.dropFirst(currentIndex + 1).prefix(5)
         let urls = upcoming.compactMap { track in
-            let path = track.thumb ?? track.parentThumb
-            return client.artworkURL(server: server, path: path, width: 1000, height: 1000)
+            let path = track.parentThumb ?? track.thumb
+            return client.artworkURL(server: server, path: path, width: 300, height: 300)
         }
         Task { await ImageCache.shared.prefetch(urls: urls) }
     }
@@ -700,11 +751,10 @@ final class AudioPlayerService {
             cachedArtwork = nil
             if let client, let server,
                let url = client.artworkURL(server: server, path: thumbPath, width: 1000, height: 1000) {
-                nonisolated(unsafe) let weakSelf = self
                 Task {
                     guard let image = await ImageCache.shared.image(for: url) else { return }
-                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                    weakSelf.cachedArtwork = artwork
+                    let artwork = Self.makeArtwork(from: image)
+                    self.cachedArtwork = artwork
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
                 }
             }

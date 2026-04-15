@@ -86,35 +86,7 @@ struct HomeView: View {
     }
 
     private func tracksHorizontalRow(tracks: [PlexMetadata]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(
-                rows: [
-                    GridItem(.fixed(46), spacing: 10),
-                    GridItem(.fixed(46), spacing: 10)
-                ],
-                spacing: AppStyle.Spacing.listItemGap
-            ) {
-                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                    TrackRowView(
-                        track: track,
-                        tracks: tracks,
-                        index: index,
-                        showArtwork: true,
-                        showArtist: true,
-                        showTrackNumber: false,
-                        artworkSize: 46,
-                        showsMenu: false,
-                        isCompact: true,
-                        titleFont: AppStyle.Typography.itemTitle,
-                        artistFont: AppStyle.Typography.itemSubtitle
-                    )
-                    .frame(width: 300, alignment: .leading)
-                }
-            }
-            .scrollTargetLayout()
-            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-        }
-        .scrollTargetBehavior(.viewAligned)
+        HorizontalTrackGrid(tracks: tracks)
     }
 
     private var recentlyAddedSection: some View {
@@ -173,45 +145,44 @@ struct HomeView: View {
             return
         }
 
-        let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
-        let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
-
-        // Show cached data instantly
-        let cachedTracksResult = await LibraryCache.shared.get([PlexMetadata].self, forKey: tracksKey)
-        if let cachedTracksResult {
-            applyTracks(cachedTracksResult.value)
+        if forceRefresh {
+            // Clear cache so cachedTracks/cachedAlbums fetch fresh
+            let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
+            let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
+            await LibraryCache.shared.remove(forKey: tracksKey)
+            await LibraryCache.shared.remove(forKey: albumsKey)
         }
-        let cachedAlbumsResult = await LibraryCache.shared.get([PlexMetadata].self, forKey: albumsKey)
-        if let cachedAlbumsResult {
-            recentAlbums = Array(cachedAlbumsResult.value.sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }.prefix(10))
-        }
-        isLoading = false
-
-        // Only fetch from server if forced or cache is stale
-        let needsRefresh = forceRefresh
-            || cachedTracksResult == nil || cachedTracksResult!.isStale
-            || cachedAlbumsResult == nil || cachedAlbumsResult!.isStale
-
-        guard needsRefresh else { return }
 
         do {
             async let tracksReq = client.cachedTracks(server: server, sectionId: sectionId)
-            async let albumsReq = client.getRecentlyAdded(server: server, sectionId: sectionId)
+            async let albumsReq = client.cachedAlbums(server: server, sectionId: sectionId)
             async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
+            // Recently played is always fetched fresh from the server
+            // since lastViewedAt changes with every play and stale cache data
+            // would show outdated recently played
+            async let recentlyPlayedReq: [PlexMetadata] = client.getRecentlyPlayed(server: server, sectionId: sectionId)
 
             let allTracks = try await tracksReq
-            let freshAlbums = try await albumsReq
+            let allAlbums = try await albumsReq
             let plexFavorites = (try? await favoritesReq) ?? []
+            let recentlyPlayed = (try? await recentlyPlayedReq) ?? []
 
-            applyTracks(allTracks, plexFavorites: plexFavorites)
-            recentAlbums = freshAlbums
+            applyFavorites(allTracks: allTracks, plexFavorites: plexFavorites)
+            recentTracks = Array(recentlyPlayed.prefix(10))
+            recentAlbums = Array(
+                allAlbums
+                    .sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }
+                    .prefix(10)
+            )
         } catch {}
+
+        isLoading = false
     }
 
-    private func applyTracks(_ allTracks: [PlexMetadata], plexFavorites: [PlexMetadata]? = nil) {
-        let resolvedFavorites = (plexFavorites ?? []).isEmpty
+    private func applyFavorites(allTracks: [PlexMetadata], plexFavorites: [PlexMetadata]) {
+        let resolvedFavorites = plexFavorites.isEmpty
             ? allTracks.filter { ($0.userRating ?? 0) > 0 }
-            : (plexFavorites ?? [])
+            : plexFavorites
 
         favoriteTracks = Array(
             resolvedFavorites
@@ -223,16 +194,10 @@ struct HomeView: View {
                 }
                 .prefix(10)
         )
-
-        recentTracks = Array(
-            allTracks
-                .filter { ($0.lastViewedAt ?? 0) > 0 }
-                .sorted { ($0.lastViewedAt ?? 0) > ($1.lastViewedAt ?? 0) }
-                .prefix(10)
-        )
     }
 }
 
+#if DEBUG
 #Preview {
     NavigationStack {
         HomeView(
@@ -242,3 +207,4 @@ struct HomeView: View {
     }
     .environment(AudioPlayerService())
 }
+#endif

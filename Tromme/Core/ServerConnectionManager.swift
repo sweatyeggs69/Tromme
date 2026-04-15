@@ -1,41 +1,5 @@
 import Foundation
 import SwiftUI
-import Network
-
-// MARK: - NetworkMonitor
-
-@Observable
-private final class NetworkMonitor: @unchecked Sendable {
-    private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "com.tromme.networkmonitor", qos: .utility)
-
-    private(set) var isConnected = false
-    private(set) var isExpensive = false
-    private var interfaceType: NWInterface.InterfaceType?
-
-    var onChange: (@MainActor @Sendable () -> Void)?
-
-    init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            guard let self else { return }
-            let connected = path.status == .satisfied
-            let expensive = path.isExpensive
-            let newType = path.availableInterfaces.first?.type
-            Task { @MainActor in
-                let changed = self.isConnected != connected || self.interfaceType != newType
-                self.isConnected = connected
-                self.isExpensive = expensive
-                self.interfaceType = newType
-                if changed {
-                    self.onChange?()
-                }
-            }
-        }
-        monitor.start(queue: queue)
-    }
-
-    deinit { monitor.cancel() }
-}
 
 // MARK: - ServerConnectionManager
 
@@ -47,8 +11,9 @@ final class ServerConnectionManager {
     private static let serverKey = "currentServer"
     private static let libraryKey = "currentLibrarySectionId"
 
-    private let networkMonitor = NetworkMonitor()
     private var reprobeTask: Task<Void, Never>?
+    private var networkObservation: Task<Void, Never>?
+    private var warmingTask: Task<Void, Never>?
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.serverKey),
@@ -57,11 +22,19 @@ final class ServerConnectionManager {
         }
         self.currentLibrarySectionId = UserDefaults.standard.string(forKey: Self.libraryKey)
 
-        networkMonitor.onChange = { [weak self] in
-            self?.scheduleReprobe()
+        // Observe network changes via shared monitor
+        networkObservation = Task { [weak self] in
+            var lastType = NetworkStatus.shared.interfaceType
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                let currentType = NetworkStatus.shared.interfaceType
+                if currentType != lastType {
+                    lastType = currentType
+                    self?.scheduleReprobe()
+                }
+            }
         }
 
-        // Probe on app start to ensure we have the best connection for current network.
         if currentServer != nil {
             scheduleReprobe()
         }
@@ -74,7 +47,7 @@ final class ServerConnectionManager {
         }
     }
 
-    func selectLibrary(_ sectionId: String) {
+    func selectLibrary(_ sectionId: String, client: PlexAPIClient? = nil) {
         let changed = currentLibrarySectionId != sectionId
         currentLibrarySectionId = sectionId
         UserDefaults.standard.set(sectionId, forKey: Self.libraryKey)
@@ -82,17 +55,35 @@ final class ServerConnectionManager {
             UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
             Task { await LibraryCache.shared.clearAll() }
         }
+        // Warm cache for the selected library
+        if let server = currentServer, let client {
+            warmCache(server: server, sectionId: sectionId, client: client)
+        }
+    }
+
+    /// Preload core library data in the background so views load instantly.
+    func warmCache(server: PlexServer, sectionId: String, client: PlexAPIClient) {
+        warmingTask?.cancel()
+        warmingTask = Task {
+            await client.warmCache(server: server, sectionId: sectionId)
+        }
     }
 
     func disconnect() {
         currentServer = nil
         currentLibrarySectionId = nil
+        availableServers = []
         reprobeTask?.cancel()
         reprobeTask = nil
+        warmingTask?.cancel()
+        warmingTask = nil
         UserDefaults.standard.removeObject(forKey: Self.serverKey)
         UserDefaults.standard.removeObject(forKey: Self.libraryKey)
         UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
-        Task { await LibraryCache.shared.clearAll() }
+        Task {
+            await LibraryCache.shared.clearAll()
+            await ImageCache.shared.clearAll()
+        }
     }
 
     var isConnected: Bool {
@@ -101,12 +92,31 @@ final class ServerConnectionManager {
 
     // MARK: - Auto-Discovery
 
+    /// Discover all reachable Plex servers with music libraries.
+    /// If exactly one is found, connects automatically. If multiple are found,
+    /// returns them so the caller can present a picker.
     func autoDiscover(authToken: String, client: PlexAPIClient) async throws {
+        let servers = try await discoverServers(authToken: authToken, client: client)
+        if servers.count == 1, let only = servers.first {
+            connect(to: only)
+        } else if servers.isEmpty {
+            throw DiscoveryError.noMusicServer
+        } else {
+            availableServers = servers
+        }
+    }
+
+    /// All discovered servers when multiple are available.
+    var availableServers: [PlexServer] = []
+
+    /// Probes all Plex resources and returns servers with music libraries.
+    func discoverServers(authToken: String, client: PlexAPIClient) async throws -> [PlexServer] {
         let resources = try await client.getResources(token: authToken)
         let candidates = resources.filter {
             $0.isServer && $0.accessToken != nil && $0.clientIdentifier != nil
         }
 
+        var servers: [PlexServer] = []
         for resource in candidates {
             guard let token = resource.accessToken,
                   let machineId = resource.clientIdentifier else { continue }
@@ -115,7 +125,7 @@ final class ServerConnectionManager {
             guard let uri = await Self.probe(
                 connections: connections,
                 token: token,
-                timeout: networkMonitor.isExpensive ? 5 : 1
+                timeout: NetworkStatus.shared.isExpensive ? 10 : 2
             ) else { continue }
 
             let server = PlexServer(
@@ -128,12 +138,25 @@ final class ServerConnectionManager {
 
             if let sections = try? await client.getLibrarySections(server: server),
                sections.contains(where: \.isMusicLibrary) {
-                connect(to: server)
-                return
+                servers.append(server)
             }
         }
+        return servers
+    }
 
-        throw DiscoveryError.noMusicServer
+    func selectServer(_ server: PlexServer) {
+        let serverChanged = currentServer?.machineIdentifier != server.machineIdentifier
+        availableServers = []
+        if serverChanged {
+            currentLibrarySectionId = nil
+            UserDefaults.standard.removeObject(forKey: Self.libraryKey)
+            UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
+            Task {
+                await LibraryCache.shared.clearAll()
+                await ImageCache.shared.clearAll()
+            }
+        }
+        connect(to: server)
     }
 
     enum DiscoveryError: LocalizedError {
@@ -155,7 +178,7 @@ final class ServerConnectionManager {
     func reprobe() async {
         guard let server = currentServer, !server.connections.isEmpty else { return }
 
-        let timeout: TimeInterval = networkMonitor.isExpensive ? 5 : 1
+        let timeout: TimeInterval = NetworkStatus.shared.isExpensive ? 10 : 2
 
         guard let bestURI = await Self.probe(
             connections: server.connections,

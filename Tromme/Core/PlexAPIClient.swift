@@ -39,7 +39,6 @@ extension DecodingError {
     }
 }
 
-@Observable
 final class PlexAPIClient: Sendable {
     // Required Plex identification headers (per API spec)
     static let clientIdentifier = "com.kylemcclain.Tromme"
@@ -54,8 +53,19 @@ final class PlexAPIClient: Sendable {
 
     private let session: URLSession
 
-    init(session: URLSession = .shared) {
-        self.session = session
+    /// Default session configured for reliability on all network types.
+    /// `waitsForConnectivity` ensures requests don't fail instantly on cellular
+    /// when connectivity is briefly interrupted (e.g., handoff between towers).
+    private static let defaultSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 300
+        return URLSession(configuration: config)
+    }()
+
+    init(session: URLSession? = nil) {
+        self.session = session ?? Self.defaultSession
     }
 
     /// Applies the full set of X-Plex-* identification headers to a request.
@@ -102,12 +112,27 @@ final class PlexAPIClient: Sendable {
     }
 
     func getLibraryContents(server: PlexServer, sectionId: String, type: Int? = nil) async throws -> [PlexMetadata] {
-        var path = "/library/sections/\(sectionId)/all"
-        if let type {
-            path += "?type=\(type)"
+        let pageSize = 200
+        var allItems: [PlexMetadata] = []
+        var start = 0
+
+        while true {
+            var path = "/library/sections/\(sectionId)/all?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
+            if let type {
+                path += "&type=\(type)"
+            }
+            let response: PlexResponse<PlexMetadata> = try await retryingRequest {
+                try await self.serverRequest(server: server, path: path)
+            }
+            let items = response.mediaContainer.metadata ?? []
+            allItems.append(contentsOf: items)
+
+            let total = response.mediaContainer.totalSize ?? items.count
+            start += items.count
+            if start >= total || items.isEmpty { break }
         }
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-        return response.mediaContainer.metadata ?? []
+
+        return allItems
     }
 
     /// Fetch tracks considered favorites by Plex (typically user-rated 4+ stars).
@@ -117,8 +142,20 @@ final class PlexAPIClient: Sendable {
         return response.mediaContainer.metadata ?? []
     }
 
+    func getTopTracks(server: PlexServer, sectionId: String, artistRatingKey: String, limit: Int = 10) async throws -> [PlexMetadata] {
+        let path = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&sort=viewCount:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
+        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
+        return response.mediaContainer.metadata ?? []
+    }
+
     func getRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
         let path = "/library/sections/\(sectionId)/all?type=\(type)&sort=addedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
+        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
+        return response.mediaContainer.metadata ?? []
+    }
+
+    func getRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
+        let path = "/library/sections/\(sectionId)/all?type=10&sort=lastViewedAt:desc&lastViewedAt>=1&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
         let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
         return response.mediaContainer.metadata ?? []
     }
@@ -167,14 +204,6 @@ final class PlexAPIClient: Sendable {
     }
 
     // MARK: - Playback
-
-    /// Mark an item as played (scrobble). Per API spec:
-    /// - `identifier`: required, the media provider identifier
-    /// - `key`: the ratingKey of the item
-    func scrobble(server: PlexServer, ratingKey: String) async throws {
-        let path = "/:/scrobble?identifier=com.plexapp.plugins.library&key=\(ratingKey)"
-        _ = try await rawServerRequest(server: server, path: path, method: "PUT")
-    }
 
     /// Report playback state to PMS so it appears in the dashboard.
     /// Per API spec: POST /:/timeline with state, time, duration, key, ratingKey.
@@ -381,6 +410,34 @@ final class PlexAPIClient: Sendable {
 
     // MARK: - Private Helpers
 
+    /// Retry a request up to `maxRetries` times for transient network errors.
+    /// Only retries on network errors (timeout, connection lost) — not on
+    /// server errors (4xx/5xx) or decoding failures.
+    private func retryingRequest<T>(maxRetries: Int = 2, _ operation: () async throws -> T) async throws -> T {
+        var lastError: Error?
+        for attempt in 0...maxRetries {
+            do {
+                return try await operation()
+            } catch let error as PlexAPIError {
+                switch error {
+                case .networkError:
+                    lastError = error
+                    if attempt < maxRetries {
+                        try? await Task.sleep(for: .seconds(Double(attempt + 1)))
+                    }
+                default:
+                    throw error
+                }
+            } catch {
+                lastError = error
+                if attempt < maxRetries {
+                    try? await Task.sleep(for: .seconds(Double(attempt + 1)))
+                }
+            }
+        }
+        throw lastError!
+    }
+
     /// Build a request to plex.tv with all required identification headers.
     private func plexTVRequest(path: String, method: String) -> URLRequest {
         var request = URLRequest(url: URL(string: "https://plex.tv\(path)")!)
@@ -409,12 +466,19 @@ final class PlexAPIClient: Sendable {
         request.httpMethod = method
         applyPlexHeaders(to: &request)
         request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
-        if method == "GET", shouldIncludeContainerHeaders(for: path) {
+        if method == "GET", shouldIncludeContainerHeaders(for: path),
+           !path.contains("X-Plex-Container-Start") {
             request.setValue(Self.defaultContainerStart, forHTTPHeaderField: "X-Plex-Container-Start")
             request.setValue(Self.defaultContainerSize, forHTTPHeaderField: "X-Plex-Container-Size")
         }
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw PlexAPIError.networkError(error)
+        }
         guard let http = response as? HTTPURLResponse else {
             throw PlexAPIError.invalidURL
         }
