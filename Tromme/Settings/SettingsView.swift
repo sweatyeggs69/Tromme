@@ -5,10 +5,14 @@ struct SettingsView: View {
     @Environment(\.serverConnection) private var serverConnection
 
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
+    @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
+    @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
     @State private var sections: [LibrarySection] = []
     var onSignOut: () -> Void
+
+    private static let cellularTranscodeBitrateOptions: [Int] = [192, 256, 320]
 
     var body: some View {
         Form {
@@ -22,6 +26,20 @@ struct SettingsView: View {
                 Text("Magic Mix")
             } footer: {
                 Text("The number of style tags that must match between albums to be included in a mix. The higher the number the fewer amount tracks.")
+            }
+
+            Section {
+                Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
+                Picker("Cellular Bitrate", selection: $cellularTranscodeBitrateKbps) {
+                    ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
+                        Text("\(bitrate) kbps").tag(bitrate)
+                    }
+                }
+                .disabled(!cellularTranscodingBinding.wrappedValue)
+            } header: {
+                Text("Playback")
+            } footer: {
+                Text("When enabled audio streams over cellular are delivered in AAC format and at the desired bitrate. FLAC will always transcode to a compatible container (ALAC on WiFi, AAC on cellular)")
             }
             
             Section("Server") {
@@ -80,6 +98,13 @@ struct SettingsView: View {
         Binding(
             get: { serverConnection.currentLibrarySectionId ?? "" },
             set: { serverConnection.selectLibrary($0, client: client) }
+        )
+    }
+
+    private var cellularTranscodingBinding: Binding<Bool> {
+        Binding(
+            get: { !disableCellularTranscoding },
+            set: { disableCellularTranscoding = !$0 }
         )
     }
 

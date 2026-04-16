@@ -265,16 +265,24 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Common query items shared between the decision and start endpoints.
-    private func universalQueryItems(server: PlexServer, metadataPath: String, sessionID: String, cellular: Bool = false) -> [URLQueryItem] {
-        [
+    private func universalQueryItems(
+        server: PlexServer,
+        metadataPath: String,
+        sessionID: String,
+        cellular: Bool = false,
+        disableCellularTranscoding: Bool = false,
+        cellularTranscodeBitrate: Int = 320
+    ) -> [URLQueryItem] {
+        let avoidCellularAudioTranscode = cellular && disableCellularTranscoding
+        return [
             URLQueryItem(name: "path", value: metadataPath),
             URLQueryItem(name: "mediaIndex", value: "0"),
             URLQueryItem(name: "partIndex", value: "0"),
             URLQueryItem(name: "protocol", value: "hls"),
             URLQueryItem(name: "directPlay", value: "0"),
             URLQueryItem(name: "directStream", value: "1"),
-            URLQueryItem(name: "directStreamAudio", value: "0"),
-            URLQueryItem(name: "musicBitrate", value: cellular ? "320" : "40000"),
+            URLQueryItem(name: "directStreamAudio", value: avoidCellularAudioTranscode ? "1" : "0"),
+            URLQueryItem(name: "musicBitrate", value: avoidCellularAudioTranscode ? "40000" : (cellular ? "\(cellularTranscodeBitrate)" : "40000")),
             URLQueryItem(name: "mediaBufferSize", value: "102400"),
             URLQueryItem(name: "location", value: cellular ? "cellular" : "lan"),
             URLQueryItem(name: "session", value: sessionID),
@@ -290,12 +298,27 @@ final class PlexAPIClient: Sendable {
 
     /// Call the decision endpoint to authorize the transcode session before streaming.
     /// PMS requires this before the start endpoint will serve content.
-    func universalDecision(server: PlexServer, metadataPath: String, sessionID: String, headers: [String: String], cellular: Bool = false) async throws {
+    func universalDecision(
+        server: PlexServer,
+        metadataPath: String,
+        sessionID: String,
+        headers: [String: String],
+        cellular: Bool = false,
+        disableCellularTranscoding: Bool = false,
+        cellularTranscodeBitrate: Int = 320
+    ) async throws {
         guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else {
             throw PlexAPIError.invalidURL
         }
         components.path = "/music/:/transcode/universal/decision"
-        components.queryItems = universalQueryItems(server: server, metadataPath: metadataPath, sessionID: sessionID, cellular: cellular)
+        components.queryItems = universalQueryItems(
+            server: server,
+            metadataPath: metadataPath,
+            sessionID: sessionID,
+            cellular: cellular,
+            disableCellularTranscoding: disableCellularTranscoding,
+            cellularTranscodeBitrate: cellularTranscodeBitrate
+        )
 
         guard let url = components.url else { throw PlexAPIError.invalidURL }
         var request = URLRequest(url: url)
@@ -314,13 +337,27 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Build the universal transcode HLS master playlist URL.
-    func universalStreamURLCandidates(server: PlexServer, mediaPathCandidates: [String], sessionID: String, cellular: Bool = false) -> [URL] {
+    func universalStreamURLCandidates(
+        server: PlexServer,
+        mediaPathCandidates: [String],
+        sessionID: String,
+        cellular: Bool = false,
+        disableCellularTranscoding: Bool = false,
+        cellularTranscodeBitrate: Int = 320
+    ) -> [URL] {
         let path = mediaPathCandidates.first ?? "/library/metadata/0"
         let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
 
         guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return [] }
         components.path = "/music/:/transcode/universal/start.m3u8"
-        components.queryItems = universalQueryItems(server: server, metadataPath: normalizedPath, sessionID: sessionID, cellular: cellular)
+        components.queryItems = universalQueryItems(
+            server: server,
+            metadataPath: normalizedPath,
+            sessionID: sessionID,
+            cellular: cellular,
+            disableCellularTranscoding: disableCellularTranscoding,
+            cellularTranscodeBitrate: cellularTranscodeBitrate
+        )
 
         guard let url = components.url else { return [] }
         return [url]
@@ -371,7 +408,13 @@ final class PlexAPIClient: Sendable {
     static let profileExtraCellular: String =
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=aac)"
 
-    func playbackHeaders(server: PlexServer, sessionID: String?, cellular: Bool = false) -> [String: String] {
+    func playbackHeaders(
+        server: PlexServer,
+        sessionID: String?,
+        cellular: Bool = false,
+        disableCellularTranscoding: Bool = false
+    ) -> [String: String] {
+        let avoidCellularAudioTranscode = cellular && disableCellularTranscoding
         var headers: [String: String] = [
             "X-Plex-Token": server.accessToken,
             "X-Plex-Client-Identifier": Self.clientIdentifier,
@@ -383,7 +426,7 @@ final class PlexAPIClient: Sendable {
             "X-Plex-Device-Name": Self.deviceName,
             "X-Plex-Provides": "player",
             "X-Plex-Client-Profile-Name": "Generic",
-            "X-Plex-Client-Profile-Extra": cellular ? Self.profileExtraCellular : Self.profileExtraLAN,
+            "X-Plex-Client-Profile-Extra": avoidCellularAudioTranscode ? Self.profileExtraLAN : (cellular ? Self.profileExtraCellular : Self.profileExtraLAN),
         ]
         if let sessionID {
             headers["X-Plex-Session-Identifier"] = sessionID

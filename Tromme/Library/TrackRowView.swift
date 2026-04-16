@@ -33,7 +33,7 @@ struct TrackRowView: View {
                             Text("\(track.index ?? (index + 1))")
                                 .font(.body)
                                 .monospacedDigit()
-                                .foregroundStyle(isCurrentTrack ? Color.accentColor : .secondary)
+                                .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .secondary)
                         }
                     }
                     .frame(width: 28, alignment: .center)
@@ -44,7 +44,7 @@ struct TrackRowView: View {
                     Text(track.title)
                         .font(titleFont ?? (isCompact ? .caption : .body))
                         .lineLimit(1)
-                        .foregroundStyle(isCurrentTrack ? Color.accentColor : .primary)
+                        .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .primary)
 
                     if let subtitle {
                         Text(subtitle)
@@ -127,7 +127,7 @@ struct TrackRowView: View {
 // MARK: - Now Playing Bars Animation (Apple Music equalizer indicator)
 
 struct NowPlayingBarsView: View {
-    var color: Color = .accentColor
+    var color: Color = AppStyle.Colors.tint
     @State private var isAnimating = false
 
     var body: some View {

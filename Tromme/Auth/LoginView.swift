@@ -48,6 +48,7 @@ struct LoginView: View {
             Spacer()
                 .frame(height: 40)
         }
+        .tint(AppStyle.Colors.tint)
         .sheet(isPresented: Binding(
             get: { authService.showAuthSheet },
             set: { if !$0 { authService.cancelAuth() } }

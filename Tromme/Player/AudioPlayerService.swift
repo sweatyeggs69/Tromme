@@ -354,14 +354,26 @@ final class AudioPlayerService: @unchecked Sendable {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
 
-        if shouldUseUniversalHLS(for: track) {
-            // Transcode via HLS for formats AVPlayer can't handle natively or reliably.
+        let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
+        let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
+            UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
+        )
+        let shouldPreferUniversalOnCellular = isCellular && !disableCellularTranscoding
+        let shouldUseUniversalPath = shouldUseUniversalHLS(for: track) || shouldPreferUniversalOnCellular
+
+        if shouldUseUniversalPath {
+            // Route through universal HLS for compatibility codecs and optional cellular transcoding.
             let sessionID = currentSessionID!
             let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
             let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
             let mediaPathCandidates = [normalizedPath]
             let cellular = isCellular
-            let headers = client.playbackHeaders(server: server, sessionID: sessionID, cellular: cellular)
+            let headers = client.playbackHeaders(
+                server: server,
+                sessionID: sessionID,
+                cellular: cellular,
+                disableCellularTranscoding: disableCellularTranscoding
+            )
             universalHeadersForCurrentItem = headers
             directFallbackURLForCurrentItem = directURL
             let generation = playbackGeneration
@@ -376,7 +388,9 @@ final class AudioPlayerService: @unchecked Sendable {
                         metadataPath: normalizedPath,
                         sessionID: sessionID,
                         headers: headers,
-                        cellular: cellular
+                        cellular: cellular,
+                        disableCellularTranscoding: disableCellularTranscoding,
+                        cellularTranscodeBitrate: cellularTranscodeBitrate
                     )
                 } catch {
                     guard self.playbackGeneration == generation else { return }
@@ -392,7 +406,9 @@ final class AudioPlayerService: @unchecked Sendable {
                     server: capturedServer,
                     mediaPathCandidates: mediaPathCandidates,
                     sessionID: sessionID,
-                    cellular: cellular
+                    cellular: cellular,
+                    disableCellularTranscoding: disableCellularTranscoding,
+                    cellularTranscodeBitrate: cellularTranscodeBitrate
                 )
                 self.universalCandidatesForCurrentItem = universalCandidates
 
@@ -651,6 +667,13 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let trackKey = "playbackTrack"
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
+    private static let disableCellularTranscodingKey = "disableCellularTranscoding"
+    private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
+    private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
+
+    private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {
+        supportedCellularTranscodeBitrates.contains(bitrate) ? bitrate : 320
+    }
 
     private func savePlaybackState() {
         let defaults = UserDefaults.standard

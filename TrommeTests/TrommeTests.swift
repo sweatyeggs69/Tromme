@@ -125,6 +125,56 @@ private func makeServer() -> PlexServer {
     #expect(headers["X-Plex-Client-Profile-Extra"] == PlexAPIClient.profileExtraCellular)
 }
 
+@Test func plexAPIClientPlaybackHeadersAvoidCellularTranscodeWhenDisabled() {
+    let client = PlexAPIClient()
+    let server = makeServer()
+    let headers = client.playbackHeaders(
+        server: server,
+        sessionID: "session-42",
+        cellular: true,
+        disableCellularTranscoding: true
+    )
+
+    #expect(headers["X-Plex-Client-Profile-Extra"] == PlexAPIClient.profileExtraLAN)
+}
+
+@Test func plexAPIClientUniversalStreamCandidatesAvoidCellularAudioTranscodeWhenDisabled() throws {
+    let client = PlexAPIClient()
+    let server = makeServer()
+    let urls = client.universalStreamURLCandidates(
+        server: server,
+        mediaPathCandidates: ["library/metadata/99"],
+        sessionID: "session-1",
+        cellular: true,
+        disableCellularTranscoding: true
+    )
+    let url = try #require(urls.first)
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    let items = Dictionary((components.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
+
+    #expect(items["directStreamAudio"] == "1")
+    #expect(items["musicBitrate"] == "40000")
+}
+
+@Test func plexAPIClientUniversalStreamCandidatesUseSelectedCellularBitrate() throws {
+    let client = PlexAPIClient()
+    let server = makeServer()
+    let urls = client.universalStreamURLCandidates(
+        server: server,
+        mediaPathCandidates: ["library/metadata/99"],
+        sessionID: "session-1",
+        cellular: true,
+        disableCellularTranscoding: false,
+        cellularTranscodeBitrate: 192
+    )
+    let url = try #require(urls.first)
+    let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    let items = Dictionary((components.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
+
+    #expect(items["directStreamAudio"] == "0")
+    #expect(items["musicBitrate"] == "192")
+}
+
 #if DEBUG
 @Test func imageCacheDebugMemoryKeyBucketsBy32Pixels() throws {
     let url = try #require(URL(string: "https://example.com/art.jpg"))

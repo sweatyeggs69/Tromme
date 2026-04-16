@@ -17,7 +17,6 @@
 		3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */; };
 		3D50460BD62807638F37C3B5 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 88E669475DFAD83939BFCA3B /* AppIcon.icon */; };
 		3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE54BE32E8EC9FD004BAD4F /* AlbumDetailView.swift */; };
-		3E1189EBD631314DBA36425E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FCF2A26FBC0B7BE50ECAF258 /* Assets.xcassets */; };
 		3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD02991E2EF1D25E465FAA5E /* SearchView.swift */; };
 		430DFB356E617473516BD8A3 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7883CADF67B162FB14F053 /* PlaylistDetailView.swift */; };
 		4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */; };
@@ -102,7 +101,6 @@
 		E4F506172839A1B2C3D4E5F6 /* NetworkStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkStatus.swift; sourceTree = "<group>"; };
 		EA7883CADF67B162FB14F053 /* PlaylistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistDetailView.swift; sourceTree = "<group>"; };
 		FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexModels.swift; sourceTree = "<group>"; };
-		FCF2A26FBC0B7BE50ECAF258 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -183,7 +181,6 @@
 			isa = PBXGroup;
 			children = (
 				88E669475DFAD83939BFCA3B /* AppIcon.icon */,
-				FCF2A26FBC0B7BE50ECAF258 /* Assets.xcassets */,
 				09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */,
 				198E310192207773F55E967F /* Info.plist */,
 				C57DE269A00C80AACDA07EDF /* TrommeApp.swift */,
@@ -351,7 +348,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				3D50460BD62807638F37C3B5 /* AppIcon.icon in Resources */,
-				3E1189EBD631314DBA36425E /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

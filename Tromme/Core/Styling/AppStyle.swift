@@ -2,7 +2,7 @@ import SwiftUI
 
 enum AppStyle {
     enum Colors {
-        static let tint: Color = .orange
+        static let tint = Color(red: 0, green: 0.6, blue: 0.6)
     }
 
     enum Spacing {

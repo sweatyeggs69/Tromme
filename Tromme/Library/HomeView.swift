@@ -146,46 +146,30 @@ struct HomeView: View {
         }
 
         if forceRefresh {
-            // Clear cache so cachedTracks/cachedAlbums fetch fresh
             let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
             let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
             await LibraryCache.shared.remove(forKey: tracksKey)
             await LibraryCache.shared.remove(forKey: albumsKey)
         }
 
-        do {
-            async let tracksReq = client.cachedTracks(server: server, sectionId: sectionId)
-            async let albumsReq = client.cachedAlbums(server: server, sectionId: sectionId)
-            async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
-            // Recently played is always fetched fresh from the server
-            // since lastViewedAt changes with every play and stale cache data
-            // would show outdated recently played
-            async let recentlyPlayedReq: [PlexMetadata] = client.getRecentlyPlayed(server: server, sectionId: sectionId)
+        async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
+        async let recentlyPlayedReq: [PlexMetadata] = client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)
+        async let recentlyAddedReq: [PlexMetadata] = client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
 
-            let allTracks = try await tracksReq
-            let allAlbums = try await albumsReq
-            let plexFavorites = (try? await favoritesReq) ?? []
-            let recentlyPlayed = (try? await recentlyPlayedReq) ?? []
+        let plexFavorites = (try? await favoritesReq) ?? []
+        let recentlyPlayed = (try? await recentlyPlayedReq) ?? []
+        let recentlyAdded = (try? await recentlyAddedReq) ?? []
 
-            applyFavorites(allTracks: allTracks, plexFavorites: plexFavorites)
-            recentTracks = Array(recentlyPlayed.prefix(10))
-            recentAlbums = Array(
-                allAlbums
-                    .sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }
-                    .prefix(10)
-            )
-        } catch {}
+        applyFavorites(plexFavorites: plexFavorites)
+        recentTracks = Array(recentlyPlayed.prefix(10))
+        recentAlbums = Array(recentlyAdded.prefix(10))
 
         isLoading = false
     }
 
-    private func applyFavorites(allTracks: [PlexMetadata], plexFavorites: [PlexMetadata]) {
-        let resolvedFavorites = plexFavorites.isEmpty
-            ? allTracks.filter { ($0.userRating ?? 0) > 0 }
-            : plexFavorites
-
+    private func applyFavorites(plexFavorites: [PlexMetadata]) {
         favoriteTracks = Array(
-            resolvedFavorites
+            plexFavorites
                 .sorted {
                     if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
                         return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)

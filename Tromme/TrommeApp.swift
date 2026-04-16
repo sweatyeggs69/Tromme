@@ -9,6 +9,25 @@ struct TrommeApp: App {
     @State private var plexClient = PlexAPIClient()
     @State private var audioPlayer = AudioPlayerService()
 
+    init() {
+        let accentColor = UIColor(AppStyle.Colors.tint)
+        UINavigationBar.appearance().tintColor = accentColor
+
+        let tabBarAppearance = UITabBarAppearance()
+        tabBarAppearance.configureWithDefaultBackground()
+        tabBarAppearance.stackedLayoutAppearance.selected.iconColor = accentColor
+        tabBarAppearance.stackedLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accentColor]
+        tabBarAppearance.inlineLayoutAppearance.selected.iconColor = accentColor
+        tabBarAppearance.inlineLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accentColor]
+        tabBarAppearance.compactInlineLayoutAppearance.selected.iconColor = accentColor
+        tabBarAppearance.compactInlineLayoutAppearance.selected.titleTextAttributes = [.foregroundColor: accentColor]
+
+        let tabBarProxy = UITabBar.appearance()
+        tabBarProxy.tintColor = accentColor
+        tabBarProxy.standardAppearance = tabBarAppearance
+        tabBarProxy.scrollEdgeAppearance = tabBarAppearance
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -24,6 +43,8 @@ struct TrommeApp: App {
                     // Warm cache on launch if already signed in
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
+                    // Let the first frame render before heavy background warming work starts.
+                    try? await Task.sleep(for: .seconds(1.5))
                     serverConnection.warmCache(server: server, sectionId: sectionId, client: plexClient)
                 }
                 .task {
