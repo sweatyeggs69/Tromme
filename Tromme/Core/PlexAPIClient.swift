@@ -43,7 +43,7 @@ final class PlexAPIClient: Sendable {
     // Required Plex identification headers (per API spec)
     static let clientIdentifier = "com.kylemcclain.Tromme"
     static let product = "Tromme"
-    static let version = "1.0.1"
+    static let version = "1.0.0"
     static let platform = "iOS"
     static let platformVersion = ProcessInfo.processInfo.operatingSystemVersionString
     static let device = "iPhone"
@@ -196,9 +196,15 @@ final class PlexAPIClient: Sendable {
     }
 
     func getPlaylistItems(server: PlexServer, playlistKey: String) async throws -> [PlexMetadata] {
+        let normalizedPath: String
+        if playlistKey.hasPrefix("/playlists/") {
+            normalizedPath = playlistKey.hasSuffix("/items") ? playlistKey : "\(playlistKey)/items"
+        } else {
+            normalizedPath = "/playlists/\(playlistKey)/items"
+        }
         let response: PlexResponse<PlexMetadata> = try await serverRequest(
             server: server,
-            path: "/playlists/\(playlistKey)/items"
+            path: normalizedPath
         )
         return response.mediaContainer.metadata ?? []
     }

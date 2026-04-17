@@ -11,9 +11,25 @@ struct ArtistsView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    private var isRegularLayout: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var gridColumnSpacing: CGFloat {
+        isRegularLayout ? 16 : 8
+    }
+
+    private var gridRowSpacing: CGFloat {
+        isRegularLayout ? 18 : 10
+    }
+
+    private var gridHorizontalPadding: CGFloat {
+        isRegularLayout ? 24 : 16
+    }
+
     private var columns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 4 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 8), count: count)
+        let count = isRegularLayout ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: gridColumnSpacing), count: count)
     }
 
     var body: some View {
@@ -60,21 +76,27 @@ struct ArtistsView: View {
 
         case .grid:
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 10) {
+                LazyVGrid(columns: columns, spacing: gridRowSpacing) {
                     ForEach(artists) { artist in
                         NavigationLink(value: artist) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                ArtworkView(thumbPath: artist.thumb, size: 184, cornerRadius: 92)
+                            VStack(alignment: .center, spacing: 4) {
+                                GeometryReader { geo in
+                                    let size = geo.size.width
+                                    ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
+                                }
+                                .aspectRatio(1, contentMode: .fit)
 
                                 Text(artist.title)
                                     .appItemTitleStyle()
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
                             }
-                            .frame(width: 184, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .center)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, gridHorizontalPadding)
                 .padding(.vertical, 8)
             }
         }

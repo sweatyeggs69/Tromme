@@ -19,23 +19,38 @@ struct PlaylistsView: View {
                     description: Text("Create playlists in Plex to see them here.")
                 )
             } else {
-                List(playlists) { playlist in
-                    NavigationLink(value: playlist) {
-                        HStack(spacing: 12) {
-                            ArtworkView(thumbPath: playlist.composite, size: 56, cornerRadius: 6)
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(playlists) { playlist in
+                            NavigationLink(value: playlist) {
+                                HStack(spacing: 12) {
+                                    ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 72, cornerRadius: 8)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(playlist.title)
-                                    .font(.body)
-                                    .lineLimit(1)
-                                if let count = playlist.leafCount {
-                                    Text("\(count) songs")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(playlist.title)
+                                            .appItemTitleStyle()
+                                            .lineLimit(1)
+
+                                        if let count = playlist.leafCount {
+                                            Text("\(count) songs")
+                                                .appItemSubtitleStyle()
+                                        }
+                                    }
+
+                                    Spacer()
                                 }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color.primary.opacity(0.06))
+                                )
                             }
+                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                    .padding(.vertical, 12)
                 }
             }
         }
@@ -45,12 +60,16 @@ struct PlaylistsView: View {
     }
 
     private func loadPlaylists() async {
-        guard let server = serverConnection.currentServer else { return }
+        guard let server = serverConnection.currentServer else {
+            playlists = []
+            isLoading = false
+            return
+        }
         do {
             let all = try await client.cachedPlaylists(server: server)
             playlists = all.filter(\.isMusicPlaylist)
         } catch {
-            // Handle error
+            playlists = []
         }
         isLoading = false
     }

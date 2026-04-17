@@ -422,8 +422,26 @@ private extension Color {
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
         guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
-        let luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
-        return luminance > 0.58
+
+        // WCAG relative luminance for contrast-based black/white foreground choice.
+        func linearized(_ component: CGFloat) -> CGFloat {
+            component <= 0.03928 ? (component / 12.92) : pow((component + 0.055) / 1.055, 2.4)
+        }
+
+        let luminance =
+            (0.2126 * linearized(red)) +
+            (0.7152 * linearized(green)) +
+            (0.0722 * linearized(blue))
+
+        let blackContrast = (luminance + 0.05) / 0.05
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        let contrastDelta = abs(blackContrast - whiteContrast)
+
+        // Dead-band: when both options are close, bias to a slightly lighter threshold.
+        if contrastDelta < 0.35 {
+            return luminance > 0.45
+        }
+        return blackContrast >= whiteContrast
     }
 }
 

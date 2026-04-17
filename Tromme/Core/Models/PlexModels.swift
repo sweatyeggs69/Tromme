@@ -505,6 +505,7 @@ struct PlexPlaylist: Codable, Sendable, Identifiable, Hashable {
     let summary: String?
     let smart: Bool?
     let playlistType: String?
+    let thumb: String?
     let composite: String?
     let duration: Int?
     let leafCount: Int?

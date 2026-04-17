@@ -266,8 +266,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 let songCount = playlist.leafCount.map { "\($0) songs" }
                 let item = CPListItem(text: playlist.title, detailText: songCount)
                 item.accessoryType = .disclosureIndicator
-                loadArtwork(path: playlist.composite, into: item, server: server, client: client)
-                let key = playlist.ratingKey
+                loadArtwork(path: playlist.thumb ?? playlist.composite, into: item, server: server, client: client)
+                let key = playlist.key ?? playlist.ratingKey
                 let title = playlist.title
                 item.handler = { [weak self] _, completion in
                     self?.showPlaylistTracks(playlistKey: key, playlistTitle: title)

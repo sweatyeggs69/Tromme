@@ -94,6 +94,7 @@ enum DevelopmentMockData {
         summary: "Headphones recommended",
         smart: false,
         playlistType: "audio",
+        thumb: nil,
         composite: nil,
         duration: 3_600_000,
         leafCount: 18,
