@@ -398,7 +398,7 @@ private struct AlbumTrackRow: View {
                             NowPlayingBarsView(color: tertiaryTextColor)
                                 .frame(width: 22, height: 14)
                         } else {
-                            Text("\(index + 1)")
+                            Text("\(track.index ?? (index + 1))")
                                 .font(.body)
                                 .foregroundStyle(tertiaryTextColor)
                         }
