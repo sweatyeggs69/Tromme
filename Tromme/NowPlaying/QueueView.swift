@@ -136,7 +136,7 @@ struct QueueView: View {
             .opacity(isInfiniteModeActive ? 0.45 : 1)
             .frame(maxWidth: .infinity)
         }
-        .font(.body.weight(.semibold))
+        .font(.callout.weight(.semibold))
     }
 
     @MainActor
@@ -216,7 +216,7 @@ private struct QueueActionPill: View {
             Image(systemName: systemImage)
                 .foregroundStyle(isActive ? .white : .white.opacity(0.7))
                 .contentTransition(.symbolEffect(.replace))
-                .frame(maxWidth: .infinity, minHeight: 38)
+                .frame(maxWidth: .infinity, minHeight: 36)
                 .background {
                     Capsule(style: .continuous)
                         .fill(.white.opacity(isActive ? 0.24 : 0.10))
