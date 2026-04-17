@@ -187,7 +187,7 @@ struct NowPlayingView: View {
                                     .font(.callout.bold())
                                     .foregroundStyle(.white)
                                     .lineLimit(1)
-                                Text(player.currentTrack?.artistName ?? "")
+                                Text(player.currentTrack?.artistDisplayName ?? "")
                                     .font(.callout)
                                     .foregroundStyle(.white.opacity(0.6))
                                     .lineLimit(1)
@@ -332,7 +332,7 @@ struct NowPlayingView: View {
                 Menu {
                     trackContextMenuItems
                 } label: {
-                    Text(player.currentTrack?.artistName ?? "")
+                    Text(player.currentTrack?.artistDisplayName ?? "")
                         .font(.body)
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)

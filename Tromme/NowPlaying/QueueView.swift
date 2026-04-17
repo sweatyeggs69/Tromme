@@ -242,7 +242,7 @@ private struct QueueRow: View {
                     .font(.callout)
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Text(track.artistName)
+                Text(track.artistDisplayName)
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)

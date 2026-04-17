@@ -150,8 +150,8 @@ struct AlbumDetailView: View {
                         Text(artistTarget.title)
                             .font(.title3)
                             .foregroundStyle(secondaryTextColor)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, 20)
                     }
                     .buttonStyle(.plain)
@@ -160,8 +160,8 @@ struct AlbumDetailView: View {
                         Text(artistTarget.title)
                             .font(.title3)
                             .foregroundStyle(secondaryTextColor)
-                            .multilineTextAlignment(.leading)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, 20)
                     }
                     .buttonStyle(.plain)
@@ -170,8 +170,8 @@ struct AlbumDetailView: View {
                 Text(artist)
                     .font(.title3)
                     .foregroundStyle(secondaryTextColor)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.horizontal, 20)
             }
 
@@ -317,6 +317,7 @@ struct AlbumDetailView: View {
                         track: track,
                         index: index,
                         tracks: tracks,
+                        albumArtistName: albumDetails.parentTitle ?? album.parentTitle,
                         player: player,
                         tertiaryTextColor: tertiaryTextColor,
                         titleColor: titleColor
@@ -430,9 +431,27 @@ private struct AlbumTrackRow: View {
     let track: PlexMetadata
     let index: Int
     let tracks: [PlexMetadata]
+    let albumArtistName: String?
     let player: AudioPlayerService
     let tertiaryTextColor: Color
     let titleColor: Color
+
+    private var trackArtistCredit: String {
+        track.artistDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var alternateArtistText: String? {
+        let albumArtist = (albumArtistName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trackArtist = trackArtistCredit
+        guard !trackArtist.isEmpty else { return nil }
+
+        // Rule: if track artist differs from album artist, show track artist.
+        if albumArtist.isEmpty { return trackArtist }
+        let hasDifferentArtist = trackArtist.caseInsensitiveCompare(albumArtist) != .orderedSame
+
+        guard hasDifferentArtist else { return nil }
+        return trackArtist
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -452,9 +471,18 @@ private struct AlbumTrackRow: View {
                     }
                     .frame(width: 22, alignment: .trailing)
 
-                    Text(track.title)
-                        .foregroundStyle(titleColor)
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(track.title)
+                            .foregroundStyle(titleColor)
+                            .lineLimit(1)
+
+                        if let alternateArtistText {
+                            Text(alternateArtistText)
+                                .font(.caption)
+                                .foregroundStyle(tertiaryTextColor)
+                                .lineLimit(1)
+                        }
+                    }
 
                     Spacer()
                 }

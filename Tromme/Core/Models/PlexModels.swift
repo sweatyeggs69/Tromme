@@ -170,6 +170,15 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
         grandparentTitle ?? parentTitle ?? ""
     }
 
+    /// Display name for UI. Prefer track-level artist credit when Plex provides one.
+    var artistDisplayName: String {
+        let trackLevelArtist = (originalTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trackLevelArtist.isEmpty {
+            return trackLevelArtist
+        }
+        return artistName
+    }
+
     var albumName: String {
         parentTitle ?? ""
     }

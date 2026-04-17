@@ -299,7 +299,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             }
 
             let trackItems: [CPListTemplateItem] = tracks.prefix(CPListTemplate.maximumItemCount - 1).enumerated().map { index, track -> CPListItem in
-                let item = CPListItem(text: track.title, detailText: track.artistName)
+                let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
                 loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
                 item.handler = { [weak self] _, completion in
                     self?.player?.play(tracks: tracks, startingAt: index)
@@ -356,7 +356,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
 
         let trackItems = tracks.enumerated().map { index, track -> CPListItem in
-            let item = CPListItem(text: track.title, detailText: track.artistName)
+            let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
             if let server, let client {
                 loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
             }
@@ -588,7 +588,7 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
         guard let player, !player.upcomingTracks.isEmpty else { return }
         let tracks = player.upcomingTracks
         let items = tracks.prefix(CPListTemplate.maximumItemCount).enumerated().map { index, track -> CPListItem in
-            let item = CPListItem(text: track.title, detailText: track.artistName)
+            let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
             item.handler = { [weak self] _, completion in
                 self?.player?.playFromQueue(at: index)
                 completion()
@@ -605,4 +605,3 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
         showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName)
     }
 }
-

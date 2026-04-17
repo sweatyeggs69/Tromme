@@ -52,7 +52,7 @@ struct TrackRowView: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     } else if showArtist {
-                        Text(track.artistName)
+                        Text(track.artistDisplayName)
                             .font(artistFont ?? (isCompact ? .caption2 : .caption))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

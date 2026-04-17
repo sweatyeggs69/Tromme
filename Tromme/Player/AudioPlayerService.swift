@@ -1109,7 +1109,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private func updateNowPlayingInfo() {
         var info = [String: Any]()
         info[MPMediaItemPropertyTitle] = currentTrack?.title ?? ""
-        info[MPMediaItemPropertyArtist] = currentTrack?.artistName ?? ""
+        info[MPMediaItemPropertyArtist] = currentTrack?.artistDisplayName ?? ""
         info[MPMediaItemPropertyAlbumTitle] = currentTrack?.albumName ?? ""
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
