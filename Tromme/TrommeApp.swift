@@ -10,6 +10,12 @@ struct TrommeApp: App {
     @State private var audioPlayer = AudioPlayerService()
 
     init() {
+        // Populate shared context so CarPlay (and other non-SwiftUI code) can access services
+        let ctx = AppContext.shared
+        ctx.serverConnection = serverConnection
+        ctx.plexClient = plexClient
+        ctx.audioPlayer = audioPlayer
+
         let accentColor = UIColor(AppStyle.Colors.tint)
         UINavigationBar.appearance().tintColor = accentColor
 

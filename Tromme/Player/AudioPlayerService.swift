@@ -41,11 +41,8 @@ final class AudioPlayerService: @unchecked Sendable {
     private var server: PlexServer?
     private var client: PlexAPIClient?
     private var originalQueue: [PlexMetadata] = []
-    private var directFallbackURLForCurrentItem: URL?
-    private var didFallbackToDirectForCurrentItem = false
     private var universalCandidatesForCurrentItem: [URL] = []
     private var universalCandidateIndexForCurrentItem = 0
-    private var universalHeadersForCurrentItem: [String: String] = [:]
     private var currentSessionID: String?
     private var cachedArtwork: MPMediaItemArtwork?
     private var cachedArtworkThumbPath: String?
@@ -315,12 +312,8 @@ final class AudioPlayerService: @unchecked Sendable {
 
     // MARK: - Private
 
-    private func makePlayerItem(url: URL, headers: [String: String]? = nil) -> AVPlayerItem {
-        guard let headers, !headers.isEmpty else {
-            return AVPlayerItem(url: url)
-        }
-        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers])
-        return AVPlayerItem(asset: asset)
+    private func makePlayerItem(url: URL) -> AVPlayerItem {
+        AVPlayerItem(url: url)
     }
 
     private func loadAndPlay(_ track: PlexMetadata) {
@@ -340,15 +333,11 @@ final class AudioPlayerService: @unchecked Sendable {
         currentTime = 0
         duration = Double(track.duration ?? 0) / 1000.0
         lastNowPlayingInfoSyncTime = 0
-        didFallbackToDirectForCurrentItem = false
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
-        universalHeadersForCurrentItem = [:]
         currentSessionID = UUID().uuidString
 
-        guard let server, let client,
-              let partKey = track.media?.first?.part?.first?.key,
-              let directURL = client.streamURL(server: server, partKey: partKey) else { return }
+        guard let server, let client else { return }
 
         tearDownObservers()
         player?.pause()
@@ -358,91 +347,66 @@ final class AudioPlayerService: @unchecked Sendable {
         let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
             UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
         )
-        let shouldPreferUniversalOnCellular = isCellular && !disableCellularTranscoding
-        let shouldUseUniversalPath = shouldUseUniversalHLS(for: track) || shouldPreferUniversalOnCellular
+        // Always route audio through Plex universal HLS for stable seek/duration behavior.
+        let sessionID = currentSessionID!
+        let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
+        let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
+        let mediaPathCandidates = [normalizedPath]
+        let cellular = isCellular
+        let headers = client.playbackHeaders(
+            server: server,
+            sessionID: sessionID,
+            cellular: cellular,
+            disableCellularTranscoding: disableCellularTranscoding
+        )
+        let generation = playbackGeneration
+        let capturedClient = client
+        let capturedServer = server
 
-        if shouldUseUniversalPath {
-            // Route through universal HLS for compatibility codecs and optional cellular transcoding.
-            let sessionID = currentSessionID!
-            let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
-            let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
-            let mediaPathCandidates = [normalizedPath]
-            let cellular = isCellular
-            let headers = client.playbackHeaders(
-                server: server,
-                sessionID: sessionID,
-                cellular: cellular,
-                disableCellularTranscoding: disableCellularTranscoding
-            )
-            universalHeadersForCurrentItem = headers
-            directFallbackURLForCurrentItem = directURL
-            let generation = playbackGeneration
-            let capturedClient = client
-            let capturedServer = server
-
-            Task {
-                // Step 1: Authorize the transcode session
-                do {
-                    try await capturedClient.universalDecision(
-                        server: capturedServer,
-                        metadataPath: normalizedPath,
-                        sessionID: sessionID,
-                        headers: headers,
-                        cellular: cellular,
-                        disableCellularTranscoding: disableCellularTranscoding,
-                        cellularTranscodeBitrate: cellularTranscodeBitrate
-                    )
-                } catch {
-                    guard self.playbackGeneration == generation else { return }
-                    print("[AudioPlayer] Decision failed: \(error.localizedDescription). Using direct stream.")
-                    self.startPlayback(url: directURL)
-                    return
-                }
-
-                guard self.playbackGeneration == generation else { return }
-
-                // Step 2: Fetch master playlist and resolve variant URL
-                let universalCandidates = capturedClient.universalStreamURLCandidates(
+        Task {
+            // Step 1: Authorize the transcode session.
+            do {
+                try await capturedClient.universalDecision(
                     server: capturedServer,
-                    mediaPathCandidates: mediaPathCandidates,
+                    metadataPath: normalizedPath,
                     sessionID: sessionID,
+                    headers: headers,
                     cellular: cellular,
                     disableCellularTranscoding: disableCellularTranscoding,
                     cellularTranscodeBitrate: cellularTranscodeBitrate
                 )
-                self.universalCandidatesForCurrentItem = universalCandidates
-
-                guard let masterURL = universalCandidates.first else {
-                    print("[AudioPlayer] Universal URL unavailable. Using direct stream.")
-                    self.startPlayback(url: directURL)
-                    return
-                }
-
-                do {
-                    let variantURL = try await capturedClient.resolveVariantPlaylistURL(
-                        masterURL: masterURL,
-                        server: capturedServer,
-                        headers: headers
-                    )
-                    guard self.playbackGeneration == generation else { return }
-                    self.startPlayback(url: variantURL, headers: self.universalHeadersForCurrentItem)
-                } catch {
-                    guard self.playbackGeneration == generation else { return }
-                    print("[AudioPlayer] Variant resolve failed: \(error.localizedDescription). Using direct stream.")
-                    self.startPlayback(url: directURL)
-                }
+            } catch {
+                guard self.playbackGeneration == generation else { return }
+                print("[AudioPlayer] Decision failed: \(error.localizedDescription)")
+                self.isPlaying = false
+                return
             }
-        } else {
-            directFallbackURLForCurrentItem = nil
-            universalCandidatesForCurrentItem = []
-            universalCandidateIndexForCurrentItem = 0
-            universalHeadersForCurrentItem = [:]
-            startPlayback(url: directURL)
+
+            guard self.playbackGeneration == generation else { return }
+
+            // Step 2: Build universal HLS URL and play directly.
+            let universalCandidates = capturedClient.universalStreamURLCandidates(
+                server: capturedServer,
+                mediaPathCandidates: mediaPathCandidates,
+                sessionID: sessionID,
+                cellular: cellular,
+                disableCellularTranscoding: disableCellularTranscoding,
+                cellularTranscodeBitrate: cellularTranscodeBitrate
+            )
+            self.universalCandidatesForCurrentItem = universalCandidates
+
+            guard let masterURL = universalCandidates.first else {
+                print("[AudioPlayer] Universal URL unavailable.")
+                self.isPlaying = false
+                return
+            }
+            guard self.playbackGeneration == generation else { return }
+            self.startPlayback(url: masterURL)
         }
     }
 
-    private func startPlayback(url: URL, headers: [String: String]? = nil) {
-        let item = makePlayerItem(url: url, headers: headers)
+    private func startPlayback(url: URL) {
+        let item = makePlayerItem(url: url)
         player = AVPlayer(playerItem: item)
         player?.play()
         isPlaying = true
@@ -457,36 +421,6 @@ final class AudioPlayerService: @unchecked Sendable {
         reportTimelineState("playing")
         savePlaybackState()
     }
-
-    /// Formats that need the universal transcode path:
-    /// - FLAC/WAV: AVPlayer plays them but seeking drifts out of sync over time
-    /// - OGG/Opus/WMA/WavPack/Musepack: AVPlayer can't play these at all
-    private static let universalTranscodeCodecs: Set<String> = [
-        "flac", "wav", "ogg", "vorbis", "opus", "wma", "wmav2", "wavpack", "wv", "musepack", "mpc",
-    ]
-    private static let universalTranscodeContainers: Set<String> = [
-        "flac", "wav", "ogg", "wma", "wv", "mpc",
-    ]
-    private static let universalTranscodeExtensions: Set<String> = [
-        ".flac", ".wav", ".ogg", ".opus", ".wma", ".wv", ".mpc",
-    ]
-
-    private func shouldUseUniversalHLS(for track: PlexMetadata) -> Bool {
-        track.media?.contains { media in
-            let codec = media.audioCodec?.lowercased() ?? ""
-            let container = media.container?.lowercased() ?? ""
-            if Self.universalTranscodeCodecs.contains(codec) || Self.universalTranscodeContainers.contains(container) {
-                return true
-            }
-            return media.part?.contains { part in
-                let partContainer = part.container?.lowercased() ?? ""
-                let filePath = part.file?.lowercased() ?? ""
-                return Self.universalTranscodeContainers.contains(partContainer)
-                    || Self.universalTranscodeExtensions.contains(where: { filePath.hasSuffix($0) })
-            } ?? false
-        } ?? false
-    }
-
 
     // MARK: - Observers
 
@@ -514,17 +448,10 @@ final class AudioPlayerService: @unchecked Sendable {
                         if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
                             self.universalCandidateIndexForCurrentItem = nextIndex
                             let nextURL = self.universalCandidatesForCurrentItem[nextIndex]
-                            self.startPlayback(url: nextURL, headers: self.universalHeadersForCurrentItem)
+                            self.startPlayback(url: nextURL)
                             return
                         }
-                        if !self.didFallbackToDirectForCurrentItem,
-                           let fallbackURL = self.directFallbackURLForCurrentItem {
-                            self.didFallbackToDirectForCurrentItem = true
-                            self.directFallbackURLForCurrentItem = nil
-                            self.universalHeadersForCurrentItem = [:]
-                            print("[AudioPlayer] Universal stream failed. Using direct stream.")
-                            self.startPlayback(url: fallbackURL)
-                        }
+                        self.isPlaying = false
                     default:
                         break
                     }

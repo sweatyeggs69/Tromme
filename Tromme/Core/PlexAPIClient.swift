@@ -43,7 +43,7 @@ final class PlexAPIClient: Sendable {
     // Required Plex identification headers (per API spec)
     static let clientIdentifier = "com.kylemcclain.Tromme"
     static let product = "Tromme"
-    static let version = "1.0.0"
+    static let version = "1.0.1"
     static let platform = "iOS"
     static let platformVersion = ProcessInfo.processInfo.operatingSystemVersionString
     static let device = "iPhone"
@@ -273,7 +273,7 @@ final class PlexAPIClient: Sendable {
         disableCellularTranscoding: Bool = false,
         cellularTranscodeBitrate: Int = 320
     ) -> [URLQueryItem] {
-        let avoidCellularAudioTranscode = cellular && disableCellularTranscoding
+        let musicBitrate = cellular && !disableCellularTranscoding ? "\(cellularTranscodeBitrate)" : "40000"
         return [
             URLQueryItem(name: "path", value: metadataPath),
             URLQueryItem(name: "mediaIndex", value: "0"),
@@ -281,8 +281,8 @@ final class PlexAPIClient: Sendable {
             URLQueryItem(name: "protocol", value: "hls"),
             URLQueryItem(name: "directPlay", value: "0"),
             URLQueryItem(name: "directStream", value: "1"),
-            URLQueryItem(name: "directStreamAudio", value: avoidCellularAudioTranscode ? "1" : "0"),
-            URLQueryItem(name: "musicBitrate", value: avoidCellularAudioTranscode ? "40000" : (cellular ? "\(cellularTranscodeBitrate)" : "40000")),
+            URLQueryItem(name: "directStreamAudio", value: "1"),
+            URLQueryItem(name: "musicBitrate", value: musicBitrate),
             URLQueryItem(name: "mediaBufferSize", value: "102400"),
             URLQueryItem(name: "location", value: cellular ? "cellular" : "lan"),
             URLQueryItem(name: "session", value: sessionID),
@@ -361,43 +361,6 @@ final class PlexAPIClient: Sendable {
 
         guard let url = components.url else { return [] }
         return [url]
-    }
-
-    /// Fetch the HLS master playlist and resolve the variant playlist URL.
-    /// This bypasses the BANDWIDTH declaration in the master playlist that causes
-    /// AVPlayer to stall when FLAC segments exceed the declared rate.
-    func resolveVariantPlaylistURL(masterURL: URL, server: PlexServer, headers: [String: String]) async throws -> URL {
-        var request = URLRequest(url: masterURL)
-        for (field, value) in headers {
-            request.setValue(value, forHTTPHeaderField: field)
-        }
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard statusCode == 200,
-              let body = String(data: data, encoding: .utf8) else {
-            throw PlexAPIError.serverError(statusCode)
-        }
-
-        // Parse the variant playlist path from the master m3u8.
-        // Format: #EXT-X-STREAM-INF:...\nsession/.../base/index.m3u8
-        for line in body.components(separatedBy: .newlines) {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
-            // Resolve relative URL against the master URL and add the auth token
-            if var variantURL = URL(string: trimmed, relativeTo: masterURL)?.absoluteURL,
-               var components = URLComponents(url: variantURL, resolvingAgainstBaseURL: false) {
-                var items = components.queryItems ?? []
-                items.append(URLQueryItem(name: "X-Plex-Token", value: server.accessToken))
-                components.queryItems = items
-                if let authenticated = components.url {
-                    variantURL = authenticated
-                }
-                return variantURL
-            }
-        }
-
-        throw PlexAPIError.invalidURL
     }
 
     /// ALAC profile for LAN — lossless, no quality loss.
