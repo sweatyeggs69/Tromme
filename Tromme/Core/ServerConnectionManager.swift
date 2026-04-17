@@ -197,43 +197,55 @@ final class ServerConnectionManager {
 
     // MARK: - Probing
 
-    /// Probes ALL connections concurrently. Assigns priority: local=0, remote=1, relay=2.
-    /// Returns the highest-priority reachable URI. If a local connection responds, we
-    /// short-circuit immediately since nothing can outrank it.
+    /// Probes connections by priority tiers: local, then remote, then relay.
+    /// This avoids unnecessary relay/cellular-style probes when a higher-priority
+    /// path is already reachable.
     static func probe(
         connections: [PlexConnection],
         token: String,
         timeout: TimeInterval
     ) async -> String? {
-        // Priority: local (0) > remote (1) > relay (2)
-        let indexed: [(priority: Int, uri: String)] = connections.compactMap { c in
-            guard let uri = c.uri else { return nil }
-            if c.local == true { return (0, uri) }
-            if c.relay == true { return (2, uri) }
-            return (1, uri)
+        let localURIs = connections.compactMap { c -> String? in
+            guard c.local == true else { return nil }
+            return c.uri
         }
-        guard !indexed.isEmpty else { return nil }
+        let remoteURIs = connections.compactMap { c -> String? in
+            guard c.local != true, c.relay != true else { return nil }
+            return c.uri
+        }
+        let relayURIs = connections.compactMap { c -> String? in
+            guard c.relay == true else { return nil }
+            return c.uri
+        }
 
-        return await withTaskGroup(of: (Int, String)?.self) { group in
-            for (priority, uri) in indexed {
+        if let bestLocal = await firstReachableURI(in: localURIs, token: token, timeout: timeout) {
+            return bestLocal
+        }
+        if let bestRemote = await firstReachableURI(in: remoteURIs, token: token, timeout: timeout) {
+            return bestRemote
+        }
+        return await firstReachableURI(in: relayURIs, token: token, timeout: timeout)
+    }
+
+    private static func firstReachableURI(
+        in uris: [String],
+        token: String,
+        timeout: TimeInterval
+    ) async -> String? {
+        guard !uris.isEmpty else { return nil }
+        return await withTaskGroup(of: String?.self) { group in
+            for uri in uris {
                 group.addTask {
-                    guard await testURI(uri, token: token, timeout: timeout) else { return nil }
-                    return (priority, uri)
+                    await testURI(uri, token: token, timeout: timeout) ? uri : nil
                 }
             }
-            var best: (Int, String)?
             for await result in group {
-                guard let r = result else { continue }
-                if best == nil || r.0 < best!.0 {
-                    best = r
-                }
-                // Local is highest priority — can't improve, stop waiting.
-                if r.0 == 0 {
+                if let reachable = result {
                     group.cancelAll()
-                    return r.1
+                    return reachable
                 }
             }
-            return best?.1
+            return nil
         }
     }
 

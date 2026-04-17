@@ -22,7 +22,7 @@ struct ArtistDetailView: View {
         heroMinY < -80
     }
 
-    private let heroHeight: CGFloat = 350
+    private let heroHeight: CGFloat = 400
     private let previewData: PreviewData?
 
     struct PreviewData {

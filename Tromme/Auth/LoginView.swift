@@ -42,6 +42,7 @@ struct LoginView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .frame(maxWidth: 250)
             .disabled(authService.isAuthenticating)
             .padding(.horizontal, 32)
 
