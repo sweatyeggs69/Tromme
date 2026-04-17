@@ -226,6 +226,10 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func handlePlaybackFailure(_ reason: String) {
         guard let track = currentTrack else { return }
+        guard isPlaying else {
+            logPlayback("recovery_ignored", "reason=\(reason) playback_inactive=true")
+            return
+        }
 
         if recoveryTrackRatingKey != track.ratingKey {
             recoveryTrackRatingKey = track.ratingKey
