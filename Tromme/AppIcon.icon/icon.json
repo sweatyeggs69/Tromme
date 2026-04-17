@@ -2,7 +2,20 @@
   "fill-specializations" : [
     {
       "value" : {
-        "automatic-gradient" : "display-p3:0.94280,0.51562,0.19027,1.00000"
+        "linear-gradient" : [
+          "display-p3:0.94280,0.51562,0.19027,1.00000",
+          "display-p3:0.92929,0.25479,0.13961,1.00000"
+        ],
+        "orientation" : {
+          "start" : {
+            "x" : 0.5,
+            "y" : 0
+          },
+          "stop" : {
+            "x" : 0.5,
+            "y" : 0.7
+          }
+        }
       }
     },
     {
@@ -23,11 +36,25 @@
             {
               "appearance" : "dark",
               "value" : {
-                "automatic-gradient" : "display-p3:0.94280,0.51562,0.19027,1.00000"
+                "linear-gradient" : [
+                  "display-p3:0.94280,0.51562,0.19027,1.00000",
+                  "display-p3:0.92929,0.25479,0.13961,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
               }
             }
           ],
           "glass" : true,
+          "hidden" : false,
           "image-name" : "trome logo.png",
           "name" : "trome logo",
           "position" : {

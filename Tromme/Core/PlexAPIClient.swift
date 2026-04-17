@@ -251,6 +251,31 @@ final class PlexAPIClient: Sendable {
         }
     }
 
+    /// Mark an item as played in Plex history.
+    /// Endpoint: /:/scrobble
+    func reportScrobble(server: PlexServer, ratingKey: String) async throws {
+        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else {
+            throw PlexAPIError.invalidURL
+        }
+        components.path = "/:/scrobble"
+        components.queryItems = [
+            URLQueryItem(name: "key", value: ratingKey),
+            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
+        ]
+
+        guard let url = components.url else { throw PlexAPIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let (_, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if statusCode >= 400 {
+            print("[AudioPlayer] Scrobble failed: status \(statusCode)")
+        }
+    }
+
     /// Build a direct stream URL with full Plex identification query params.
     func streamURL(server: PlexServer, partKey: String) -> URL? {
         guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }

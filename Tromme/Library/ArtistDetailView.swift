@@ -187,7 +187,7 @@ struct ArtistDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedAlbum) { album in
-            AlbumDetailView(album: album)
+            AlbumDetailView(album: album, sourceArtistRatingKey: artist.ratingKey)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {

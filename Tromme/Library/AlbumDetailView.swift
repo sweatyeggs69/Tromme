@@ -4,8 +4,10 @@ struct AlbumDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
+    @Environment(\.dismiss) private var dismiss
 
     let album: PlexMetadata
+    let sourceArtistRatingKey: String?
     @State private var albumDetails: PlexMetadata
     @State private var tracks: [PlexMetadata]
     @State private var firstTrackDetails: PlexMetadata?
@@ -104,6 +106,11 @@ struct AlbumDetailView: View {
         )
     }
 
+    private var shouldPopToSourceArtist: Bool {
+        guard let sourceArtistRatingKey, let artistTarget = artistNavigationTarget else { return false }
+        return sourceArtistRatingKey == artistTarget.ratingKey
+    }
+
     private var plexAudioStyleText: String? {
         let media = firstTrackDetails?.media?.first
             ?? tracks.compactMap(\.media?.first).first
@@ -136,19 +143,35 @@ struct AlbumDetailView: View {
                 .padding(.horizontal, 20)
 
             if let artistTarget = artistNavigationTarget {
-                NavigationLink(value: artistTarget) {
-                    Text(artistTarget.title)
-                        .font(.title3)
-                        .foregroundStyle(secondaryTextColor)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
+                if shouldPopToSourceArtist {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text(artistTarget.title)
+                            .font(.title3)
+                            .foregroundStyle(secondaryTextColor)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    NavigationLink(value: artistTarget) {
+                        Text(artistTarget.title)
+                            .font(.title3)
+                            .foregroundStyle(secondaryTextColor)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } else if let artist = album.parentTitle, !artist.isEmpty {
                 Text(artist)
                     .font(.title3)
                     .foregroundStyle(secondaryTextColor)
-                    .multilineTextAlignment(.center)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
             }
 
@@ -227,8 +250,9 @@ struct AlbumDetailView: View {
 
     private let isPreviewMode: Bool
 
-    init(album: PlexMetadata, previewTracks: [PlexMetadata]? = nil) {
+    init(album: PlexMetadata, sourceArtistRatingKey: String? = nil, previewTracks: [PlexMetadata]? = nil) {
         self.album = album
+        self.sourceArtistRatingKey = sourceArtistRatingKey
         _albumDetails = State(initialValue: album)
         _tracks = State(initialValue: previewTracks ?? [])
         _isLoadingTracks = State(initialValue: previewTracks == nil)

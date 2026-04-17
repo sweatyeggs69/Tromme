@@ -40,6 +40,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var itemFailedToEndObserver: Any?
     private var playbackGeneration: Int = 0
     private let maxRecoveryAttemptsPerTrack = 2
+    private let scrobbleThreshold: Double = 0.9
     private var recoveryTrackRatingKey: String?
     private var recoveryAttemptsForTrack = 0
     private var lastNowPlayingInfoSyncTime: TimeInterval = 0
@@ -57,6 +58,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var soundCheckObserver: NSObjectProtocol?
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     private var pendingInitialSeekTime: TimeInterval?
+    private var scrobbledTrackRatingKey: String?
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -486,6 +488,9 @@ final class AudioPlayerService: @unchecked Sendable {
             recoveryTrackRatingKey = track.ratingKey
             recoveryAttemptsForTrack = 0
         }
+        if scrobbledTrackRatingKey != track.ratingKey {
+            scrobbledTrackRatingKey = nil
+        }
         playbackGeneration += 1
         isReadyToPlay = false
         currentTime = 0
@@ -825,6 +830,7 @@ final class AudioPlayerService: @unchecked Sendable {
                     }
 
                     self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
+                    self.maybeReportScrobble()
 
                     if abs(self.currentTime - self.lastNowPlayingInfoSyncTime) >= 1 {
                         self.lastNowPlayingInfoSyncTime = self.currentTime
@@ -884,6 +890,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func handleTrackEnd() {
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
+        maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
         reportTimelineState("stopped", continuing: hasNext)
         next()
@@ -915,6 +922,27 @@ final class AudioPlayerService: @unchecked Sendable {
                 sessionID: sessionID,
                 continuing: continuing
             )
+        }
+    }
+
+    private func maybeReportScrobble(force: Bool = false) {
+        guard let currentTrack, let client, let server else { return }
+        guard scrobbledTrackRatingKey != currentTrack.ratingKey else { return }
+
+        let shouldScrobble: Bool
+        if force {
+            shouldScrobble = true
+        } else if duration > 0 {
+            shouldScrobble = (currentTime / duration) >= scrobbleThreshold
+        } else {
+            shouldScrobble = false
+        }
+
+        guard shouldScrobble else { return }
+        scrobbledTrackRatingKey = currentTrack.ratingKey
+        logPlayback("scrobble", "time=\(Int(currentTime)) duration=\(Int(duration))")
+        Task {
+            try? await client.reportScrobble(server: server, ratingKey: currentTrack.ratingKey)
         }
     }
 
