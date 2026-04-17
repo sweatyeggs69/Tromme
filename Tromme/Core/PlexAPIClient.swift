@@ -327,12 +327,19 @@ final class PlexAPIClient: Sendable {
             request.setValue(value, forHTTPHeaderField: field)
         }
 
-        let (_, response) = try await URLSession.shared.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        try await retryingRequest {
+            let (_, response): (Data, URLResponse)
+            do {
+                ( _, response) = try await self.session.data(for: request)
+            } catch {
+                throw PlexAPIError.networkError(error)
+            }
 
-        if statusCode >= 400 {
-            print("[AudioPlayer] Decision failed with status \(statusCode)")
-            throw PlexAPIError.serverError(statusCode)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if statusCode >= 400 {
+                print("[AudioPlayer] Decision failed with status \(statusCode)")
+                throw PlexAPIError.serverError(statusCode)
+            }
         }
     }
 

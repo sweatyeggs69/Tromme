@@ -33,6 +33,7 @@ struct ArtistsView: View {
                 } label: {
                     Image(systemName: viewMode == .grid ? "list.bullet" : "square.grid.2x2")
                 }
+                .tint(.primary)
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }

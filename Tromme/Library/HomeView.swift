@@ -179,6 +179,7 @@ struct HomeView: View {
                 .prefix(10)
         )
     }
+
 }
 
 #if DEBUG

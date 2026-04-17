@@ -234,6 +234,7 @@ private extension View {
                 } label: {
                     Image(systemName: "gear")
                 }
+                .tint(.primary)
             }
         }
     }

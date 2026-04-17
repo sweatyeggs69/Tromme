@@ -32,6 +32,7 @@ struct SettingsView: View {
 
             Section {
                 Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
+                    .tint(.green)
                 Picker("Cellular Bitrate", selection: $cellularTranscodeBitrateKbps) {
                     ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
                         Text("\(bitrate) kbps").tag(bitrate)
@@ -39,6 +40,7 @@ struct SettingsView: View {
                 }
                 .disabled(!cellularTranscodingBinding.wrappedValue)
                 Toggle("Sound Check", isOn: $soundCheckEnabled)
+                    .tint(.green)
             } header: {
                 Text("Playback")
             } footer: {

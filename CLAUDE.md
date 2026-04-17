@@ -91,3 +91,8 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - File organization: one type per file
 - Naming: PascalCase for types, camelCase for properties
 - Group files by feature, not by type (Weather/, Profile/, Settings/)
+
+## Logging & Diagnostics
+- All verbose diagnostics and development logs must be gated to debug builds only (`#if DEBUG`).
+- Release builds must not emit internal debug traces to the console.
+- If runtime toggles are used for diagnostics, they must only be honored in debug builds.

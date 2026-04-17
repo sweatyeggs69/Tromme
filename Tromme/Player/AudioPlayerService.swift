@@ -36,7 +36,12 @@ final class AudioPlayerService: @unchecked Sendable {
     private var timeControlObservation: NSKeyValueObservation?
     private var errorLogObserver: Any?
     private var trackEndObserver: Any?
+    private var playbackStalledObserver: Any?
+    private var itemFailedToEndObserver: Any?
     private var playbackGeneration: Int = 0
+    private let maxRecoveryAttemptsPerTrack = 2
+    private var recoveryTrackRatingKey: String?
+    private var recoveryAttemptsForTrack = 0
     private var lastNowPlayingInfoSyncTime: TimeInterval = 0
     private var server: PlexServer?
     private var client: PlexAPIClient?
@@ -50,6 +55,8 @@ final class AudioPlayerService: @unchecked Sendable {
     private var isCellular: Bool { NetworkStatus.shared.isCellular }
     private var isSeeking = false
     private var soundCheckObserver: NSObjectProtocol?
+    private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
+    private var pendingInitialSeekTime: TimeInterval?
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -75,7 +82,11 @@ final class AudioPlayerService: @unchecked Sendable {
     // MARK: - Playback Control
 
     func play(tracks: [PlexMetadata], startingAt index: Int = 0) {
-        guard !tracks.isEmpty, tracks.indices.contains(index) else { return }
+        guard !tracks.isEmpty, tracks.indices.contains(index) else {
+            logPlayback("play_request_rejected", "count=\(tracks.count) start=\(index)")
+            return
+        }
+        logPlayback("play_request", "count=\(tracks.count) start=\(index) shuffled=\(isShuffled)")
         originalQueue = tracks
         if isShuffled {
             var shuffled = tracks
@@ -93,19 +104,24 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     func togglePlayPause() {
-        if player == nil, let track = currentTrack {
-            if queue.isEmpty {
-                queue = [track]
-                currentIndex = 0
-            }
-            guard currentIndex < queue.count else { return }
-            loadAndPlay(queue[currentIndex])
+        logPlayback("toggle_play_pause", "isPlaying=\(isPlaying)")
+        if player == nil {
+            logPlayback("toggle_recover", "reason=player_nil")
+            recoverAndPlayCurrentTrackIfPossible()
             return
         }
         guard let player else { return }
+
+        if player.currentItem == nil || player.currentItem?.status == .failed {
+            logPlayback("toggle_recover", "reason=item_missing_or_failed")
+            recoverAndPlayCurrentTrackIfPossible()
+            return
+        }
+
         if player.timeControlStatus == .playing {
             player.pause()
             isPlaying = false
+            logPlayback("paused")
             reportTimelineState("paused")
         } else {
             // If the item has finished playing, seek to start before resuming
@@ -119,18 +135,25 @@ final class AudioPlayerService: @unchecked Sendable {
                     currentPlayer.play()
                 }
                 isPlaying = true
+                logPlayback("resumed_from_end")
                 reportTimelineState("playing")
                 updateNowPlayingInfo()
                 return
             }
             player.play()
             isPlaying = true
+            logPlayback("resumed")
             reportTimelineState("playing")
         }
         updateNowPlayingInfo()
     }
 
     private func playCurrent() {
+        if player == nil || player?.currentItem == nil || player?.currentItem?.status == .failed {
+            recoverAndPlayCurrentTrackIfPossible()
+            return
+        }
+
         // If the player item has ended (song finished), re-seek to start before playing
         if let item = player?.currentItem,
            item.status == .readyToPlay,
@@ -158,22 +181,116 @@ final class AudioPlayerService: @unchecked Sendable {
         updateNowPlayingInfo()
     }
 
+    private var diagnosticsEnabled: Bool {
+        #if DEBUG
+        return UserDefaults.standard.object(forKey: Self.diagnosticsEnabledKey) as? Bool ?? true
+        #else
+        return false
+        #endif
+    }
+
+    private func logPlayback(_ event: String, _ details: String = "") {
+        guard diagnosticsEnabled else { return }
+        let trackKey = currentTrack?.ratingKey ?? "none"
+        let prefix = "[AudioPlayer][\(event)] track=\(trackKey) idx=\(currentIndex)/\(max(queue.count - 1, 0))"
+        if details.isEmpty {
+            print(prefix)
+        } else {
+            print("\(prefix) \(details)")
+        }
+    }
+
+    private func recoverAndPlayCurrentTrackIfPossible(resumeAt: TimeInterval? = nil) {
+        if queue.indices.contains(currentIndex) {
+            if let resumeAt {
+                logPlayback("recover_queue_track", "resume_at=\(resumeAt)")
+            } else {
+                logPlayback("recover_queue_track")
+            }
+            loadAndPlay(queue[currentIndex], resumeAt: resumeAt)
+            return
+        }
+        if let track = currentTrack {
+            if let resumeAt {
+                logPlayback("recover_current_track_seed_queue", "resume_at=\(resumeAt)")
+            } else {
+                logPlayback("recover_current_track_seed_queue")
+            }
+            queue = [track]
+            currentIndex = 0
+            loadAndPlay(track, resumeAt: resumeAt)
+            return
+        }
+        logPlayback("recover_failed", "reason=no_track_available")
+    }
+
+    private func handlePlaybackFailure(_ reason: String) {
+        guard let track = currentTrack else { return }
+
+        if recoveryTrackRatingKey != track.ratingKey {
+            recoveryTrackRatingKey = track.ratingKey
+            recoveryAttemptsForTrack = 0
+        }
+
+        let resumeTime: TimeInterval?
+        if currentTime.isFinite, currentTime > 2 {
+            resumeTime = currentTime
+        } else if let playerTime = player?.currentTime().seconds, playerTime.isFinite, playerTime > 2 {
+            resumeTime = playerTime
+        } else {
+            resumeTime = nil
+        }
+
+        if recoveryAttemptsForTrack < maxRecoveryAttemptsPerTrack {
+            recoveryAttemptsForTrack += 1
+            if let resumeTime {
+                logPlayback("recovery_attempt", "reason=\(reason) attempt=\(recoveryAttemptsForTrack)/\(maxRecoveryAttemptsPerTrack) resume_at=\(resumeTime)")
+            } else {
+                logPlayback("recovery_attempt", "reason=\(reason) attempt=\(recoveryAttemptsForTrack)/\(maxRecoveryAttemptsPerTrack)")
+            }
+            recoverAndPlayCurrentTrackIfPossible(resumeAt: resumeTime)
+            return
+        }
+
+        logPlayback("recovery_exhausted", "reason=\(reason) action=skip")
+        if currentIndex < queue.count - 1 {
+            currentIndex += 1
+            loadAndPlay(queue[currentIndex])
+            return
+        }
+        if repeatMode == .all, !queue.isEmpty {
+            currentIndex = 0
+            loadAndPlay(queue[currentIndex])
+            return
+        }
+
+        isPlaying = false
+        updateNowPlayingInfo()
+    }
+
     func next() {
-        guard !queue.isEmpty else { return }
+        guard !queue.isEmpty else {
+            logPlayback("next_ignored", "reason=empty_queue")
+            return
+        }
         if repeatMode == .one {
+            logPlayback("next_repeat_one_reload")
             loadAndPlay(queue[currentIndex])
             return
         }
         if currentIndex < queue.count - 1 {
             currentIndex += 1
+            logPlayback("next_advance", "to_index=\(currentIndex)")
         } else if repeatMode == .all {
             currentIndex = 0
+            logPlayback("next_wrap", "to_index=0")
         } else {
             player?.pause()
             isPlaying = false
             currentTime = 0
             player?.seek(to: .zero)
             updateNowPlayingInfo()
+            logPlayback("next_stop_end_of_queue")
             reportTimelineState("stopped")
             return
         }
@@ -196,7 +313,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     func seek(to time: TimeInterval) {
         guard isReadyToPlay, let player else {
-            print("[AudioPlayer] Seek blocked: not ready")
+            logPlayback("seek_blocked", "reason=not_ready")
             return
         }
         let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
@@ -342,10 +459,17 @@ final class AudioPlayerService: @unchecked Sendable {
         AVPlayerItem(url: url)
     }
 
-    private func loadAndPlay(_ track: PlexMetadata) {
+    private func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil) {
         guard server != nil, client != nil else {
-            print("[AudioPlayer] Cannot play: server/client not configured")
+            logPlayback("load_failed", "reason=server_or_client_not_configured requested=\(track.ratingKey)")
             return
+        }
+
+        pendingInitialSeekTime = resumeAt
+        if let resumeAt {
+            logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count) resume_at=\(resumeAt)")
+        } else {
+            logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count)")
         }
 
         // Report stopped for the previous track before switching
@@ -354,6 +478,10 @@ final class AudioPlayerService: @unchecked Sendable {
         }
 
         currentTrack = track
+        if recoveryTrackRatingKey != track.ratingKey {
+            recoveryTrackRatingKey = track.ratingKey
+            recoveryAttemptsForTrack = 0
+        }
         playbackGeneration += 1
         isReadyToPlay = false
         currentTime = 0
@@ -411,8 +539,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 try await decisionResult
             } catch {
                 guard self.playbackGeneration == generation else { return }
-                print("[AudioPlayer] Decision failed: \(error.localizedDescription)")
-                self.isPlaying = false
+                self.logPlayback("decision_failed", "error=\(error.localizedDescription)")
+                self.handlePlaybackFailure("decision_failed")
                 return
             }
 
@@ -432,18 +560,22 @@ final class AudioPlayerService: @unchecked Sendable {
             self.universalCandidatesForCurrentItem = universalCandidates
 
             guard let masterURL = universalCandidates.first else {
-                print("[AudioPlayer] Universal URL unavailable.")
+                self.logPlayback("universal_url_unavailable")
                 self.isPlaying = false
                 return
             }
             guard self.playbackGeneration == generation else { return }
+            self.logPlayback("load_ready", "candidate_count=\(universalCandidates.count)")
             self.startPlayback(url: masterURL)
         }
     }
 
     private func startPlayback(url: URL) {
+        logPlayback("start_playback", "path=\(url.path)")
         let item = makePlayerItem(url: url)
+        item.preferredForwardBufferDuration = 20
         player = AVPlayer(playerItem: item)
+        player?.automaticallyWaitsToMinimizeStalling = true
         player?.volume = soundCheckVolume(for: currentTrack)
         player?.play()
         isPlaying = true
@@ -451,6 +583,7 @@ final class AudioPlayerService: @unchecked Sendable {
         observeItemStatus(item)
         observePlayerState()
         observeErrorLog(item)
+        observePlaybackFailures(item)
         addTimeObserver()
         observeTrackEnd()
         updateNowPlayingInfo()
@@ -507,10 +640,31 @@ final class AudioPlayerService: @unchecked Sendable {
                         if assetDuration.isFinite && assetDuration > 0 {
                             self.duration = assetDuration
                         }
+                        self.logPlayback("item_ready", "duration=\(self.duration)")
+
+                        if let pendingSeek = self.pendingInitialSeekTime {
+                            self.pendingInitialSeekTime = nil
+                            let safeUpper = self.duration > 1 ? max(self.duration - 1, 0) : self.duration
+                            let bounded = safeUpper > 0 ? min(max(0, pendingSeek), safeUpper) : max(0, pendingSeek)
+                            self.logPlayback("resume_seek", "to=\(bounded)")
+                            let target = CMTime(seconds: bounded, preferredTimescale: 600)
+                            let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+                            self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+                                guard let self, finished else { return }
+                                Task { @MainActor [weak self] in
+                                    guard let self else { return }
+                                    self.currentTime = bounded
+                                    self.player?.play()
+                                    self.isPlaying = true
+                                    self.updateNowPlayingInfo()
+                                }
+                            }
+                        }
+
                         self.updateNowPlayingInfo()
                     case .failed:
                         self.isReadyToPlay = false
-                        print("[AudioPlayer] Item failed: \(errorDesc ?? "unknown")")
+                        self.logPlayback("item_failed", "error=\(errorDesc ?? "unknown")")
                         let nextIndex = self.universalCandidateIndexForCurrentItem + 1
                         if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
                             self.universalCandidateIndexForCurrentItem = nextIndex
@@ -518,7 +672,7 @@ final class AudioPlayerService: @unchecked Sendable {
                             self.startPlayback(url: nextURL)
                             return
                         }
-                        self.isPlaying = false
+                        self.handlePlaybackFailure("item_failed")
                     default:
                         break
                     }
@@ -541,6 +695,89 @@ final class AudioPlayerService: @unchecked Sendable {
         }
     }
 
+    private func observePlaybackFailures(_ item: AVPlayerItem) {
+        let observedGeneration = playbackGeneration
+
+        playbackStalledObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemPlaybackStalled,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard self.playbackGeneration == observedGeneration else { return }
+
+                self.logPlayback("playback_stalled")
+                self.player?.play()
+
+                let stallStartTime = {
+                    if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
+                        return playerTime
+                    }
+                    return self.currentTime
+                }()
+
+                try? await Task.sleep(for: .seconds(6))
+                guard self.playbackGeneration == observedGeneration else { return }
+                guard self.currentTrack?.ratingKey == self.recoveryTrackRatingKey else { return }
+
+                let status = self.player?.timeControlStatus
+                let waitingReason = self.player?.reasonForWaitingToPlay
+                let waitingReasonRaw = waitingReason?.rawValue ?? "none"
+                let checkTime = {
+                    if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
+                        return playerTime
+                    }
+                    return self.currentTime
+                }()
+                let progressed = checkTime - stallStartTime
+
+                self.logPlayback("stall_check", "status=\(status?.rawValue ?? -1) waiting_reason=\(waitingReasonRaw) progressed=\(progressed)")
+
+                if status == .playing || progressed > 1 {
+                    return
+                }
+
+                if status == .waitingToPlayAtSpecifiedRate, waitingReason == .toMinimizeStalls {
+                    self.logPlayback("stall_grace", "reason=toMinimizeStalls")
+                    try? await Task.sleep(for: .seconds(10))
+                    guard self.playbackGeneration == observedGeneration else { return }
+                    guard self.currentTrack?.ratingKey == self.recoveryTrackRatingKey else { return }
+
+                    let recheckStatus = self.player?.timeControlStatus
+                    let recheckReason = self.player?.reasonForWaitingToPlay?.rawValue ?? "none"
+                    let recheckTime = {
+                        if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
+                            return playerTime
+                        }
+                        return self.currentTime
+                    }()
+                    let recheckProgressed = recheckTime - stallStartTime
+                    self.logPlayback("stall_recheck", "status=\(recheckStatus?.rawValue ?? -1) waiting_reason=\(recheckReason) progressed=\(recheckProgressed)")
+
+                    if recheckStatus == .playing || recheckProgressed > 1 {
+                        return
+                    }
+                }
+
+                self.handlePlaybackFailure("playback_stalled")
+            }
+        }
+
+        itemFailedToEndObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemFailedToPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard self.playbackGeneration == observedGeneration else { return }
+                self.logPlayback("failed_to_play_to_end")
+                self.handlePlaybackFailure("failed_to_end")
+            }
+        }
+    }
+
     private func tearDownObservers() {
         removeTimeObserver()
         statusObservation?.invalidate()
@@ -555,6 +792,14 @@ final class AudioPlayerService: @unchecked Sendable {
             NotificationCenter.default.removeObserver(trackEndObserver)
         }
         trackEndObserver = nil
+        if let playbackStalledObserver {
+            NotificationCenter.default.removeObserver(playbackStalledObserver)
+        }
+        playbackStalledObserver = nil
+        if let itemFailedToEndObserver {
+            NotificationCenter.default.removeObserver(itemFailedToEndObserver)
+        }
+        itemFailedToEndObserver = nil
     }
 
     // MARK: - Time Tracking
@@ -597,10 +842,15 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func observePlayerState() {
         timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { [weak self] observedPlayer, _ in
-            let playing = observedPlayer.timeControlStatus != .paused
+            let status = observedPlayer.timeControlStatus
+            let playing = status != .paused
             DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    if self.lastLoggedTimeControlStatus != status {
+                        self.lastLoggedTimeControlStatus = status
+                        self.logPlayback("time_control", "status=\(status.rawValue)")
+                    }
                     self.isPlaying = playing
                     self.updateNowPlayingInfo()
                 }
@@ -630,11 +880,19 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func handleTrackEnd() {
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
+        logPlayback("track_end", "has_next=\(hasNext)")
         reportTimelineState("stopped", continuing: hasNext)
         next()
     }
 
     // MARK: - Timeline Reporting
+
+    /// Best-effort lifecycle signal when the app is terminating.
+    /// iOS may not deliver this on force-quit, but when it does we report stopped.
+    func reportStoppedForAppTermination() {
+        guard currentTrack != nil else { return }
+        reportTimelineState("stopped", continuing: false)
+    }
 
     private func reportTimelineState(_ state: String, continuing: Bool = false) {
         guard let currentTrack, let client, let server else { return }
@@ -667,6 +925,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
     private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
+    private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
 
     private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {

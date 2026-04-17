@@ -37,6 +37,7 @@ struct TrommeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(AppStyle.Colors.tint)
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)
@@ -63,6 +64,9 @@ struct TrommeApp: App {
                 }
                 .task {
                     await observeMemoryWarnings()
+                }
+                .task {
+                    await observeAppTermination()
                 }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -92,6 +96,16 @@ struct TrommeApp: App {
             named: UIApplication.didReceiveMemoryWarningNotification
         ) {
             await ImageCache.shared.clearMemory()
+        }
+    }
+
+    private func observeAppTermination() async {
+        for await _ in NotificationCenter.default.notifications(
+            named: UIApplication.willTerminateNotification
+        ) {
+            await MainActor.run {
+                audioPlayer.reportStoppedForAppTermination()
+            }
         }
     }
 }

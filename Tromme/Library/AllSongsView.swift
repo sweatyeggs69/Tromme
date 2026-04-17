@@ -48,6 +48,7 @@ struct AllSongsView: View {
                 } label: {
                     Image(systemName: "shuffle")
                 }
+                .tint(.primary)
                 .disabled(tracks.isEmpty)
             }
         }

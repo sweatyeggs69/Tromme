@@ -60,6 +60,7 @@ struct LibraryPickerView: View {
                     Button("Back", systemImage: "chevron.left") {
                         serverConnection.disconnect()
                     }
+                    .tint(.primary)
                 }
             }
         }

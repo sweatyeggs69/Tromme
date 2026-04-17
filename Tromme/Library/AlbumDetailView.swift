@@ -90,6 +90,20 @@ struct AlbumDetailView: View {
         return components.isEmpty ? nil : components.joined(separator: " · ")
     }
 
+    private var artistNavigationTarget: PlexMetadata? {
+        let artistTitle = albumDetails.parentTitle ?? album.parentTitle
+        let artistRatingKey = albumDetails.parentRatingKey ?? album.parentRatingKey
+        guard let artistTitle, !artistTitle.isEmpty,
+              let artistRatingKey, !artistRatingKey.isEmpty else { return nil }
+
+        return PlexMetadata(
+            ratingKey: artistRatingKey,
+            title: artistTitle,
+            type: "artist",
+            thumb: albumDetails.parentThumb ?? album.parentThumb
+        )
+    }
+
     private var plexAudioStyleText: String? {
         let media = firstTrackDetails?.media?.first
             ?? tracks.compactMap(\.media?.first).first
@@ -121,7 +135,16 @@ struct AlbumDetailView: View {
                 .padding(.top, 12)
                 .padding(.horizontal, 20)
 
-            if let artist = album.parentTitle, !artist.isEmpty {
+            if let artistTarget = artistNavigationTarget {
+                NavigationLink(value: artistTarget) {
+                    Text(artistTarget.title)
+                        .font(.title3)
+                        .foregroundStyle(secondaryTextColor)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+                .buttonStyle(.plain)
+            } else if let artist = album.parentTitle, !artist.isEmpty {
                 Text(artist)
                     .font(.title3)
                     .foregroundStyle(secondaryTextColor)
