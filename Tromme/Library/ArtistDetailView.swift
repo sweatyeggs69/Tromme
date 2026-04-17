@@ -118,7 +118,7 @@ struct ArtistDetailView: View {
                     }
                 )
 
-            if let latestAlbum = artistAlbums.first {
+            if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
                 sectionHeader("Latest")
 
                 Button {

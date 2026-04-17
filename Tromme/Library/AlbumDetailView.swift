@@ -12,6 +12,7 @@ struct AlbumDetailView: View {
     @State private var tracks: [PlexMetadata]
     @State private var firstTrackDetails: PlexMetadata?
     @State private var isLoadingTracks: Bool
+    @State private var selectedArtist: PlexMetadata?
 
     private var thumbPath: String? {
         album.thumb
@@ -129,6 +130,20 @@ struct AlbumDetailView: View {
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
+    @ViewBuilder
+    private func centeredArtistHeaderText(_ text: String) -> some View {
+        HStack {
+            Spacer(minLength: 0)
+            Text(text)
+                .font(.title3)
+                .foregroundStyle(secondaryTextColor)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var albumHeader: some View {
         VStack {
             ArtworkView(thumbPath: album.thumb, size: 300, cornerRadius: 8)
@@ -147,32 +162,21 @@ struct AlbumDetailView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Text(artistTarget.title)
-                            .font(.title3)
-                            .foregroundStyle(secondaryTextColor)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.horizontal, 20)
+                        centeredArtistHeaderText(artistTarget.title)
                     }
                     .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 } else {
-                    NavigationLink(value: artistTarget) {
-                        Text(artistTarget.title)
-                            .font(.title3)
-                            .foregroundStyle(secondaryTextColor)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.horizontal, 20)
+                    Button {
+                        selectedArtist = artistTarget
+                    } label: {
+                        centeredArtistHeaderText(artistTarget.title)
                     }
                     .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             } else if let artist = album.parentTitle, !artist.isEmpty {
-                Text(artist)
-                    .font(.title3)
-                    .foregroundStyle(secondaryTextColor)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.horizontal, 20)
+                centeredArtistHeaderText(artist)
             }
 
             if let infoLine = albumInfoLine {
@@ -396,6 +400,9 @@ struct AlbumDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedArtist) { artist in
+            ArtistDetailView(artist: artist)
+        }
         .task(id: thumbPath) {
             guard !isPreviewMode else { return }
             guard let server = serverConnection.currentServer else { return }
