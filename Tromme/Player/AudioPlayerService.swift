@@ -49,6 +49,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var cachedArtworkThumbPath: String?
     private var isCellular: Bool { NetworkStatus.shared.isCellular }
     private var isSeeking = false
+    private var soundCheckObserver: NSObjectProtocol?
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -63,6 +64,7 @@ final class AudioPlayerService: @unchecked Sendable {
         setupRemoteCommands()
         restorePlaybackState()
         updateShuffleRepeatState()
+        observeSoundCheckToggle()
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -456,6 +458,19 @@ final class AudioPlayerService: @unchecked Sendable {
         prefetchUpcomingArtwork()
         reportTimelineState("playing")
         savePlaybackState()
+    }
+
+    private func observeSoundCheckToggle() {
+        soundCheckObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.player?.volume = self.soundCheckVolume(for: self.currentTrack)
+            }
+        }
     }
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
