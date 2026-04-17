@@ -239,38 +239,38 @@ final class CacheEntry: NSObject, Codable {
 /// so a one-size-fits-all TTL leaves some data stale and over-fetches others.
 enum CachePolicy: Sendable {
     /// Large, rarely-changing lists (all artists, all albums, all tracks).
-    /// Memory: 1 hour, Disk: 7 days.
+    /// Memory: 4 hours, Disk: 30 days.
     case library
     /// Detail pages, children, top tracks — moderate change frequency.
-    /// Memory: 30 min, Disk: 24 hours.
+    /// Memory: 2 hours, Disk: 7 days.
     case detail
     /// Playlists, favorites — user-editable, changes more often.
-    /// Memory: 15 min, Disk: 12 hours.
+    /// Memory: 1 hour, Disk: 3 days.
     case userContent
     /// Search results — short-lived, mostly just deduplication.
-    /// Memory: 5 min, Disk: 1 hour.
+    /// Memory: 10 min, Disk: 4 hours.
     case search
     /// Album styles — very stable metadata.
-    /// Memory: 2 hours, Disk: 7 days.
+    /// Memory: 4 hours, Disk: 30 days.
     case styles
 
     var memoryTTL: TimeInterval {
         switch self {
-        case .library:     return 3600      // 1 hour
-        case .detail:      return 1800      // 30 min
-        case .userContent: return 900       // 15 min
-        case .search:      return 300       // 5 min
-        case .styles:      return 7200      // 2 hours
+        case .library:     return 14400     // 4 hours
+        case .detail:      return 7200      // 2 hours
+        case .userContent: return 3600      // 1 hour
+        case .search:      return 600       // 10 min
+        case .styles:      return 14400     // 4 hours
         }
     }
 
     var diskTTL: TimeInterval {
         switch self {
-        case .library:     return 604_800   // 7 days
-        case .detail:      return 86400     // 24 hours
-        case .userContent: return 43200     // 12 hours
-        case .search:      return 3600      // 1 hour
-        case .styles:      return 604_800   // 7 days
+        case .library:     return 2_592_000 // 30 days
+        case .detail:      return 604_800   // 7 days
+        case .userContent: return 259_200   // 3 days
+        case .search:      return 14400     // 4 hours
+        case .styles:      return 2_592_000 // 30 days
         }
     }
 }

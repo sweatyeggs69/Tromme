@@ -189,6 +189,8 @@ extension PlexAPIClient {
         // Phase 1: Fetch library data in parallel
         var artists: [PlexMetadata] = []
         var albums: [PlexMetadata] = []
+        var recentTracks: [PlexMetadata] = []
+        var favoriteTracks: [PlexMetadata] = []
 
         await withTaskGroup(of: (String, [PlexMetadata]).self) { group in
             group.addTask { ("artists", (try? await self.cachedArtists(server: server, sectionId: sectionId)) ?? []) }
@@ -198,19 +200,64 @@ extension PlexAPIClient {
                 _ = try? await self.cachedPlaylists(server: server)
                 return ("playlists", [])
             }
+            group.addTask { ("recent", (try? await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 30)) ?? []) }
+            group.addTask { ("favorites", (try? await self.getFavoriteTracks(server: server, sectionId: sectionId)) ?? []) }
 
             for await (key, items) in group {
                 switch key {
                 case "artists": artists = items
                 case "albums": albums = items
+                case "recent": recentTracks = items
+                case "favorites": favoriteTracks = items
                 default: break
                 }
             }
         }
 
         // Phase 2: Prefetch artwork for artists and albums in the background.
-        // Keep this conservative so visible loads are never starved by background requests.
         prefetchArtwork(for: artists + albums, server: server, size: 256)
+
+        // Phase 3: Pre-fetch detail data for frequently accessed artists and albums.
+        // Collect unique artist and album keys from recent + favorite tracks.
+        var artistKeys = Set<String>()
+        var albumKeys = Set<String>()
+        for track in recentTracks + favoriteTracks {
+            if let key = track.grandparentRatingKey { artistKeys.insert(key) }
+            if let key = track.parentRatingKey { albumKeys.insert(key) }
+        }
+
+        let topArtistKeys = Array(artistKeys.prefix(25))
+        let topAlbumKeys = Array(albumKeys.prefix(30))
+
+        // Pre-fetch artist children (albums), artist metadata, and album children (tracks) in parallel.
+        // Low concurrency to avoid saturating the server.
+        await withTaskGroup(of: Void.self) { group in
+            for key in topArtistKeys {
+                group.addTask {
+                    _ = try? await self.cachedChildren(server: server, ratingKey: key)
+                    _ = try? await self.cachedMetadata(server: server, ratingKey: key)
+                    _ = try? await self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
+                }
+            }
+            for key in topAlbumKeys {
+                group.addTask {
+                    _ = try? await self.cachedChildren(server: server, ratingKey: key)
+                    _ = try? await self.cachedMetadata(server: server, ratingKey: key)
+                }
+            }
+        }
+
+        // Phase 4: Pre-extract artwork colors for those albums so detail views open instantly.
+        let colorAlbums = albums.filter { albumKeys.contains($0.ratingKey) }
+        let colorClient = self
+        let colorServer = server
+        for album in colorAlbums {
+            await ArtworkColorCache.shared.resolveColor(
+                for: album.thumb,
+                using: colorClient,
+                server: colorServer
+            )
+        }
     }
 
     // MARK: - Artwork Prefetching

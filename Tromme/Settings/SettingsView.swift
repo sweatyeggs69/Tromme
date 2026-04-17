@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
+    @State private var isRefreshing = false
     @State private var sections: [LibrarySection] = []
     var onSignOut: () -> Void
 
@@ -62,6 +63,19 @@ struct SettingsView: View {
             }
 
             Section {
+                Button {
+                    Task { await refreshLibrary() }
+                } label: {
+                    HStack {
+                        Text("Refresh Library")
+                        Spacer()
+                        if isRefreshing {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isRefreshing)
+
                 Button("Clear Cache") {
                     showClearCacheConfirmation = true
                 }
@@ -113,6 +127,15 @@ struct SettingsView: View {
         do {
             sections = try await client.cachedLibrarySections(server: server)
         } catch {}
+    }
+
+    private func refreshLibrary() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+        isRefreshing = true
+        await LibraryCache.shared.clearAll()
+        await client.warmCache(server: server, sectionId: sectionId)
+        isRefreshing = false
     }
 
     private func connectionLabel(for server: PlexServer) -> String {
