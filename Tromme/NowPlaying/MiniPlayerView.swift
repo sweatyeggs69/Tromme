@@ -13,8 +13,38 @@ struct MiniPlayerView: View {
     var body: some View {
         Group {
             if isPad {
-                ZStack {
-                    // Centered playback controls
+                HStack(spacing: 12) {
+                    Button {
+                        openNowPlaying(.none)
+                        showNowPlaying = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            ArtworkView(
+                                thumbPath: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb,
+                                size: 36,
+                                cornerRadius: 8
+                            )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(player.currentTrack?.title ?? "")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .allowsTightening(true)
+                                Text(player.currentTrack?.artistName ?? "")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .allowsTightening(true)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+
                     HStack(spacing: 2) {
                         shuffleButton
                         previousButton
@@ -22,42 +52,14 @@ struct MiniPlayerView: View {
                         forwardButton
                         repeatButton
                     }
+                    .fixedSize()
+                    .layoutPriority(1)
 
-                    // Left: track info, Right: action buttons
-                    HStack(spacing: 8) {
-                        Button {
-                            openNowPlaying(.none)
-                            showNowPlaying = true
-                        } label: {
-                            HStack(spacing: 8) {
-                                ArtworkView(
-                                    thumbPath: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb,
-                                    size: 36,
-                                    cornerRadius: 8
-                                )
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(player.currentTrack?.title ?? "")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .lineLimit(1)
-                                    Text(player.currentTrack?.artistName ?? "")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer(minLength: 0)
-
-                        HStack(spacing: 2) {
-                            lyricsButton
-                            queueButton
-                        }
+                    HStack(spacing: 2) {
+                        lyricsButton
+                        queueButton
                     }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.leading, 16)
                 .padding(.trailing, 12)
