@@ -224,11 +224,13 @@ final class AudioPlayerService: @unchecked Sendable {
         let insertIndex = currentIndex + 1
         queue.insert(track, at: min(insertIndex, queue.count))
         originalQueue.append(track)
+        savePlaybackState()
     }
 
     func addToEndOfQueue(_ track: PlexMetadata) {
         queue.append(track)
         originalQueue.append(track)
+        savePlaybackState()
     }
 
     func removeFromQueue(at index: Int) {
@@ -238,6 +240,7 @@ final class AudioPlayerService: @unchecked Sendable {
         if let origIndex = originalQueue.firstIndex(where: { $0.ratingKey == track.ratingKey }) {
             originalQueue.remove(at: origIndex)
         }
+        savePlaybackState()
     }
 
     func playFromQueue(at index: Int) {
@@ -311,6 +314,22 @@ final class AudioPlayerService: @unchecked Sendable {
         guard !queue.isEmpty else { return }
         queue = Array(queue.prefix(currentIndex + 1))
         originalQueue = queue
+    }
+
+    func resetPlayback() {
+        player?.pause()
+        player?.replaceCurrentItem(with: nil)
+        queue = []
+        originalQueue = []
+        currentIndex = 0
+        currentTrack = nil
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        isMagicMixActive = false
+        isInfiniteModeActive = false
+        savePlaybackState()
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
     // MARK: - Private
@@ -595,6 +614,9 @@ final class AudioPlayerService: @unchecked Sendable {
     // MARK: - State Persistence
 
     private static let trackKey = "playbackTrack"
+    private static let queueKey = "playbackQueue"
+    private static let originalQueueKey = "playbackOriginalQueue"
+    private static let currentIndexKey = "playbackCurrentIndex"
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
@@ -611,6 +633,13 @@ final class AudioPlayerService: @unchecked Sendable {
            let data = try? JSONEncoder().encode(track) {
             defaults.set(data, forKey: Self.trackKey)
         }
+        if let queueData = try? JSONEncoder().encode(queue) {
+            defaults.set(queueData, forKey: Self.queueKey)
+        }
+        if let origData = try? JSONEncoder().encode(originalQueue) {
+            defaults.set(origData, forKey: Self.originalQueueKey)
+        }
+        defaults.set(currentIndex, forKey: Self.currentIndexKey)
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
     }
@@ -621,6 +650,18 @@ final class AudioPlayerService: @unchecked Sendable {
         if let raw = defaults.string(forKey: Self.repeatKey),
            let mode = RepeatMode(rawValue: raw) {
             repeatMode = mode
+        }
+        if let queueData = defaults.data(forKey: Self.queueKey),
+           let savedQueue = try? JSONDecoder().decode([PlexMetadata].self, from: queueData) {
+            queue = savedQueue
+        }
+        if let origData = defaults.data(forKey: Self.originalQueueKey),
+           let savedOriginal = try? JSONDecoder().decode([PlexMetadata].self, from: origData) {
+            originalQueue = savedOriginal
+        }
+        currentIndex = defaults.integer(forKey: Self.currentIndexKey)
+        if currentIndex >= queue.count {
+            currentIndex = 0
         }
         if let data = defaults.data(forKey: Self.trackKey),
            let track = try? JSONDecoder().decode(PlexMetadata.self, from: data) {

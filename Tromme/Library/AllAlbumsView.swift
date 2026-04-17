@@ -7,7 +7,6 @@ struct AllAlbumsView: View {
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
-    @State private var searchText = ""
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
 
     private let previewAlbums: [PlexMetadata]?
@@ -45,17 +44,12 @@ struct AllAlbumsView: View {
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }
-        .searchable(text: $searchText, prompt: "Find in Albums")
         .task {
             guard previewAlbums == nil else { return }
             await loadAlbums()
         }
         .task(id: artworkPrefetchKey) {
             await prefetchVisibleArtwork()
-        }
-        .refreshable {
-            guard previewAlbums == nil else { return }
-            await loadAlbums()
         }
     }
 
@@ -65,7 +59,7 @@ struct AllAlbumsView: View {
         case .grid:
             ScrollView {
                 LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-                    ForEach(filteredAlbums) { album in
+                    ForEach(albums) { album in
                         NavigationLink(value: album) {
                             VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
                                 GeometryReader { geo in
@@ -93,7 +87,7 @@ struct AllAlbumsView: View {
             }
 
         case .list:
-            List(filteredAlbums) { album in
+            List(albums) { album in
                 NavigationLink(value: album) {
                     HStack(spacing: 10) {
                         ArtworkView(
@@ -119,16 +113,8 @@ struct AllAlbumsView: View {
         }
     }
 
-    private var filteredAlbums: [PlexMetadata] {
-        if searchText.isEmpty { return albums }
-        return albums.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            ($0.parentTitle ?? "").localizedCaseInsensitiveContains(searchText)
-        }
-    }
-
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(searchText)|\(filteredAlbums.count)"
+        "\(viewMode.rawValue)|\(albums.count)"
     }
 
     private func loadAlbums() async {
@@ -152,7 +138,7 @@ struct AllAlbumsView: View {
             AppStyle.AlbumLayout.listArtworkSize
         }
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
-        let urls = filteredAlbums.prefix(prefetchCount).compactMap { album in
+        let urls = albums.prefix(prefetchCount).compactMap { album in
             client.artworkURL(server: server, path: album.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)

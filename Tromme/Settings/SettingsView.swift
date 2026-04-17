@@ -96,7 +96,7 @@ struct SettingsView: View {
         } message: {
             Text("You'll need to sign in again to access your music.")
         }
-        .confirmationDialog("Clear Cache", isPresented: $showClearCacheConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Clear Cache", isPresented: $showClearCacheConfirmation, titleVisibility: .hidden) {
             Button("Clear Cache", role: .destructive) {
                 Task {
                     await LibraryCache.shared.clearAll()

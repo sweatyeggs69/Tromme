@@ -33,7 +33,7 @@ struct HomeView: View {
             }
             .padding(.vertical, 8)
         }
-        .task {
+        .task(id: serverConnection.currentLibrarySectionId) {
             guard previewRecentTracks == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: false)
         }

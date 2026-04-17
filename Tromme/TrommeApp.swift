@@ -17,7 +17,7 @@ struct TrommeApp: App {
         ctx.audioPlayer = audioPlayer
 
         let accentColor = UIColor(AppStyle.Colors.tint)
-        UINavigationBar.appearance().tintColor = accentColor
+        UINavigationBar.appearance().tintColor = .label
 
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
@@ -37,13 +37,20 @@ struct TrommeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .tint(AppStyle.Colors.tint)
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)
-                .onChange(of: serverConnection.currentServer, initial: true) { _, server in
+                .onChange(of: serverConnection.currentServer, initial: true) { old, server in
                     if let server {
+                        if old != nil && old?.machineIdentifier != server.machineIdentifier {
+                            audioPlayer.resetPlayback()
+                        }
                         audioPlayer.configure(server: server, client: plexClient)
+                    }
+                }
+                .onChange(of: serverConnection.currentLibrarySectionId) { old, new in
+                    if let old, let new, old != new {
+                        audioPlayer.resetPlayback()
                     }
                 }
                 .task {

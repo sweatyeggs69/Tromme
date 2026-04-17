@@ -7,7 +7,6 @@ struct AllSongsView: View {
 
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
-    @State private var searchText = ""
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
@@ -23,20 +22,10 @@ struct AllSongsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    // Shuffle All button at top (Apple Music style)
-                    Button {
-                        var shuffled = filteredTracks
-                        shuffled.shuffle()
-                        player.play(tracks: shuffled)
-                    } label: {
-                        Label("Shuffle All", systemImage: "shuffle")
-                            .foregroundStyle(Color.accentColor)
-                    }
-
-                    ForEach(Array(filteredTracks.enumerated()), id: \.element.id) { index, track in
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                         TrackRowView(
                             track: track,
-                            tracks: filteredTracks,
+                            tracks: tracks,
                             index: index,
                             showArtwork: true,
                             showArtist: true,
@@ -47,25 +36,24 @@ struct AllSongsView: View {
                 }
                 .listStyle(.plain)
                 .listRowSpacing(2)
-                .searchable(text: $searchText, prompt: "Find in Songs")
             }
         }
         .navigationTitle("Songs")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    var shuffled = tracks
+                    shuffled.shuffle()
+                    player.play(tracks: shuffled)
+                } label: {
+                    Image(systemName: "shuffle")
+                }
+                .disabled(tracks.isEmpty)
+            }
+        }
         .task {
             guard previewTracks == nil else { return }
             await loadTracks()
-        }
-        .refreshable {
-            guard previewTracks == nil else { return }
-            await loadTracks()
-        }
-    }
-
-    private var filteredTracks: [PlexMetadata] {
-        if searchText.isEmpty { return tracks }
-        return tracks.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText) ||
-            $0.artistName.localizedCaseInsensitiveContains(searchText)
         }
     }
 

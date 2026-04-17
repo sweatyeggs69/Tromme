@@ -7,7 +7,6 @@ struct ArtistsView: View {
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
-    @State private var searchText = ""
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -37,17 +36,15 @@ struct ArtistsView: View {
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }
-        .searchable(text: $searchText, prompt: "Find in Artists")
         .task { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
-        .refreshable { await loadArtists() }
     }
 
     @ViewBuilder
     private var contentView: some View {
         switch viewMode {
         case .list:
-            List(filteredArtists) { artist in
+            List(artists) { artist in
                 NavigationLink(value: artist) {
                     HStack(spacing: 10) {
                         ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
@@ -63,7 +60,7 @@ struct ArtistsView: View {
         case .grid:
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(filteredArtists) { artist in
+                    ForEach(artists) { artist in
                         NavigationLink(value: artist) {
                             VStack(alignment: .leading, spacing: 4) {
                                 ArtworkView(thumbPath: artist.thumb, size: 184, cornerRadius: 92)
@@ -82,13 +79,8 @@ struct ArtistsView: View {
         }
     }
 
-    private var filteredArtists: [PlexMetadata] {
-        if searchText.isEmpty { return artists }
-        return artists.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
-    }
-
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(searchText)|\(filteredArtists.count)"
+        "\(viewMode.rawValue)|\(artists.count)"
     }
 
     private func loadArtists() async {
@@ -127,7 +119,7 @@ struct ArtistsView: View {
         let prefetchCount = viewMode == .grid ? 60 : 80
         let pointSize: CGFloat = viewMode == .grid ? 184 : 48
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
-        let urls = filteredArtists.prefix(prefetchCount).compactMap { artist in
+        let urls = artists.prefix(prefetchCount).compactMap { artist in
             client.artworkURL(server: server, path: artist.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)

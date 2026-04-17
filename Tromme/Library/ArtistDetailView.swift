@@ -98,7 +98,13 @@ struct ArtistDetailView: View {
 
     var body: some View {
         List {
-            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight)
+            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight) {
+                    guard !artistTracks.isEmpty else { return }
+                    player.play(tracks: artistTracks)
+                    if !player.isShuffled {
+                        player.toggleShuffle()
+                    }
+                }
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -171,14 +177,9 @@ struct ArtistDetailView: View {
                 .listRowSeparator(.hidden)
             }
 
-            if !albums.isEmpty {
-                sectionHeader("Albums")
-                releaseGrid(albums)
-            }
-
-            if !singlesAndEPs.isEmpty {
-                sectionHeader("Singles & EPs")
-                releaseGrid(singlesAndEPs)
+            if !artistAlbums.isEmpty {
+                sectionHeader("Discography")
+                releaseGrid(artistAlbums)
             }
 
         }
@@ -196,31 +197,15 @@ struct ArtistDetailView: View {
                     .opacity(showsCollapsedTitle ? 1 : 0)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                HStack {
-                    Button {
-                        guard !artistTracks.isEmpty else { return }
-                        player.play(tracks: artistTracks)
-                        if !player.isShuffled {
-                            player.toggleShuffle()
+                if displayArtist.summary != nil {
+                    Menu {
+                        Button {
+                            showsBioSheet = true
+                        } label: {
+                            Label("Artist Info", systemImage: "info.circle")
                         }
                     } label: {
-                        Image(systemName: "shuffle")
-                            .padding(.leading, 10)
-                            .padding(.trailing, 3)
-                    }
-
-                    if displayArtist.summary != nil {
-                        Menu {
-                            Button {
-                                showsBioSheet = true
-                            } label: {
-                                Label("Artist Info", systemImage: "info.circle")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .padding(.leading, 3)
-                                .padding(.trailing, 10)
-                        }
+                        Image(systemName: "ellipsis")
                     }
                 }
             }
@@ -309,6 +294,7 @@ private struct ArtistHeroHeaderView: View {
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
+    var onShuffle: (() -> Void)?
 
     @State private var image: UIImage?
 
@@ -339,12 +325,29 @@ private struct ArtistHeroHeaderView: View {
                     endPoint: .bottom
                 )
 
-                Text(artist.title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                HStack(alignment: .bottom) {
+                    Text(artist.title)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+
+                    Spacer()
+
+                    if let onShuffle {
+                        Button {
+                            onShuffle()
+                        } label: {
+                            Image(systemName: "shuffle")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.black)
+                                .frame(width: 40, height: 40)
+                                .background(.white.opacity(0.85), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
             }
             .offset(y: stretchOffset)
         }
@@ -366,7 +369,22 @@ private struct ArtistHeroHeaderView: View {
         }
         let resolvedImage = await ImageCache.shared.image(for: url)
         guard !Task.isCancelled else { return }
-        image = resolvedImage
+        image = resolvedImage?.squareCropped()
+    }
+}
+
+private extension UIImage {
+    func squareCropped() -> UIImage {
+        let side = min(size.width, size.height)
+        guard side < max(size.width, size.height) else { return self }
+        let origin = CGPoint(
+            x: (size.width - side) / 2,
+            y: (size.height - side) / 2
+        )
+        let cropRect = CGRect(origin: origin, size: CGSize(width: side, height: side))
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+        guard let cgImage, let cropped = cgImage.cropping(to: cropRect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: imageOrientation)
     }
 }
 
