@@ -54,28 +54,104 @@ extension PlexAPIClient {
         server: PlexServer,
         sectionId: String,
         seedAlbumKey: String,
+        seedArtistKey: String? = nil,
         limit: Int = 25,
         minMatchingStyles: Int = 1
     ) async throws -> [PlexMetadata] {
         guard limit > 0, minMatchingStyles > 0 else { return [] }
 
         let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
 
-        guard let seedStyles = stylesByAlbum[seedAlbumKey], !seedStyles.isEmpty else { return [] }
-        let normalizedSeed = Set(seedStyles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        var seedStyles = stylesByAlbum[seedAlbumKey] ?? []
+
+        // Fallback 1: borrow styles from sibling albums by the same artist
+        if seedStyles.isEmpty, let artistKey = seedArtistKey {
+            let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
+            for album in siblings where album.ratingKey != seedAlbumKey {
+                if let styles = stylesByAlbum[album.ratingKey], !styles.isEmpty {
+                    seedStyles.append(contentsOf: styles)
+                }
+            }
+            seedStyles = deduplicateTags(seedStyles)
+        }
+
+        // Fallback 2: if still no styles, match by genre instead.
+        // Fetch full metadata for reliable genre data (bulk list often omits it).
+        var useGenreMatching = false
+        var seedGenres = Set<String>()
+        if seedStyles.isEmpty {
+            var albumKeysToCheck: [String] = [seedAlbumKey]
+            if let artistKey = seedArtistKey {
+                let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
+                albumKeysToCheck.append(contentsOf: siblings.map(\.ratingKey))
+            }
+            // Fetch full metadata in parallel to get genre tags
+            await withTaskGroup(of: [String].self) { group in
+                for key in albumKeysToCheck {
+                    group.addTask {
+                        guard let meta = try? await self.cachedMetadata(server: server, ratingKey: key) else { return [] }
+                        return (meta.genre ?? []).compactMap(\.tag).filter { !$0.isEmpty }
+                    }
+                }
+                for await genres in group {
+                    for g in genres {
+                        seedGenres.insert(g.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
+                }
+            }
+            useGenreMatching = !seedGenres.isEmpty
+        }
+
+        let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
 
         var matchingAlbumKeys = Set<String>()
-        for (albumKey, styles) in stylesByAlbum {
-            guard albumKey != seedAlbumKey else { continue }
-            let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
-            if normalizedSeed.intersection(normalized).count >= minMatchingStyles {
-                matchingAlbumKeys.insert(albumKey)
+
+        if !seedStyles.isEmpty {
+            let normalizedSeed = Set(seedStyles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+            for (albumKey, styles) in stylesByAlbum {
+                guard albumKey != seedAlbumKey else { continue }
+                let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+                if normalizedSeed.intersection(normalized).count >= minMatchingStyles {
+                    matchingAlbumKeys.insert(albumKey)
+                }
+            }
+        } else if useGenreMatching {
+            // Match albums by genre — fetch full metadata for each album is too expensive,
+            // so check genre on the bulk list first, then fall back to albums that have styles
+            // matching any genre keyword.
+            for album in allAlbums {
+                guard album.ratingKey != seedAlbumKey else { continue }
+                let albumGenres = Set((album.genre ?? []).compactMap { $0.tag?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
+                if !seedGenres.intersection(albumGenres).isEmpty {
+                    matchingAlbumKeys.insert(album.ratingKey)
+                }
+            }
+            // Also match albums whose style tags overlap with seed genres
+            // (e.g., seed genre "Rock" matches album style "Rock")
+            if matchingAlbumKeys.isEmpty {
+                for (albumKey, styles) in stylesByAlbum {
+                    guard albumKey != seedAlbumKey else { continue }
+                    let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+                    if !seedGenres.intersection(normalized).isEmpty {
+                        matchingAlbumKeys.insert(albumKey)
+                    }
+                }
+            }
+        }
+
+        // Fallback 3: if no tag-based matches, use other tracks by the same artist
+        if matchingAlbumKeys.isEmpty, let artistKey = seedArtistKey {
+            let artistTracks = allTracks.filter {
+                $0.grandparentRatingKey == artistKey && $0.parentRatingKey != seedAlbumKey
+            }
+            if !artistTracks.isEmpty {
+                return Array(artistTracks.shuffled().prefix(limit))
             }
         }
 
         guard !matchingAlbumKeys.isEmpty else { return [] }
 
-        let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
         var tracksByAlbum: [String: [PlexMetadata]] = [:]
         for track in allTracks {
             guard let albumKey = track.parentRatingKey,
@@ -283,6 +359,11 @@ extension PlexAPIClient {
     }
 
     // MARK: - Private Helpers
+
+    private func deduplicateTags(_ tags: [String]) -> [String] {
+        var seen = Set<String>()
+        return tags.filter { seen.insert($0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)).inserted }
+    }
 
     private func cachedLibraryContents(server: PlexServer, sectionId: String, type: Int, key: String) async throws -> [PlexMetadata] {
         let items: [PlexMetadata] = try await LibraryCache.shared.cachedFetch(

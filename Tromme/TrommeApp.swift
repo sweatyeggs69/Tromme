@@ -37,6 +37,7 @@ struct TrommeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .tint(AppStyle.Colors.tint)
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)

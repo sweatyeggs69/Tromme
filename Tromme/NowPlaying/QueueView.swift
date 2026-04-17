@@ -155,6 +155,7 @@ struct QueueView: View {
             server: server,
             sectionId: sectionId,
             seedAlbumKey: seedAlbumKey,
+            seedArtistKey: currentTrack.grandparentRatingKey,
             limit: 50,
             minMatchingStyles: magicMixStyleMatch
         ), !allTracks.isEmpty else { return }
