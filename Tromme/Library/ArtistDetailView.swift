@@ -349,7 +349,7 @@ private struct ArtistHeroHeaderView: View {
             .offset(y: stretchOffset)
         }
         .frame(height: heroHeight)
-        .task(id: artist.art ?? artist.thumb) {
+        .task(id: artist.thumb) {
             await loadImage()
         }
     }
@@ -359,7 +359,7 @@ private struct ArtistHeroHeaderView: View {
             image = nil
             return
         }
-        let artworkPath = artist.art ?? artist.thumb
+        let artworkPath = artist.thumb
         guard let url = client.artworkURL(server: server, path: artworkPath, width: 1000, height: 1000) else {
             image = nil
             return

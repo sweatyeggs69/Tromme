@@ -61,6 +61,7 @@ final class AudioPlayerService: @unchecked Sendable {
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()
+        updateShuffleRepeatState()
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -279,6 +280,7 @@ final class AudioPlayerService: @unchecked Sendable {
             }
         }
         savePlaybackState()
+        updateShuffleRepeatState()
     }
 
     func cycleRepeatMode() {
@@ -288,6 +290,7 @@ final class AudioPlayerService: @unchecked Sendable {
         case .one: repeatMode = .off
         }
         savePlaybackState()
+        updateShuffleRepeatState()
     }
 
     func shuffleUpcomingQueue() {
@@ -676,6 +679,37 @@ final class AudioPlayerService: @unchecked Sendable {
                 self?.seek(to: event.positionTime)
             }
             return .success
+        }
+        center.changeShuffleModeCommand.isEnabled = true
+        center.changeShuffleModeCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPChangeShuffleModeCommandEvent else { return .commandFailed }
+            let wantsShuffle = event.shuffleType != .off
+            if wantsShuffle != self.isShuffled { self.toggleShuffle() }
+            return .success
+        }
+        center.changeRepeatModeCommand.isEnabled = true
+        center.changeRepeatModeCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPChangeRepeatModeCommandEvent else { return .commandFailed }
+            switch event.repeatType {
+            case .off: self.repeatMode = .off
+            case .one: self.repeatMode = .one
+            case .all: self.repeatMode = .all
+            @unknown default: break
+            }
+            self.savePlaybackState()
+            self.updateShuffleRepeatState()
+            return .success
+        }
+        updateShuffleRepeatState()
+    }
+
+    private func updateShuffleRepeatState() {
+        let center = MPRemoteCommandCenter.shared()
+        center.changeShuffleModeCommand.currentShuffleType = isShuffled ? .items : .off
+        switch repeatMode {
+        case .off: center.changeRepeatModeCommand.currentRepeatType = .off
+        case .all: center.changeRepeatModeCommand.currentRepeatType = .all
+        case .one: center.changeRepeatModeCommand.currentRepeatType = .one
         }
     }
 
