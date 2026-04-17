@@ -320,9 +320,11 @@ struct PlexStream: Codable, Sendable, Hashable {
     let bitrate: Int?
     let bitDepth: Int?
     let samplingRate: Int?
+    let gain: Double?
+    let albumGain: Double?
 
     enum CodingKeys: String, CodingKey {
-        case id, streamType, codec, channels, bitrate, bitDepth, samplingRate
+        case id, streamType, codec, channels, bitrate, bitDepth, samplingRate, gain, albumGain
     }
 
     init(
@@ -332,7 +334,9 @@ struct PlexStream: Codable, Sendable, Hashable {
         channels: Int? = nil,
         bitrate: Int? = nil,
         bitDepth: Int? = nil,
-        samplingRate: Int? = nil
+        samplingRate: Int? = nil,
+        gain: Double? = nil,
+        albumGain: Double? = nil
     ) {
         self.id = id
         self.streamType = streamType
@@ -341,6 +345,8 @@ struct PlexStream: Codable, Sendable, Hashable {
         self.bitrate = bitrate
         self.bitDepth = bitDepth
         self.samplingRate = samplingRate
+        self.gain = gain
+        self.albumGain = albumGain
     }
 
     init(from decoder: Decoder) throws {
@@ -352,6 +358,12 @@ struct PlexStream: Codable, Sendable, Hashable {
             return nil
         }
 
+        func decodeFlexibleDouble(_ key: CodingKeys) -> Double? {
+            if let value = try? c.decode(Double.self, forKey: key) { return value }
+            if let value = try? c.decode(String.self, forKey: key), let doubleValue = Double(value) { return doubleValue }
+            return nil
+        }
+
         id = decodeFlexibleInt(.id)
         streamType = decodeFlexibleInt(.streamType)
         codec = try? c.decodeIfPresent(String.self, forKey: .codec)
@@ -359,6 +371,8 @@ struct PlexStream: Codable, Sendable, Hashable {
         bitrate = decodeFlexibleInt(.bitrate)
         bitDepth = decodeFlexibleInt(.bitDepth)
         samplingRate = decodeFlexibleInt(.samplingRate)
+        gain = decodeFlexibleDouble(.gain)
+        albumGain = decodeFlexibleDouble(.albumGain)
     }
 }
 

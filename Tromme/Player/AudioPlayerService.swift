@@ -44,6 +44,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var universalCandidatesForCurrentItem: [URL] = []
     private var universalCandidateIndexForCurrentItem = 0
     private var currentSessionID: String?
+    private var detailedTrackForSoundCheck: PlexMetadata?
     private var cachedArtwork: MPMediaItemArtwork?
     private var cachedArtworkThumbPath: String?
     private var isCellular: Bool { NetworkStatus.shared.isCellular }
@@ -85,6 +86,7 @@ final class AudioPlayerService: @unchecked Sendable {
             queue = tracks
             currentIndex = index
         }
+        prefetchGainMetadata()
         loadAndPlay(queue[currentIndex])
     }
 
@@ -385,24 +387,34 @@ final class AudioPlayerService: @unchecked Sendable {
         let capturedClient = client
         let capturedServer = server
 
+        let soundCheckEnabled = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
+        let ratingKey = track.ratingKey
+
         Task {
-            // Step 1: Authorize the transcode session.
+            // Step 1: Authorize transcode session and fetch detailed metadata (for gain) in parallel.
+            async let decisionResult: Void = capturedClient.universalDecision(
+                server: capturedServer,
+                metadataPath: normalizedPath,
+                sessionID: sessionID,
+                headers: headers,
+                cellular: cellular,
+                disableCellularTranscoding: disableCellularTranscoding,
+                cellularTranscodeBitrate: cellularTranscodeBitrate
+            )
+            async let detailedTrack: PlexMetadata? = soundCheckEnabled
+                ? (try? await capturedClient.cachedMetadata(server: capturedServer, ratingKey: ratingKey))
+                : nil
+
             do {
-                try await capturedClient.universalDecision(
-                    server: capturedServer,
-                    metadataPath: normalizedPath,
-                    sessionID: sessionID,
-                    headers: headers,
-                    cellular: cellular,
-                    disableCellularTranscoding: disableCellularTranscoding,
-                    cellularTranscodeBitrate: cellularTranscodeBitrate
-                )
+                try await decisionResult
             } catch {
                 guard self.playbackGeneration == generation else { return }
                 print("[AudioPlayer] Decision failed: \(error.localizedDescription)")
                 self.isPlaying = false
                 return
             }
+
+            self.detailedTrackForSoundCheck = await detailedTrack
 
             guard self.playbackGeneration == generation else { return }
 
@@ -430,6 +442,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private func startPlayback(url: URL) {
         let item = makePlayerItem(url: url)
         player = AVPlayer(playerItem: item)
+        player?.volume = soundCheckVolume(for: currentTrack)
         player?.play()
         isPlaying = true
 
@@ -439,9 +452,26 @@ final class AudioPlayerService: @unchecked Sendable {
         addTimeObserver()
         observeTrackEnd()
         updateNowPlayingInfo()
+        prefetchGainMetadata()
         prefetchUpcomingArtwork()
         reportTimelineState("playing")
         savePlaybackState()
+    }
+
+    /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
+    /// ReplayGain `gain` is the dB adjustment needed to reach −18 LUFS.
+    /// We add +4 dB to target −14 LUFS instead, then clamp to AVPlayer's range.
+    /// Uses detailed track metadata (fetched before playback) for stream-level gain values.
+    private func soundCheckVolume(for track: PlexMetadata?) -> Float {
+        guard UserDefaults.standard.bool(forKey: Self.soundCheckKey) else { return 1.0 }
+        let source = detailedTrackForSoundCheck ?? track
+        guard let stream = source?.media?.first?.part?.first?.stream?.first(where: { $0.streamType == 2 }) else {
+            return 1.0
+        }
+        let gainDB = stream.gain ?? stream.albumGain ?? 0.0
+        let adjustedDB = gainDB + 4.0
+        let linear = Float(pow(10.0, adjustedDB / 20.0))
+        return min(max(linear, 0.0), 1.0)
     }
 
     // MARK: - Observers
@@ -617,6 +647,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let queueKey = "playbackQueue"
     private static let originalQueueKey = "playbackOriginalQueue"
     private static let currentIndexKey = "playbackCurrentIndex"
+    private static let soundCheckKey = "soundCheckEnabled"
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
@@ -682,6 +713,21 @@ final class AudioPlayerService: @unchecked Sendable {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             // Audio session setup failed
+        }
+    }
+
+    /// Pre-fetches detailed metadata (with gain values) for upcoming queue items
+    /// so Sound Check doesn't need a network call at playback time.
+    private func prefetchGainMetadata() {
+        guard UserDefaults.standard.bool(forKey: Self.soundCheckKey),
+              let client, let server else { return }
+        // Prefetch current + next 10 tracks
+        let upcoming = queue.dropFirst(currentIndex).prefix(11)
+        let keys = upcoming.map(\.ratingKey)
+        Task.detached(priority: .utility) {
+            for key in keys {
+                _ = try? await client.cachedMetadata(server: server, ratingKey: key)
+            }
         }
     }
 

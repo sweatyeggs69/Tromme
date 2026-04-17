@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
+    @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
     @State private var isRefreshing = false
@@ -37,10 +38,11 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(!cellularTranscodingBinding.wrappedValue)
+                Toggle("Sound Check", isOn: $soundCheckEnabled)
             } header: {
                 Text("Playback")
             } footer: {
-                Text("When enabled audio streams over cellular are delivered in AAC format and at the desired bitrate. FLAC will always transcode to a compatible container (ALAC on WiFi, AAC on cellular)")
+                Text("When enabled audio streams over cellular are delivered in AAC format and at the desired bitrate. FLAC will always transcode to a compatible container (ALAC on WiFi, AAC on cellular). Sound Check normalizes volume across tracks using ReplayGain data to target −14 LUFS.")
             }
             
             Section("Server") {
