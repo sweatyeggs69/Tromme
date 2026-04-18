@@ -126,6 +126,18 @@ final class AudioPlayerService: @unchecked Sendable {
             logPlayback("paused")
             reportTimelineState("paused")
         } else {
+            if isStuckWaitingForBuffer() {
+                recoveryAttemptsForTrack = 0
+                let resumeAt = preferredResumeTimeForRecovery()
+                if let resumeAt {
+                    logPlayback("toggle_recover", "reason=stuck_waiting resume_at=\(resumeAt)")
+                } else {
+                    logPlayback("toggle_recover", "reason=stuck_waiting")
+                }
+                recoverAndPlayCurrentTrackIfPossible(resumeAt: resumeAt)
+                return
+            }
+
             // If the item has finished playing, seek to start before resuming
             if let item = player.currentItem,
                item.status == .readyToPlay,
@@ -202,6 +214,30 @@ final class AudioPlayerService: @unchecked Sendable {
         }
     }
 
+    private func preferredResumeTimeForRecovery() -> TimeInterval? {
+        if currentTime.isFinite, currentTime > 2 {
+            return currentTime
+        }
+        if let playerTime = player?.currentTime().seconds, playerTime.isFinite, playerTime > 2 {
+            return playerTime
+        }
+        return nil
+    }
+
+    private func isStuckWaitingForBuffer() -> Bool {
+        guard let player else { return false }
+        guard player.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return false }
+        guard let reason = player.reasonForWaitingToPlay else { return false }
+        guard let item = player.currentItem else { return false }
+
+        let isBufferingWait =
+            reason == .toMinimizeStalls ||
+            reason.rawValue == AVPlayer.WaitingReason.evaluatingBufferingRate.rawValue
+        guard isBufferingWait else { return false }
+
+        return item.isPlaybackBufferEmpty || !item.isPlaybackLikelyToKeepUp
+    }
+
     private func recoverAndPlayCurrentTrackIfPossible(resumeAt: TimeInterval? = nil) {
         if queue.indices.contains(currentIndex) {
             if let resumeAt {
@@ -238,14 +274,7 @@ final class AudioPlayerService: @unchecked Sendable {
             recoveryAttemptsForTrack = 0
         }
 
-        let resumeTime: TimeInterval?
-        if currentTime.isFinite, currentTime > 2 {
-            resumeTime = currentTime
-        } else if let playerTime = player?.currentTime().seconds, playerTime.isFinite, playerTime > 2 {
-            resumeTime = playerTime
-        } else {
-            resumeTime = nil
-        }
+        let resumeTime = preferredResumeTimeForRecovery()
 
         if recoveryAttemptsForTrack < maxRecoveryAttemptsPerTrack {
             recoveryAttemptsForTrack += 1

@@ -56,7 +56,7 @@ struct MiniPlayerView: View {
                     .layoutPriority(1)
 
                     HStack(spacing: 2) {
-                        lyricsButton
+                        airPlayButton
                         queueButton
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
@@ -200,6 +200,11 @@ struct MiniPlayerView: View {
                 .frame(width: 36, height: 44)
         }
         .buttonStyle(.plain)
+    }
+
+    private var airPlayButton: some View {
+        AirPlayButton(tintOpacity: 0.7, activeTintOpacity: 0.92)
+            .frame(width: 36, height: 44)
     }
 
 }

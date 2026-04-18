@@ -221,7 +221,7 @@ struct NowPlayingView: View {
                                 .padding(.bottom, 28)
                                 .transition(.opacity)
                         }
-                        controlsStack(horizontalPadding: controlsHorizontalPadding)
+                        controlsStack(horizontalPadding: controlsHorizontalPadding, isPadPortrait: isPadPortrait)
                         bottomActions
                             .frame(height: 32)
                             .padding(.horizontal, controlsHorizontalPadding)
@@ -360,19 +360,27 @@ struct NowPlayingView: View {
 
     // MARK: - Controls Stack
 
-    private func controlsStack(horizontalPadding: CGFloat, bottomPadding: CGFloat = 20) -> some View {
-        VStack(spacing: 0) {
+    private func controlsStack(
+        horizontalPadding: CGFloat,
+        bottomPadding: CGFloat = 20,
+        isPadPortrait: Bool = false
+    ) -> some View {
+        let sliderBottomPadding: CGFloat = isPadPortrait ? 30 : 20
+        let transportBottomPadding: CGFloat = isPadPortrait ? 52 : 42
+        let volumeBottomPadding: CGFloat = isPadPortrait ? 30 : bottomPadding
+
+        return VStack(spacing: 0) {
             TimelineSlider()
                 .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, 20)
+                .padding(.bottom, sliderBottomPadding)
             transportControls
                 .frame(height: 56)
                 .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, 42)
+                .padding(.bottom, transportBottomPadding)
             VolumeSlider()
                 .frame(height: 32)
                 .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, bottomPadding)
+                .padding(.bottom, volumeBottomPadding)
         }
     }
 
