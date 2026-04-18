@@ -9,14 +9,69 @@ struct SearchView: View {
     @State private var searchText = ""
     @State private var hubs: [Hub] = []
     @State private var searchTask: Task<Void, Never>?
+    @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
+
+    private let maxRecentSearches = 12
+
+    private var recentSearches: [String] {
+        get {
+            guard let data = recentSearchesStorage.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        nonmutating set {
+            guard let data = try? JSONEncoder().encode(newValue),
+                  let stringValue = String(data: data, encoding: .utf8) else {
+                return
+            }
+            recentSearchesStorage = stringValue
+        }
+    }
+
     var body: some View {
         Group {
             if searchText.isEmpty && hubs.isEmpty {
-                ContentUnavailableView(
-                    "Search Music",
-                    systemImage: "magnifyingglass",
-                    description: Text("Search for artists, albums, and songs.")
-                )
+                if recentSearches.isEmpty {
+                    ContentUnavailableView(
+                        "Search Music",
+                        systemImage: "magnifyingglass",
+                        description: Text("Search for artists, albums, and songs.")
+                    )
+                } else {
+                    List {
+                        Section {
+                            ForEach(recentSearches, id: \.self) { query in
+                                Button {
+                                    searchText = query
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "clock")
+                                            .foregroundStyle(.secondary)
+                                        Text(query)
+                                        Spacer()
+                                        Image(systemName: "arrow.up.left")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .onDelete(perform: deleteRecentSearches)
+                        } header: {
+                            HStack {
+                                Text("Recent Searches")
+                                Spacer()
+                                Button("Clear") {
+                                    clearRecentSearches()
+                                }
+                                .font(.caption.weight(.semibold))
+                            }
+                        }
+                    }
+                }
             } else if hubs.isEmpty && !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
@@ -33,8 +88,10 @@ struct SearchView: View {
                 }
             }
         }
-        .navigationTitle("Search")
         .searchable(text: $searchText, prompt: "Artists, Songs, Albums & More")
+        .onSubmit(of: .search) {
+            rememberSearch(searchText)
+        }
         .onChange(of: searchText) { _, newValue in
             searchTask?.cancel()
             searchTask = Task {
@@ -43,6 +100,28 @@ struct SearchView: View {
                 await performSearch(query: newValue)
             }
         }
+    }
+
+    private func rememberSearch(_ query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var updated = recentSearches.filter { $0.caseInsensitiveCompare(trimmed) != .orderedSame }
+        updated.insert(trimmed, at: 0)
+        if updated.count > maxRecentSearches {
+            updated = Array(updated.prefix(maxRecentSearches))
+        }
+        recentSearches = updated
+    }
+
+    private func clearRecentSearches() {
+        recentSearches = []
+    }
+
+    private func deleteRecentSearches(at offsets: IndexSet) {
+        var updated = recentSearches
+        updated.remove(atOffsets: offsets)
+        recentSearches = updated
     }
 
     @ViewBuilder

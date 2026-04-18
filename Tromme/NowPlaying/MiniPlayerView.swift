@@ -9,14 +9,18 @@ struct MiniPlayerView: View {
     private var isInline: Bool { placement == .inline }
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
+    private func openNowPlayingDefault() {
+        openNowPlaying(.none)
+        showNowPlaying = true
+    }
+
  
     var body: some View {
         Group {
             if isPad {
                 HStack(spacing: 12) {
                     Button {
-                        openNowPlaying(.none)
-                        showNowPlaying = true
+                        openNowPlayingDefault()
                     } label: {
                         HStack(spacing: 8) {
                             ArtworkView(
@@ -64,11 +68,17 @@ struct MiniPlayerView: View {
                 .padding(.leading, 16)
                 .padding(.trailing, 12)
                 .padding(.vertical, 8)
+                .contentShape(Rectangle())
+                .gesture(
+                    TapGesture().onEnded {
+                        openNowPlayingDefault()
+                    },
+                    including: .gesture
+                )
             } else {
                 HStack(spacing: isInline ? 12 : 8) {
                     Button {
-                        openNowPlaying(.none)
-                        showNowPlaying = true
+                        openNowPlayingDefault()
                     } label: {
                         HStack(spacing: isInline ? 12 : 8) {
                             ArtworkView(
@@ -108,6 +118,13 @@ struct MiniPlayerView: View {
                 .padding(.leading, isInline ? 0 : 16)
                 .padding(.trailing, isInline ? 0 : 12)
                 .padding(.vertical, isInline ? 0 : 8)
+                .contentShape(Rectangle())
+                .gesture(
+                    TapGesture().onEnded {
+                        openNowPlayingDefault()
+                    },
+                    including: .gesture
+                )
             }
         }
     }

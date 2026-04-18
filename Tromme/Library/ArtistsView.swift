@@ -7,6 +7,8 @@ struct ArtistsView: View {
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -32,6 +34,14 @@ struct ArtistsView: View {
         return Array(repeating: GridItem(.flexible(), spacing: gridColumnSpacing), count: count)
     }
 
+    private var filteredArtists: [PlexMetadata] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return artists }
+        return artists.filter { artist in
+            artist.title.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
         Group {
             if isLoading {
@@ -42,6 +52,12 @@ struct ArtistsView: View {
             }
         }
         .navigationTitle("Artists")
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchPresented,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Filter artists"
+        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -55,55 +71,67 @@ struct ArtistsView: View {
         }
         .task { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
+        .onDisappear {
+            searchText = ""
+            isSearchPresented = false
+        }
     }
 
     @ViewBuilder
     private var contentView: some View {
         switch viewMode {
         case .list:
-            List(artists) { artist in
-                NavigationLink(value: artist) {
-                    HStack(spacing: 10) {
-                        ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
+            if filteredArtists.isEmpty, !searchText.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                List(filteredArtists) { artist in
+                    NavigationLink(value: artist) {
+                        HStack(spacing: 10) {
+                            ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
 
-                        Text(artist.title)
-                            .font(.body)
+                            Text(artist.title)
+                                .font(.body)
+                        }
                     }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                .listStyle(.plain)
             }
-            .listStyle(.plain)
 
         case .grid:
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: gridRowSpacing) {
-                    ForEach(artists) { artist in
-                        NavigationLink(value: artist) {
-                            VStack(alignment: .center, spacing: 4) {
-                                GeometryReader { geo in
-                                    let size = geo.size.width
-                                    ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
-                                }
-                                .aspectRatio(1, contentMode: .fit)
+            if filteredArtists.isEmpty, !searchText.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: gridRowSpacing) {
+                        ForEach(filteredArtists) { artist in
+                            NavigationLink(value: artist) {
+                                VStack(alignment: .center, spacing: 4) {
+                                    GeometryReader { geo in
+                                        let size = geo.size.width
+                                        ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
+                                    }
+                                    .aspectRatio(1, contentMode: .fit)
 
-                                Text(artist.title)
-                                    .appItemTitleStyle()
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: .infinity)
+                                    Text(artist.title)
+                                        .appItemTitleStyle()
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .center)
                             }
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal, gridHorizontalPadding)
+                    .padding(.vertical, 8)
                 }
-                .padding(.horizontal, gridHorizontalPadding)
-                .padding(.vertical, 8)
             }
         }
     }
 
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(artists.count)"
+        "\(viewMode.rawValue)|\(filteredArtists.count)|\(searchText)"
     }
 
     private func loadArtists() async {
@@ -142,7 +170,7 @@ struct ArtistsView: View {
         let prefetchCount = viewMode == .grid ? 60 : 80
         let pointSize: CGFloat = viewMode == .grid ? 184 : 48
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
-        let urls = artists.prefix(prefetchCount).compactMap { artist in
+        let urls = filteredArtists.prefix(prefetchCount).compactMap { artist in
             client.artworkURL(server: server, path: artist.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)

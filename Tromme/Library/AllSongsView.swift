@@ -7,6 +7,8 @@ struct AllSongsView: View {
 
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var searchText = ""
+    @State private var isSearchPresented = false
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
@@ -15,46 +17,70 @@ struct AllSongsView: View {
         _isLoading = State(initialValue: previewTracks == nil)
     }
 
+    private var filteredTracks: [PlexMetadata] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return tracks }
+        return tracks.filter { track in
+            track.title.localizedCaseInsensitiveContains(query)
+            || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+            || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
     var body: some View {
         Group {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        TrackRowView(
-                            track: track,
-                            tracks: tracks,
-                            index: index,
-                            showArtwork: true,
-                            showArtist: true,
-                            showTrackNumber: false
-                        )
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                if filteredTracks.isEmpty, !searchText.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
+                } else {
+                    List {
+                        ForEach(Array(filteredTracks.enumerated()), id: \.element.id) { index, track in
+                            TrackRowView(
+                                track: track,
+                                tracks: filteredTracks,
+                                index: index,
+                                showArtwork: true,
+                                showArtist: true,
+                                showTrackNumber: false
+                            )
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        }
                     }
+                    .listStyle(.plain)
+                    .listRowSpacing(2)
                 }
-                .listStyle(.plain)
-                .listRowSpacing(2)
             }
         }
         .navigationTitle("Songs")
+        .searchable(
+            text: $searchText,
+            isPresented: $isSearchPresented,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Filter songs"
+        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    var shuffled = tracks
+                    var shuffled = filteredTracks
                     shuffled.shuffle()
                     player.play(tracks: shuffled)
                 } label: {
                     Image(systemName: "shuffle")
                 }
                 .tint(.primary)
-                .disabled(tracks.isEmpty)
+                .disabled(filteredTracks.isEmpty)
             }
         }
         .task {
             guard previewTracks == nil else { return }
             await loadTracks()
+        }
+        .onDisappear {
+            searchText = ""
+            isSearchPresented = false
         }
     }
 
