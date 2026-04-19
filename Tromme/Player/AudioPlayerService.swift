@@ -16,6 +16,8 @@ final class AudioPlayerService: @unchecked Sendable {
     var isInfiniteModeActive = false
     /// True once the current item's status is .readyToPlay.
     var isReadyToPlay = false
+    /// True when the active audio output route is AirPlay.
+    var isAirPlayConnected = false
 
     enum RepeatMode: String, Sendable {
         case off, all, one
@@ -56,6 +58,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var isCellular: Bool { NetworkStatus.shared.isCellular }
     private var isSeeking = false
     private var soundCheckObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     private var pendingInitialSeekTime: TimeInterval?
     private var scrobbledTrackRatingKey: String?
@@ -74,6 +77,8 @@ final class AudioPlayerService: @unchecked Sendable {
         restorePlaybackState()
         updateShuffleRepeatState()
         observeSoundCheckToggle()
+        observeAudioRouteChanges()
+        refreshAirPlayConnectionState()
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -642,6 +647,24 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.player?.volume = self.soundCheckVolume(for: self.currentTrack)
             }
         }
+    }
+
+    private func observeAudioRouteChanges() {
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshAirPlayConnectionState()
+            }
+        }
+    }
+
+    private func refreshAirPlayConnectionState() {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        isAirPlayConnected = outputs.contains { $0.portType == .airPlay }
     }
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.

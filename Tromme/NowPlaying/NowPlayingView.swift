@@ -377,7 +377,7 @@ struct NowPlayingView: View {
                 .frame(height: 56)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, transportBottomPadding)
-            VolumeSlider()
+            VolumeSlider(isEnabled: !player.isAirPlayConnected)
                 .frame(height: 32)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, volumeBottomPadding)
@@ -655,6 +655,8 @@ struct AirPlayButton: UIViewRepresentable {
 // MARK: - Volume Slider
 
 struct VolumeSlider: UIViewRepresentable {
+    let isEnabled: Bool
+
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsVolumeSlider = true
@@ -662,10 +664,24 @@ struct VolumeSlider: UIViewRepresentable {
         for subview in view.subviews where subview is UIButton {
             subview.removeFromSuperview()
         }
+        configure(view)
         return view
     }
 
-    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {
+        configure(uiView)
+    }
+
+    private func configure(_ view: MPVolumeView) {
+        view.isUserInteractionEnabled = isEnabled
+        view.alpha = isEnabled ? 1 : 0.5
+        for subview in view.subviews {
+            if let slider = subview as? UISlider {
+                slider.isEnabled = isEnabled
+                slider.alpha = isEnabled ? 1 : 0.5
+            }
+        }
+    }
 }
 
 // MARK: - Dynamic Color Background
