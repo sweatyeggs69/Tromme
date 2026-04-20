@@ -18,6 +18,8 @@ final class AudioPlayerService: @unchecked Sendable {
     var isReadyToPlay = false
     /// True when the active audio output route is AirPlay.
     var isAirPlayConnected = false
+    /// Bumps whenever the active audio route changes so UI can resync route-bound controls.
+    var audioRouteChangeToken: Int = 0
 
     enum RepeatMode: String, Sendable {
         case off, all, one
@@ -59,9 +61,12 @@ final class AudioPlayerService: @unchecked Sendable {
     private var isSeeking = false
     private var soundCheckObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
+    private var outputVolumeObservation: NSKeyValueObservation?
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     private var pendingInitialSeekTime: TimeInterval?
     private var scrobbledTrackRatingKey: String?
+    private let systemVolumeView = MPVolumeView(frame: .zero)
+    private var isApplyingPersistedRouteVolume = false
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -78,7 +83,9 @@ final class AudioPlayerService: @unchecked Sendable {
         updateShuffleRepeatState()
         observeSoundCheckToggle()
         observeAudioRouteChanges()
+        observeSystemOutputVolume()
         refreshAirPlayConnectionState()
+        applyPersistedRouteVolumeIfNeeded()
     }
 
     func configure(server: PlexServer, client: PlexAPIClient) {
@@ -658,6 +665,20 @@ final class AudioPlayerService: @unchecked Sendable {
             guard let self else { return }
             Task { @MainActor in
                 self.refreshAirPlayConnectionState()
+                self.applyPersistedRouteVolumeIfNeeded()
+            }
+        }
+    }
+
+    private func observeSystemOutputVolume() {
+        outputVolumeObservation = AVAudioSession.sharedInstance().observe(
+            \.outputVolume,
+            options: [.new]
+        ) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                Task { @MainActor [weak self] in
+                    self?.persistCurrentRouteVolume()
+                }
             }
         }
     }
@@ -665,6 +686,57 @@ final class AudioPlayerService: @unchecked Sendable {
     private func refreshAirPlayConnectionState() {
         let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
         isAirPlayConnected = outputs.contains { $0.portType == .airPlay }
+        audioRouteChangeToken &+= 1
+    }
+
+    private func persistCurrentRouteVolume() {
+        guard !isApplyingPersistedRouteVolume else { return }
+        let routeID = currentOutputRouteIdentifier()
+        guard !routeID.isEmpty else { return }
+
+        let volume = AVAudioSession.sharedInstance().outputVolume
+        var byRoute = persistedRouteVolumes()
+        byRoute[routeID] = volume
+        UserDefaults.standard.set(byRoute, forKey: Self.routeVolumeByOutputKey)
+    }
+
+    private func applyPersistedRouteVolumeIfNeeded() {
+        let routeID = currentOutputRouteIdentifier()
+        guard !routeID.isEmpty else { return }
+        guard let storedVolume = persistedRouteVolumes()[routeID] else { return }
+
+        let currentVolume = AVAudioSession.sharedInstance().outputVolume
+        guard abs(storedVolume - currentVolume) > 0.015 else { return }
+
+        isApplyingPersistedRouteVolume = true
+        setSystemVolume(storedVolume)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.isApplyingPersistedRouteVolume = false
+            }
+        }
+    }
+
+    private func setSystemVolume(_ volume: Float) {
+        let bounded = min(max(volume, 0.0), 1.0)
+        guard let slider = systemVolumeView.subviews.compactMap({ $0 as? UISlider }).first else { return }
+        slider.setValue(bounded, animated: false)
+        slider.sendActions(for: .touchUpInside)
+    }
+
+    private func persistedRouteVolumes() -> [String: Float] {
+        UserDefaults.standard.dictionary(forKey: Self.routeVolumeByOutputKey) as? [String: Float] ?? [:]
+    }
+
+    private func currentOutputRouteIdentifier() -> String {
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+        let parts = outputs
+            .map { output in
+                let uid = output.uid.isEmpty ? output.portName : output.uid
+                return "\(output.portType.rawValue):\(uid)"
+            }
+            .sorted()
+        return parts.joined(separator: "|")
     }
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
@@ -1010,6 +1082,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
     private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
     private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
+    private static let routeVolumeByOutputKey = "routeVolumeByOutput"
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
 
     private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {
