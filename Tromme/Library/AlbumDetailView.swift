@@ -13,6 +13,9 @@ struct AlbumDetailView: View {
     @State private var firstTrackDetails: PlexMetadata?
     @State private var isLoadingTracks: Bool
     @State private var selectedArtist: PlexMetadata?
+    @State private var addToPlaylistItemKeys: [String] = []
+    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistResultMessage: String?
 
     private var thumbPath: String? {
         album.thumb
@@ -234,6 +237,7 @@ struct AlbumDetailView: View {
                         addAlbumToQueueEnd()
                     }
                     Button("Add to Playlist", systemImage: "text.badge.plus") {
+                        presentAddToPlaylist(for: tracks.map(\.ratingKey))
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -324,7 +328,10 @@ struct AlbumDetailView: View {
                         albumArtistName: albumDetails.parentTitle ?? album.parentTitle,
                         player: player,
                         tertiaryTextColor: tertiaryTextColor,
-                        titleColor: titleColor
+                        titleColor: titleColor,
+                        onAddToPlaylist: { track in
+                            presentAddToPlaylist(for: [track.ratingKey])
+                        }
                     )
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(titleColor.opacity(0.22))
@@ -418,6 +425,40 @@ struct AlbumDetailView: View {
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
         }
+        .sheet(isPresented: $showingAddToPlaylistSheet) {
+            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys) { playlistCount in
+                let itemCount = addToPlaylistItemKeys.count
+                let itemLabel = itemCount == 1 ? "item" : "items"
+                let playlistLabel = playlistCount == 1 ? "playlist" : "playlists"
+                addToPlaylistResultMessage = "Added \(itemCount) \(itemLabel) to \(playlistCount) \(playlistLabel)."
+            }
+        }
+        .alert("Added to Playlist", isPresented: .init(
+            get: { addToPlaylistResultMessage != nil },
+            set: { if !$0 { addToPlaylistResultMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(addToPlaylistResultMessage ?? "")
+        }
+    }
+
+    private func presentAddToPlaylist(for itemKeys: [String]) {
+        let normalizedKeys = orderedUnique(keys: itemKeys)
+        guard !normalizedKeys.isEmpty else { return }
+        addToPlaylistItemKeys = normalizedKeys
+        showingAddToPlaylistSheet = true
+    }
+
+    private func orderedUnique(keys: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for key in keys where !key.isEmpty {
+            if seen.insert(key).inserted {
+                result.append(key)
+            }
+        }
+        return result
     }
 }
 
@@ -460,6 +501,7 @@ private struct AlbumTrackRow: View {
     let player: AudioPlayerService
     let tertiaryTextColor: Color
     let titleColor: Color
+    let onAddToPlaylist: (PlexMetadata) -> Void
 
     private var trackArtistCredit: String {
         track.artistDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -524,6 +566,7 @@ private struct AlbumTrackRow: View {
                     player.addToEndOfQueue(track)
                 }
                 Button("Add to Playlist", systemImage: "text.badge.plus") {
+                    onAddToPlaylist(track)
                 }
             } label: {
                 Image(systemName: "ellipsis")

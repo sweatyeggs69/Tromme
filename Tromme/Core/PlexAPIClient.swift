@@ -209,6 +209,69 @@ final class PlexAPIClient: Sendable {
         return response.mediaContainer.metadata ?? []
     }
 
+    func addItemsToPlaylist(server: PlexServer, playlistId: String, itemRatingKeys: [String]) async throws {
+        let normalizedItemKeys = orderedUniqueItemKeys(from: itemRatingKeys)
+        guard !normalizedItemKeys.isEmpty else { return }
+
+        let uri = playlistMetadataURI(server: server, itemRatingKeys: normalizedItemKeys)
+        let queryItems = [URLQueryItem(name: "uri", value: uri)]
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/playlists/\(playlistId)/items",
+            method: "PUT",
+            queryItems: queryItems
+        )
+    }
+
+    func createPlaylist(
+        server: PlexServer,
+        title: String,
+        playlistType: String = "audio",
+        itemRatingKeys: [String]
+    ) async throws -> PlexPlaylist {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedItemKeys = orderedUniqueItemKeys(from: itemRatingKeys)
+        guard !normalizedItemKeys.isEmpty else { throw PlexAPIError.invalidURL }
+        let uri = playlistMetadataURI(server: server, itemRatingKeys: normalizedItemKeys)
+        let queryItems = [
+            URLQueryItem(name: "uri", value: uri),
+            URLQueryItem(name: "title", value: trimmedTitle),
+            URLQueryItem(name: "type", value: playlistType),
+            URLQueryItem(name: "smart", value: "0"),
+        ]
+        let data = try await rawServerRequest(
+            server: server,
+            path: "/playlists",
+            method: "POST",
+            queryItems: queryItems
+        )
+        do {
+            let decoded = try JSONDecoder().decode(PlexResponse<PlexPlaylist>.self, from: data)
+            if let playlist = decoded.mediaContainer.metadata?.first {
+                return playlist
+            }
+            throw PlexAPIError.decodingError(
+                DecodingError.valueNotFound(
+                    PlexPlaylist.self,
+                    .init(codingPath: [], debugDescription: "No playlist returned from create endpoint.")
+                ),
+                path: "/playlists"
+            )
+        } catch let error as PlexAPIError {
+            throw error
+        } catch {
+            throw PlexAPIError.decodingError(error, path: "/playlists")
+        }
+    }
+
+    func deletePlaylist(server: PlexServer, playlistId: String) async throws {
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/playlists/\(playlistId)",
+            method: "DELETE"
+        )
+    }
+
     // MARK: - Playback
 
     /// Report playback state to PMS so it appears in the dashboard.
@@ -533,6 +596,43 @@ final class PlexAPIClient: Sendable {
         return data
     }
 
+    /// Execute a raw request against a Plex Media Server with URL-encoded query items.
+    @discardableResult
+    private func rawServerRequest(
+        server: PlexServer,
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem]
+    ) async throws -> Data {
+        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: true) else {
+            throw PlexAPIError.invalidURL
+        }
+        components.path = path
+        components.queryItems = queryItems
+        guard let url = components.url else { throw PlexAPIError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw PlexAPIError.networkError(error)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw PlexAPIError.invalidURL
+        }
+        guard (200...299).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw PlexAPIError.unauthorized }
+            throw PlexAPIError.serverError(http.statusCode)
+        }
+        return data
+    }
+
     private func shouldIncludeContainerHeaders(for path: String) -> Bool {
         if path.hasPrefix("/library/sections/"), path.contains("/all") {
             return true
@@ -550,6 +650,22 @@ final class PlexAPIClient: Sendable {
             return true
         }
         return false
+    }
+
+    private func playlistMetadataURI(server: PlexServer, itemRatingKeys: [String]) -> String {
+        let joinedKeys = itemRatingKeys.joined(separator: ",")
+        return "server://\(server.machineIdentifier)/com.plexapp.plugins.library/library/metadata/\(joinedKeys)"
+    }
+
+    private func orderedUniqueItemKeys(from itemRatingKeys: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for key in itemRatingKeys where !key.isEmpty {
+            if seen.insert(key).inserted {
+                result.append(key)
+            }
+        }
+        return result
     }
 
     /// Execute a typed request against plex.tv.

@@ -93,20 +93,22 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .task { await loadSections() }
-        .confirmationDialog("Sign Out", isPresented: $showSignOutConfirmation, titleVisibility: .visible) {
+        .alert("Sign Out", isPresented: $showSignOutConfirmation) {
             Button("Sign Out", role: .destructive) {
                 onSignOut()
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("You'll need to sign in again to access your music.")
         }
-        .confirmationDialog("Clear Cache", isPresented: $showClearCacheConfirmation, titleVisibility: .hidden) {
+        .alert("Clear Cache", isPresented: $showClearCacheConfirmation) {
             Button("Clear Cache", role: .destructive) {
                 Task {
                     await LibraryCache.shared.clearAll()
                     await ImageCache.shared.clearAll()
                 }
             }
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove all cached data. It will be re-downloaded automatically.")
         }

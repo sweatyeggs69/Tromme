@@ -73,6 +73,10 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - All designs should look and feel like a stock iOS 26 app
 - Only use .glassEffect on custom views that need glass treatment and aren't already system-managed
 
+## Popups & Confirmation UX
+- Confirmation flows must use alert-style popups (`.alert`) instead of confirmation sheets (`.confirmationDialog`).
+- Use destructive alert actions for destructive operations (delete, sign out, clear cache), with an explicit cancel action.
+
 ## Plex Audio Streaming
 - FLAC files use the universal transcode endpoint to convert FLAC→ALAC (Apple Lossless) via HLS
   - ALAC is lossless — identical decoded audio to FLAC — with proper AVPlayer seeking/timeline

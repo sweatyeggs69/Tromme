@@ -3,12 +3,16 @@ import SwiftUI
 struct PlaylistDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.dismiss) private var dismiss
     @Environment(AudioPlayerService.self) private var player
 
     let playlist: PlexPlaylist
 
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var isDeletingPlaylist = false
+    @State private var showDeletePlaylistConfirmation = false
+    @State private var playlistDeleteErrorMessage: String?
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
 
@@ -42,6 +46,10 @@ struct PlaylistDetailView: View {
 
     private var controlsDisabled: Bool {
         tracks.isEmpty
+    }
+
+    private var canDeletePlaylist: Bool {
+        !isPreviewMode
     }
 
     private var playlistFooterRight: String {
@@ -239,6 +247,39 @@ struct PlaylistDetailView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if canDeletePlaylist {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Delete Playlist", systemImage: "trash", role: .destructive) {
+                            showDeletePlaylistConfirmation = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .symbolRenderingMode(.monochrome)
+                            .foregroundStyle(.primary)
+                    }
+                    .tint(.primary)
+                    .disabled(isDeletingPlaylist)
+                }
+            }
+        }
+        .alert("Delete Playlist?", isPresented: $showDeletePlaylistConfirmation) {
+            Button("Delete Playlist", role: .destructive) {
+                Task { await deletePlaylist() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove \"\(playlist.title)\".")
+        }
+        .alert("Unable to Delete Playlist", isPresented: .init(
+            get: { playlistDeleteErrorMessage != nil },
+            set: { if !$0 { playlistDeleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(playlistDeleteErrorMessage ?? "")
+        }
         .task(id: artworkPath) {
             guard !isPreviewMode else { return }
             guard let server = serverConnection.currentServer else { return }
@@ -276,6 +317,27 @@ struct PlaylistDetailView: View {
             tracks = []
         }
         isLoading = false
+    }
+
+    @MainActor
+    private func deletePlaylist() async {
+        guard let server = serverConnection.currentServer else { return }
+        guard !isDeletingPlaylist else { return }
+
+        isDeletingPlaylist = true
+        defer { isDeletingPlaylist = false }
+
+        do {
+            try await client.deletePlaylist(server: server, playlistId: playlist.ratingKey)
+            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
+            await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: playlist.ratingKey))
+            if let key = playlist.key {
+                await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: key))
+            }
+            dismiss()
+        } catch {
+            playlistDeleteErrorMessage = error.localizedDescription
+        }
     }
 }
 

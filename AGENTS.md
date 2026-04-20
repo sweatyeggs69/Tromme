@@ -63,6 +63,10 @@
 - Naming: PascalCase for types, cameCase for properties
 - Group files by feature, not by type (Weather/, Profile/, Settings/)
 
+## Popups & Confirmation UX
+- Confirmation flows must use alert-style popups (`.alert`) instead of confirmation sheets (`.confirmationDialog`).
+- Use destructive alert actions for destructive operations (delete, sign out, clear cache), with an explicit cancel action.
+
 ## Logging & Diagnostics
 - All verbose diagnostics and development logs must be gated to debug builds only (`#if DEBUG`).
 - Release builds must not emit internal debug traces to the console.
