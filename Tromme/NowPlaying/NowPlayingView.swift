@@ -377,7 +377,7 @@ struct NowPlayingView: View {
                 .frame(height: 56)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, transportBottomPadding)
-            VolumeSlider(isEnabled: !player.isAirPlayConnected, routeChangeToken: player.audioRouteChangeToken)
+            VolumeSlider(isEnabled: true)
                 .frame(height: 32)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, volumeBottomPadding)
@@ -656,11 +656,6 @@ struct AirPlayButton: UIViewRepresentable {
 
 struct VolumeSlider: UIViewRepresentable {
     let isEnabled: Bool
-    let routeChangeToken: Int
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
 
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
@@ -670,17 +665,11 @@ struct VolumeSlider: UIViewRepresentable {
             subview.removeFromSuperview()
         }
         configure(view)
-        context.coordinator.bind(to: view)
-        context.coordinator.syncSliderToSystemVolume()
-        context.coordinator.handleRouteChange(token: routeChangeToken)
         return view
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {
         configure(uiView)
-        context.coordinator.bind(to: uiView)
-        context.coordinator.syncSliderToSystemVolume()
-        context.coordinator.handleRouteChange(token: routeChangeToken)
     }
 
     private func configure(_ view: MPVolumeView) {
@@ -690,75 +679,7 @@ struct VolumeSlider: UIViewRepresentable {
             if let slider = subview as? UISlider {
                 slider.isEnabled = isEnabled
                 slider.alpha = isEnabled ? 1 : 0.5
-                if isEnabled {
-                    slider.setThumbImage(nil, for: .normal)
-                    slider.setThumbImage(nil, for: .highlighted)
-                    slider.setThumbImage(nil, for: .disabled)
-                } else {
-                    let clearThumb = UIImage()
-                    slider.setThumbImage(clearThumb, for: .normal)
-                    slider.setThumbImage(clearThumb, for: .highlighted)
-                    slider.setThumbImage(clearThumb, for: .disabled)
-                }
             }
-        }
-    }
-
-    @MainActor
-    final class Coordinator {
-        private weak var volumeView: MPVolumeView?
-        private var outputVolumeObservation: NSKeyValueObservation?
-        private var routeChangeObserver: NSObjectProtocol?
-        private var lastHandledRouteToken: Int?
-
-        func bind(to view: MPVolumeView) {
-            volumeView = view
-            if outputVolumeObservation == nil {
-                outputVolumeObservation = AVAudioSession.sharedInstance().observe(
-                    \.outputVolume,
-                    options: [.new]
-                ) { [weak self] _, _ in
-                    Task { @MainActor [weak self] in
-                        self?.syncSliderToSystemVolume()
-                    }
-                }
-            }
-            if routeChangeObserver == nil {
-                routeChangeObserver = NotificationCenter.default.addObserver(
-                    forName: AVAudioSession.routeChangeNotification,
-                    object: nil,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        self?.syncSliderToSystemVolume()
-                    }
-                }
-            }
-        }
-
-        func handleRouteChange(token: Int) {
-            guard lastHandledRouteToken != token else { return }
-            lastHandledRouteToken = token
-            // AirPlay route transitions can report final volume slightly after route-change notification.
-            syncSliderToSystemVolume()
-            scheduleSync(after: 0.25)
-            scheduleSync(after: 0.8)
-            scheduleSync(after: 1.5)
-        }
-
-        private func scheduleSync(after delay: TimeInterval) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                Task { @MainActor [weak self] in
-                    self?.syncSliderToSystemVolume()
-                }
-            }
-        }
-
-        func syncSliderToSystemVolume() {
-            guard let slider = volumeView?.subviews.compactMap({ $0 as? UISlider }).first else { return }
-            let systemVolume = AVAudioSession.sharedInstance().outputVolume
-            guard abs(slider.value - systemVolume) > 0.001 else { return }
-            slider.setValue(systemVolume, animated: false)
         }
     }
 }
