@@ -33,6 +33,7 @@ struct NowPlayingView: View {
     private let actionIconActiveOpacity: Double = 0.82
     private let actionIconInactiveOpacity: Double = 0.45
     private let actionBackgroundOpacity: Double = 0.12
+    private let actionBackgroundActiveOpacity: Double = 0.2
     private let controlTintOpacity: Double = 0.45
 
     // MARK: - Computed Properties
@@ -124,30 +125,14 @@ struct NowPlayingView: View {
                             Button {
                                 toggleLyricsPanel()
                             } label: {
-                                Image(systemName: "quote.bubble")
-                                    .foregroundStyle(.white.opacity(showLyrics ? actionIconActiveOpacity : actionIconInactiveOpacity))
-                                    .frame(width: 38, height: 38)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(.white.opacity(actionBackgroundOpacity))
-                                            .opacity(showLyrics ? 1 : 0)
-                                    }
-                                    .animation(.none, value: showLyrics)
+                                panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
                             }
                             .buttonStyle(.plain)
 
                             Button {
                                 toggleQueuePanel()
                             } label: {
-                                Image(systemName: "list.bullet")
-                                    .foregroundStyle(.white.opacity(showQueue ? actionIconActiveOpacity : actionIconInactiveOpacity))
-                                    .frame(width: 38, height: 38)
-                                    .background {
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(.white.opacity(actionBackgroundOpacity))
-                                            .opacity(showQueue ? 1 : 0)
-                                    }
-                                    .animation(.none, value: showQueue)
+                                panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
                             }
                             .buttonStyle(.plain)
                         }
@@ -365,9 +350,9 @@ struct NowPlayingView: View {
         bottomPadding: CGFloat = 20,
         isPadPortrait: Bool = false
     ) -> some View {
-        let sliderBottomPadding: CGFloat = isPadPortrait ? 30 : 20
-        let transportBottomPadding: CGFloat = isPadPortrait ? 52 : 42
-        let volumeBottomPadding: CGFloat = isPadPortrait ? 30 : bottomPadding
+        let sliderBottomPadding: CGFloat = isPadPortrait ? 42 : 28
+        let transportBottomPadding: CGFloat = isPadPortrait ? 64 : 52
+        let volumeBottomPadding: CGFloat = isPadPortrait ? 38 : (bottomPadding + 6)
 
         return VStack(spacing: 0) {
             TimelineSlider()
@@ -491,15 +476,7 @@ struct NowPlayingView: View {
             Button {
                 toggleLyricsPanel()
             } label: {
-                Image(systemName: "quote.bubble")
-                    .foregroundStyle(.white.opacity(showLyrics ? actionIconActiveOpacity : actionIconInactiveOpacity))
-                    .frame(width: 38, height: 38)
-                    .background {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.white.opacity(actionBackgroundOpacity))
-                            .opacity(showLyrics ? 1 : 0)
-                    }
-                    .animation(.none, value: showLyrics)
+                panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
             }
             .buttonStyle(.plain)
             .padding(.leading, bottomActionsLeadingButtonPadding)
@@ -517,15 +494,7 @@ struct NowPlayingView: View {
             Button {
                 toggleQueuePanel()
             } label: {
-                Image(systemName: "list.bullet")
-                    .foregroundStyle(.white.opacity(showQueue ? actionIconActiveOpacity : actionIconInactiveOpacity))
-                    .frame(width: 38, height: 38)
-                    .background {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.white.opacity(actionBackgroundOpacity))
-                            .opacity(showQueue ? 1 : 0)
-                    }
-                    .animation(.none, value: showQueue)
+                panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
             }
             .buttonStyle(.plain)
             .padding(.trailing, bottomActionsTrailingButtonPadding)
@@ -570,6 +539,27 @@ struct NowPlayingView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private func panelToggleIcon(systemName: String, isActive: Bool) -> some View {
+        if isActive {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.white.opacity(actionBackgroundActiveOpacity))
+                Image(systemName: systemName)
+                    .foregroundStyle(.black)
+                    .blendMode(.destinationOut)
+            }
+            .compositingGroup()
+            .frame(width: 38, height: 38)
+            .animation(.none, value: isActive)
+        } else {
+            Image(systemName: systemName)
+                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                .frame(width: 38, height: 38)
+                .animation(.none, value: isActive)
+        }
+    }
 }
 
 // MARK: - Timeline Slider
@@ -609,7 +599,9 @@ struct TimelineSlider: View {
         }
         .onChange(of: player.currentTime) { _, newValue in
             if !isDragging {
-                sliderValue = newValue
+                withAnimation(.linear(duration: 0.1)) {
+                    sliderValue = min(newValue, duration)
+                }
             }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
