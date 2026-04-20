@@ -60,13 +60,18 @@ extension PlexAPIClient {
     ) async throws -> [PlexMetadata] {
         guard limit > 0, minMatchingStyles > 0 else { return [] }
 
+        var resolvedSeedArtistKey = seedArtistKey
+        if resolvedSeedArtistKey == nil {
+            resolvedSeedArtistKey = (try? await cachedMetadata(server: server, ratingKey: seedAlbumKey))?.parentRatingKey
+        }
+
         let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
         let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
 
         var seedStyles = stylesByAlbum[seedAlbumKey] ?? []
 
         // Fallback 1: borrow styles from sibling albums by the same artist
-        if seedStyles.isEmpty, let artistKey = seedArtistKey {
+        if seedStyles.isEmpty, let artistKey = resolvedSeedArtistKey {
             let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
             for album in siblings where album.ratingKey != seedAlbumKey {
                 if let styles = stylesByAlbum[album.ratingKey], !styles.isEmpty {
@@ -82,7 +87,7 @@ extension PlexAPIClient {
         var seedGenres = Set<String>()
         if seedStyles.isEmpty {
             var albumKeysToCheck: [String] = [seedAlbumKey]
-            if let artistKey = seedArtistKey {
+            if let artistKey = resolvedSeedArtistKey {
                 let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
                 albumKeysToCheck.append(contentsOf: siblings.map(\.ratingKey))
             }
@@ -141,7 +146,27 @@ extension PlexAPIClient {
         }
 
         // Fallback 3: if no tag-based matches, use other tracks by the same artist
-        if matchingAlbumKeys.isEmpty, let artistKey = seedArtistKey {
+        if matchingAlbumKeys.isEmpty, let artistKey = resolvedSeedArtistKey {
+            // Prefer sibling albums as the fallback source, since parentRatingKey is more
+            // reliable in bulk track payloads than grandparentRatingKey.
+            let siblingAlbums = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
+            let siblingAlbumKeys = Set(
+                siblingAlbums
+                    .map(\.ratingKey)
+                    .filter { $0 != seedAlbumKey }
+            )
+
+            if !siblingAlbumKeys.isEmpty {
+                let siblingAlbumTracks = allTracks.filter {
+                    guard let parentKey = $0.parentRatingKey else { return false }
+                    return siblingAlbumKeys.contains(parentKey)
+                }
+                if !siblingAlbumTracks.isEmpty {
+                    return Array(siblingAlbumTracks.shuffled().prefix(limit))
+                }
+            }
+
+            // Secondary fallback when album linkage is unavailable.
             let artistTracks = allTracks.filter {
                 $0.grandparentRatingKey == artistKey && $0.parentRatingKey != seedAlbumKey
             }
@@ -162,23 +187,23 @@ extension PlexAPIClient {
         guard !tracksByAlbum.isEmpty else { return [] }
 
         let maxPerAlbum = 3
-        var result: [PlexMetadata] = []
+        var picked: [PlexMetadata] = []
         var albumQueues = tracksByAlbum.values.map { $0.shuffled() }.shuffled()
 
-        while result.count < limit && !albumQueues.isEmpty {
+        while picked.count < limit && !albumQueues.isEmpty {
             var nextRound: [[PlexMetadata]] = []
             for var queue in albumQueues {
-                let take = min(maxPerAlbum, queue.count, limit - result.count)
-                result.append(contentsOf: queue.prefix(take))
+                let take = min(maxPerAlbum, queue.count, limit - picked.count)
+                picked.append(contentsOf: queue.prefix(take))
                 queue.removeFirst(take)
-                if !queue.isEmpty && result.count < limit {
+                if !queue.isEmpty && picked.count < limit {
                     nextRound.append(queue)
                 }
             }
             albumQueues = nextRound.shuffled()
         }
 
-        return result.shuffled()
+        return interleaveTracksAvoidingAdjacentAlbums(picked, limit: limit)
     }
 
     // MARK: - Cached Tracks
@@ -363,6 +388,51 @@ extension PlexAPIClient {
     private func deduplicateTags(_ tags: [String]) -> [String] {
         var seen = Set<String>()
         return tags.filter { seen.insert($0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)).inserted }
+    }
+
+    private func interleaveTracksAvoidingAdjacentAlbums(_ tracks: [PlexMetadata], limit: Int) -> [PlexMetadata] {
+        guard !tracks.isEmpty, limit > 0 else { return [] }
+
+        var byAlbum: [String: [PlexMetadata]] = [:]
+        let fallbackAlbumKey = "__unknown_album__"
+        for track in tracks {
+            let albumKey = track.parentRatingKey ?? fallbackAlbumKey
+            byAlbum[albumKey, default: []].append(track)
+        }
+        for key in byAlbum.keys {
+            byAlbum[key]?.shuffle()
+        }
+
+        var result: [PlexMetadata] = []
+        result.reserveCapacity(min(limit, tracks.count))
+        var lastAlbumKey: String?
+
+        while result.count < limit {
+            var candidateKey: String?
+            var candidateCount = -1
+
+            for (albumKey, albumTracks) in byAlbum where !albumTracks.isEmpty {
+                if albumKey == lastAlbumKey { continue }
+                if albumTracks.count > candidateCount {
+                    candidateKey = albumKey
+                    candidateCount = albumTracks.count
+                }
+            }
+
+            if candidateKey == nil {
+                candidateKey = byAlbum.first(where: { !$0.value.isEmpty })?.key
+            }
+            guard let selectedAlbumKey = candidateKey,
+                  var selectedAlbumTracks = byAlbum[selectedAlbumKey],
+                  !selectedAlbumTracks.isEmpty else { break }
+
+            let next = selectedAlbumTracks.removeFirst()
+            byAlbum[selectedAlbumKey] = selectedAlbumTracks
+            result.append(next)
+            lastAlbumKey = selectedAlbumKey
+        }
+
+        return result
     }
 
     private func cachedLibraryContents(server: PlexServer, sectionId: String, type: Int, key: String) async throws -> [PlexMetadata] {
