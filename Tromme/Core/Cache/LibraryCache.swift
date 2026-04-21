@@ -244,6 +244,9 @@ enum CachePolicy: Sendable {
     /// Detail pages, children, top tracks — moderate change frequency.
     /// Memory: 2 hours, Disk: 7 days.
     case detail
+    /// Album info/summary payloads for album detail.
+    /// Memory: 2 hours, Disk: 24 hours.
+    case albumInfo
     /// Playlists, favorites — user-editable, changes more often.
     /// Memory: 1 hour, Disk: 3 days.
     case userContent
@@ -258,6 +261,7 @@ enum CachePolicy: Sendable {
         switch self {
         case .library:     return 14400     // 4 hours
         case .detail:      return 7200      // 2 hours
+        case .albumInfo:   return 7200      // 2 hours
         case .userContent: return 3600      // 1 hour
         case .search:      return 600       // 10 min
         case .styles:      return 14400     // 4 hours
@@ -268,6 +272,7 @@ enum CachePolicy: Sendable {
         switch self {
         case .library:     return 2_592_000 // 30 days
         case .detail:      return 604_800   // 7 days
+        case .albumInfo:   return 86_400    // 24 hours
         case .userContent: return 259_200   // 3 days
         case .search:      return 14400     // 4 hours
         case .styles:      return 2_592_000 // 30 days

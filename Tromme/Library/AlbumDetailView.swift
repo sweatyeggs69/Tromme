@@ -16,6 +16,7 @@ struct AlbumDetailView: View {
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistResultMessage: String?
+    @State private var showsAlbumInfoSheet = false
 
     private var thumbPath: String? {
         album.thumb
@@ -94,6 +95,15 @@ struct AlbumDetailView: View {
         }
 
         return components.isEmpty ? nil : components.joined(separator: " · ")
+    }
+
+    private var albumInfoText: String {
+        let summary = (albumDetails.summary ?? album.summary ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !summary.isEmpty {
+            return summary
+        }
+        return "No album info available for this release."
     }
 
     private var artistNavigationTarget: PlexMetadata? {
@@ -271,7 +281,7 @@ struct AlbumDetailView: View {
     private func loadAlbumDetails() async {
         guard let server = serverConnection.currentServer else { return }
         do {
-            albumDetails = try await client.cachedMetadata(server: server, ratingKey: album.ratingKey) ?? album
+            albumDetails = try await client.cachedAlbumMetadata(server: server, ratingKey: album.ratingKey) ?? album
         } catch {
             albumDetails = album
         }
@@ -410,6 +420,20 @@ struct AlbumDetailView: View {
         .navigationDestination(item: $selectedArtist) { artist in
             ArtistDetailView(artist: artist)
         }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showsAlbumInfoSheet = true
+                    } label: {
+                        Label("Album Info", systemImage: "info.circle")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .tint(.primary)
+            }
+        }
         .task(id: thumbPath) {
             guard !isPreviewMode else { return }
             guard let server = serverConnection.currentServer else { return }
@@ -424,6 +448,18 @@ struct AlbumDetailView: View {
             async let detailsTask: Void = loadAlbumDetails()
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
+        }
+        .sheet(isPresented: $showsAlbumInfoSheet) {
+            NavigationStack {
+                ScrollView {
+                    Text(albumInfoText)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+                .navigationTitle("Album Info")
+                .navigationBarTitleDisplayMode(.inline)
+            }
         }
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys) { playlistCount in

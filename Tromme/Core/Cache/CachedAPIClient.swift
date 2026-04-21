@@ -281,6 +281,17 @@ extension PlexAPIClient {
         }
     }
 
+    /// Album-detail metadata with a shorter disk lifetime so album summaries
+    /// are refreshed at least once per day.
+    func cachedAlbumMetadata(server: PlexServer, ratingKey: String) async throws -> PlexMetadata? {
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.metadata(ratingKey: ratingKey),
+            policy: .albumInfo
+        ) {
+            try await self.getMetadata(server: server, ratingKey: ratingKey)
+        }
+    }
+
     // MARK: - Cache Warming
 
     /// Preload the core library data (artists, albums, tracks) in parallel,
