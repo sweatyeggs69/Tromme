@@ -8,14 +8,14 @@ final class ArtworkColorCache {
 
     private var cache: [String: Color] = [:]
     private let diskURL: URL
-    private var pendingSaves = false
+    private let persistence = ArtworkColorPersistence()
     private var saveTask: Task<Void, Never>?
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         diskURL = caches.appendingPathComponent("TrommeColorCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
-        loadFromDisk()
+        Task { await loadFromDisk() }
     }
 
     func color(for thumbPath: String?) -> Color? {
@@ -34,10 +34,9 @@ final class ArtworkColorCache {
 
     // MARK: - Disk Persistence
 
-    private func loadFromDisk() {
+    private func loadFromDisk() async {
         let fileURL = diskURL.appendingPathComponent("colors.json")
-        guard let data = try? Data(contentsOf: fileURL),
-              let entries = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) else { return }
+        let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             cache[key] = Color(red: rgb[0], green: rgb[1], blue: rgb[2])
         }
@@ -61,9 +60,24 @@ final class ArtworkColorCache {
             uiColor.getRed(&r, green: &g, blue: &b, alpha: nil)
             entries[key] = [r, g, b]
         }
-        if let data = try? JSONEncoder().encode(entries) {
-            try? data.write(to: fileURL, options: .atomic)
+        Task(priority: .utility) {
+            await persistence.save(entries, to: fileURL)
         }
+    }
+}
+
+private actor ArtworkColorPersistence {
+    func load(from fileURL: URL) -> [String: [CGFloat]] {
+        guard let data = try? Data(contentsOf: fileURL),
+              let entries = try? JSONDecoder().decode([String: [CGFloat]].self, from: data) else {
+            return [:]
+        }
+        return entries
+    }
+
+    func save(_ entries: [String: [CGFloat]], to fileURL: URL) {
+        guard let data = try? JSONEncoder().encode(entries) else { return }
+        try? data.write(to: fileURL, options: .atomic)
     }
 }
 

@@ -426,8 +426,8 @@ struct PlexServer: Codable, Sendable, Identifiable, Hashable {
 
     var id: String { machineIdentifier }
 
-    var baseURL: URL {
-        URL(string: uri)!
+    var baseURL: URL? {
+        URL(string: uri)
     }
 }
 

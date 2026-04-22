@@ -389,7 +389,7 @@ extension PlexAPIClient {
             artworkURL(server: server, path: path, width: size, height: size)
         }
 
-        Task.detached(priority: .utility) {
+        Task(priority: .utility) {
             await ImageCache.shared.prefetch(urls: urls, targetPixelSize: size, maxConcurrent: 2)
         }
     }

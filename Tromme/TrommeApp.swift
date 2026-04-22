@@ -45,10 +45,10 @@ struct TrommeApp: App {
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)
                 .onChange(of: serverConnection.currentServer, initial: true) { old, server in
+                    if let old, old.machineIdentifier != server?.machineIdentifier {
+                        audioPlayer.resetPlayback()
+                    }
                     if let server {
-                        if old != nil && old?.machineIdentifier != server.machineIdentifier {
-                            audioPlayer.resetPlayback()
-                        }
                         audioPlayer.configure(server: server, client: plexClient)
                     }
                 }

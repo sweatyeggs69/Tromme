@@ -62,6 +62,9 @@ final class AudioPlayerService: @unchecked Sendable {
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     private var pendingInitialSeekTime: TimeInterval?
     private var scrobbledTrackRatingKey: String?
+    private var gainPrefetchTask: Task<Void, Never>?
+    private var playbackLoadTask: Task<Void, Never>?
+    private var nowPlayingArtworkTask: Task<Void, Never>?
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -88,6 +91,12 @@ final class AudioPlayerService: @unchecked Sendable {
         if let routeChangeObserver {
             NotificationCenter.default.removeObserver(routeChangeObserver)
         }
+        playbackLoadTask?.cancel()
+        nowPlayingArtworkTask?.cancel()
+        gainPrefetchTask?.cancel()
+        playbackLoadTask = nil
+        nowPlayingArtworkTask = nil
+        gainPrefetchTask = nil
         tearDownObservers()
     }
 
@@ -383,15 +392,13 @@ final class AudioPlayerService: @unchecked Sendable {
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
         let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
         player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    self.isSeeking = false
-                    guard finished else { return }
-                    self.currentTime = boundedTime
-                    self.updateNowPlayingInfo()
-                    self.reportTimelineState(self.isPlaying ? "playing" : "paused")
-                }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isSeeking = false
+                guard finished else { return }
+                self.currentTime = boundedTime
+                self.updateNowPlayingInfo()
+                self.reportTimelineState(self.isPlaying ? "playing" : "paused")
             }
         }
     }
@@ -498,8 +505,17 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     func resetPlayback() {
+        playbackGeneration += 1
+        playbackLoadTask?.cancel()
+        nowPlayingArtworkTask?.cancel()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+        player = nil
+        tearDownObservers()
+        gainPrefetchTask?.cancel()
+        playbackLoadTask = nil
+        nowPlayingArtworkTask = nil
+        gainPrefetchTask = nil
         queue = []
         originalQueue = []
         currentIndex = 0
@@ -509,6 +525,14 @@ final class AudioPlayerService: @unchecked Sendable {
         duration = 0
         isMagicMixActive = false
         isInfiniteModeActive = false
+        isReadyToPlay = false
+        currentSessionID = nil
+        pendingInitialSeekTime = nil
+        universalCandidatesForCurrentItem = []
+        universalCandidateIndexForCurrentItem = 0
+        detailedTrackForSoundCheck = nil
+        cachedArtwork = nil
+        cachedArtworkThumbPath = nil
         savePlaybackState()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -570,7 +594,10 @@ final class AudioPlayerService: @unchecked Sendable {
             UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
         )
         // Always route audio through Plex universal HLS for stable seek/duration behavior.
-        let sessionID = currentSessionID!
+        guard let sessionID = currentSessionID else {
+            logPlayback("load_rejected", "reason=missing_session_id")
+            return
+        }
         let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
         let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
         let mediaPathCandidates = [normalizedPath]
@@ -588,7 +615,8 @@ final class AudioPlayerService: @unchecked Sendable {
         let soundCheckEnabled = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
         let ratingKey = track.ratingKey
 
-        Task {
+        playbackLoadTask?.cancel()
+        playbackLoadTask = Task {
             // Step 1: Authorize transcode session and fetch detailed metadata (for gain) in parallel.
             async let decisionResult: Void = capturedClient.universalDecision(
                 server: capturedServer,
@@ -606,6 +634,7 @@ final class AudioPlayerService: @unchecked Sendable {
             do {
                 try await decisionResult
             } catch {
+                guard !Task.isCancelled else { return }
                 guard self.playbackGeneration == generation else { return }
                 self.logPlayback("decision_failed", "error=\(error.localizedDescription)")
                 self.handlePlaybackFailure("decision_failed")
@@ -614,6 +643,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
             self.detailedTrackForSoundCheck = await detailedTrack
 
+            guard !Task.isCancelled else { return }
             guard self.playbackGeneration == generation else { return }
 
             // Step 2: Build universal HLS URL and play directly.
@@ -632,6 +662,7 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.isPlaying = false
                 return
             }
+            guard !Task.isCancelled else { return }
             guard self.playbackGeneration == generation else { return }
             self.logPlayback("load_ready", "candidate_count=\(universalCandidates.count)")
             self.startPlayback(url: masterURL)
@@ -717,54 +748,52 @@ final class AudioPlayerService: @unchecked Sendable {
             let status = observedItem.status
             let assetDuration = observedItem.duration.seconds
             let errorDesc = observedItem.error?.localizedDescription
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    switch status {
-                    case .readyToPlay:
-                        self.isReadyToPlay = true
-                        if assetDuration.isFinite && assetDuration > 0 {
-                            self.duration = assetDuration
-                        }
-                        self.logPlayback("item_ready", "duration=\(self.duration)")
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                switch status {
+                case .readyToPlay:
+                    self.isReadyToPlay = true
+                    if assetDuration.isFinite && assetDuration > 0 {
+                        self.duration = assetDuration
+                    }
+                    self.logPlayback("item_ready", "duration=\(self.duration)")
 
-                        if let pendingSeek = self.pendingInitialSeekTime {
-                            self.pendingInitialSeekTime = nil
-                            let safeUpper = self.duration > 1 ? max(self.duration - 1, 0) : self.duration
-                            let bounded = safeUpper > 0 ? min(max(0, pendingSeek), safeUpper) : max(0, pendingSeek)
-                            self.logPlayback("resume_seek", "to=\(bounded)")
-                            self.isSeeking = true
-                            let target = CMTime(seconds: bounded, preferredTimescale: 600)
-                            let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
-                            self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+                    if let pendingSeek = self.pendingInitialSeekTime {
+                        self.pendingInitialSeekTime = nil
+                        let safeUpper = self.duration > 1 ? max(self.duration - 1, 0) : self.duration
+                        let bounded = safeUpper > 0 ? min(max(0, pendingSeek), safeUpper) : max(0, pendingSeek)
+                        self.logPlayback("resume_seek", "to=\(bounded)")
+                        self.isSeeking = true
+                        let target = CMTime(seconds: bounded, preferredTimescale: 600)
+                        let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+                        self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+                            guard let self else { return }
+                            Task { @MainActor [weak self] in
                                 guard let self else { return }
-                                Task { @MainActor [weak self] in
-                                    guard let self else { return }
-                                    self.isSeeking = false
-                                    guard finished else { return }
-                                    self.currentTime = bounded
-                                    self.player?.play()
-                                    self.isPlaying = true
-                                    self.updateNowPlayingInfo()
-                                }
+                                self.isSeeking = false
+                                guard finished else { return }
+                                self.currentTime = bounded
+                                self.player?.play()
+                                self.isPlaying = true
+                                self.updateNowPlayingInfo()
                             }
                         }
-
-                        self.updateNowPlayingInfo()
-                    case .failed:
-                        self.isReadyToPlay = false
-                        self.logPlayback("item_failed", "error=\(errorDesc ?? "unknown")")
-                        let nextIndex = self.universalCandidateIndexForCurrentItem + 1
-                        if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
-                            self.universalCandidateIndexForCurrentItem = nextIndex
-                            let nextURL = self.universalCandidatesForCurrentItem[nextIndex]
-                            self.startPlayback(url: nextURL)
-                            return
-                        }
-                        self.handlePlaybackFailure("item_failed")
-                    default:
-                        break
                     }
+
+                    self.updateNowPlayingInfo()
+                case .failed:
+                    self.isReadyToPlay = false
+                    self.logPlayback("item_failed", "error=\(errorDesc ?? "unknown")")
+                    let nextIndex = self.universalCandidateIndexForCurrentItem + 1
+                    if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
+                        self.universalCandidateIndexForCurrentItem = nextIndex
+                        let nextURL = self.universalCandidatesForCurrentItem[nextIndex]
+                        self.startPlayback(url: nextURL)
+                        return
+                    }
+                    self.handlePlaybackFailure("item_failed")
+                default:
+                    break
                 }
             }
         }
@@ -899,24 +928,22 @@ final class AudioPlayerService: @unchecked Sendable {
         let generation = playbackGeneration
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self, self.playbackGeneration == generation else { return }
-                    guard !self.isSeeking else { return }
-                    guard seconds.isFinite && seconds >= 0 else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.playbackGeneration == generation else { return }
+                guard !self.isSeeking else { return }
+                guard seconds.isFinite && seconds >= 0 else { return }
 
-                    if let itemDuration = self.player?.currentItem?.duration.seconds,
-                       itemDuration.isFinite && itemDuration > 0 {
-                        self.duration = itemDuration
-                    }
+                if let itemDuration = self.player?.currentItem?.duration.seconds,
+                   itemDuration.isFinite && itemDuration > 0 {
+                    self.duration = itemDuration
+                }
 
-                    self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
-                    self.maybeReportScrobble()
+                self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
+                self.maybeReportScrobble()
 
-                    if abs(self.currentTime - self.lastNowPlayingInfoSyncTime) >= 1 {
-                        self.lastNowPlayingInfoSyncTime = self.currentTime
-                        self.updateNowPlayingInfo()
-                    }
+                if abs(self.currentTime - self.lastNowPlayingInfoSyncTime) >= 1 {
+                    self.lastNowPlayingInfoSyncTime = self.currentTime
+                    self.updateNowPlayingInfo()
                 }
             }
         }
@@ -934,20 +961,18 @@ final class AudioPlayerService: @unchecked Sendable {
     private func observePlayerState() {
         timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { [weak self] observedPlayer, _ in
             let status = observedPlayer.timeControlStatus
-            DispatchQueue.main.async { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else { return }
-                    let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
-                    // Preserve the current "playing intent" while AVPlayer is briefly
-                    // buffering so transport controls do not flicker.
-                    let playing = status == .playing || (waitingForPlayback && self.isPlaying)
-                    if self.lastLoggedTimeControlStatus != status {
-                        self.lastLoggedTimeControlStatus = status
-                        self.logPlayback("time_control", "status=\(status.rawValue)")
-                    }
-                    self.isPlaying = playing
-                    self.updateNowPlayingInfo()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
+                // Preserve the current "playing intent" while AVPlayer is briefly
+                // buffering so transport controls do not flicker.
+                let playing = status == .playing || (waitingForPlayback && self.isPlaying)
+                if self.lastLoggedTimeControlStatus != status {
+                    self.lastLoggedTimeControlStatus = status
+                    self.logPlayback("time_control", "status=\(status.rawValue)")
                 }
+                self.isPlaying = playing
+                self.updateNowPlayingInfo()
             }
         }
     }
@@ -963,10 +988,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 object: item,
                 queue: .main
             ) { [weak self] _ in
-                DispatchQueue.main.async { [weak self] in
-                    MainActor.assumeIsolated {
-                        self?.handleTrackEnd()
-                    }
+                Task { @MainActor [weak self] in
+                    self?.handleTrackEnd()
                 }
             }
         }
@@ -1117,11 +1140,13 @@ final class AudioPlayerService: @unchecked Sendable {
     private func prefetchGainMetadata() {
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey),
               let client, let server else { return }
+        gainPrefetchTask?.cancel()
         // Prefetch current + next 10 tracks
         let upcoming = queue.dropFirst(currentIndex).prefix(11)
         let keys = upcoming.map(\.ratingKey)
-        Task.detached(priority: .utility) {
+        gainPrefetchTask = Task(priority: .utility) {
             for key in keys {
+                guard !Task.isCancelled else { return }
                 _ = try? await client.cachedMetadata(server: server, ratingKey: key)
             }
         }
@@ -1216,10 +1241,16 @@ final class AudioPlayerService: @unchecked Sendable {
         if thumbPath != cachedArtworkThumbPath {
             cachedArtworkThumbPath = thumbPath
             cachedArtwork = nil
+            nowPlayingArtworkTask?.cancel()
             if let client, let server,
                let url = client.artworkURL(server: server, path: thumbPath, width: 1000, height: 1000) {
-                Task {
+                let generation = playbackGeneration
+                let trackKey = currentTrack?.ratingKey
+                nowPlayingArtworkTask = Task {
                     guard let image = await ImageCache.shared.image(for: url) else { return }
+                    guard !Task.isCancelled else { return }
+                    guard self.playbackGeneration == generation else { return }
+                    guard self.currentTrack?.ratingKey == trackKey else { return }
                     let artwork = Self.makeArtwork(from: image)
                     self.cachedArtwork = artwork
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork

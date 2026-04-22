@@ -131,7 +131,7 @@ struct SettingsView: View {
     private func loadSections() async {
         guard let server = serverConnection.currentServer else { return }
         do {
-            sections = try await client.cachedLibrarySections(server: server)
+            sections = try await client.cachedLibrarySections(server: server).filter(\.isMusicLibrary)
         } catch {}
     }
 

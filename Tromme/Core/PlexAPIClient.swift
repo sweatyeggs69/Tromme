@@ -84,19 +84,19 @@ final class PlexAPIClient: Sendable {
     // MARK: - Plex.tv Auth Endpoints
 
     func createPin() async throws -> PlexPinResponse {
-        var request = plexTVRequest(path: "/api/v2/pins", method: "POST")
+        var request = try plexTVRequest(path: "/api/v2/pins", method: "POST")
         request.httpBody = "strong=true".data(using: .utf8)
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         return try await perform(request)
     }
 
     func checkPin(id: Int) async throws -> PlexPinResponse {
-        let request = plexTVRequest(path: "/api/v2/pins/\(id)", method: "GET")
+        let request = try plexTVRequest(path: "/api/v2/pins/\(id)", method: "GET")
         return try await perform(request)
     }
 
     func getResources(token: String) async throws -> [PlexResource] {
-        var request = plexTVRequest(path: "/api/v2/resources?includeHttps=1&includeRelay=1", method: "GET")
+        var request = try plexTVRequest(path: "/api/v2/resources?includeHttps=1&includeRelay=1", method: "GET")
         request.setValue(token, forHTTPHeaderField: "X-Plex-Token")
         return try await perform(request)
     }
@@ -287,7 +287,8 @@ final class PlexAPIClient: Sendable {
         sessionID: String?,
         continuing: Bool = false
     ) async throws {
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw PlexAPIError.invalidURL
         }
         components.path = "/:/timeline"
@@ -325,7 +326,8 @@ final class PlexAPIClient: Sendable {
     /// Mark an item as played in Plex history.
     /// Endpoint: /:/scrobble
     func reportScrobble(server: PlexServer, ratingKey: String) async throws {
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw PlexAPIError.invalidURL
         }
         components.path = "/:/scrobble"
@@ -351,7 +353,8 @@ final class PlexAPIClient: Sendable {
 
     /// Build a direct stream URL with full Plex identification query params.
     func streamURL(server: PlexServer, partKey: String) -> URL? {
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
         components.path = partKey
         components.queryItems = [
             URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
@@ -405,7 +408,8 @@ final class PlexAPIClient: Sendable {
         disableCellularTranscoding: Bool = false,
         cellularTranscodeBitrate: Int = 320
     ) async throws {
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw PlexAPIError.invalidURL
         }
         components.path = "/music/:/transcode/universal/decision"
@@ -455,7 +459,8 @@ final class PlexAPIClient: Sendable {
         let path = mediaPathCandidates.first ?? "/library/metadata/0"
         let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
 
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return [] }
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return [] }
         components.path = "/music/:/transcode/universal/start.m3u8"
         components.queryItems = universalQueryItems(
             server: server,
@@ -507,7 +512,8 @@ final class PlexAPIClient: Sendable {
     /// Build a transcoded artwork URL with Plex identification.
     func artworkURL(server: PlexServer, path: String?, width: Int = 400, height: Int = 400) -> URL? {
         guard let path, !path.isEmpty else { return nil }
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
         components.path = "/photo/:/transcode"
         components.queryItems = [
             URLQueryItem(name: "width", value: "\(width)"),
@@ -550,12 +556,19 @@ final class PlexAPIClient: Sendable {
                 }
             }
         }
-        throw lastError!
+        if let lastError {
+            throw lastError
+        } else {
+            throw PlexAPIError.networkError(URLError(.unknown))
+        }
     }
 
     /// Build a request to plex.tv with all required identification headers.
-    private func plexTVRequest(path: String, method: String) -> URLRequest {
-        var request = URLRequest(url: URL(string: "https://plex.tv\(path)")!)
+    private func plexTVRequest(path: String, method: String) throws -> URLRequest {
+        guard let url = URL(string: "https://plex.tv\(path)") else {
+            throw PlexAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         applyPlexHeaders(to: &request)
         return request
@@ -574,7 +587,8 @@ final class PlexAPIClient: Sendable {
     /// Execute a raw request against a Plex Media Server with all required headers.
     @discardableResult
     private func rawServerRequest(server: PlexServer, path: String, method: String = "GET") async throws -> Data {
-        guard let url = URL(string: path, relativeTo: server.baseURL) else {
+        guard let baseURL = server.baseURL,
+              let url = URL(string: path, relativeTo: baseURL) else {
             throw PlexAPIError.invalidURL
         }
         var request = URLRequest(url: url)
@@ -612,7 +626,8 @@ final class PlexAPIClient: Sendable {
         method: String,
         queryItems: [URLQueryItem]
     ) async throws -> Data {
-        guard var components = URLComponents(url: server.baseURL, resolvingAgainstBaseURL: true) else {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else {
             throw PlexAPIError.invalidURL
         }
         components.path = path

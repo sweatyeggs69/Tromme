@@ -91,7 +91,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     continue
                 }
 
-                let changed: Void = await withCheckedContinuation { continuation in
+                await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = manager.currentServer
                         _ = manager.currentLibrarySectionId
@@ -99,7 +99,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                         continuation.resume()
                     }
                 }
-                _ = changed
                 guard !Task.isCancelled else { return }
                 self.updateRootTemplate()
             }
@@ -587,7 +586,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard let self, let player = self.player else { return }
                 // Read the properties we want to track — withObservationTracking
                 // will call onChange when any of them mutate.
-                let changed: Void = await withCheckedContinuation { continuation in
+                await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = player.isShuffled
                         _ = player.repeatMode
@@ -597,7 +596,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                         continuation.resume()
                     }
                 }
-                _ = changed
                 guard !Task.isCancelled else { return }
                 self.syncMixButtons()
             }

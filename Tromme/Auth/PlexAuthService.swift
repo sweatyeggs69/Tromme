@@ -30,7 +30,11 @@ final class PlexAuthService {
 
         do {
             let pin = try await client.createPin()
-            let url = URL(string: "https://app.plex.tv/auth#?clientID=\(PlexAPIClient.clientIdentifier)&code=\(pin.code)&context%5Bdevice%5D%5Bproduct%5D=\(PlexAPIClient.product)")!
+            guard let url = URL(
+                string: "https://app.plex.tv/auth#?clientID=\(PlexAPIClient.clientIdentifier)&code=\(pin.code)&context%5Bdevice%5D%5Bproduct%5D=\(PlexAPIClient.product)"
+            ) else {
+                throw PlexAPIError.invalidURL
+            }
 
             // Present the auth sheet
             authURL = url
