@@ -17,6 +17,9 @@ struct AlbumDetailView: View {
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistResultMessage: String?
     @State private var showsAlbumInfoSheet = false
+    @State private var showDeleteAlbumConfirmation = false
+    @State private var albumDeleteErrorMessage: String?
+    @State private var isDeletingAlbum = false
 
     private var thumbPath: String? {
         album.thumb
@@ -428,10 +431,17 @@ struct AlbumDetailView: View {
                     } label: {
                         Label("Album Info", systemImage: "info.circle")
                     }
+                    if !isPreviewMode {
+                        Divider()
+                        Button("Delete Album", systemImage: "trash", role: .destructive) {
+                            showDeleteAlbumConfirmation = true
+                        }
+                    }
                 } label: {
                     Image(systemName: "ellipsis")
                 }
                 .tint(.primary)
+                .disabled(isDeletingAlbum)
             }
         }
         .task(id: thumbPath) {
@@ -477,6 +487,22 @@ struct AlbumDetailView: View {
         } message: {
             Text(addToPlaylistResultMessage ?? "")
         }
+        .alert("Delete Album?", isPresented: $showDeleteAlbumConfirmation) {
+            Button("Delete Album", role: .destructive) {
+                Task { await deleteAlbum() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove \"\(album.title)\".")
+        }
+        .alert("Unable to Delete Album", isPresented: .init(
+            get: { albumDeleteErrorMessage != nil },
+            set: { if !$0 { albumDeleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(albumDeleteErrorMessage ?? "")
+        }
     }
 
     private func presentAddToPlaylist(for itemKeys: [String]) {
@@ -495,6 +521,25 @@ struct AlbumDetailView: View {
             }
         }
         return result
+    }
+
+    @MainActor
+    private func deleteAlbum() async {
+        guard !isPreviewMode else { return }
+        guard let server = serverConnection.currentServer else { return }
+        guard !isDeletingAlbum else { return }
+
+        isDeletingAlbum = true
+        defer { isDeletingAlbum = false }
+
+        do {
+            try await client.deleteLibraryItem(server: server, ratingKey: album.ratingKey)
+            await LibraryCache.shared.clearAll()
+            await ImageCache.shared.clearAll()
+            dismiss()
+        } catch {
+            albumDeleteErrorMessage = error.localizedDescription
+        }
     }
 }
 

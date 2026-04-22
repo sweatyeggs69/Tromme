@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TrackRowView: View {
     @Environment(AudioPlayerService.self) private var player
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
 
     let track: PlexMetadata
     let tracks: [PlexMetadata]
@@ -15,6 +17,9 @@ struct TrackRowView: View {
     var isCompact: Bool = false
     var titleFont: Font? = nil
     var artistFont: Font? = nil
+    @State private var showDeleteTrackConfirmation = false
+    @State private var trackDeleteErrorMessage: String?
+    @State private var isDeletingTrack = false
 
     var body: some View {
         Button {
@@ -78,6 +83,22 @@ struct TrackRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
+            Button("Delete Track", role: .destructive) {
+                Task { await deleteTrack() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove \"\(track.title)\".")
+        }
+        .alert("Unable to Delete Track", isPresented: .init(
+            get: { trackDeleteErrorMessage != nil },
+            set: { if !$0 { trackDeleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(trackDeleteErrorMessage ?? "")
+        }
     }
 
     @ViewBuilder
@@ -117,10 +138,34 @@ struct TrackRowView: View {
                 Label("Go to Album", systemImage: "square.stack")
             }
         }
+
+        Divider()
+
+        Button("Delete Track", systemImage: "trash", role: .destructive) {
+            showDeleteTrackConfirmation = true
+        }
+        .disabled(isDeletingTrack || serverConnection.currentServer == nil)
     }
 
     private var isCurrentTrack: Bool {
         player.currentTrack?.ratingKey == track.ratingKey
+    }
+
+    @MainActor
+    private func deleteTrack() async {
+        guard let server = serverConnection.currentServer else { return }
+        guard !isDeletingTrack else { return }
+
+        isDeletingTrack = true
+        defer { isDeletingTrack = false }
+
+        do {
+            try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
+            await LibraryCache.shared.clearAll()
+            await ImageCache.shared.clearAll()
+        } catch {
+            trackDeleteErrorMessage = error.localizedDescription
+        }
     }
 }
 

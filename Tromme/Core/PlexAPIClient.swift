@@ -272,6 +272,14 @@ final class PlexAPIClient: Sendable {
         )
     }
 
+    func deleteLibraryItem(server: PlexServer, ratingKey: String) async throws {
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/library/metadata/\(ratingKey)",
+            method: "DELETE"
+        )
+    }
+
     // MARK: - Playback
 
     /// Report playback state to PMS so it appears in the dashboard.
