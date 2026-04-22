@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
 
@@ -17,7 +18,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authToken == nil {
+            if !hasAuthenticatedContext {
                 LoginView { token in
                     authToken = token
                 }
@@ -34,6 +35,10 @@ struct ContentView: View {
             } else {
                 mainTabView
             }
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard phase == .active else { return }
+            refreshAuthTokenFromKeychainIfNeeded()
         }
     }
 
@@ -186,10 +191,20 @@ struct ContentView: View {
     }
 
     private func signOut() {
+        player.resetPlayback()
         authToken = nil
         KeychainHelper.delete(forKey: "plexAuthToken")
         serverConnection.disconnect()
         // Cache clearing is handled by disconnect() — no duplicate clearing needed
+    }
+
+    private var hasAuthenticatedContext: Bool {
+        authToken != nil || (serverConnection.currentServer != nil && serverConnection.currentLibrarySectionId != nil)
+    }
+
+    private func refreshAuthTokenFromKeychainIfNeeded() {
+        guard authToken == nil else { return }
+        authToken = KeychainHelper.load(forKey: "plexAuthToken")
     }
 
     private func openNowPlaying(_ panel: NowPlayingStartPanel = .none) {

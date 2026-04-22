@@ -9,10 +9,17 @@ enum KeychainHelper {
             kSecAttrAccount as String: key,
             kSecAttrService as String: "com.kylemcclain.Tromme",
         ]
-        SecItemDelete(query as CFDictionary)
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        if deleteStatus != errSecSuccess && deleteStatus != errSecItemNotFound {
+            debugLog(status: deleteStatus, operation: "delete-before-save", key: key)
+        }
         var addQuery = query
         addQuery[kSecValueData as String] = data
-        SecItemAdd(addQuery as CFDictionary, nil)
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        if addStatus != errSecSuccess {
+            debugLog(status: addStatus, operation: "save", key: key)
+        }
     }
 
     static func load(forKey key: String) -> String? {
@@ -24,7 +31,11 @@ enum KeychainHelper {
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            debugLog(status: status, operation: "load", key: key)
+        }
+        guard status == errSecSuccess,
               let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
@@ -35,6 +46,16 @@ enum KeychainHelper {
             kSecAttrAccount as String: key,
             kSecAttrService as String: "com.kylemcclain.Tromme",
         ]
-        SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            debugLog(status: status, operation: "delete", key: key)
+        }
+    }
+
+    private static func debugLog(status: OSStatus, operation: String, key: String) {
+        #if DEBUG
+        let message = SecCopyErrorMessageString(status, nil) as String? ?? "unknown"
+        print("[KeychainHelper][\(operation)] key=\(key) status=\(status) message=\(message)")
+        #endif
     }
 }

@@ -81,6 +81,16 @@ final class AudioPlayerService: @unchecked Sendable {
         refreshAirPlayConnectionState()
     }
 
+    @MainActor deinit {
+        if let soundCheckObserver {
+            NotificationCenter.default.removeObserver(soundCheckObserver)
+        }
+        if let routeChangeObserver {
+            NotificationCenter.default.removeObserver(routeChangeObserver)
+        }
+        tearDownObservers()
+    }
+
     func configure(server: PlexServer, client: PlexAPIClient) {
         self.server = server
         self.client = client
@@ -244,24 +254,26 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func recoverAndPlayCurrentTrackIfPossible(resumeAt: TimeInterval? = nil) {
+        let effectiveResumeAt = resumeAt ?? pendingInitialSeekTime ?? preferredResumeTimeForRecovery()
+
         if queue.indices.contains(currentIndex) {
-            if let resumeAt {
-                logPlayback("recover_queue_track", "resume_at=\(resumeAt)")
+            if let effectiveResumeAt {
+                logPlayback("recover_queue_track", "resume_at=\(effectiveResumeAt)")
             } else {
                 logPlayback("recover_queue_track")
             }
-            loadAndPlay(queue[currentIndex], resumeAt: resumeAt)
+            loadAndPlay(queue[currentIndex], resumeAt: effectiveResumeAt)
             return
         }
         if let track = currentTrack {
-            if let resumeAt {
-                logPlayback("recover_current_track_seed_queue", "resume_at=\(resumeAt)")
+            if let effectiveResumeAt {
+                logPlayback("recover_current_track_seed_queue", "resume_at=\(effectiveResumeAt)")
             } else {
                 logPlayback("recover_current_track_seed_queue")
             }
             queue = [track]
             currentIndex = 0
-            loadAndPlay(track, resumeAt: resumeAt)
+            loadAndPlay(track, resumeAt: effectiveResumeAt)
             return
         }
         logPlayback("recover_failed", "reason=no_track_available")
@@ -352,11 +364,19 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     func seek(to time: TimeInterval) {
-        guard isReadyToPlay, let player else {
-            logPlayback("seek_blocked", "reason=not_ready")
+        let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
+        guard let player else {
+            pendingInitialSeekTime = boundedTime
+            currentTime = boundedTime
+            logPlayback("seek_queued", "reason=player_nil target=\(boundedTime)")
             return
         }
-        let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
+        guard isReadyToPlay else {
+            pendingInitialSeekTime = boundedTime
+            currentTime = boundedTime
+            logPlayback("seek_queued", "reason=not_ready target=\(boundedTime)")
+            return
+        }
         isSeeking = true
         currentTime = boundedTime
 
@@ -527,8 +547,13 @@ final class AudioPlayerService: @unchecked Sendable {
         }
         playbackGeneration += 1
         isReadyToPlay = false
-        currentTime = 0
         duration = Double(track.duration ?? 0) / 1000.0
+        if let resumeAt {
+            let boundedResume = max(0, duration > 0 ? min(resumeAt, duration) : resumeAt)
+            currentTime = boundedResume
+        } else {
+            currentTime = 0
+        }
         lastNowPlayingInfoSyncTime = 0
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
@@ -708,12 +733,15 @@ final class AudioPlayerService: @unchecked Sendable {
                             let safeUpper = self.duration > 1 ? max(self.duration - 1, 0) : self.duration
                             let bounded = safeUpper > 0 ? min(max(0, pendingSeek), safeUpper) : max(0, pendingSeek)
                             self.logPlayback("resume_seek", "to=\(bounded)")
+                            self.isSeeking = true
                             let target = CMTime(seconds: bounded, preferredTimescale: 600)
                             let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
                             self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
-                                guard let self, finished else { return }
+                                guard let self else { return }
                                 Task { @MainActor [weak self] in
                                     guard let self else { return }
+                                    self.isSeeking = false
+                                    guard finished else { return }
                                     self.currentTime = bounded
                                     self.player?.play()
                                     self.isPlaying = true
@@ -906,10 +934,13 @@ final class AudioPlayerService: @unchecked Sendable {
     private func observePlayerState() {
         timeControlObservation = player?.observe(\.timeControlStatus, options: [.new]) { [weak self] observedPlayer, _ in
             let status = observedPlayer.timeControlStatus
-            let playing = status != .paused
             DispatchQueue.main.async { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
+                    // Preserve the current "playing intent" while AVPlayer is briefly
+                    // buffering so transport controls do not flicker.
+                    let playing = status == .playing || (waitingForPlayback && self.isPlaying)
                     if self.lastLoggedTimeControlStatus != status {
                         self.lastLoggedTimeControlStatus = status
                         self.logPlayback("time_control", "status=\(status.rawValue)")
@@ -1022,11 +1053,17 @@ final class AudioPlayerService: @unchecked Sendable {
         if let track = currentTrack,
            let data = try? JSONEncoder().encode(track) {
             defaults.set(data, forKey: Self.trackKey)
+        } else {
+            defaults.removeObject(forKey: Self.trackKey)
         }
-        if let queueData = try? JSONEncoder().encode(queue) {
+        if queue.isEmpty {
+            defaults.removeObject(forKey: Self.queueKey)
+        } else if let queueData = try? JSONEncoder().encode(queue) {
             defaults.set(queueData, forKey: Self.queueKey)
         }
-        if let origData = try? JSONEncoder().encode(originalQueue) {
+        if originalQueue.isEmpty {
+            defaults.removeObject(forKey: Self.originalQueueKey)
+        } else if let origData = try? JSONEncoder().encode(originalQueue) {
             defaults.set(origData, forKey: Self.originalQueueKey)
         }
         defaults.set(currentIndex, forKey: Self.currentIndexKey)

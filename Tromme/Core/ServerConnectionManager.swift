@@ -25,12 +25,17 @@ final class ServerConnectionManager {
         // Observe network changes via shared monitor
         networkObservation = Task { [weak self] in
             var lastType = NetworkStatus.shared.interfaceType
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+            var lastConnected = NetworkStatus.shared.isConnected
+            for await _ in NotificationCenter.default.notifications(named: NetworkStatus.didChangeNotification) {
+                guard !Task.isCancelled else { return }
                 let currentType = NetworkStatus.shared.interfaceType
-                if currentType != lastType {
+                let currentConnected = NetworkStatus.shared.isConnected
+                if currentType != lastType || (!lastConnected && currentConnected) {
                     lastType = currentType
+                    lastConnected = currentConnected
                     self?.scheduleReprobe()
+                } else {
+                    lastConnected = currentConnected
                 }
             }
         }

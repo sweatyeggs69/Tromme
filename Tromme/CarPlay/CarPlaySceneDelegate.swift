@@ -13,6 +13,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var infiniteButton: CPNowPlayingImageButton?
     private var magicMixButton: CPNowPlayingImageButton?
     private var observationTask: Task<Void, Never>?
+    private var connectionObservationTask: Task<Void, Never>?
+    private var lastRootSignature: String?
 
     // MARK: - Scene Lifecycle
 
@@ -21,8 +23,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         didConnect interfaceController: CPInterfaceController
     ) {
         self.interfaceController = interfaceController
+        lastRootSignature = nil
         configureNowPlaying()
         updateRootTemplate()
+        startObservingConnection()
         startObservingPlayer()
     }
 
@@ -32,14 +36,21 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         observationTask?.cancel()
         observationTask = nil
+        connectionObservationTask?.cancel()
+        connectionObservationTask = nil
         CPNowPlayingTemplate.shared.remove(self)
         if self.interfaceController === interfaceController {
             self.interfaceController = nil
         }
+        lastRootSignature = nil
     }
 
     private func updateRootTemplate() {
         guard let interfaceController else { return }
+        let signature = rootSignature()
+        guard signature != lastRootSignature else { return }
+        lastRootSignature = signature
+
         if server != nil, sectionId != nil {
             let homeList = makeHomeList()
             homeList.tabTitle = "Home"
@@ -61,6 +72,37 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
             interfaceController.setRootTemplate(makeSignInTemplate(), animated: true, completion: nil)
+        }
+    }
+
+    private func rootSignature() -> String {
+        let machine = server?.machineIdentifier ?? "none"
+        let library = sectionId ?? "none"
+        return "\(machine)|\(library)"
+    }
+
+    private func startObservingConnection() {
+        connectionObservationTask?.cancel()
+        connectionObservationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                guard let manager = AppContext.shared.serverConnection else {
+                    try? await Task.sleep(for: .seconds(1))
+                    continue
+                }
+
+                let changed: Void = await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = manager.currentServer
+                        _ = manager.currentLibrarySectionId
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                _ = changed
+                guard !Task.isCancelled else { return }
+                self.updateRootTemplate()
+            }
         }
     }
 

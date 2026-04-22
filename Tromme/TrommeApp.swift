@@ -15,6 +15,9 @@ struct TrommeApp: App {
         ctx.serverConnection = serverConnection
         ctx.plexClient = plexClient
         ctx.audioPlayer = audioPlayer
+        if let server = serverConnection.currentServer {
+            audioPlayer.configure(server: server, client: plexClient)
+        }
 
         let accentColor = UIColor(AppStyle.Colors.tint)
         UINavigationBar.appearance().tintColor = .label

@@ -30,7 +30,6 @@
 		74402BEBDBD8A049EA6A574A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 570A2B691FCC5F218BF6D09D /* HomeView.swift */; };
 		7E1DCA19C4645D2EDFB2A565 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */; };
 		8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B32F38AB3FBE4BA037947B /* TrackRowView.swift */; };
-		8EBBFCCC0DB012C166B107FE /* TrommeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45718A181489317ECF778570 /* TrommeTests.swift */; };
 		923A24CEED84D646FA58FBA3 /* CachedAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73935816F396307CD214867 /* CachedAPIClient.swift */; };
 		96546FB0EC41ADF4AA99D125 /* PlexAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5399E5136BEAD2B236509EEB /* PlexAPIClient.swift */; };
 		A4285F2680C8414F47AE1DD4 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */; };
@@ -83,7 +82,6 @@
 		42BB6B7139BCB32BF5F17D78 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		43EE8A2C889BA17E40BD87F9 /* TrommeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrommeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		44F7B2561599A3C94974B66E /* ArtworkColorCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkColorCache.swift; sourceTree = "<group>"; };
-		45718A181489317ECF778570 /* TrommeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrommeTests.swift; sourceTree = "<group>"; };
 		5399E5136BEAD2B236509EEB /* PlexAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAPIClient.swift; sourceTree = "<group>"; };
 		570A2B691FCC5F218BF6D09D /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		5B11DF0208D38E2301F64EAC /* AppStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStyle.swift; sourceTree = "<group>"; };
@@ -169,14 +167,6 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
-		30BC08CD374FC1824AC8506B /* TrommeTests */ = {
-			isa = PBXGroup;
-			children = (
-				45718A181489317ECF778570 /* TrommeTests.swift */,
-			);
-			path = TrommeTests;
-			sourceTree = "<group>";
-		};
 		3BE7EE28A52515059B899086 /* Search */ = {
 			isa = PBXGroup;
 			children = (
@@ -230,7 +220,6 @@
 			isa = PBXGroup;
 			children = (
 				7AD43F2900FE467C850EF1C7 /* Tromme */,
-				30BC08CD374FC1824AC8506B /* TrommeTests */,
 				5C7D86059CB6E9BBDEA3D94B /* Products */,
 				0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */,
 			);
@@ -377,7 +366,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8EBBFCCC0DB012C166B107FE /* TrommeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

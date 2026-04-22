@@ -316,7 +316,9 @@ final class PlexAPIClient: Sendable {
         let (_, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         if statusCode >= 400 {
+            #if DEBUG
             print("[AudioPlayer] Timeline report failed: status \(statusCode)")
+            #endif
         }
     }
 
@@ -341,7 +343,9 @@ final class PlexAPIClient: Sendable {
         let (_, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
         if statusCode >= 400 {
+            #if DEBUG
             print("[AudioPlayer] Scrobble failed: status \(statusCode)")
+            #endif
         }
     }
 
@@ -431,7 +435,9 @@ final class PlexAPIClient: Sendable {
 
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             if statusCode >= 400 {
+                #if DEBUG
                 print("[AudioPlayer] Decision failed with status \(statusCode)")
+                #endif
                 throw PlexAPIError.serverError(statusCode)
             }
         }
@@ -530,15 +536,17 @@ final class PlexAPIClient: Sendable {
                 case .networkError:
                     lastError = error
                     if attempt < maxRetries {
-                        try? await Task.sleep(for: .seconds(Double(attempt + 1)))
+                        try await Task.sleep(for: .seconds(Double(attempt + 1)))
                     }
                 default:
                     throw error
                 }
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 lastError = error
                 if attempt < maxRetries {
-                    try? await Task.sleep(for: .seconds(Double(attempt + 1)))
+                    try await Task.sleep(for: .seconds(Double(attempt + 1)))
                 }
             }
         }
