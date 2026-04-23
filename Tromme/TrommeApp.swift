@@ -8,6 +8,7 @@ struct TrommeApp: App {
     @State private var serverConnection = ServerConnectionManager()
     @State private var plexClient = PlexAPIClient()
     @State private var audioPlayer = AudioPlayerService()
+    @State private var configuredCatalystSceneIDs: Set<String> = []
 
     init() {
         // Populate shared context so CarPlay (and other non-SwiftUI code) can access services
@@ -71,6 +72,11 @@ struct TrommeApp: App {
                 .task {
                     await observeAppTermination()
                 }
+                .task {
+                    await MainActor.run {
+                        configureCatalystWindowGeometryIfNeeded()
+                    }
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
@@ -110,5 +116,34 @@ struct TrommeApp: App {
                 audioPlayer.reportStoppedForAppTermination()
             }
         }
+    }
+
+    @MainActor
+    private func configureCatalystWindowGeometryIfNeeded() {
+#if targetEnvironment(macCatalyst)
+        let initialSize = CGSize(width: 1024, height: 768)
+        let minimumSize = CGSize(width: 768, height: 576)
+        let maximumSize = CGSize(width: 1365, height: 1024)
+
+        for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
+            let sceneID = windowScene.session.persistentIdentifier
+            guard !configuredCatalystSceneIDs.contains(sceneID) else { continue }
+
+            if let restrictions = windowScene.sizeRestrictions {
+                restrictions.minimumSize = minimumSize
+                restrictions.maximumSize = maximumSize
+                restrictions.allowsFullScreen = false
+            }
+
+            let preferences = UIWindowScene.GeometryPreferences.Mac()
+            preferences.systemFrame = CGRect(origin: .zero, size: initialSize)
+            windowScene.requestGeometryUpdate(preferences) { error in
+#if DEBUG
+                print("Failed to update Catalyst window geometry: \(error.localizedDescription)")
+#endif
+            }
+            configuredCatalystSceneIDs.insert(sceneID)
+        }
+#endif
     }
 }
