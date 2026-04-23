@@ -53,99 +53,153 @@ extension PlexAPIClient {
     func magicMixTracks(
         server: PlexServer,
         sectionId: String,
+        seedTrackKey: String? = nil,
         seedAlbumKey: String,
         seedArtistKey: String? = nil,
         limit: Int = 25,
         minMatchingStyles: Int = 1
     ) async throws -> [PlexMetadata] {
         guard limit > 0, minMatchingStyles > 0 else { return [] }
+        #if DEBUG
+        func debugMixLog(_ message: String) {
+            print("[MagicMix] \(message)")
+        }
+        #endif
+
+        let metadataTags: (PlexMetadata) -> [String] = { metadata in
+            (metadata.style ?? [])
+                .compactMap(\.tag)
+                .filter { !$0.isEmpty }
+        }
+
+        let seedTrackMetadata: PlexMetadata? = if let seedTrackKey {
+            try? await cachedMetadata(server: server, ratingKey: seedTrackKey)
+        } else {
+            nil
+        }
 
         var resolvedSeedArtistKey = seedArtistKey
         if resolvedSeedArtistKey == nil {
+            resolvedSeedArtistKey = seedTrackMetadata?.grandparentRatingKey
+        }
+        if resolvedSeedArtistKey == nil {
             resolvedSeedArtistKey = (try? await cachedMetadata(server: server, ratingKey: seedAlbumKey))?.parentRatingKey
+        }
+        if resolvedSeedArtistKey == nil {
+            resolvedSeedArtistKey = (try? await getMetadata(server: server, ratingKey: seedAlbumKey))?.parentRatingKey
         }
 
         let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
         let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
+        let allAlbumsByKey = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.ratingKey, $0) })
 
-        var seedStyles = stylesByAlbum[seedAlbumKey] ?? []
+        var seedStyles = (seedTrackMetadata?.style ?? [])
+            .compactMap(\.tag)
+            .filter { !$0.isEmpty }
+        seedStyles = deduplicateTags(seedStyles)
+        var seedTagSource = seedStyles.isEmpty ? "none" : "track"
 
-        // Fallback 1: borrow styles from sibling albums by the same artist
+        // Fallback 1: use the current track's album style tags.
+        if seedStyles.isEmpty, let albumStyles = stylesByAlbum[seedAlbumKey], !albumStyles.isEmpty {
+            seedStyles = deduplicateTags(albumStyles)
+            seedTagSource = "seed_album_cache"
+        }
+        if seedStyles.isEmpty {
+            if let albumMetadata = try? await getMetadata(server: server, ratingKey: seedAlbumKey) {
+                seedStyles = deduplicateTags(metadataTags(albumMetadata))
+                if !seedStyles.isEmpty { seedTagSource = "seed_album_metadata" }
+            } else if let albumMetadata = try? await cachedMetadata(server: server, ratingKey: seedAlbumKey) {
+                seedStyles = deduplicateTags(metadataTags(albumMetadata))
+                if !seedStyles.isEmpty { seedTagSource = "seed_album_cached_metadata" }
+            }
+        }
+
+        // Fallback 2: borrow styles from sibling albums by the same artist.
         if seedStyles.isEmpty, let artistKey = resolvedSeedArtistKey {
             let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
             for album in siblings where album.ratingKey != seedAlbumKey {
                 if let styles = stylesByAlbum[album.ratingKey], !styles.isEmpty {
                     seedStyles.append(contentsOf: styles)
+                    continue
+                }
+                if let albumMetadata = try? await getMetadata(server: server, ratingKey: album.ratingKey) {
+                    seedStyles.append(contentsOf: metadataTags(albumMetadata))
                 }
             }
             seedStyles = deduplicateTags(seedStyles)
+            if !seedStyles.isEmpty { seedTagSource = "sibling_albums" }
         }
 
-        // Fallback 2: if still no styles, match by genre instead.
-        // Fetch full metadata for reliable genre data (bulk list often omits it).
+        // Fallback 3: if still no styles, match by artist genre.
         var useGenreMatching = false
         var seedGenres = Set<String>()
-        if seedStyles.isEmpty {
-            var albumKeysToCheck: [String] = [seedAlbumKey]
-            if let artistKey = resolvedSeedArtistKey {
-                let siblings = (try? await cachedChildren(server: server, ratingKey: artistKey)) ?? []
-                albumKeysToCheck.append(contentsOf: siblings.map(\.ratingKey))
-            }
-            // Fetch full metadata in parallel to get genre tags
-            await withTaskGroup(of: [String].self) { group in
-                for key in albumKeysToCheck {
-                    group.addTask {
-                        guard let meta = try? await self.cachedMetadata(server: server, ratingKey: key) else { return [] }
-                        return (meta.genre ?? []).compactMap(\.tag).filter { !$0.isEmpty }
-                    }
-                }
-                for await genres in group {
-                    for g in genres {
-                        seedGenres.insert(g.lowercased().trimmingCharacters(in: .whitespacesAndNewlines))
-                    }
+        if seedStyles.isEmpty,
+           let artistKey = resolvedSeedArtistKey,
+           let artist = try? await cachedMetadata(server: server, ratingKey: artistKey) {
+            let genres = (artist.genre ?? []).compactMap(\.tag)
+            for genre in genres {
+                let normalized = genre.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty {
+                    seedGenres.insert(normalized)
                 }
             }
             useGenreMatching = !seedGenres.isEmpty
         }
+        #if DEBUG
+        debugMixLog("seedSource=\(seedTagSource) seedTagCount=\(seedStyles.count) genreFallback=\(useGenreMatching)")
+        #endif
 
         let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
 
         var matchingAlbumKeys = Set<String>()
+        let isSameArtistAlbum: (String) -> Bool = { albumKey in
+            guard let artistKey = resolvedSeedArtistKey else { return false }
+            return allAlbumsByKey[albumKey]?.parentRatingKey == artistKey
+        }
+        let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, seedStyles.count))
 
         if !seedStyles.isEmpty {
             let normalizedSeed = Set(seedStyles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
             for (albumKey, styles) in stylesByAlbum {
                 guard albumKey != seedAlbumKey else { continue }
+                guard !isSameArtistAlbum(albumKey) else { continue }
                 let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
-                if normalizedSeed.intersection(normalized).count >= minMatchingStyles {
+                if normalizedSeed.intersection(normalized).count >= effectiveMinMatchingStyles {
                     matchingAlbumKeys.insert(albumKey)
                 }
             }
+            #if DEBUG
+            debugMixLog("matchMode=style matchedAlbums=\(matchingAlbumKeys.count) requiredMatches=\(effectiveMinMatchingStyles) configuredMin=\(minMatchingStyles)")
+            #endif
         } else if useGenreMatching {
             // Match albums by genre — fetch full metadata for each album is too expensive,
             // so check genre on the bulk list first, then fall back to albums that have styles
             // matching any genre keyword.
             for album in allAlbums {
                 guard album.ratingKey != seedAlbumKey else { continue }
+                guard !isSameArtistAlbum(album.ratingKey) else { continue }
                 let albumGenres = Set((album.genre ?? []).compactMap { $0.tag?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
                 if !seedGenres.intersection(albumGenres).isEmpty {
                     matchingAlbumKeys.insert(album.ratingKey)
                 }
             }
-            // Also match albums whose style tags overlap with seed genres
-            // (e.g., seed genre "Rock" matches album style "Rock")
+            // Also match albums whose style tags overlap with seed genres.
             if matchingAlbumKeys.isEmpty {
                 for (albumKey, styles) in stylesByAlbum {
                     guard albumKey != seedAlbumKey else { continue }
+                    guard !isSameArtistAlbum(albumKey) else { continue }
                     let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
                     if !seedGenres.intersection(normalized).isEmpty {
                         matchingAlbumKeys.insert(albumKey)
                     }
                 }
             }
+            #if DEBUG
+            debugMixLog("matchMode=genre matchedAlbums=\(matchingAlbumKeys.count)")
+            #endif
         }
 
-        // Fallback 3: if no tag-based matches, use other tracks by the same artist
+        // Fallback 4: if no tag-based matches, use other tracks by the same artist
         if matchingAlbumKeys.isEmpty, let artistKey = resolvedSeedArtistKey {
             // Prefer sibling albums as the fallback source, since parentRatingKey is more
             // reliable in bulk track payloads than grandparentRatingKey.
@@ -162,6 +216,9 @@ extension PlexAPIClient {
                     return siblingAlbumKeys.contains(parentKey)
                 }
                 if !siblingAlbumTracks.isEmpty {
+                    #if DEBUG
+                    debugMixLog("finalFallback=sibling_artist_tracks resultCount=\(min(limit, siblingAlbumTracks.count))")
+                    #endif
                     return Array(siblingAlbumTracks.shuffled().prefix(limit))
                 }
             }
@@ -171,11 +228,19 @@ extension PlexAPIClient {
                 $0.grandparentRatingKey == artistKey && $0.parentRatingKey != seedAlbumKey
             }
             if !artistTracks.isEmpty {
+                #if DEBUG
+                debugMixLog("finalFallback=artist_tracks resultCount=\(min(limit, artistTracks.count))")
+                #endif
                 return Array(artistTracks.shuffled().prefix(limit))
             }
         }
 
-        guard !matchingAlbumKeys.isEmpty else { return [] }
+        guard !matchingAlbumKeys.isEmpty else {
+            #if DEBUG
+            debugMixLog("result=empty reason=no_matches")
+            #endif
+            return []
+        }
 
         var tracksByAlbum: [String: [PlexMetadata]] = [:]
         for track in allTracks {
@@ -203,6 +268,9 @@ extension PlexAPIClient {
             albumQueues = nextRound.shuffled()
         }
 
+        #if DEBUG
+        debugMixLog("result=tag_match_tracks count=\(min(limit, picked.count))")
+        #endif
         return interleaveTracksAvoidingAdjacentAlbums(picked, limit: limit)
     }
 

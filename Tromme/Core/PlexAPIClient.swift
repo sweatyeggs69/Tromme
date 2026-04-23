@@ -378,11 +378,11 @@ final class PlexAPIClient: Sendable {
         server: PlexServer,
         metadataPath: String,
         sessionID: String,
-        cellular: Bool = false,
-        disableCellularTranscoding: Bool = false,
+        location: String = "lan",
+        constrainAudioBitrate: Bool = false,
         cellularTranscodeBitrate: Int = 320
     ) -> [URLQueryItem] {
-        let musicBitrate = cellular && !disableCellularTranscoding ? "\(cellularTranscodeBitrate)" : "40000"
+        let musicBitrate = constrainAudioBitrate ? "\(cellularTranscodeBitrate)" : "40000"
         return [
             URLQueryItem(name: "path", value: metadataPath),
             URLQueryItem(name: "mediaIndex", value: "0"),
@@ -393,7 +393,7 @@ final class PlexAPIClient: Sendable {
             URLQueryItem(name: "directStreamAudio", value: "1"),
             URLQueryItem(name: "musicBitrate", value: musicBitrate),
             URLQueryItem(name: "mediaBufferSize", value: "102400"),
-            URLQueryItem(name: "location", value: cellular ? "cellular" : "lan"),
+            URLQueryItem(name: "location", value: location),
             URLQueryItem(name: "session", value: sessionID),
             URLQueryItem(name: "transcodeSessionId", value: sessionID),
             URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
@@ -412,8 +412,8 @@ final class PlexAPIClient: Sendable {
         metadataPath: String,
         sessionID: String,
         headers: [String: String],
-        cellular: Bool = false,
-        disableCellularTranscoding: Bool = false,
+        location: String = "lan",
+        constrainAudioBitrate: Bool = false,
         cellularTranscodeBitrate: Int = 320
     ) async throws {
         guard let baseURL = server.baseURL,
@@ -425,8 +425,8 @@ final class PlexAPIClient: Sendable {
             server: server,
             metadataPath: metadataPath,
             sessionID: sessionID,
-            cellular: cellular,
-            disableCellularTranscoding: disableCellularTranscoding,
+            location: location,
+            constrainAudioBitrate: constrainAudioBitrate,
             cellularTranscodeBitrate: cellularTranscodeBitrate
         )
 
@@ -460,8 +460,8 @@ final class PlexAPIClient: Sendable {
         server: PlexServer,
         mediaPathCandidates: [String],
         sessionID: String,
-        cellular: Bool = false,
-        disableCellularTranscoding: Bool = false,
+        location: String = "lan",
+        constrainAudioBitrate: Bool = false,
         cellularTranscodeBitrate: Int = 320
     ) -> [URL] {
         let path = mediaPathCandidates.first ?? "/library/metadata/0"
@@ -474,8 +474,8 @@ final class PlexAPIClient: Sendable {
             server: server,
             metadataPath: normalizedPath,
             sessionID: sessionID,
-            cellular: cellular,
-            disableCellularTranscoding: disableCellularTranscoding,
+            location: location,
+            constrainAudioBitrate: constrainAudioBitrate,
             cellularTranscodeBitrate: cellularTranscodeBitrate
         )
 
@@ -494,10 +494,17 @@ final class PlexAPIClient: Sendable {
     func playbackHeaders(
         server: PlexServer,
         sessionID: String?,
-        cellular: Bool = false,
-        disableCellularTranscoding: Bool = false
+        preferAACTranscode: Bool = false,
+        avoidAudioTranscode: Bool = false
     ) -> [String: String] {
-        let avoidCellularAudioTranscode = cellular && disableCellularTranscoding
+        let profileExtra: String
+        if avoidAudioTranscode {
+            profileExtra = Self.profileExtraLAN
+        } else if preferAACTranscode {
+            profileExtra = Self.profileExtraCellular
+        } else {
+            profileExtra = Self.profileExtraLAN
+        }
         var headers: [String: String] = [
             "X-Plex-Token": server.accessToken,
             "X-Plex-Client-Identifier": Self.clientIdentifier,
@@ -509,7 +516,7 @@ final class PlexAPIClient: Sendable {
             "X-Plex-Device-Name": Self.deviceName,
             "X-Plex-Provides": "player",
             "X-Plex-Client-Profile-Name": "Generic",
-            "X-Plex-Client-Profile-Extra": avoidCellularAudioTranscode ? Self.profileExtraLAN : (cellular ? Self.profileExtraCellular : Self.profileExtraLAN),
+            "X-Plex-Client-Profile-Extra": profileExtra,
         ]
         if let sessionID {
             headers["X-Plex-Session-Identifier"] = sessionID

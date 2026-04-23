@@ -154,6 +154,7 @@ struct QueueView: View {
         guard let allTracks = try? await client.magicMixTracks(
             server: server,
             sectionId: sectionId,
+            seedTrackKey: currentTrack.ratingKey,
             seedAlbumKey: seedAlbumKey,
             seedArtistKey: currentTrack.grandparentRatingKey,
             limit: 50,

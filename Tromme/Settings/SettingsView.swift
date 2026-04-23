@@ -27,24 +27,25 @@ struct SettingsView: View {
             } header: {
                 Text("Magic Mix")
             } footer: {
-                Text("The number of style tags that must match between albums to be included in a mix. The higher the number the fewer amount tracks.")
+                Text("How many style tags should match for Magic Mix. If a track or album has fewer style tags than this value, Magic Mix automatically uses the available tag count instead.")
             }
 
             Section {
                 Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
                     .tint(.green)
-                Picker("Cellular Bitrate", selection: $cellularTranscodeBitrateKbps) {
-                    ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
-                        Text("\(bitrate) kbps").tag(bitrate)
+                if cellularTranscodingBinding.wrappedValue {
+                    Picker("Bitrate", selection: $cellularTranscodeBitrateKbps) {
+                        ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
+                            Text("\(bitrate) kbps").tag(bitrate)
+                        }
                     }
                 }
-                .disabled(!cellularTranscodingBinding.wrappedValue)
                 Toggle("Sound Check", isOn: $soundCheckEnabled)
                     .tint(.green)
             } header: {
                 Text("Playback")
             } footer: {
-                Text("When enabled audio streams over cellular are delivered in AAC format and at the desired bitrate. FLAC will always transcode to a compatible container (ALAC on WiFi, AAC on cellular). Sound Check normalizes volume across tracks using ReplayGain data to target −14 LUFS.")
+                Text("Enable Cellular Transcoding to use less data on mobile networks. Pick a lower bitrate to save more data or a higher bitrate for better sound quality. Sound Check keeps song volume more consistent.")
             }
             
             Section("Server") {

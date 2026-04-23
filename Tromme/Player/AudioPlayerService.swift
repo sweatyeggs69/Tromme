@@ -55,6 +55,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var detailedTrackForSoundCheck: PlexMetadata?
     private var cachedArtwork: MPMediaItemArtwork?
     private var cachedArtworkThumbPath: String?
+    private var isConstrainedPlaybackPath = false
     private var isCellular: Bool { NetworkStatus.shared.isCellular }
     private var isSeeking = false
     private var soundCheckObserver: NSObjectProtocol?
@@ -533,6 +534,7 @@ final class AudioPlayerService: @unchecked Sendable {
         detailedTrackForSoundCheck = nil
         cachedArtwork = nil
         cachedArtworkThumbPath = nil
+        isConstrainedPlaybackPath = false
         savePlaybackState()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -541,6 +543,29 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
         AVPlayerItem(url: url)
+    }
+
+    private enum PlaybackPath {
+        case lan
+        case wan
+        case relay
+        case cellular
+
+        var locationQueryValue: String {
+            switch self {
+            case .lan: "lan"
+            case .wan: "wan"
+            case .relay: "relay"
+            case .cellular: "cellular"
+            }
+        }
+
+        var isRemote: Bool {
+            switch self {
+            case .lan: false
+            case .wan, .relay, .cellular: true
+            }
+        }
     }
 
     private func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil) {
@@ -582,6 +607,7 @@ final class AudioPlayerService: @unchecked Sendable {
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
         currentSessionID = UUID().uuidString
+        isConstrainedPlaybackPath = false
 
         guard let server, let client else { return }
 
@@ -593,6 +619,18 @@ final class AudioPlayerService: @unchecked Sendable {
         let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
             UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
         )
+        let shouldConstrainConstrainedPaths = !disableCellularTranscoding
+        let playbackPath = resolvedPlaybackPath(for: server)
+        let shouldConstrainForNetwork: Bool
+        switch playbackPath {
+        case .cellular, .wan, .relay:
+            shouldConstrainForNetwork = shouldConstrainConstrainedPaths
+        case .lan:
+            shouldConstrainForNetwork = false
+        }
+        let preferAACTranscode = shouldConstrainForNetwork
+        let avoidAudioTranscode = !preferAACTranscode
+
         // Always route audio through Plex universal HLS for stable seek/duration behavior.
         guard let sessionID = currentSessionID else {
             logPlayback("load_rejected", "reason=missing_session_id")
@@ -601,13 +639,13 @@ final class AudioPlayerService: @unchecked Sendable {
         let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
         let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
         let mediaPathCandidates = [normalizedPath]
-        let cellular = isCellular
         let headers = client.playbackHeaders(
             server: server,
             sessionID: sessionID,
-            cellular: cellular,
-            disableCellularTranscoding: disableCellularTranscoding
+            preferAACTranscode: preferAACTranscode,
+            avoidAudioTranscode: avoidAudioTranscode
         )
+        isConstrainedPlaybackPath = shouldConstrainForNetwork
         let generation = playbackGeneration
         let capturedClient = client
         let capturedServer = server
@@ -623,8 +661,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 metadataPath: normalizedPath,
                 sessionID: sessionID,
                 headers: headers,
-                cellular: cellular,
-                disableCellularTranscoding: disableCellularTranscoding,
+                location: playbackPath.locationQueryValue,
+                constrainAudioBitrate: shouldConstrainForNetwork,
                 cellularTranscodeBitrate: cellularTranscodeBitrate
             )
             async let detailedTrack: PlexMetadata? = soundCheckEnabled
@@ -651,8 +689,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 server: capturedServer,
                 mediaPathCandidates: mediaPathCandidates,
                 sessionID: sessionID,
-                cellular: cellular,
-                disableCellularTranscoding: disableCellularTranscoding,
+                location: playbackPath.locationQueryValue,
+                constrainAudioBitrate: shouldConstrainForNetwork,
                 cellularTranscodeBitrate: cellularTranscodeBitrate
             )
             self.universalCandidatesForCurrentItem = universalCandidates
@@ -672,7 +710,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
         let item = makePlayerItem(url: url)
-        item.preferredForwardBufferDuration = 20
+        item.preferredForwardBufferDuration = isConstrainedPlaybackPath ? 8 : 20
         player = AVPlayer(playerItem: item)
         player?.automaticallyWaitsToMinimizeStalling = true
         player?.volume = soundCheckVolume(for: currentTrack)
@@ -923,8 +961,8 @@ final class AudioPlayerService: @unchecked Sendable {
     // MARK: - Time Tracking
 
     private func addTimeObserver() {
-        // Use a tighter cadence so progress UI advances smoothly during playback.
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
+        // Balanced cadence to keep progress smooth without waking the main thread too often.
+        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         let generation = playbackGeneration
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
@@ -1138,6 +1176,7 @@ final class AudioPlayerService: @unchecked Sendable {
     /// Pre-fetches detailed metadata (with gain values) for upcoming queue items
     /// so Sound Check doesn't need a network call at playback time.
     private func prefetchGainMetadata() {
+        guard !isConstrainedPlaybackPath, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey),
               let client, let server else { return }
         gainPrefetchTask?.cancel()
@@ -1153,6 +1192,7 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func prefetchUpcomingArtwork() {
+        guard !isConstrainedPlaybackPath, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         guard let client, let server else { return }
         let upcoming = queue.dropFirst(currentIndex + 1).prefix(5)
         let urls = upcoming.compactMap { track in
@@ -1219,6 +1259,19 @@ final class AudioPlayerService: @unchecked Sendable {
         case .all: center.changeRepeatModeCommand.currentRepeatType = .all
         case .one: center.changeRepeatModeCommand.currentRepeatType = .one
         }
+    }
+
+    private func resolvedPlaybackPath(for server: PlexServer) -> PlaybackPath {
+        if isCellular {
+            return .cellular
+        }
+        if let activeConnection = server.connections.first(where: { $0.uri == server.uri }) {
+            if activeConnection.relay == true {
+                return .relay
+            }
+            return activeConnection.local == true ? .lan : .wan
+        }
+        return .wan
     }
 
     private func updateNowPlayingInfo() {
