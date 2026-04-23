@@ -98,6 +98,16 @@ struct TrommeApp: App {
                 }
             }
         }
+#if targetEnvironment(macCatalyst)
+        .commands {
+            CommandMenu("Playback") {
+                Button(audioPlayer.isPlaying ? "Pause" : "Play") {
+                    audioPlayer.togglePlayPause()
+                }
+                .keyboardShortcut(.space, modifiers: [])
+            }
+        }
+#endif
     }
 
     private func observeMemoryWarnings() async {

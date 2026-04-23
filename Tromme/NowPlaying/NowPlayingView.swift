@@ -35,6 +35,7 @@ struct NowPlayingView: View {
     private let actionBackgroundOpacity: Double = 0.12
     private let actionBackgroundActiveOpacity: Double = 0.2
     private let controlTintOpacity: Double = 0.45
+    private let iPadBottomActionsExtraPadding: CGFloat = 12
 
     // MARK: - Computed Properties
 
@@ -141,7 +142,7 @@ struct NowPlayingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
-                    .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 2 : 6)
+                    .padding(.bottom, (geo.safeAreaInsets.bottom > 0 ? 2 : 6) + iPadBottomActionsExtraPadding)
                 }
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
                 .animation(.easeInOut(duration: 0.25), value: showQueue)
@@ -210,6 +211,7 @@ struct NowPlayingView: View {
                         bottomActions
                             .frame(height: 32)
                             .padding(.horizontal, controlsHorizontalPadding)
+                            .padding(.bottom, isPadPortrait ? iPadBottomActionsExtraPadding : 0)
                     }
                     .frame(maxWidth: controlsContainerWidth)
                     .frame(maxWidth: .infinity)
