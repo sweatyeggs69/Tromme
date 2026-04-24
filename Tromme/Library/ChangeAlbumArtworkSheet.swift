@@ -29,10 +29,10 @@ struct ChangeAlbumArtworkSheet: View {
         }
     }
 
-    private var artworkTileSize: CGFloat {
+    private func artworkTileSize(containerWidth: CGFloat) -> CGFloat {
         let columnCount = UIDevice.current.userInterfaceIdiom == .pad ? 2 : 1
         let totalSpacing = gridSpacing * CGFloat(max(columnCount - 1, 0))
-        let available = UIScreen.main.bounds.width - (horizontalInset * 2) - totalSpacing
+        let available = containerWidth - (horizontalInset * 2) - totalSpacing
         return max(available / CGFloat(columnCount), 1)
     }
 
@@ -58,14 +58,17 @@ struct ChangeAlbumArtworkSheet: View {
                         description: Text("Plex did not return any available artwork options for this album.")
                     )
                 } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: gridSpacing) {
-                            ForEach(sortedArtworkOptions) { artwork in
-                                artworkOptionButton(for: artwork)
+                    GeometryReader { proxy in
+                        let tileSize = artworkTileSize(containerWidth: proxy.size.width)
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: gridSpacing) {
+                                ForEach(sortedArtworkOptions) { artwork in
+                                    artworkOptionButton(for: artwork, tileSize: tileSize)
+                                }
                             }
+                            .padding(.horizontal, horizontalInset)
+                            .padding(.vertical, 12)
                         }
-                        .padding(.horizontal, horizontalInset)
-                        .padding(.vertical, 12)
                     }
                 }
             }
@@ -96,7 +99,7 @@ struct ChangeAlbumArtworkSheet: View {
         }
     }
 
-    private func artworkOptionButton(for artwork: PlexImageResource) -> some View {
+    private func artworkOptionButton(for artwork: PlexImageResource, tileSize: CGFloat) -> some View {
         Button {
             Task {
                 await applyArtwork(artwork)
@@ -105,7 +108,7 @@ struct ChangeAlbumArtworkSheet: View {
             ZStack(alignment: .topTrailing) {
                 ArtworkView(
                     thumbPath: artwork.thumb ?? artwork.url ?? artwork.key,
-                    size: artworkTileSize,
+                    size: tileSize,
                     cornerRadius: 12,
                     useCache: false
                 )

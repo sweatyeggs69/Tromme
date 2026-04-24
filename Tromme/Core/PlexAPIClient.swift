@@ -261,11 +261,21 @@ final class PlexAPIClient: Sendable {
     // MARK: - Search
 
     func search(server: PlexServer, query: String, sectionId: String? = nil, limit: Int = 20) async throws -> [Hub] {
-        var path = "/hubs/search?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&limit=\(limit)"
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "query", value: query),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
         if let sectionId {
-            path += "&sectionId=\(sectionId)"
+            queryItems.append(URLQueryItem(name: "sectionId", value: sectionId))
         }
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
+
+        let data = try await rawServerRequest(
+            server: server,
+            path: "/hubs/search",
+            method: "GET",
+            queryItems: queryItems
+        )
+        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
         return response.mediaContainer.hub ?? []
     }
 
