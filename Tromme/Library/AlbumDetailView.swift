@@ -20,9 +20,10 @@ struct AlbumDetailView: View {
     @State private var showDeleteAlbumConfirmation = false
     @State private var albumDeleteErrorMessage: String?
     @State private var isDeletingAlbum = false
+    @State private var showingChangeArtworkSheet = false
 
     private var thumbPath: String? {
-        album.thumb
+        albumDetails.thumb ?? album.thumb
     }
 
     private var artworkColor: Color {
@@ -162,7 +163,7 @@ struct AlbumDetailView: View {
 
     private var albumHeader: some View {
         VStack {
-            ArtworkView(thumbPath: album.thumb, size: 300, cornerRadius: 8)
+            ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
@@ -432,6 +433,11 @@ struct AlbumDetailView: View {
                         Label("Album Info", systemImage: "info.circle")
                     }
                     if !isPreviewMode {
+                        Button {
+                            showingChangeArtworkSheet = true
+                        } label: {
+                            Label("Change Artwork", systemImage: "photo")
+                        }
                         Divider()
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
@@ -477,6 +483,13 @@ struct AlbumDetailView: View {
                 let itemLabel = itemCount == 1 ? "item" : "items"
                 let playlistLabel = playlistCount == 1 ? "playlist" : "playlists"
                 addToPlaylistResultMessage = "Added \(itemCount) \(itemLabel) to \(playlistCount) \(playlistLabel)."
+            }
+        }
+        .sheet(isPresented: $showingChangeArtworkSheet) {
+            ChangeAlbumArtworkSheet(
+                albumRatingKey: album.ratingKey
+            ) {
+                await loadAlbumDetails()
             }
         }
         .alert("Added to Playlist", isPresented: .init(

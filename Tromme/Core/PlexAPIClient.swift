@@ -176,6 +176,88 @@ final class PlexAPIClient: Sendable {
         return response.mediaContainer.metadata?.first
     }
 
+    func getMetadataArtworkOptions(server: PlexServer, ratingKey: String) async throws -> [PlexImageResource] {
+        let response: PlexMetadataImageResponse = try await serverRequest(
+            server: server,
+            path: "/library/metadata/\(ratingKey)"
+        )
+        let metadataImages = response.mediaContainer.metadata?.first?.image ?? []
+        let posterLike = metadataImages.filter { image in
+            guard let type = image.type?.lowercased() else { return false }
+            return type == "coverposter" || type == "poster"
+        }
+        return posterLike.isEmpty ? metadataImages : posterLike
+    }
+
+    func getArtworkResources(server: PlexServer, ratingKey: String, element: String = "posters") async throws -> [PlexImageResource] {
+        let path = "/library/metadata/\(ratingKey)/\(element)"
+        let queryItems = [URLQueryItem(name: "includeExternalMedia", value: "1")]
+        let data = try await rawServerRequest(server: server, path: path, method: "GET", queryItems: queryItems)
+
+        do {
+            let response = try JSONDecoder().decode(PlexArtworkResourceResponse.self, from: data)
+            if let directImages = response.mediaContainer.image, !directImages.isEmpty {
+                return directImages
+            }
+
+            if let metadataItems = response.mediaContainer.metadata, !metadataItems.isEmpty {
+                return metadataItems.map(\.asImageResource)
+            }
+
+            return []
+        } catch {
+            // Some PMS versions still return XML for this endpoint.
+            let xmlImages = parseArtworkResourcesXML(data)
+            if !xmlImages.isEmpty {
+                return xmlImages
+            }
+            throw PlexAPIError.decodingError(error, path: path)
+        }
+    }
+
+    func setArtworkResource(server: PlexServer, ratingKey: String, element: String = "poster", artworkURL: String) async throws {
+        let candidateElements: [String]
+        if element == "poster" {
+            candidateElements = ["poster", "thumb", "posters", "thumbs", "art", "arts"]
+        } else {
+            candidateElements = [element, "poster", "thumb", "posters", "thumbs", "art", "arts"]
+        }
+        let candidateMethods = ["PUT", "POST"]
+        var lastError: Error?
+
+        for candidateElement in candidateElements {
+            for method in candidateMethods {
+                do {
+                    try await setArtworkResource(
+                        server: server,
+                        ratingKey: ratingKey,
+                        element: candidateElement,
+                        artworkURL: artworkURL,
+                        method: method
+                    )
+                    return
+                } catch let error as PlexAPIError {
+                    switch error {
+                    case .serverError(400), .serverError(404), .serverError(406):
+                        lastError = error
+                        continue
+                    default:
+                        throw error
+                    }
+                } catch {
+                    throw error
+                }
+            }
+        }
+
+        if let lastError {
+            throw lastError
+        } else {
+            throw PlexAPIError.serverError(404)
+        }
+    }
+
+
     // MARK: - Search
 
     func search(server: PlexServer, query: String, sectionId: String? = nil, limit: Int = 20) async throws -> [Hub] {
@@ -706,6 +788,51 @@ final class PlexAPIClient: Sendable {
         return result
     }
 
+    private func parseArtworkResourcesXML(_ data: Data) -> [PlexImageResource] {
+        let parserDelegate = ArtworkXMLParserDelegate()
+        let parser = XMLParser(data: data)
+        parser.delegate = parserDelegate
+        let didParse = parser.parse()
+        guard didParse else { return [] }
+        return parserDelegate.images
+    }
+
+    private func setArtworkResource(
+        server: PlexServer,
+        ratingKey: String,
+        element: String,
+        artworkURL: String,
+        method: String
+    ) async throws {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else {
+            throw PlexAPIError.invalidURL
+        }
+        components.path = "/library/metadata/\(ratingKey)/\(element)"
+        components.queryItems = [URLQueryItem(name: "url", value: artworkURL)]
+        guard let url = components.url else { throw PlexAPIError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        applyPlexHeaders(to: &request)
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let (_, response): (Data, URLResponse)
+        do {
+            ( _, response) = try await session.data(for: request)
+        } catch {
+            throw PlexAPIError.networkError(error)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw PlexAPIError.invalidURL
+        }
+        guard (200...299).contains(http.statusCode) else {
+            if http.statusCode == 401 { throw PlexAPIError.unauthorized }
+            throw PlexAPIError.serverError(http.statusCode)
+        }
+    }
+
     /// Execute a typed request against plex.tv.
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         do {
@@ -725,5 +852,139 @@ final class PlexAPIClient: Sendable {
         } catch {
             throw PlexAPIError.networkError(error)
         }
+    }
+}
+
+private struct PlexMetadataImageResponse: Decodable, Sendable {
+    let mediaContainer: PlexMetadataImageContainer
+
+    enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
+private struct PlexMetadataImageContainer: Decodable, Sendable {
+    let metadata: [PlexMetadataImageItem]?
+
+    enum CodingKeys: String, CodingKey {
+        case metadata = "Metadata"
+    }
+}
+
+private struct PlexMetadataImageItem: Decodable, Sendable {
+    let image: [PlexImageResource]?
+
+    enum CodingKeys: String, CodingKey {
+        case image = "Image"
+    }
+}
+
+private struct PlexArtworkResourceResponse: Decodable, Sendable {
+    let mediaContainer: PlexArtworkResourceContainer
+
+    enum CodingKeys: String, CodingKey {
+        case mediaContainer = "MediaContainer"
+    }
+}
+
+private struct PlexArtworkResourceContainer: Decodable, Sendable {
+    let image: [PlexImageResource]?
+    let metadata: [PlexArtworkResourceMetadata]?
+
+    enum CodingKeys: String, CodingKey {
+        case image = "Image"
+        case metadata = "Metadata"
+    }
+}
+
+private struct PlexArtworkResourceMetadata: Decodable, Sendable {
+    let key: String?
+    let url: String?
+    let thumb: String?
+    let provider: String?
+    let type: String?
+    let selected: Bool?
+    let width: Int?
+    let height: Int?
+
+    var asImageResource: PlexImageResource {
+        PlexImageResource(
+            key: key,
+            provider: provider,
+            type: type,
+            url: url,
+            thumb: thumb,
+            selected: selected,
+            width: width,
+            height: height
+        )
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case key, url, thumb, provider, type, selected, width, height
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        key = try? c.decodeIfPresent(String.self, forKey: .key)
+        url = try? c.decodeIfPresent(String.self, forKey: .url)
+        thumb = try? c.decodeIfPresent(String.self, forKey: .thumb)
+        provider = try? c.decodeIfPresent(String.self, forKey: .provider)
+        type = try? c.decodeIfPresent(String.self, forKey: .type)
+        selected = Self.decodeFlexibleBool(from: c, forKey: .selected)
+        width = Self.decodeFlexibleInt(from: c, forKey: .width)
+        height = Self.decodeFlexibleInt(from: c, forKey: .height)
+    }
+
+    private static func decodeFlexibleInt(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> Int? {
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+
+    private static func decodeFlexibleBool(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> Bool? {
+        if let value = try? container.decodeIfPresent(Bool.self, forKey: key) { return value }
+        if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value != 0 }
+        if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+            switch value.lowercased() {
+            case "1", "true", "yes":
+                return true
+            case "0", "false", "no":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+}
+
+private final class ArtworkXMLParserDelegate: NSObject, XMLParserDelegate {
+    var images: [PlexImageResource] = []
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+        let supportedElements: Set<String> = ["Image", "Photo", "Poster"]
+        guard supportedElements.contains(elementName) else { return }
+
+        let width = attributeDict["width"].flatMap(Int.init)
+        let height = attributeDict["height"].flatMap(Int.init)
+        let selected = attributeDict["selected"].flatMap { $0 == "1" ? true : ($0 == "0" ? false : nil) }
+        let image = PlexImageResource(
+            key: attributeDict["key"],
+            provider: attributeDict["provider"],
+            type: attributeDict["type"],
+            url: attributeDict["url"],
+            thumb: attributeDict["thumb"],
+            selected: selected,
+            width: width,
+            height: height
+        )
+        images.append(image)
     }
 }

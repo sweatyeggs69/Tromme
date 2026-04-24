@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311B274B9F165FE0F81E54FD /* SafariView.swift */; };
 		0603E2752890285A43E43246 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2FC699685A8C436EF372D6 /* ImageCache.swift */; };
+		0E0B926D2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */; };
 		0E1110B9BACB9425E1322364 /* AllSongsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDEFE1EDC3B807A75155156D /* AllSongsView.swift */; };
 		0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */; };
 		0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */; };
@@ -64,6 +65,7 @@
 		038C1CCDF9AE80768D9F702E /* LibraryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCache.swift; sourceTree = "<group>"; };
 		054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuthService.swift; sourceTree = "<group>"; };
 		09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeAlbumArtworkSheet.swift; sourceTree = "<group>"; };
 		0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStartPanel.swift; sourceTree = "<group>"; };
 		0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToPlaylistSheet.swift; sourceTree = "<group>"; };
 		0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentMockData.swift; sourceTree = "<group>"; };
@@ -237,6 +239,7 @@
 				570A2B691FCC5F218BF6D09D /* HomeView.swift */,
 				E2B3C4D5F60718293A4B5C6D /* HorizontalTrackGrid.swift */,
 				30B32F38AB3FBE4BA037947B /* TrackRowView.swift */,
+				0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -377,6 +380,7 @@
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,
 				0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */,
+				0E0B926D2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift in Sources */,
 				0E1110B9BACB9425E1322364 /* AllSongsView.swift in Sources */,
 				ECCBEDFE65601440EDC129FA /* AppStyle.swift in Sources */,
 				C15AFF987C2932597A1C6F35 /* ArtistDetailView.swift in Sources */,
@@ -526,8 +530,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.kylemcclain.Tromme;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
@@ -578,8 +582,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.kylemcclain.Tromme;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;

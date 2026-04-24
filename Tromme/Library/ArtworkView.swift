@@ -8,6 +8,7 @@ struct ArtworkView: View {
     let thumbPath: String?
     var size: CGFloat = 60
     var cornerRadius: CGFloat = 8
+    var useCache: Bool = true
 
     @State private var image: UIImage?
     private var safeSize: CGFloat {
@@ -56,9 +57,24 @@ struct ArtworkView: View {
             image = nil
             return
         }
-        let resolvedImage = await ImageCache.shared.image(for: url, targetPixelSize: transcodePx)
+        let resolvedImage: UIImage?
+        if useCache {
+            resolvedImage = await ImageCache.shared.image(for: url, targetPixelSize: transcodePx)
+        } else {
+            resolvedImage = await uncachedImage(for: url)
+        }
         guard !Task.isCancelled, path == thumbPath else { return }
         image = resolvedImage
+    }
+
+    private func uncachedImage(for url: URL) async -> UIImage? {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return nil }
+            return UIImage(data: data)
+        } catch {
+            return nil
+        }
     }
 }
 
