@@ -3,6 +3,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
 
     @State private var favoriteTracks: [PlexMetadata]
     @State private var recentTracks: [PlexMetadata]
@@ -39,7 +40,7 @@ struct HomeView: View {
             }
             .padding(.vertical, 8)
         }
-        .task(id: serverConnection.currentLibrarySectionId) {
+        .task(id: loadTaskID) {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: false)
         }
@@ -47,6 +48,12 @@ struct HomeView: View {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: true)
         }
+    }
+
+    private var loadTaskID: String {
+        let sectionID = serverConnection.currentLibrarySectionId ?? "none"
+        let serverURI = serverConnection.currentServer?.uri ?? "none"
+        return "\(sectionID)|\(serverURI)"
     }
 
     private var favoritesSection: some View {
@@ -193,21 +200,37 @@ struct HomeView: View {
     }
 
     private func loadHomeContent(forceRefresh: Bool) async {
+        let hadFavorites = !favoriteTracks.isEmpty
+        let hadRecentTracks = !recentTracks.isEmpty
+        let hadPlaylists = !playlists.isEmpty
+        let hadRecentAlbums = !recentAlbums.isEmpty
+
+        // Keep existing content visible during refresh; show loading spinners only
+        // when there is no content yet.
+        if !hadFavorites && !hadRecentTracks && !hadPlaylists && !hadRecentAlbums {
+            isLoading = true
+        }
+
+        defer {
+            isLoading = false
+        }
+
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else {
             favoriteTracks = []
             recentTracks = []
             playlists = []
             recentAlbums = []
-            isLoading = false
             return
         }
 
         if forceRefresh {
             let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
             let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
+            let playlistsKey = CacheKey.playlists(serverId: server.machineIdentifier)
             await LibraryCache.shared.remove(forKey: tracksKey)
             await LibraryCache.shared.remove(forKey: albumsKey)
+            await LibraryCache.shared.remove(forKey: playlistsKey)
         }
 
         async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
@@ -215,17 +238,48 @@ struct HomeView: View {
         async let playlistsReq: [PlexPlaylist] = client.cachedPlaylists(server: server)
         async let recentlyAddedReq: [PlexMetadata] = client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
 
-        let plexFavorites = (try? await favoritesReq) ?? []
-        let recentlyPlayed = (try? await recentlyPlayedReq) ?? []
-        let allPlaylists = (try? await playlistsReq) ?? []
-        let recentlyAdded = (try? await recentlyAddedReq) ?? []
+        let favoritesResult = try? await favoritesReq
+        let recentlyPlayedResult = try? await recentlyPlayedReq
+        let playlistsResult = try? await playlistsReq
+        let recentlyAddedResult = try? await recentlyAddedReq
 
-        applyFavorites(plexFavorites: plexFavorites)
-        recentTracks = Array(recentlyPlayed.prefix(10))
-        playlists = Array(allPlaylists.filter(\.isMusicPlaylist).prefix(10))
-        recentAlbums = Array(recentlyAdded.prefix(10))
+        if let favoritesResult {
+            applyFavorites(plexFavorites: favoritesResult)
+        } else if !hadFavorites {
+            favoriteTracks = []
+        }
 
-        isLoading = false
+        if let recentlyPlayedResult {
+            recentTracks = Array(recentlyPlayedResult.prefix(10))
+        } else if !hadRecentTracks {
+            recentTracks = []
+        }
+
+        if let playlistsResult {
+            playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
+        } else if !hadPlaylists {
+            playlists = []
+        }
+
+        if let recentlyAddedResult {
+            recentAlbums = Array(recentlyAddedResult.prefix(10))
+        } else if !hadRecentAlbums {
+            recentAlbums = []
+        }
+
+        let snapshotFavorites = favoriteTracks
+        let snapshotRecentTracks = recentTracks
+        let snapshotPlaylists = playlists
+        let snapshotRecentAlbums = recentAlbums
+        Task(priority: .utility) {
+            await prefetchHomeArtwork(
+                server: server,
+                favorites: snapshotFavorites,
+                recentTracks: snapshotRecentTracks,
+                playlists: snapshotPlaylists,
+                recentAlbums: snapshotRecentAlbums
+            )
+        }
     }
 
     private func applyFavorites(plexFavorites: [PlexMetadata]) {
@@ -241,6 +295,49 @@ struct HomeView: View {
         )
     }
 
+    private func prefetchHomeArtwork(
+        server: PlexServer,
+        favorites: [PlexMetadata],
+        recentTracks: [PlexMetadata],
+        playlists: [PlexPlaylist],
+        recentAlbums: [PlexMetadata]
+    ) async {
+        let trackPixelSize = ArtworkView.recommendedTranscodeSize(
+            pointSize: AppStyle.TrackGrid.artworkSize,
+            displayScale: displayScale
+        )
+        let cardPixelSize = ArtworkView.recommendedTranscodeSize(
+            pointSize: 170,
+            displayScale: displayScale
+        )
+
+        let trackThumbPaths = (favorites + recentTracks)
+            .compactMap { $0.thumb ?? $0.parentThumb }
+        let cardThumbPaths = recentAlbums.compactMap(\.thumb) + playlists.compactMap { $0.thumb ?? $0.composite }
+
+        var seen = Set<String>()
+        let trackURLs = trackThumbPaths
+            .filter { seen.insert("track:\($0)").inserted }
+            .compactMap { path in
+                client.artworkURL(server: server, path: path, width: trackPixelSize, height: trackPixelSize)
+            }
+
+        seen.removeAll(keepingCapacity: true)
+        let cardURLs = cardThumbPaths
+            .filter { seen.insert("card:\($0)").inserted }
+            .compactMap { path in
+                client.artworkURL(server: server, path: path, width: cardPixelSize, height: cardPixelSize)
+            }
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask {
+                await ImageCache.shared.prefetch(urls: trackURLs, targetPixelSize: trackPixelSize, maxConcurrent: 4)
+            }
+            group.addTask {
+                await ImageCache.shared.prefetch(urls: cardURLs, targetPixelSize: cardPixelSize, maxConcurrent: 4)
+            }
+        }
+    }
 }
 
 #if DEBUG
