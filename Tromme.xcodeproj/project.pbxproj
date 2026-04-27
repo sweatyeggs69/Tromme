@@ -16,6 +16,7 @@
 		0E4345EB2F8EC60700424676 /* DevelopmentMockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */; };
 		0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */; };
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
+		0ED55A372F9FDBF40030FD07 /* MiniLyricsLineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED55A362F9FDBF40030FD07 /* MiniLyricsLineView.swift */; };
 		25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB6B7139BCB32BF5F17D78 /* LoginView.swift */; };
 		277F53ED9EB6AF4188D15B0A /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */; };
 		3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */; };
@@ -73,6 +74,7 @@
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		0E91C64D2F91AE8800775275 /* Tromme.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tromme.entitlements; sourceTree = "<group>"; };
 		0E91C64E2F91B03000775275 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
+		0ED55A362F9FDBF40030FD07 /* MiniLyricsLineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniLyricsLineView.swift; sourceTree = "<group>"; };
 		198E310192207773F55E967F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1C2FC699685A8C436EF372D6 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
 		2EB138EDD82605DC91055038 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
@@ -121,6 +123,7 @@
 				FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */,
 				866C87D0462783ACE391CDD2 /* QueueView.swift */,
 				0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */,
+				0ED55A362F9FDBF40030FD07 /* MiniLyricsLineView.swift */,
 			);
 			path = NowPlaying;
 			sourceTree = "<group>";
@@ -409,6 +412,7 @@
 				D3E4F50617283940A1B2C3D5 /* NetworkStatus.swift in Sources */,
 				96546FB0EC41ADF4AA99D125 /* PlexAPIClient.swift in Sources */,
 				3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */,
+				0ED55A372F9FDBF40030FD07 /* MiniLyricsLineView.swift in Sources */,
 				4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */,
 				616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */,
 				01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */,

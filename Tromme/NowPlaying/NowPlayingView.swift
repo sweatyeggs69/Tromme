@@ -18,6 +18,7 @@ struct NowPlayingView: View {
     @State private var lyricsService = LyricsService()
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
+    @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
 
     init(startPanel: NowPlayingStartPanel = .none, onNavigate: ((PlexMetadata) -> Void)? = nil) {
         self.startPanel = startPanel
@@ -41,6 +42,14 @@ struct NowPlayingView: View {
 
     private var isCompact: Bool { showLyrics || showQueue }
 
+    private var activeMiniLyricText: String? {
+        guard miniLyricsModeEnabled, !showLyrics, !showQueue else { return nil }
+        let index = lyricsService.currentLineIndex(at: player.currentTime)
+        guard lyricsService.lines.indices.contains(index) else { return nil }
+        let text = lyricsService.lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
 
     private var artworkColor: Color {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
@@ -52,6 +61,8 @@ struct NowPlayingView: View {
         GeometryReader { geo in
             let width = geo.size.width
             let height = geo.size.height
+            let isPortrait = height >= width
+            let showsMiniLyricsSlot = miniLyricsModeEnabled && !showLyrics && !showQueue && isPortrait
             let baseArtworkWidth = width - 64.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
@@ -197,7 +208,15 @@ struct NowPlayingView: View {
                             .transaction { $0.animation = nil }
                     }
 
-                    Spacer()
+                    if showsMiniLyricsSlot {
+                        Spacer(minLength: 0)
+                        MiniLyricsLineView(text: activeMiniLyricText ?? " ")
+                            .padding(.horizontal, 32)
+                            .transition(.opacity)
+                        Spacer(minLength: 0)
+                    } else {
+                        Spacer()
+                    }
 
                     // Bottom controls — pinned to bottom
                     VStack(spacing: 0) {

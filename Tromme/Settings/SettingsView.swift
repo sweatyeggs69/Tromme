@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
+    @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
     @State private var isRefreshing = false
@@ -18,6 +19,13 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Mini Mode", isOn: $miniLyricsModeEnabled)
+                    .tint(.green)
+            } header: {
+                Text("Lyrics")
+            }
+            
             Section {
                 Picker("Style Match", selection: $magicMixStyleMatch) {
                     ForEach(1...5, id: \.self) { value in
@@ -47,8 +55,8 @@ struct SettingsView: View {
             } footer: {
                 Text("Enable Cellular Transcoding to use less data on mobile networks. Pick a lower bitrate to save more data or a higher bitrate for better sound quality. Sound Check keeps song volume more consistent.")
             }
-            
-            Section("Server") {
+
+            Section {
                 if let server = serverConnection.currentServer {
                     LabeledContent("Name", value: server.name)
                     LabeledContent("Connection", value: connectionLabel(for: server))
@@ -65,6 +73,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+            } header: {
+                Text("Server")
             }
 
             Section {
