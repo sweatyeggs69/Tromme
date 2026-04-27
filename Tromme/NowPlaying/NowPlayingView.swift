@@ -43,7 +43,7 @@ struct NowPlayingView: View {
     private var isCompact: Bool { showLyrics || showQueue }
 
     private var activeMiniLyricText: String? {
-        guard miniLyricsModeEnabled, !showLyrics, !showQueue else { return nil }
+        guard miniLyricsModeEnabled, !showLyrics, !showQueue, lyricsService.hasSynced else { return nil }
         let index = lyricsService.currentLineIndex(at: player.currentTime)
         guard lyricsService.lines.indices.contains(index) else { return nil }
         let text = lyricsService.lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -62,7 +62,12 @@ struct NowPlayingView: View {
             let width = geo.size.width
             let height = geo.size.height
             let isPortrait = height >= width
-            let showsMiniLyricsSlot = miniLyricsModeEnabled && !showLyrics && !showQueue && isPortrait
+            let showsMiniLyricsSlot = miniLyricsModeEnabled
+                && !showLyrics
+                && !showQueue
+                && isPortrait
+                && lyricsService.hasSynced
+                && !lyricsService.lines.isEmpty
             let baseArtworkWidth = width - 64.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
