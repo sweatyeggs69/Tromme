@@ -39,12 +39,14 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
-                    .tint(.green)
-                if cellularTranscodingBinding.wrappedValue {
-                    Picker("Bitrate", selection: $cellularTranscodeBitrateKbps) {
-                        ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
-                            Text("\(bitrate) kbps").tag(bitrate)
+                if supportsCellularSettings {
+                    Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
+                        .tint(.green)
+                    if cellularTranscodingBinding.wrappedValue {
+                        Picker("Bitrate", selection: $cellularTranscodeBitrateKbps) {
+                            ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
+                                Text("\(bitrate) kbps").tag(bitrate)
+                            }
                         }
                     }
                 }
@@ -53,7 +55,7 @@ struct SettingsView: View {
             } header: {
                 Text("Playback")
             } footer: {
-                Text("Enable Cellular Transcoding to use less data on mobile networks. Pick a lower bitrate to save more data or a higher bitrate for better sound quality. Sound Check keeps song volume more consistent.")
+                Text(playbackFooterText)
             }
 
             Section {
@@ -137,6 +139,20 @@ struct SettingsView: View {
             get: { !disableCellularTranscoding },
             set: { disableCellularTranscoding = !$0 }
         )
+    }
+
+    private var supportsCellularSettings: Bool {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            return true
+        }
+        return NetworkStatus.shared.isCellular || NetworkStatus.shared.interfaceType == .cellular
+    }
+
+    private var playbackFooterText: String {
+        if supportsCellularSettings {
+            return "Enable Cellular Transcoding to use less data on mobile networks. Pick a lower bitrate to save more data or a higher bitrate for better sound quality. Sound Check keeps song volume more consistent."
+        }
+        return "Sound Check keeps song volume more consistent."
     }
 
     private func loadSections() async {
