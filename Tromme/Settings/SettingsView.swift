@@ -143,7 +143,11 @@ struct SettingsView: View {
         guard let server = serverConnection.currentServer else { return }
         do {
             sections = try await client.cachedLibrarySections(server: server).filter(\.isMusicLibrary)
-        } catch {}
+        } catch {
+            #if DEBUG
+            print("[SettingsView] Failed to load library sections: \(error.localizedDescription)")
+            #endif
+        }
     }
 
     private func refreshLibrary() async {

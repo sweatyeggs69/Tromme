@@ -161,7 +161,11 @@ struct ArtistsView: View {
                 artistSortKey(for: $0.title) < artistSortKey(for: $1.title)
             }
             artists = result
-        } catch {}
+        } catch {
+            #if DEBUG
+            print("[ArtistsView] Failed to load artists: \(error.localizedDescription)")
+            #endif
+        }
         isLoading = false
     }
 

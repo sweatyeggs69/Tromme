@@ -37,6 +37,8 @@ struct NowPlayingView: View {
     private let actionBackgroundActiveOpacity: Double = 0.2
     private let controlTintOpacity: Double = 0.45
     private let iPadBottomActionsExtraPadding: CGFloat = 12
+    private let portraitArtworkBottomPadding: CGFloat = 10
+    private let portraitTrackInfoBottomPadding: CGFloat = 18
 
     // MARK: - Computed Properties
 
@@ -204,7 +206,7 @@ struct NowPlayingView: View {
                     .frame(maxWidth: isCompact ? .infinity : nil)
                     .padding(.horizontal, isCompact ? 32 : 0)
                     .padding(.top, isCompact ? 8 : 0)
-                    .padding(.bottom, showsMiniLyricsSlot ? 0 : 10)
+                    .padding(.bottom, showsMiniLyricsSlot ? 0 : portraitArtworkBottomPadding)
                     .offset(y: 0)
                     .zIndex(1)
 
@@ -229,7 +231,7 @@ struct NowPlayingView: View {
                         if !isCompact {
                             trackInfo
                                 .padding(.horizontal, controlsHorizontalPadding)
-                                .padding(.bottom, 18)
+                                .padding(.bottom, portraitTrackInfoBottomPadding)
                                 .transition(.opacity)
                         }
                         controlsStack(horizontalPadding: controlsHorizontalPadding, isPadPortrait: isPadPortrait)
