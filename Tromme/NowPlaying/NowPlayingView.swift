@@ -194,7 +194,7 @@ struct NowPlayingView: View {
                                     .foregroundStyle(.white.opacity(0.6))
                                     .lineLimit(1)
                             }
-                            .transition(.opacity)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
 
                             Spacer()
 
@@ -204,7 +204,8 @@ struct NowPlayingView: View {
                     .frame(maxWidth: isCompact ? .infinity : nil)
                     .padding(.horizontal, isCompact ? 32 : 0)
                     .padding(.top, isCompact ? 8 : 0)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, showsMiniLyricsSlot ? 0 : 10)
+                    .offset(y: 0)
                     .zIndex(1)
 
                     // Content area when compact
@@ -216,7 +217,7 @@ struct NowPlayingView: View {
                     if showsMiniLyricsSlot {
                         Spacer(minLength: 0)
                         MiniLyricsLineView(text: activeMiniLyricText ?? " ")
-                            .padding(.horizontal, 32)
+                            .padding(.horizontal, controlsHorizontalPadding)
                             .transition(.opacity)
                         Spacer(minLength: 0)
                     } else {
@@ -228,7 +229,7 @@ struct NowPlayingView: View {
                         if !isCompact {
                             trackInfo
                                 .padding(.horizontal, controlsHorizontalPadding)
-                                .padding(.bottom, 28)
+                                .padding(.bottom, 18)
                                 .transition(.opacity)
                         }
                         controlsStack(horizontalPadding: controlsHorizontalPadding, isPadPortrait: isPadPortrait)
@@ -242,6 +243,7 @@ struct NowPlayingView: View {
                     .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 16)
                 }
                 .animation(.easeInOut(duration: 0.4), value: isCompact)
+                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showsMiniLyricsSlot)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
