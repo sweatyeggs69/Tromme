@@ -37,6 +37,7 @@ struct NowPlayingView: View {
     private let actionBackgroundActiveOpacity: Double = 0.2
     private let controlTintOpacity: Double = 0.45
     private let iPadBottomActionsExtraPadding: CGFloat = 12
+    private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
     private let portraitTrackInfoBottomPadding: CGFloat = 18
 
@@ -160,7 +161,7 @@ struct NowPlayingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
-                    .padding(.bottom, (geo.safeAreaInsets.bottom > 0 ? 2 : 6) + iPadBottomActionsExtraPadding)
+                    .padding(.bottom, 0)
                 }
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
                 .animation(.easeInOut(duration: 0.25), value: showQueue)
@@ -219,7 +220,9 @@ struct NowPlayingView: View {
                     if showsMiniLyricsSlot {
                         Spacer(minLength: 0)
                         MiniLyricsLineView(text: activeMiniLyricText ?? " ")
-                            .padding(.horizontal, controlsHorizontalPadding)
+                            .frame(maxWidth: controlsContainerWidth)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, isPadPortrait ? 0 : AppStyle.Spacing.nowPlayingHorizontal)
                             .transition(.opacity)
                         Spacer(minLength: 0)
                     } else {
