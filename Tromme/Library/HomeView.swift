@@ -53,7 +53,9 @@ struct HomeView: View {
     private var loadTaskID: String {
         let sectionID = serverConnection.currentLibrarySectionId ?? "none"
         let serverURI = serverConnection.currentServer?.uri ?? "none"
-        return "\(sectionID)|\(serverURI)"
+        let networkType = NetworkStatus.shared.interfaceType.map { "\($0)" } ?? "none"
+        let connected = NetworkStatus.shared.isConnected
+        return "\(sectionID)|\(serverURI)|\(networkType)|\(connected)"
     }
 
     private var favoritesSection: some View {
@@ -212,7 +214,9 @@ struct HomeView: View {
         }
 
         defer {
-            isLoading = false
+            if !Task.isCancelled {
+                isLoading = false
+            }
         }
 
         guard let server = serverConnection.currentServer,
