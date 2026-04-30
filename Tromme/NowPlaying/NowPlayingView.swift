@@ -395,7 +395,11 @@ struct NowPlayingView: View {
                 .frame(height: 56)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, transportBottomPadding)
-            VolumeSlider(isEnabled: true)
+            VolumeSlider(
+                isEnabled: !player.isCarPlayConnected,
+                isDarkened: player.isCarPlayConnected,
+                hidesThumb: player.isCarPlayConnected
+            )
                 .frame(height: 32)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, volumeBottomPadding)
@@ -681,14 +685,13 @@ struct AirPlayButton: UIViewRepresentable {
 
 struct VolumeSlider: UIViewRepresentable {
     let isEnabled: Bool
+    let isDarkened: Bool
+    let hidesThumb: Bool
 
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsVolumeSlider = true
         view.tintColor = .white
-        for subview in view.subviews where subview is UIButton {
-            subview.removeFromSuperview()
-        }
         configure(view)
         return view
     }
@@ -699,11 +702,22 @@ struct VolumeSlider: UIViewRepresentable {
 
     private func configure(_ view: MPVolumeView) {
         view.isUserInteractionEnabled = isEnabled
-        view.alpha = isEnabled ? 1 : 0.5
+        view.alpha = isDarkened ? 0.45 : (isEnabled ? 1 : 0.5)
         for subview in view.subviews {
             if let slider = subview as? UISlider {
                 slider.isEnabled = isEnabled
-                slider.alpha = isEnabled ? 1 : 0.5
+                slider.minimumTrackTintColor = UIColor.white.withAlphaComponent(isDarkened ? 0.28 : 0.82)
+                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(isDarkened ? 0.16 : 0.35)
+                slider.alpha = isDarkened ? 0.8 : (isEnabled ? 1 : 0.5)
+                if hidesThumb {
+                    slider.setThumbImage(UIImage(), for: .normal)
+                    slider.setThumbImage(UIImage(), for: .highlighted)
+                    slider.setThumbImage(UIImage(), for: .disabled)
+                } else {
+                    slider.setThumbImage(nil, for: .normal)
+                    slider.setThumbImage(nil, for: .highlighted)
+                    slider.setThumbImage(nil, for: .disabled)
+                }
             }
         }
     }

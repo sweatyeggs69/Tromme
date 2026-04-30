@@ -194,9 +194,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let server, let sectionId, let client else { return template }
         Task {
             let artists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
-            let letters = alphabetIndex(from: artists, keyPath: \.title)
+            let letters = alphabetIndex(from: artists) { artist in
+                artist.titleSort ?? artist.title
+            }
             let items = letters.map { letter -> CPListItem in
-                let count = artists.filter { firstLetter(of: $0.title) == letter }.count
+                let count = artists.filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }.count
                 let item = CPListItem(text: letter, detailText: "\(count) artists")
                 item.accessoryType = .disclosureIndicator
                 item.handler = { [weak self] _, completion in
@@ -212,7 +214,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func showArtistsForLetter(_ letter: String, allArtists: [PlexMetadata]) {
         let filtered = allArtists
-            .filter { firstLetter(of: $0.title) == letter }
+            .filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }
             .sorted { ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending }
         let items = filtered.prefix(CPListTemplate.maximumItemCount).map { artist -> CPListItem in
             let item = CPListItem(text: artist.title, detailText: nil)
@@ -258,7 +260,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let server, let sectionId, let client else { return template }
         Task {
             let albums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
-            let letters = alphabetIndex(from: albums, keyPath: \.title)
+            let letters = alphabetIndex(from: albums) { $0.title }
             let items = letters.map { letter -> CPListItem in
                 let count = albums.filter { firstLetter(of: $0.title) == letter }.count
                 let item = CPListItem(text: letter, detailText: "\(count) albums")
@@ -367,11 +369,14 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return "#"
     }
 
-    private func alphabetIndex(from items: [PlexMetadata], keyPath: KeyPath<PlexMetadata, String>) -> [String] {
+    private func alphabetIndex(
+        from items: [PlexMetadata],
+        titleProvider: (PlexMetadata) -> String
+    ) -> [String] {
         var seen = Set<String>()
         var letters: [String] = []
         for item in items {
-            let letter = firstLetter(of: item[keyPath: keyPath])
+            let letter = firstLetter(of: titleProvider(item))
             if seen.insert(letter).inserted {
                 letters.append(letter)
             }

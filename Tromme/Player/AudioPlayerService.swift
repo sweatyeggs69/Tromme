@@ -18,6 +18,8 @@ final class AudioPlayerService: @unchecked Sendable {
     var isReadyToPlay = false
     /// True when the active audio output route is AirPlay.
     var isAirPlayConnected = false
+    /// True when the active audio output route is CarPlay.
+    var isCarPlayConnected = false
 
     enum RepeatMode: String, Sendable {
         case off, all, one
@@ -501,8 +503,21 @@ final class AudioPlayerService: @unchecked Sendable {
 
     func clearQueue() {
         guard !queue.isEmpty else { return }
-        queue = Array(queue.prefix(currentIndex + 1))
-        originalQueue = queue
+        if let currentTrack {
+            queue = [currentTrack]
+            originalQueue = [currentTrack]
+            currentIndex = 0
+        } else if queue.indices.contains(currentIndex) {
+            let track = queue[currentIndex]
+            queue = [track]
+            originalQueue = [track]
+            currentIndex = 0
+        } else {
+            queue = []
+            originalQueue = []
+            currentIndex = 0
+        }
+        savePlaybackState()
     }
 
     func resetPlayback() {
@@ -759,6 +774,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private func refreshAirPlayConnectionState() {
         let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
         isAirPlayConnected = outputs.contains { $0.portType == .airPlay }
+        isCarPlayConnected = outputs.contains { $0.portType == .carAudio }
     }
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.

@@ -326,6 +326,18 @@ enum CacheKey {
     static func lyrics(title: String, artist: String) -> String {
         "lyrics_\(artist)_\(title)"
     }
+    static func homeFavorites(serverId: String, sectionId: String) -> String {
+        "home_favorites_\(serverId)_\(sectionId)"
+    }
+    static func homeRecentlyPlayed(serverId: String, sectionId: String) -> String {
+        "home_recently_played_\(serverId)_\(sectionId)"
+    }
+    static func homeRecentlyAdded(serverId: String, sectionId: String) -> String {
+        "home_recently_added_\(serverId)_\(sectionId)"
+    }
+    static func homePlaylists(serverId: String) -> String {
+        "home_playlists_\(serverId)"
+    }
 }
 
 // MARK: - String SHA256

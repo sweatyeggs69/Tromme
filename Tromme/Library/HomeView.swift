@@ -232,41 +232,112 @@ struct HomeView: View {
             let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
             let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
             let playlistsKey = CacheKey.playlists(serverId: server.machineIdentifier)
+            let homeFavoritesKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
+            let homeRecentTracksKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
+            let homeRecentAlbumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
+            let homePlaylistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
             await LibraryCache.shared.remove(forKey: tracksKey)
             await LibraryCache.shared.remove(forKey: albumsKey)
             await LibraryCache.shared.remove(forKey: playlistsKey)
+            await LibraryCache.shared.remove(forKey: homeFavoritesKey)
+            await LibraryCache.shared.remove(forKey: homeRecentTracksKey)
+            await LibraryCache.shared.remove(forKey: homeRecentAlbumsKey)
+            await LibraryCache.shared.remove(forKey: homePlaylistsKey)
+        } else {
+            await hydrateFromHomeCacheIfAvailable(server: server, sectionId: sectionId)
         }
 
-        async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
-        async let recentlyPlayedReq: [PlexMetadata] = client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)
-        async let playlistsReq: [PlexPlaylist] = client.cachedPlaylists(server: server)
-        async let recentlyAddedReq: [PlexMetadata] = client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
+        enum HomeLoadResult {
+            case favorites([PlexMetadata]?)
+            case recentlyPlayed([PlexMetadata]?)
+            case playlists([PlexPlaylist]?)
+            case recentlyAdded([PlexMetadata]?)
+        }
 
-        let favoritesResult = try? await favoritesReq
-        let recentlyPlayedResult = try? await recentlyPlayedReq
-        let playlistsResult = try? await playlistsReq
-        let recentlyAddedResult = try? await recentlyAddedReq
+        let loadResults: [HomeLoadResult] = await withTaskGroup(of: HomeLoadResult.self, returning: [HomeLoadResult].self) { group in
+            group.addTask {
+                let value = await fetchWithRetryOnFailure {
+                    try await client.getFavoriteTracks(server: server, sectionId: sectionId)
+                }
+                return .favorites(value)
+            }
+            group.addTask {
+                let value = await fetchWithRetryOnFailure {
+                    try await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)
+                }
+                return .recentlyPlayed(value)
+            }
+            group.addTask {
+                let value = await fetchWithRetryOnFailure {
+                    try await client.cachedPlaylists(server: server)
+                }
+                return .playlists(value)
+            }
+            group.addTask {
+                let value = await fetchWithRetryOnFailure {
+                    try await client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
+                }
+                return .recentlyAdded(value)
+            }
+
+            var aggregated: [HomeLoadResult] = []
+            for await result in group {
+                aggregated.append(result)
+            }
+            return aggregated
+        }
+
+        var favoritesResult: [PlexMetadata]?
+        var recentlyPlayedResult: [PlexMetadata]?
+        var playlistsResult: [PlexPlaylist]?
+        var recentlyAddedResult: [PlexMetadata]?
+        for result in loadResults {
+            switch result {
+            case .favorites(let value): favoritesResult = value
+            case .recentlyPlayed(let value): recentlyPlayedResult = value
+            case .playlists(let value): playlistsResult = value
+            case .recentlyAdded(let value): recentlyAddedResult = value
+            }
+        }
+
+        guard !Task.isCancelled else { return }
 
         if let favoritesResult {
             applyFavorites(plexFavorites: favoritesResult)
+            await LibraryCache.shared.set(
+                favoriteTracks,
+                forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
+            )
         } else if !hadFavorites {
             favoriteTracks = []
         }
 
         if let recentlyPlayedResult {
             recentTracks = Array(recentlyPlayedResult.prefix(10))
+            await LibraryCache.shared.set(
+                recentTracks,
+                forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
+            )
         } else if !hadRecentTracks {
             recentTracks = []
         }
 
         if let playlistsResult {
             playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
+            await LibraryCache.shared.set(
+                playlists,
+                forKey: CacheKey.homePlaylists(serverId: server.machineIdentifier)
+            )
         } else if !hadPlaylists {
             playlists = []
         }
 
         if let recentlyAddedResult {
             recentAlbums = Array(recentlyAddedResult.prefix(10))
+            await LibraryCache.shared.set(
+                recentAlbums,
+                forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
+            )
         } else if !hadRecentAlbums {
             recentAlbums = []
         }
@@ -283,6 +354,51 @@ struct HomeView: View {
                 playlists: snapshotPlaylists,
                 recentAlbums: snapshotRecentAlbums
             )
+        }
+    }
+
+    private func fetchWithRetryOnFailure<T>(
+        _ operation: () async throws -> T
+    ) async -> T? {
+        do {
+            return try await operation()
+        } catch is CancellationError {
+            return nil
+        } catch {
+            guard !Task.isCancelled else { return nil }
+            do {
+                try await Task.sleep(for: .milliseconds(800))
+                guard !Task.isCancelled else { return nil }
+                return try await operation()
+            } catch is CancellationError {
+                return nil
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    private func hydrateFromHomeCacheIfAvailable(server: PlexServer, sectionId: String) async {
+        let favoritesKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
+        let recentTracksKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
+        let recentAlbumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
+        let playlistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
+
+        if let cachedFavorites = await LibraryCache.shared.get([PlexMetadata].self, forKey: favoritesKey)?.value {
+            favoriteTracks = cachedFavorites
+            isLoading = false
+        }
+        if let cachedRecentTracks = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentTracksKey)?.value {
+            recentTracks = cachedRecentTracks
+            isLoading = false
+        }
+        if let cachedRecentAlbums = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentAlbumsKey)?.value {
+            recentAlbums = cachedRecentAlbums
+            isLoading = false
+        }
+        if let cachedPlaylists = await LibraryCache.shared.get([PlexPlaylist].self, forKey: playlistsKey)?.value {
+            playlists = cachedPlaylists
+            isLoading = false
         }
     }
 
