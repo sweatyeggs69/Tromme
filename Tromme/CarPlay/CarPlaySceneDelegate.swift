@@ -123,67 +123,88 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func loadHomeContent(into template: CPListTemplate) {
         guard let server, let sectionId, let client else { return }
+
+        // Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played
+        var slots: [CPListSection?] = [nil, nil, nil]
+        var completedCount = 0
+        var anySuccess = false
+
+        func rebuildSections() {
+            completedCount += 1
+            var sections = slots.compactMap { $0 }
+            if completedCount == 3, !anySuccess, sections.isEmpty {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadHomeContent(into: template)
+                }
+                sections.append(CPListSection(items: [retry]))
+            }
+            template.updateSections(sections)
+        }
+
+        // Favorites
         Task {
-            async let favoritesReq: [PlexMetadata] = client.getFavoriteTracks(server: server, sectionId: sectionId)
-            async let recentlyPlayedReq: [PlexMetadata] = client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)
-            async let recentlyAddedReq: [PlexMetadata] = client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
-
-            let favorites = Array(((try? await favoritesReq) ?? [])
-                .sorted { ($0.userRating ?? 0) > ($1.userRating ?? 0) }
-                .prefix(10))
-            let recentlyPlayed = Array(((try? await recentlyPlayedReq) ?? []).prefix(10))
-            let recentlyAdded = Array(((try? await recentlyAddedReq) ?? []).prefix(10))
-
-            var sections: [CPListSection] = []
-
-            // Favorites — menu link
-            if !favorites.isEmpty {
-                let item = CPListItem(text: "Favorites", detailText: "\(favorites.count) songs")
+            if let favorites = try? await client.getFavoriteTracks(server: server, sectionId: sectionId),
+               !favorites.isEmpty {
+                anySuccess = true
+                let sorted = Array(favorites
+                    .sorted { ($0.userRating ?? 0) > ($1.userRating ?? 0) }
+                    .prefix(10))
+                let item = CPListItem(text: "Favorites", detailText: "\(sorted.count) songs")
                 item.accessoryType = .disclosureIndicator
-                let capturedFavorites = favorites
                 item.handler = { [weak self] _, completion in
-                    self?.showTrackList(title: "Favorites", tracks: capturedFavorites)
+                    self?.showTrackList(title: "Favorites", tracks: sorted)
                     completion()
                 }
-                sections.append(CPListSection(items: [item]))
+                slots[0] = CPListSection(items: [item])
             }
-            
-            // Recently Added — image row
-            if !recentlyAdded.isEmpty {
+            rebuildSections()
+        }
+
+        // Recently Added
+        Task {
+            if let recentlyAdded = try? await client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10),
+               !recentlyAdded.isEmpty {
+                anySuccess = true
+                let limited = Array(recentlyAdded.prefix(10))
                 let imageRow = await makeImageRow(
                     title: "Recently Added",
-                    items: recentlyAdded,
+                    items: limited,
                     server: server,
                     client: client,
                     onImageSelect: { [weak self] index in
-                        let album = recentlyAdded[index]
+                        let album = limited[index]
                         self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title)
                     },
                     onRowSelect: { [weak self] in
-                        self?.showRecentlyAddedList(recentlyAdded)
+                        self?.showRecentlyAddedList(limited)
                     }
                 )
-                sections.append(CPListSection(items: [imageRow]))
+                slots[1] = CPListSection(items: [imageRow])
             }
+            rebuildSections()
+        }
 
-            // Recently Played — image row
-            if !recentlyPlayed.isEmpty {
+        // Recently Played
+        Task {
+            if let recentlyPlayed = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
+               !recentlyPlayed.isEmpty {
+                anySuccess = true
+                let limited = Array(recentlyPlayed.prefix(10))
                 let imageRow = await makeImageRow(
                     title: "Recently Played",
-                    items: recentlyPlayed,
+                    items: limited,
                     server: server,
                     client: client,
                     onImageSelect: { [weak self] index in
-                        self?.showTrackList(title: "Recently Played", tracks: recentlyPlayed, startAt: index)
+                        self?.showTrackList(title: "Recently Played", tracks: limited, startAt: index)
                     },
                     onRowSelect: { [weak self] in
-                        self?.showTrackList(title: "Recently Played", tracks: recentlyPlayed)
+                        self?.showTrackList(title: "Recently Played", tracks: limited)
                     }
                 )
-                sections.append(CPListSection(items: [imageRow]))
+                slots[2] = CPListSection(items: [imageRow])
             }
-
-            template.updateSections(sections)
+            rebuildSections()
         }
     }
 
@@ -193,23 +214,53 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let template = CPListTemplate(title: "Artists", sections: [])
         guard let server, let sectionId, let client else { return template }
         Task {
-            let artists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
-            let letters = alphabetIndex(from: artists) { artist in
-                artist.titleSort ?? artist.title
-            }
-            let items = letters.map { letter -> CPListItem in
-                let count = artists.filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }.count
-                let item = CPListItem(text: letter, detailText: "\(count) artists")
-                item.accessoryType = .disclosureIndicator
-                item.handler = { [weak self] _, completion in
-                    self?.showArtistsForLetter(letter, allArtists: artists)
-                    completion()
+            let artists: [PlexMetadata]
+            do {
+                artists = try await client.cachedArtists(server: server, sectionId: sectionId)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadArtists(into: template)
                 }
-                return item
+                template.updateSections([CPListSection(items: [retry])])
+                return
             }
-            template.updateSections([CPListSection(items: items)])
+            populateArtists(artists, into: template)
         }
         return template
+    }
+
+    private func loadArtists(into template: CPListTemplate) {
+        guard let server, let sectionId, let client else { return }
+        Task {
+            let artists: [PlexMetadata]
+            do {
+                artists = try await client.cachedArtists(server: server, sectionId: sectionId)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadArtists(into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
+            populateArtists(artists, into: template)
+        }
+    }
+
+    private func populateArtists(_ artists: [PlexMetadata], into template: CPListTemplate) {
+        let letters = alphabetIndex(from: artists) { artist in
+            artist.titleSort ?? artist.title
+        }
+        let items = letters.map { letter -> CPListItem in
+            let count = artists.filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }.count
+            let item = CPListItem(text: letter, detailText: "\(count) artists")
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, completion in
+                self?.showArtistsForLetter(letter, allArtists: artists)
+                completion()
+            }
+            return item
+        }
+        template.updateSections([CPListSection(items: items)])
     }
 
     private func showArtistsForLetter(_ letter: String, allArtists: [PlexMetadata]) {
@@ -235,9 +286,22 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let server, let client else { return }
         let template = CPListTemplate(title: artistName, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
+        loadArtistAlbums(artistRatingKey: artistRatingKey, server: server, client: client, into: template)
+    }
+
+    private func loadArtistAlbums(artistRatingKey: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
         Task {
-            let albums = (try? await client.cachedChildren(server: server, ratingKey: artistRatingKey)) ?? []
-            let items = albums.filter { $0.type == "album" }.prefix(CPListTemplate.maximumItemCount).map { album -> CPListItem in
+            let children: [PlexMetadata]
+            do {
+                children = try await client.cachedChildren(server: server, ratingKey: artistRatingKey)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadArtistAlbums(artistRatingKey: artistRatingKey, server: server, client: client, into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
+            let items = children.filter { $0.type == "album" }.prefix(CPListTemplate.maximumItemCount).map { album -> CPListItem in
                 let item = CPListItem(text: album.title, detailText: album.releaseYear)
                 item.accessoryType = .disclosureIndicator
                 loadArtwork(path: album.thumb, into: item, server: server, client: client)
@@ -259,21 +323,51 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let template = CPListTemplate(title: "Albums", sections: [])
         guard let server, let sectionId, let client else { return template }
         Task {
-            let albums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
-            let letters = alphabetIndex(from: albums) { $0.title }
-            let items = letters.map { letter -> CPListItem in
-                let count = albums.filter { firstLetter(of: $0.title) == letter }.count
-                let item = CPListItem(text: letter, detailText: "\(count) albums")
-                item.accessoryType = .disclosureIndicator
-                item.handler = { [weak self] _, completion in
-                    self?.showAlbumsForLetter(letter, allAlbums: albums)
-                    completion()
+            let albums: [PlexMetadata]
+            do {
+                albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadAlbums(into: template)
                 }
-                return item
+                template.updateSections([CPListSection(items: [retry])])
+                return
             }
-            template.updateSections([CPListSection(items: items)])
+            populateAlbums(albums, into: template)
         }
         return template
+    }
+
+    private func loadAlbums(into template: CPListTemplate) {
+        guard let server, let sectionId, let client else { return }
+        Task {
+            let albums: [PlexMetadata]
+            do {
+                albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadAlbums(into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
+            populateAlbums(albums, into: template)
+        }
+    }
+
+    private func populateAlbums(_ albums: [PlexMetadata], into template: CPListTemplate) {
+        let letters = alphabetIndex(from: albums) { $0.title }
+        let items = letters.map { letter -> CPListItem in
+            let count = albums.filter { firstLetter(of: $0.title) == letter }.count
+            let item = CPListItem(text: letter, detailText: "\(count) albums")
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, completion in
+                self?.showAlbumsForLetter(letter, allAlbums: albums)
+                completion()
+            }
+            return item
+        }
+        template.updateSections([CPListSection(items: items)])
     }
 
     private func showAlbumsForLetter(_ letter: String, allAlbums: [PlexMetadata]) {
@@ -301,11 +395,25 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func makePlaylistsList() -> CPListTemplate {
         let template = CPListTemplate(title: "Playlists", sections: [])
-        guard let server, let client else { return template }
+        loadPlaylists(into: template)
+        return template
+    }
+
+    private func loadPlaylists(into template: CPListTemplate) {
+        guard let server, let client else { return }
         Task {
-            let playlists = ((try? await client.cachedPlaylists(server: server)) ?? [])
-                .filter { $0.isMusicPlaylist }
-            let items = playlists.prefix(CPListTemplate.maximumItemCount).map { playlist -> CPListItem in
+            let playlists: [PlexPlaylist]
+            do {
+                playlists = try await client.cachedPlaylists(server: server)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadPlaylists(into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
+            let musicPlaylists = playlists.filter { $0.isMusicPlaylist }
+            let items = musicPlaylists.prefix(CPListTemplate.maximumItemCount).map { playlist -> CPListItem in
                 let songCount = playlist.leafCount.map { "\($0) songs" }
                 let item = CPListItem(text: playlist.title, detailText: songCount)
                 item.accessoryType = .disclosureIndicator
@@ -320,16 +428,27 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             }
             template.updateSections([CPListSection(items: items)])
         }
-        return template
     }
 
     private func showPlaylistTracks(playlistKey: String, playlistTitle: String) {
         guard let server, let client else { return }
         let template = CPListTemplate(title: playlistTitle, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
+        loadPlaylistTracks(playlistKey: playlistKey, server: server, client: client, into: template)
+    }
 
+    private func loadPlaylistTracks(playlistKey: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
         Task {
-            let tracks = (try? await client.cachedPlaylistItems(server: server, playlistKey: playlistKey)) ?? []
+            let tracks: [PlexMetadata]
+            do {
+                tracks = try await client.cachedPlaylistItems(server: server, playlistKey: playlistKey)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadPlaylistTracks(playlistKey: playlistKey, server: server, client: client, into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
             guard !tracks.isEmpty else { return }
 
             let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(tracks.count) songs", image: UIImage(systemName: "shuffle"))
@@ -401,7 +520,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             completion()
         }
 
-        let trackItems = tracks.enumerated().map { index, track -> CPListItem in
+        let trackItems: [CPListTemplateItem] = tracks.prefix(CPListTemplate.maximumItemCount - 1).enumerated().map { index, track -> CPListItem in
             let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
             if let server, let client {
                 loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
@@ -500,10 +619,22 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let server, let client else { return }
         let template = CPListTemplate(title: albumTitle, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
+        loadAlbumTracks(albumRatingKey: albumRatingKey, server: server, client: client, into: template)
+    }
 
+    private func loadAlbumTracks(albumRatingKey: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
         Task {
-            let tracks = (try? await client.cachedChildren(server: server, ratingKey: albumRatingKey)) ?? []
-            let playableTracks = Array(tracks.filter { $0.type == "track" })
+            let children: [PlexMetadata]
+            do {
+                children = try await client.cachedChildren(server: server, ratingKey: albumRatingKey)
+            } catch {
+                let retry = makeRetryItem(into: template) { [weak self] in
+                    self?.loadAlbumTracks(albumRatingKey: albumRatingKey, server: server, client: client, into: template)
+                }
+                template.updateSections([CPListSection(items: [retry])])
+                return
+            }
+            let playableTracks = Array(children.filter { $0.type == "track" })
             guard !playableTracks.isEmpty else { return }
 
             let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(playableTracks.count) songs", image: UIImage(systemName: "shuffle"))
@@ -597,6 +728,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                         _ = player.repeatMode
                         _ = player.isInfiniteModeActive
                         _ = player.isMagicMixActive
+                        _ = player.currentTrack
                     } onChange: {
                         continuation.resume()
                     }
@@ -613,6 +745,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if interfaceController?.topTemplate !== nowPlaying {
             interfaceController?.pushTemplate(nowPlaying, animated: true, completion: nil)
         }
+    }
+
+    // MARK: - Error Helpers
+
+    private func makeRetryItem(into template: CPListTemplate, action: @escaping @MainActor () -> Void) -> CPListItem {
+        let item = CPListItem(text: "Couldn't Load", detailText: "Tap to retry")
+        item.handler = { _, completion in
+            action()
+            completion()
+        }
+        return item
     }
 
     // MARK: - Artwork Loading
@@ -635,7 +778,7 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
         let items = tracks.prefix(CPListTemplate.maximumItemCount).enumerated().map { index, track -> CPListItem in
             let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
             item.handler = { [weak self] _, completion in
-                self?.player?.playFromQueue(at: index)
+                self?.player?.skipToUpcoming(at: index)
                 completion()
             }
             return item

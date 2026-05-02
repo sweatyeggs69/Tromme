@@ -657,10 +657,7 @@ final class PlexAPIClient: Sendable {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                lastError = error
-                if attempt < maxRetries {
-                    try await Task.sleep(for: .seconds(Double(attempt + 1)))
-                }
+                throw error
             }
         }
         if let lastError {

@@ -51,6 +51,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var server: PlexServer?
     private var client: PlexAPIClient?
     private var originalQueue: [PlexMetadata] = []
+    private var universalStreamURL: URL?
     private var universalCandidatesForCurrentItem: [URL] = []
     private var universalCandidateIndexForCurrentItem = 0
     private var currentSessionID: String?
@@ -172,8 +173,13 @@ final class AudioPlayerService: @unchecked Sendable {
                CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
                 currentTime = 0
                 let currentPlayer = player
-                currentPlayer.seek(to: .zero) { _ in
-                    currentPlayer.play()
+                let generation = playbackGeneration
+                currentPlayer.seek(to: .zero) { [weak self] _ in
+                    guard let self else { return }
+                    Task { @MainActor [weak self] in
+                        guard let self, self.playbackGeneration == generation else { return }
+                        currentPlayer.play()
+                    }
                 }
                 isPlaying = true
                 logPlayback("resumed_from_end")
@@ -201,8 +207,13 @@ final class AudioPlayerService: @unchecked Sendable {
            item.duration.seconds.isFinite,
            CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
             guard let currentPlayer = player else { return }
-            currentPlayer.seek(to: .zero) { _ in
-                currentPlayer.play()
+            let generation = playbackGeneration
+            currentPlayer.seek(to: .zero) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, self.playbackGeneration == generation else { return }
+                    currentPlayer.play()
+                }
             }
             isPlaying = true
             currentTime = 0
@@ -443,6 +454,14 @@ final class AudioPlayerService: @unchecked Sendable {
         loadAndPlay(queue[currentIndex])
     }
 
+    /// Jump to an upcoming track by offset without reordering the queue.
+    func skipToUpcoming(at offset: Int) {
+        let queueIndex = currentIndex + 1 + offset
+        guard queue.indices.contains(queueIndex) else { return }
+        currentIndex = queueIndex
+        loadAndPlay(queue[currentIndex])
+    }
+
     func moveInQueue(from source: IndexSet, to destination: Int) {
         var upcoming = Array(queue[(currentIndex + 1)...])
         upcoming.move(fromOffsets: source, toOffset: destination)
@@ -544,6 +563,7 @@ final class AudioPlayerService: @unchecked Sendable {
         isReadyToPlay = false
         currentSessionID = nil
         pendingInitialSeekTime = nil
+        universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
         detailedTrackForSoundCheck = nil
@@ -619,6 +639,7 @@ final class AudioPlayerService: @unchecked Sendable {
             currentTime = 0
         }
         lastNowPlayingInfoSyncTime = 0
+        universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
         currentSessionID = UUID().uuidString
@@ -700,7 +721,7 @@ final class AudioPlayerService: @unchecked Sendable {
             guard self.playbackGeneration == generation else { return }
 
             // Step 2: Build universal HLS URL and play directly.
-            let universalCandidates = capturedClient.universalStreamURLCandidates(
+            let candidates = capturedClient.universalStreamURLCandidates(
                 server: capturedServer,
                 mediaPathCandidates: mediaPathCandidates,
                 sessionID: sessionID,
@@ -708,17 +729,19 @@ final class AudioPlayerService: @unchecked Sendable {
                 constrainAudioBitrate: shouldConstrainForNetwork,
                 cellularTranscodeBitrate: cellularTranscodeBitrate
             )
-            self.universalCandidatesForCurrentItem = universalCandidates
 
-            guard let masterURL = universalCandidates.first else {
+            guard let streamURL = candidates.first else {
                 self.logPlayback("universal_url_unavailable")
                 self.isPlaying = false
                 return
             }
             guard !Task.isCancelled else { return }
             guard self.playbackGeneration == generation else { return }
-            self.logPlayback("load_ready", "candidate_count=\(universalCandidates.count)")
-            self.startPlayback(url: masterURL)
+            self.universalCandidatesForCurrentItem = candidates
+            self.universalCandidateIndexForCurrentItem = 0
+            self.universalStreamURL = streamURL
+            self.logPlayback("load_ready")
+            self.startPlayback(url: streamURL)
         }
     }
 
@@ -753,6 +776,14 @@ final class AudioPlayerService: @unchecked Sendable {
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
+                let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
+                if soundCheckOn, self.detailedTrackForSoundCheck == nil,
+                   let client = self.client, let server = self.server,
+                   let ratingKey = self.currentTrack?.ratingKey {
+                    self.detailedTrackForSoundCheck = try? await client.cachedMetadata(
+                        server: server, ratingKey: ratingKey
+                    )
+                }
                 self.player?.volume = self.soundCheckVolume(for: self.currentTrack)
             }
         }
@@ -842,6 +873,7 @@ final class AudioPlayerService: @unchecked Sendable {
                     if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
                         self.universalCandidateIndexForCurrentItem = nextIndex
                         let nextURL = self.universalCandidatesForCurrentItem[nextIndex]
+                        self.universalStreamURL = nextURL
                         self.startPlayback(url: nextURL)
                         return
                     }
@@ -1200,9 +1232,21 @@ final class AudioPlayerService: @unchecked Sendable {
         let upcoming = queue.dropFirst(currentIndex).prefix(11)
         let keys = upcoming.map(\.ratingKey)
         gainPrefetchTask = Task(priority: .utility) {
-            for key in keys {
-                guard !Task.isCancelled else { return }
-                _ = try? await client.cachedMetadata(server: server, ratingKey: key)
+            await withTaskGroup(of: Void.self) { group in
+                var inFlight = 0
+                let maxConcurrent = 3
+                for key in keys {
+                    guard !Task.isCancelled else { return }
+                    if inFlight >= maxConcurrent {
+                        await group.next()
+                        inFlight -= 1
+                    }
+                    group.addTask {
+                        _ = try? await client.cachedMetadata(server: server, ratingKey: key)
+                    }
+                    inFlight += 1
+                }
+                await group.waitForAll()
             }
         }
     }
