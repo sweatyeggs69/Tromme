@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 struct SettingsView: View {
     @Environment(\.plexClient) private var client
@@ -9,6 +10,8 @@ struct SettingsView: View {
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
+    @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
+    @State private var showReviewPrompt = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
     @State private var isRefreshing = false
@@ -19,6 +22,14 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            if !hasRequestedAppReview {
+                Section {
+                    Button("Leave a Review") {
+                        showReviewPrompt = true
+                    }
+                }
+            }
+
             Section {
                 Toggle("Mini Mode", isOn: $miniLyricsModeEnabled)
                     .tint(.green)
@@ -125,6 +136,16 @@ struct SettingsView: View {
         } message: {
             Text("This will remove all cached data. It will be re-downloaded automatically.")
         }
+        .alert("Leave a Review?", isPresented: $showReviewPrompt) {
+            Button("No Thanks", role: .cancel) {
+                hasRequestedAppReview = true
+            }
+            Button("Leave Review") {
+                requestAppReviewIfNeeded()
+            }
+        } message: {
+            Text("Thanks for using Tromme! If you like it, let us know what you think.")
+        }
     }
 
     private var libraryBinding: Binding<String> {
@@ -182,6 +203,17 @@ struct SettingsView: View {
             return "Remote"
         }
         return "Unknown"
+    }
+
+    private func requestAppReviewIfNeeded() {
+        guard !hasRequestedAppReview else { return }
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return
+        }
+        AppStore.requestReview(in: scene)
+        hasRequestedAppReview = true
     }
 }
 
