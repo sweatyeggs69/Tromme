@@ -107,10 +107,11 @@ struct ChangeAlbumArtworkSheet: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 ArtworkView(
-                    thumbPath: artwork.thumb ?? artwork.url ?? artwork.key,
+                    thumbPath: preferredArtworkPath(for: artwork),
                     size: tileSize,
                     cornerRadius: 12,
-                    useCache: false
+                    useCache: false,
+                    minimumTranscodePx: 1000
                 )
                     .frame(maxWidth: .infinity)
                 if artwork.selected ?? false {
@@ -256,6 +257,17 @@ struct ChangeAlbumArtworkSheet: View {
         return result.sorted { lhs, rhs in
             candidatePriority(lhs) < candidatePriority(rhs)
         }
+    }
+
+    private func preferredArtworkPath(for artwork: PlexImageResource) -> String? {
+        let values = [artwork.url, artwork.key, artwork.thumb]
+        for value in values {
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty {
+                return trimmed
+            }
+        }
+        return nil
     }
 
     private func expandedArtworkCandidates(from value: String?) -> [String] {
