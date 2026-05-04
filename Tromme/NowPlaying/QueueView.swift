@@ -87,12 +87,19 @@ struct QueueView: View {
             }
         }
         .onChange(of: player.currentIndex) { _, _ in
-            if isMagicMixActive, player.upcomingTracks.count <= 1 {
-                Task { await buildAndQueueMagicMix() }
-            }
-            if isInfiniteModeActive, player.upcomingTracks.count < 5 {
-                Task { await fillInfiniteQueue() }
-            }
+            refillQueueIfNeeded()
+        }
+        .onChange(of: player.currentTrack?.ratingKey) { _, _ in
+            refillQueueIfNeeded()
+        }
+    }
+
+    private func refillQueueIfNeeded() {
+        if isMagicMixActive, player.upcomingTracks.count <= 1 {
+            Task { await buildAndQueueMagicMix() }
+        }
+        if isInfiniteModeActive, player.upcomingTracks.count < 5 {
+            Task { await fillInfiniteQueue() }
         }
     }
 
