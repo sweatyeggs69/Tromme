@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
+    @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @State private var showReviewPrompt = false
@@ -63,6 +64,12 @@ struct SettingsView: View {
                 }
                 Toggle("Sound Check", isOn: $soundCheckEnabled)
                     .tint(.green)
+                if soundCheckEnabled {
+                    Picker("Gain Source", selection: $soundCheckGainSource) {
+                        Text("Track").tag("track")
+                        Text("Album").tag("album")
+                    }
+                }
             } header: {
                 Text("Playback")
             } footer: {
@@ -171,9 +178,9 @@ struct SettingsView: View {
 
     private var playbackFooterText: String {
         if supportsCellularSettings {
-            return "Enable transcoding to use less data on mobile networks. Sound Check adjusts track gain to keep volume consistent."
+            return "Enable transcoding to use less data on mobile networks. Sound Check can use track or album gain to keep volume consistent."
         }
-        return "Sound Check keeps song volume more consistent."
+        return "Sound Check keeps song volume more consistent using track or album gain."
     }
 
     private func loadSections() async {

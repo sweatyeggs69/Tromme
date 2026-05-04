@@ -810,7 +810,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
     /// ReplayGain `gain` is the dB adjustment needed to reach −18 LUFS.
-    /// We add +4 dB to target −14 LUFS instead, then clamp to AVPlayer's range.
+    /// We add +7 dB to target −11 LUFS instead, then clamp to AVPlayer's range.
     /// Uses detailed track metadata (fetched before playback) for stream-level gain values.
     private func soundCheckVolume(for track: PlexMetadata?) -> Float {
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey) else { return 1.0 }
@@ -818,8 +818,16 @@ final class AudioPlayerService: @unchecked Sendable {
         guard let stream = source?.media?.first?.part?.first?.stream?.first(where: { $0.streamType == 2 }) else {
             return 1.0
         }
-        let gainDB = stream.gain ?? stream.albumGain ?? 0.0
-        let adjustedDB = gainDB + 4.0
+        let gainSource = UserDefaults.standard.string(forKey: Self.soundCheckGainSourceKey) ?? SoundCheckGainSource.track.rawValue
+        let selectedSource = SoundCheckGainSource(rawValue: gainSource) ?? .track
+        let gainDB: Double
+        switch selectedSource {
+        case .track:
+            gainDB = stream.gain ?? stream.albumGain ?? 0.0
+        case .album:
+            gainDB = stream.albumGain ?? stream.gain ?? 0.0
+        }
+        let adjustedDB = gainDB + 7.0
         let linear = Float(pow(10.0, adjustedDB / 20.0))
         return min(max(linear, 0.0), 1.0)
     }
@@ -1157,12 +1165,18 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let originalQueueKey = "playbackOriginalQueue"
     private static let currentIndexKey = "playbackCurrentIndex"
     private static let soundCheckKey = "soundCheckEnabled"
+    private static let soundCheckGainSourceKey = "soundCheckGainSource"
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
     private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
     private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
+
+    private enum SoundCheckGainSource: String {
+        case track
+        case album
+    }
 
     private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {
         supportedCellularTranscodeBitrates.contains(bitrate) ? bitrate : 320
