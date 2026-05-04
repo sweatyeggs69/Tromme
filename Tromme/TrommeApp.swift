@@ -9,6 +9,10 @@ struct TrommeApp: App {
     @State private var plexClient = PlexAPIClient()
     @State private var audioPlayer = AudioPlayerService()
     @State private var configuredCatalystSceneIDs: Set<String> = []
+    @State private var lastForegroundLibraryCheck: Date = .distantPast
+    /// Skip the foreground library check if it ran in the last 5 minutes —
+    /// otherwise rapid app-switcher transitions cost a network round-trip each.
+    private let foregroundLibraryCheckInterval: TimeInterval = 5 * 60
 
     init() {
         // Populate shared context so CarPlay (and other non-SwiftUI code) can access services
@@ -83,6 +87,9 @@ struct TrommeApp: App {
                 Task { await ImageCache.shared.clearMemory() }
             }
             if phase == .active {
+                let now = Date()
+                guard now.timeIntervalSince(lastForegroundLibraryCheck) >= foregroundLibraryCheckInterval else { return }
+                lastForegroundLibraryCheck = now
                 Task {
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }

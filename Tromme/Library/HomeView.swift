@@ -422,6 +422,10 @@ struct HomeView: View {
         playlists: [PlexPlaylist],
         recentAlbums: [PlexMetadata]
     ) async {
+        // Skip aggressive prefetching on metered networks or in Low Power Mode —
+        // images will still load lazily as the user scrolls.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let trackPixelSize = ArtworkView.recommendedTranscodeSize(
             pointSize: AppStyle.TrackGrid.artworkSize,
             displayScale: displayScale

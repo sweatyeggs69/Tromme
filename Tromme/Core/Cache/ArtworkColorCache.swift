@@ -6,7 +6,13 @@ import CryptoKit
 final class ArtworkColorCache {
     static let shared = ArtworkColorCache()
 
+    /// Soft cap on resident entries — colors are tiny (RGB triples), but the
+    /// dictionary previously grew unbounded over the app's lifetime. 500 is
+    /// roughly an album-listening session's worth of unique artwork.
+    private static let maxEntries = 500
+
     private var cache: [String: Color] = [:]
+    private var insertionOrder: [String] = []
     private let diskURL: URL
     private let persistence = ArtworkColorPersistence()
     private var saveTask: Task<Void, Never>?
@@ -28,8 +34,20 @@ final class ArtworkColorCache {
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 50, height: 50) else { return }
         guard let image = await ImageCache.shared.image(for: url) else { return }
         let dominant = image.dominantColor
-        cache[thumbPath] = Color(dominant)
+        store(Color(dominant), forKey: thumbPath)
         scheduleSave()
+    }
+
+    /// Inserts a color and evicts the oldest entry once the cap is exceeded.
+    private func store(_ color: Color, forKey key: String) {
+        if cache[key] == nil {
+            insertionOrder.append(key)
+        }
+        cache[key] = color
+        while cache.count > Self.maxEntries, !insertionOrder.isEmpty {
+            let evicted = insertionOrder.removeFirst()
+            cache.removeValue(forKey: evicted)
+        }
     }
 
     // MARK: - Disk Persistence
@@ -38,7 +56,7 @@ final class ArtworkColorCache {
         let fileURL = diskURL.appendingPathComponent("colors.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
-            cache[key] = Color(red: rgb[0], green: rgb[1], blue: rgb[2])
+            store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
         }
     }
 

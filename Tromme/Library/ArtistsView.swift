@@ -171,6 +171,10 @@ struct ArtistsView: View {
 
     private func prefetchVisibleArtwork() async {
         guard !isLoading, let server = serverConnection.currentServer else { return }
+        // Skip aggressive prefetching on metered networks or in Low Power Mode —
+        // images will still load lazily as the user scrolls.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let prefetchCount = viewMode == .grid ? 60 : 80
         let pointSize: CGFloat = viewMode == .grid ? 184 : 48
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)

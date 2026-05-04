@@ -191,6 +191,7 @@ struct NowPlayingBarsView: View {
             }
         }
         .onAppear { isAnimating = true }
+        .onDisappear { isAnimating = false }
     }
 }
 
