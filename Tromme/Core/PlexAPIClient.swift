@@ -547,6 +547,42 @@ final class PlexAPIClient: Sendable {
         }
     }
 
+    /// Tell PMS to release the transcode session associated with `sessionID`.
+    /// Best-effort cleanup; never throws — failures are swallowed because the
+    /// caller has already moved on, and PMS will GC stale sessions on its own.
+    func universalTranscodeStop(server: PlexServer, sessionID: String) async {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return }
+        components.path = "/music/:/transcode/universal/stop"
+        components.queryItems = [
+            URLQueryItem(name: "session", value: sessionID),
+            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
+            URLQueryItem(name: "X-Plex-Session-Identifier", value: sessionID),
+            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
+        ]
+
+        guard let url = components.url else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
+
+        do {
+            let (_, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if statusCode >= 400 {
+                #if DEBUG
+                print("[AudioPlayer] Transcode stop failed: status \(statusCode) session=\(sessionID)")
+                #endif
+            }
+        } catch {
+            #if DEBUG
+            print("[AudioPlayer] Transcode stop error: \(error.localizedDescription) session=\(sessionID)")
+            #endif
+        }
+    }
+
     /// Build the universal transcode HLS master playlist URL.
     func universalStreamURLCandidates(
         server: PlexServer,
