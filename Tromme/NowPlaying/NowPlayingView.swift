@@ -45,15 +45,6 @@ struct NowPlayingView: View {
 
     private var isCompact: Bool { showLyrics || showQueue }
 
-    private var activeMiniLyricText: String? {
-        guard miniLyricsModeEnabled, !showLyrics, !showQueue, lyricsService.hasSynced else { return nil }
-        let index = lyricsService.currentLineIndex(at: player.currentTime)
-        guard lyricsService.lines.indices.contains(index) else { return nil }
-        let text = lyricsService.lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-
     private var artworkColor: Color {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
     }
@@ -219,7 +210,7 @@ struct NowPlayingView: View {
 
                     if showsMiniLyricsSlot {
                         Spacer(minLength: 0)
-                        MiniLyricsLineView(text: activeMiniLyricText ?? " ")
+                        MiniLyricLineContainer(lyricsService: lyricsService)
                             .frame(maxWidth: controlsContainerWidth)
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, isPadPortrait ? 0 : AppStyle.Spacing.nowPlayingHorizontal)
@@ -599,6 +590,27 @@ struct NowPlayingView: View {
     }
 }
 
+// MARK: - Mini Lyric Line Container
+
+/// Owns the per-tick read of `player.currentTime` so the parent NowPlayingView
+/// body doesn't re-evaluate every time the playhead advances.
+private struct MiniLyricLineContainer: View {
+    @Environment(AudioPlayerService.self) private var player
+    let lyricsService: LyricsService
+
+    private var text: String? {
+        guard lyricsService.hasSynced else { return nil }
+        let index = lyricsService.currentLineIndex(at: player.currentTime)
+        guard lyricsService.lines.indices.contains(index) else { return nil }
+        let line = lyricsService.lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return line.isEmpty ? nil : line
+    }
+
+    var body: some View {
+        MiniLyricsLineView(text: text ?? " ")
+    }
+}
+
 // MARK: - Timeline Slider
 
 struct TimelineSlider: View {
@@ -636,7 +648,10 @@ struct TimelineSlider: View {
         }
         .onChange(of: player.currentTime) { _, newValue in
             if !isDragging {
-                withAnimation(.linear(duration: 0.1)) {
+                // Animate over the same window as the time observer's tick
+                // (see AudioPlayerService.addTimeObserver) so the slider tracks
+                // smoothly between samples instead of stepping.
+                withAnimation(.linear(duration: 0.5)) {
                     sliderValue = min(newValue, duration)
                 }
             }

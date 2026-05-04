@@ -47,7 +47,6 @@ final class AudioPlayerService: @unchecked Sendable {
     private let scrobbleThreshold: Double = 0.9
     private var recoveryTrackRatingKey: String?
     private var recoveryAttemptsForTrack = 0
-    private var lastNowPlayingInfoSyncTime: TimeInterval = 0
     private var server: PlexServer?
     private var client: PlexAPIClient?
     private var originalQueue: [PlexMetadata] = []
@@ -639,7 +638,6 @@ final class AudioPlayerService: @unchecked Sendable {
         } else {
             currentTime = 0
         }
-        lastNowPlayingInfoSyncTime = 0
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
@@ -1011,8 +1009,10 @@ final class AudioPlayerService: @unchecked Sendable {
     // MARK: - Time Tracking
 
     private func addTimeObserver() {
-        // Balanced cadence to keep progress smooth without waking the main thread too often.
-        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
+        // 0.5 s strikes the balance between a smoothly-tracking slider and main-thread
+        // wakeups. iOS computes lock-screen elapsed time from MPNowPlayingInfo's snapshot
+        // + playback rate, so we only refresh that on track / state changes — not here.
+        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         let generation = playbackGeneration
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = time.seconds
@@ -1028,11 +1028,6 @@ final class AudioPlayerService: @unchecked Sendable {
 
                 self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
                 self.maybeReportScrobble()
-
-                if abs(self.currentTime - self.lastNowPlayingInfoSyncTime) >= 1 {
-                    self.lastNowPlayingInfoSyncTime = self.currentTime
-                    self.updateNowPlayingInfo()
-                }
             }
         }
     }
