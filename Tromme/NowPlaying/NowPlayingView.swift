@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import MediaPlayer
+import UIKit
 
 struct NowPlayingView: View {
     // MARK: - Environment
@@ -244,6 +245,12 @@ struct NowPlayingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { NowPlayingBackground() }
+        .overlay(alignment: .topLeading) {
+            VolumeHUDSuppressor()
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .opacity(0.01)
+        }
         .preferredColorScheme(.dark)
         .gesture(
             DragGesture()
@@ -377,6 +384,7 @@ struct NowPlayingView: View {
         let sliderBottomPadding: CGFloat = isPadPortrait ? 42 : 28
         let transportBottomPadding: CGFloat = isPadPortrait ? 64 : 52
         let volumeBottomPadding: CGFloat = isPadPortrait ? 38 : (bottomPadding + 6)
+        let showsRouteNotice = player.isCarPlayConnected || player.isAirPlayConnected
 
         return VStack(spacing: 0) {
             TimelineSlider()
@@ -386,15 +394,41 @@ struct NowPlayingView: View {
                 .frame(height: 56)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, transportBottomPadding)
-            VolumeSlider(
-                isEnabled: !player.isCarPlayConnected,
-                isDarkened: player.isCarPlayConnected,
-                hidesThumb: player.isCarPlayConnected
-            )
+            if showsRouteNotice {
+                HStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
+                            .font(.caption.weight(.semibold))
+                        Text(player.isCarPlayConnected ? "CarPlay" : "AirPlay")
+                            .font(.caption)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(.white.opacity(0.1))
+                    )
+                    Spacer()
+                }
+                .foregroundStyle(.white.opacity(0.68))
+                .frame(height: 32)
+                .offset(y: -12)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, volumeBottomPadding)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else {
+                VolumeSlider(
+                    isEnabled: true
+                )
                 .frame(height: 32)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, volumeBottomPadding)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
         }
+        .animation(.easeInOut(duration: 0.22), value: showsRouteNotice)
     }
 
     // MARK: - Track Context Menu
@@ -621,6 +655,9 @@ struct TimelineSlider: View {
     var body: some View {
         let duration = max(player.duration, 1)
         let isReady = player.isReadyToPlay || player.hasTrack
+        let liveValue = min(max(player.currentTime, 0), duration)
+        let anchoredLiveValue: TimeInterval = (!player.isPlaying && liveValue < 1) ? 0 : liveValue
+        let displayValue = isDragging ? sliderValue : anchoredLiveValue
 
         VStack(spacing: 6) {
             Slider(
@@ -638,9 +675,9 @@ struct TimelineSlider: View {
             .opacity(isReady ? 1 : 0.5)
 
             HStack {
-                Text(formatTime(sliderValue))
+                Text(formatTime(displayValue))
                 Spacer()
-                Text("-\(formatTime(max(0, duration - sliderValue)))")
+                Text("-\(formatTime(max(0, duration - displayValue)))")
             }
             .font(.caption2)
             .foregroundStyle(.white.opacity(0.45))
@@ -648,17 +685,13 @@ struct TimelineSlider: View {
         }
         .onChange(of: player.currentTime) { _, newValue in
             if !isDragging {
-                // Animate over the same window as the time observer's tick
-                // (see AudioPlayerService.addTimeObserver) so the slider tracks
-                // smoothly between samples instead of stepping.
-                withAnimation(.linear(duration: 0.5)) {
-                    sliderValue = min(newValue, duration)
-                }
+                let clamped = min(max(newValue, 0), duration)
+                sliderValue = (!player.isPlaying && clamped < 1) ? 0 : clamped
             }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
             if !isDragging {
-                sliderValue = player.currentTime
+                sliderValue = anchoredLiveValue
             }
         }
         .onChange(of: player.duration) { _, newDuration in
@@ -700,13 +733,10 @@ struct AirPlayButton: UIViewRepresentable {
 
 struct VolumeSlider: UIViewRepresentable {
     let isEnabled: Bool
-    let isDarkened: Bool
-    let hidesThumb: Bool
 
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsVolumeSlider = true
-        view.tintColor = .white
         configure(view)
         return view
     }
@@ -717,25 +747,35 @@ struct VolumeSlider: UIViewRepresentable {
 
     private func configure(_ view: MPVolumeView) {
         view.isUserInteractionEnabled = isEnabled
-        view.alpha = isDarkened ? 0.45 : (isEnabled ? 1 : 0.5)
+        view.alpha = isEnabled ? 1 : 0.5
+        view.tintColor = .white
         for subview in view.subviews {
             if let slider = subview as? UISlider {
                 slider.isEnabled = isEnabled
-                slider.minimumTrackTintColor = UIColor.white.withAlphaComponent(isDarkened ? 0.28 : 0.82)
-                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(isDarkened ? 0.16 : 0.35)
-                slider.alpha = isDarkened ? 0.8 : (isEnabled ? 1 : 0.5)
-                if hidesThumb {
-                    slider.setThumbImage(UIImage(), for: .normal)
-                    slider.setThumbImage(UIImage(), for: .highlighted)
-                    slider.setThumbImage(UIImage(), for: .disabled)
-                } else {
-                    slider.setThumbImage(nil, for: .normal)
-                    slider.setThumbImage(nil, for: .highlighted)
-                    slider.setThumbImage(nil, for: .disabled)
-                }
+                slider.alpha = isEnabled ? 1 : 0.5
+                slider.minimumTrackTintColor = UIColor.white.withAlphaComponent(0.9)
+                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.35)
+                slider.thumbTintColor = .white
+            } else if let button = subview as? UIButton {
+                button.isHidden = true
+                button.isUserInteractionEnabled = false
+            } else {
+                subview.isUserInteractionEnabled = false
             }
         }
     }
+}
+
+private struct VolumeHUDSuppressor: UIViewRepresentable {
+    func makeUIView(context: Context) -> MPVolumeView {
+        let view = MPVolumeView(frame: .zero)
+        view.showsVolumeSlider = true
+        view.alpha = 0.01
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: MPVolumeView, context: Context) {}
 }
 
 // MARK: - Dynamic Color Background
@@ -776,4 +816,18 @@ struct NowPlayingBackground: View {
 #Preview {
     NowPlayingView()
         .environment(AudioPlayerService())
+}
+
+#Preview("CarPlay Connected") {
+    let player = AudioPlayerService()
+    player.isCarPlayConnected = true
+    return NowPlayingView()
+        .environment(player)
+}
+
+#Preview("AirPlay Connected") {
+    let player = AudioPlayerService()
+    player.isAirPlayConnected = true
+    return NowPlayingView()
+        .environment(player)
 }
