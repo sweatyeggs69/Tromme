@@ -287,6 +287,7 @@ struct ArtistDetailView: View {
             }
         }
     }
+
 }
 
 private struct ArtistHeroHeaderView: View {

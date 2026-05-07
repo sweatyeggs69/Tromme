@@ -4,12 +4,15 @@ struct HomeView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
+    @Environment(AudioPlayerService.self) private var player
 
     @State private var favoriteTracks: [PlexMetadata]
     @State private var recentTracks: [PlexMetadata]
     @State private var playlists: [PlexPlaylist]
     @State private var recentAlbums: [PlexMetadata]
     @State private var isLoading: Bool
+    @State private var addToPlaylistItemKeys: [String] = []
+    @State private var showingAddToPlaylistSheet = false
 
     private let previewRecentTracks: [PlexMetadata]?
     private let previewPlaylists: [PlexPlaylist]?
@@ -47,6 +50,9 @@ struct HomeView: View {
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: true)
+        }
+        .sheet(isPresented: $showingAddToPlaylistSheet) {
+            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }
     }
 
@@ -115,6 +121,9 @@ struct HomeView: View {
                                 .frame(width: 170, alignment: .topLeading)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                albumContextMenu(for: album)
+                            }
                         }
                     }
                     .scrollTargetLayout()
@@ -148,6 +157,45 @@ struct HomeView: View {
 
     private func tracksHorizontalRow(tracks: [PlexMetadata]) -> some View {
         HorizontalTrackGrid(tracks: tracks)
+    }
+
+    @ViewBuilder
+    private func albumContextMenu(for album: PlexMetadata) -> some View {
+        Button("Play Next", systemImage: "text.insert") {
+            Task { await queueAlbumNext(album) }
+        }
+        Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+            Task { await queueAlbumLast(album) }
+        }
+        Button("Add to Playlist", systemImage: "text.badge.plus") {
+            Task { await presentAddAlbumToPlaylist(album) }
+        }
+    }
+
+    @MainActor
+    private func queueAlbumNext(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        for track in tracks.reversed() {
+            player.addToQueue(track)
+        }
+    }
+
+    @MainActor
+    private func queueAlbumLast(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        for track in tracks {
+            player.addToEndOfQueue(track)
+        }
+    }
+
+    @MainActor
+    private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        addToPlaylistItemKeys = tracks.map(\.ratingKey)
+        showingAddToPlaylistSheet = true
     }
 
     private var playlistsSection: some View {

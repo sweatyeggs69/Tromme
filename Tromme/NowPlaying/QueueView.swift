@@ -1,13 +1,7 @@
 import SwiftUI
 
 struct QueueView: View {
-    @Environment(\.plexClient) private var client
-    @Environment(\.serverConnection) private var serverConnection
     var player: AudioPlayerService
-    @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
-    @State private var isBuildingMagicMix = false
-    @State private var magicMixPreviousKeys: Set<String> = []
-    @State private var infinitePreviousKeys: Set<String> = []
 
     private var isMagicMixActive: Bool {
         get { player.isMagicMixActive }
@@ -34,9 +28,9 @@ struct QueueView: View {
                     Button(isMagicMixActive ? "New Mix" : "Clear") {
                         player.clearQueue()
                         if isMagicMixActive {
-                            Task { await buildAndQueueMagicMix() }
+                            player.requestMagicMixRefill(freshMix: true)
                         } else if isInfiniteModeActive {
-                            Task { await fillInfiniteQueue() }
+                            player.requestInfiniteRefill()
                         }
                     }
                     .font(.subheadline)
@@ -86,21 +80,6 @@ struct QueueView: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .onChange(of: player.currentIndex) { _, _ in
-            refillQueueIfNeeded()
-        }
-        .onChange(of: player.currentTrack?.ratingKey) { _, _ in
-            refillQueueIfNeeded()
-        }
-    }
-
-    private func refillQueueIfNeeded() {
-        if isMagicMixActive, player.upcomingTracks.count <= 1 {
-            Task { await buildAndQueueMagicMix() }
-        }
-        if isInfiniteModeActive, player.upcomingTracks.count < 5 {
-            Task { await fillInfiniteQueue() }
-        }
     }
 
     private var queueActions: some View {
@@ -121,7 +100,7 @@ struct QueueView: View {
                 } else {
                     isMagicMixActive = false
                     isInfiniteModeActive = true
-                    Task { await fillInfiniteQueue() }
+                    player.requestInfiniteRefill()
                 }
             }
             .disabled(isMagicMixActive)
@@ -136,7 +115,7 @@ struct QueueView: View {
                     isInfiniteModeActive = false
                     player.clearQueue()
                     isMagicMixActive = true
-                    Task { await buildAndQueueMagicMix() }
+                    player.requestMagicMixRefill(freshMix: true)
                 }
             }
             .disabled(isInfiniteModeActive)
@@ -146,72 +125,6 @@ struct QueueView: View {
         .font(.callout.weight(.semibold))
     }
 
-    @MainActor
-    private func buildAndQueueMagicMix() async {
-        guard !isBuildingMagicMix else { return }
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-
-        isBuildingMagicMix = true
-        defer { isBuildingMagicMix = false }
-
-        guard let currentTrack = player.currentTrack,
-              let seedAlbumKey = currentTrack.parentRatingKey else { return }
-
-        guard let allTracks = try? await client.magicMixTracks(
-            server: server,
-            sectionId: sectionId,
-            seedTrackKey: currentTrack.ratingKey,
-            seedAlbumKey: seedAlbumKey,
-            seedArtistKey: currentTrack.grandparentRatingKey,
-            limit: 50,
-            minMatchingStyles: magicMixStyleMatch
-        ), !allTracks.isEmpty else { return }
-
-        // Favor tracks not in the previous batch, then shuffle the final selection
-        let fresh = allTracks.filter { !magicMixPreviousKeys.contains($0.ratingKey) }
-        let selected: [PlexMetadata]
-        if fresh.count >= 25 {
-            selected = Array(fresh.shuffled().prefix(25))
-        } else {
-            let repeats = allTracks.filter { magicMixPreviousKeys.contains($0.ratingKey) }
-            selected = Array((fresh + repeats).prefix(25)).shuffled()
-        }
-
-        magicMixPreviousKeys = Set(selected.map(\.ratingKey))
-
-        for track in selected {
-            player.addToEndOfQueue(track)
-        }
-    }
-
-    @MainActor
-    private func fillInfiniteQueue() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-
-        let needed = 5 - player.upcomingTracks.count
-        guard needed > 0 else { return }
-
-        let allTracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
-        guard !allTracks.isEmpty else { return }
-
-        let fresh = allTracks.filter { !infinitePreviousKeys.contains($0.ratingKey) }
-        let pool = fresh.isEmpty ? allTracks : fresh
-        let selected = Array(pool.shuffled().prefix(needed))
-
-        for key in selected.map(\.ratingKey) {
-            infinitePreviousKeys.insert(key)
-        }
-        // Prevent the set from growing indefinitely
-        if infinitePreviousKeys.count > allTracks.count / 2 {
-            infinitePreviousKeys.removeAll()
-        }
-
-        for track in selected {
-            player.addToEndOfQueue(track)
-        }
-    }
 }
 
 private struct QueueActionPill: View {

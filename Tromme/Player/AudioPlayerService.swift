@@ -68,6 +68,10 @@ final class AudioPlayerService: @unchecked Sendable {
     private var gainPrefetchTask: Task<Void, Never>?
     private var playbackLoadTask: Task<Void, Never>?
     private var nowPlayingArtworkTask: Task<Void, Never>?
+    private var magicMixRefillTask: Task<Void, Never>?
+    private var magicMixPreviousKeys: Set<String> = []
+    private var infiniteRefillTask: Task<Void, Never>?
+    private var infinitePreviousKeys: Set<String> = []
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -97,9 +101,13 @@ final class AudioPlayerService: @unchecked Sendable {
         playbackLoadTask?.cancel()
         nowPlayingArtworkTask?.cancel()
         gainPrefetchTask?.cancel()
+        magicMixRefillTask?.cancel()
+        infiniteRefillTask?.cancel()
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
         gainPrefetchTask = nil
+        magicMixRefillTask = nil
+        infiniteRefillTask = nil
         tearDownObservers()
     }
 
@@ -542,6 +550,8 @@ final class AudioPlayerService: @unchecked Sendable {
         playbackGeneration += 1
         playbackLoadTask?.cancel()
         nowPlayingArtworkTask?.cancel()
+        magicMixRefillTask?.cancel()
+        infiniteRefillTask?.cancel()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
@@ -549,6 +559,8 @@ final class AudioPlayerService: @unchecked Sendable {
         gainPrefetchTask?.cancel()
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
+        magicMixRefillTask = nil
+        infiniteRefillTask = nil
         gainPrefetchTask = nil
         queue = []
         originalQueue = []
@@ -559,6 +571,8 @@ final class AudioPlayerService: @unchecked Sendable {
         duration = 0
         isMagicMixActive = false
         isInfiniteModeActive = false
+        magicMixPreviousKeys.removeAll()
+        infinitePreviousKeys.removeAll()
         isReadyToPlay = false
         stopActiveTranscodeSession()
         currentSessionID = nil
@@ -764,8 +778,140 @@ final class AudioPlayerService: @unchecked Sendable {
         updateNowPlayingInfo()
         prefetchGainMetadata()
         prefetchUpcomingArtwork()
+        maybeRefillMagicMixQueueIfNeeded(trigger: "start_playback")
+        maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
         reportTimelineState("playing")
         savePlaybackState()
+    }
+
+    private func maybeRefillMagicMixQueueIfNeeded(trigger: String) {
+        guard isMagicMixActive else { return }
+        guard upcomingTracks.count <= 5 else { return }
+        guard magicMixRefillTask == nil else { return }
+        guard let server, let client else { return }
+        guard let sectionId = AppContext.shared.serverConnection?.currentLibrarySectionId else { return }
+        guard let currentTrack, let seedAlbumKey = currentTrack.parentRatingKey else { return }
+
+        let seedTrackKey = currentTrack.ratingKey
+        let seedArtistKey = currentTrack.grandparentRatingKey
+        let styleMatch = max(UserDefaults.standard.integer(forKey: "magicMixStyleMatch"), 1)
+
+        logPlayback("magic_mix_refill_begin", "trigger=\(trigger) upcoming=\(upcomingTracks.count)")
+
+        magicMixRefillTask = Task { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.magicMixRefillTask = nil
+                }
+            }
+
+            guard let self else { return }
+            let allTracks = (try? await client.magicMixTracks(
+                server: server,
+                sectionId: sectionId,
+                seedTrackKey: seedTrackKey,
+                seedAlbumKey: seedAlbumKey,
+                seedArtistKey: seedArtistKey,
+                limit: 50,
+                minMatchingStyles: styleMatch
+            )) ?? []
+
+            guard !Task.isCancelled else { return }
+            guard !allTracks.isEmpty else {
+                await MainActor.run {
+                    self.logPlayback("magic_mix_refill_empty", "trigger=\(trigger)")
+                }
+                return
+            }
+
+            let selected: [PlexMetadata] = await MainActor.run {
+                let fresh = allTracks.filter { !self.magicMixPreviousKeys.contains($0.ratingKey) }
+                if fresh.count >= 25 {
+                    return Array(fresh.shuffled().prefix(25))
+                } else {
+                    let repeats = allTracks.filter { self.magicMixPreviousKeys.contains($0.ratingKey) }
+                    return Array((fresh + repeats).prefix(25)).shuffled()
+                }
+            }
+
+            guard !selected.isEmpty else { return }
+
+            await MainActor.run {
+                self.magicMixPreviousKeys = Set(selected.map(\.ratingKey))
+                for track in selected {
+                    self.addToEndOfQueue(track)
+                }
+                self.logPlayback("magic_mix_refill_complete", "added=\(selected.count) upcoming=\(self.upcomingTracks.count)")
+            }
+        }
+    }
+
+    func requestMagicMixRefill(freshMix: Bool = false) {
+        if freshMix {
+            magicMixRefillTask?.cancel()
+            magicMixRefillTask = nil
+            magicMixPreviousKeys.removeAll()
+        }
+        maybeRefillMagicMixQueueIfNeeded(trigger: freshMix ? "user_request" : "queue_low")
+    }
+
+    func requestInfiniteRefill() {
+        infiniteRefillTask?.cancel()
+        infiniteRefillTask = nil
+        maybeRefillInfiniteQueueIfNeeded(trigger: "user_request")
+    }
+
+    private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
+        guard isInfiniteModeActive else { return }
+        let needed = 5 - upcomingTracks.count
+        guard needed > 0 else { return }
+        guard infiniteRefillTask == nil else { return }
+        guard let server, let client else { return }
+        guard let sectionId = AppContext.shared.serverConnection?.currentLibrarySectionId else { return }
+
+        logPlayback("infinite_refill_begin", "trigger=\(trigger) needed=\(needed)")
+
+        infiniteRefillTask = Task { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.infiniteRefillTask = nil
+                }
+            }
+
+            guard let self else { return }
+            let allTracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
+
+            guard !Task.isCancelled else { return }
+            guard !allTracks.isEmpty else {
+                await MainActor.run {
+                    self.logPlayback("infinite_refill_empty", "trigger=\(trigger)")
+                }
+                return
+            }
+
+            let selected: [PlexMetadata] = await MainActor.run {
+                let currentNeeded = 5 - self.upcomingTracks.count
+                guard currentNeeded > 0 else { return [] }
+                let fresh = allTracks.filter { !self.infinitePreviousKeys.contains($0.ratingKey) }
+                let pool = fresh.isEmpty ? allTracks : fresh
+                return Array(pool.shuffled().prefix(currentNeeded))
+            }
+
+            guard !selected.isEmpty else { return }
+
+            await MainActor.run {
+                for key in selected.map(\.ratingKey) {
+                    self.infinitePreviousKeys.insert(key)
+                }
+                if self.infinitePreviousKeys.count > allTracks.count / 2 {
+                    self.infinitePreviousKeys.removeAll()
+                }
+                for track in selected {
+                    self.addToEndOfQueue(track)
+                }
+                self.logPlayback("infinite_refill_complete", "added=\(selected.count) upcoming=\(self.upcomingTracks.count)")
+            }
+        }
     }
 
     private func observeSoundCheckToggle() {

@@ -20,69 +20,15 @@ struct TrackRowView: View {
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
     @State private var isDeletingTrack = false
+    @State private var addToPlaylistItemKeys: [String] = []
+    @State private var showingAddToPlaylistSheet = false
 
     var body: some View {
-        Button {
-            player.play(tracks: tracks, startingAt: index)
-        } label: {
-            HStack(spacing: isCompact ? 8 : 10) {
-                // Leading: track number or artwork
-                if showArtwork {
-                    ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: 8)
-                } else if showTrackNumber {
-                    ZStack {
-                        if isCurrentTrack && player.isPlaying {
-                            NowPlayingBarsView()
-                                .frame(width: 24, height: 16)
-                        } else {
-                            Text("\(track.index ?? (index + 1))")
-                                .font(.body)
-                                .monospacedDigit()
-                                .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .secondary)
-                        }
-                    }
-                    .frame(width: 28, alignment: .center)
-                }
-
-                // Title + artist
-                VStack(alignment: .leading, spacing: isCompact ? 1 : 2) {
-                    Text(track.title)
-                        .font(titleFont ?? (isCompact ? .caption : .body))
-                        .lineLimit(1)
-                        .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .primary)
-
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(artistFont ?? (isCompact ? .caption2 : .caption))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else if showArtist {
-                        Text(track.artistDisplayName)
-                            .font(artistFont ?? (isCompact ? .caption2 : .caption))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                if showsMenu {
-                    Menu {
-                        trackContextMenu
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                }
-            }
-            .appPlainRowItemStyle()
-            .frame(height: isCompact ? 44 : nil)
-            .contentShape(Rectangle())
+        trackRow
+            .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu })
+        .sheet(isPresented: $showingAddToPlaylistSheet) {
+            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }
-        .buttonStyle(.plain)
         .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
             Button("Delete Track", role: .destructive) {
                 Task { await deleteTrack() }
@@ -121,6 +67,13 @@ struct TrackRowView: View {
             Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward")
         }
 
+        Button {
+            addToPlaylistItemKeys = [track.ratingKey]
+            showingAddToPlaylistSheet = true
+        } label: {
+            Label("Add to Playlist", systemImage: "text.badge.plus")
+        }
+
         Divider()
 
         if track.grandparentTitle != nil || track.parentTitle != nil {
@@ -145,6 +98,72 @@ struct TrackRowView: View {
             showDeleteTrackConfirmation = true
         }
         .disabled(isDeletingTrack || serverConnection.currentServer == nil)
+    }
+
+    private var trackRow: some View {
+        Button {
+            player.play(tracks: tracks, startingAt: index)
+        } label: {
+            rowContent
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: isCompact ? 8 : 10) {
+            if showArtwork {
+                ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: 8)
+            } else if showTrackNumber {
+                ZStack {
+                    if isCurrentTrack && player.isPlaying {
+                        NowPlayingBarsView()
+                            .frame(width: 24, height: 16)
+                    } else {
+                        Text("\(track.index ?? (index + 1))")
+                            .font(.body)
+                            .monospacedDigit()
+                            .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .secondary)
+                    }
+                }
+                .frame(width: 28, alignment: .center)
+            }
+
+            VStack(alignment: .leading, spacing: isCompact ? 1 : 2) {
+                Text(track.title)
+                    .font(titleFont ?? (isCompact ? .caption : .body))
+                    .lineLimit(1)
+                    .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .primary)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(artistFont ?? (isCompact ? .caption2 : .caption))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else if showArtist {
+                    Text(track.artistDisplayName)
+                        .font(artistFont ?? (isCompact ? .caption2 : .caption))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if showsMenu {
+                Menu {
+                    trackContextMenu
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .appPlainRowItemStyle()
+        .frame(height: isCompact ? 44 : nil)
+        .contentShape(Rectangle())
     }
 
     private var isCurrentTrack: Bool {

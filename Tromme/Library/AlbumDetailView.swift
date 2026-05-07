@@ -669,6 +669,17 @@ private struct AlbumTrackRow: View {
                     .frame(width: 28, height: 28)
             }
         }
+        .contextMenu {
+            Button("Play Next", systemImage: "text.insert") {
+                player.addToQueue(track)
+            }
+            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                player.addToEndOfQueue(track)
+            }
+            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                onAddToPlaylist(track)
+            }
+        }
     }
 }
 

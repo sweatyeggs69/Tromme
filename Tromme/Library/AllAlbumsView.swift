@@ -4,12 +4,15 @@ struct AllAlbumsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
+    @Environment(AudioPlayerService.self) private var player
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
+    @State private var addToPlaylistItemKeys: [String] = []
+    @State private var showingAddToPlaylistSheet = false
 
     private let previewAlbums: [PlexMetadata]?
 
@@ -73,6 +76,9 @@ struct AllAlbumsView: View {
             searchText = ""
             isSearchPresented = false
         }
+        .sheet(isPresented: $showingAddToPlaylistSheet) {
+            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        }
     }
 
     @ViewBuilder
@@ -105,6 +111,9 @@ struct AllAlbumsView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                albumContextMenu(for: album)
+                            }
                         }
                     }
                     .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
@@ -136,6 +145,9 @@ struct AllAlbumsView: View {
                         .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        albumContextMenu(for: album)
+                    }
                     .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                 }
                 .listStyle(.plain)
@@ -176,6 +188,45 @@ struct AllAlbumsView: View {
             client.artworkURL(server: server, path: album.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
+    }
+
+    @ViewBuilder
+    private func albumContextMenu(for album: PlexMetadata) -> some View {
+        Button("Play Next", systemImage: "text.insert") {
+            Task { await queueAlbumNext(album) }
+        }
+        Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+            Task { await queueAlbumLast(album) }
+        }
+        Button("Add to Playlist", systemImage: "text.badge.plus") {
+            Task { await presentAddAlbumToPlaylist(album) }
+        }
+    }
+
+    @MainActor
+    private func queueAlbumNext(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        for track in tracks.reversed() {
+            player.addToQueue(track)
+        }
+    }
+
+    @MainActor
+    private func queueAlbumLast(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        for track in tracks {
+            player.addToEndOfQueue(track)
+        }
+    }
+
+    @MainActor
+    private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
+        guard let server = serverConnection.currentServer else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        addToPlaylistItemKeys = tracks.map(\.ratingKey)
+        showingAddToPlaylistSheet = true
     }
 }
 
