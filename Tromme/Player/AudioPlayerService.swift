@@ -1,5 +1,6 @@
 import AVFoundation
 import MediaPlayer
+import Network
 import Observation
 
 @Observable @MainActor
@@ -38,7 +39,6 @@ final class AudioPlayerService: @unchecked Sendable {
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
-    private var errorLogObserver: Any?
     private var trackEndObserver: Any?
     private var playbackStalledObserver: Any?
     private var itemFailedToEndObserver: Any?
@@ -62,7 +62,16 @@ final class AudioPlayerService: @unchecked Sendable {
     private var isSeeking = false
     private var soundCheckObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
+    private var audioInterruptionObserver: NSObjectProtocol?
+    private var wasInterruptedWhilePlaying = false
+    private var networkChangeObserver: NSObjectProtocol?
+    private var networkRecoveryTask: Task<Void, Never>?
+    private var lastNetworkInterfaceType: NWInterface.InterfaceType?
+    private var lastNetworkIsConnected: Bool = true
+    private var isNetworkRecovering: Bool = false
+    #if DEBUG
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
+    #endif
     private var pendingInitialSeekTime: TimeInterval?
     private var scrobbledTrackRatingKey: String?
     private var gainPrefetchTask: Task<Void, Never>?
@@ -72,6 +81,16 @@ final class AudioPlayerService: @unchecked Sendable {
     private var magicMixPreviousKeys: Set<String> = []
     private var infiniteRefillTask: Task<Void, Never>?
     private var infinitePreviousKeys: Set<String> = []
+    private var preloadedNext: PreloadedNextTrack?
+    private var nextTrackPreloadTask: Task<Void, Never>?
+
+    private struct PreloadedNextTrack {
+        let ratingKey: String
+        let streamURL: URL
+        let candidates: [URL]
+        let sessionID: String
+        let shouldConstrain: Bool
+    }
 
     /// Progress from 0 to 1
     var progress: Double {
@@ -88,6 +107,8 @@ final class AudioPlayerService: @unchecked Sendable {
         updateShuffleRepeatState()
         observeSoundCheckToggle()
         observeAudioRouteChanges()
+        observeAudioInterruptions()
+        observeNetworkChanges()
         refreshAirPlayConnectionState()
     }
 
@@ -98,16 +119,13 @@ final class AudioPlayerService: @unchecked Sendable {
         if let routeChangeObserver {
             NotificationCenter.default.removeObserver(routeChangeObserver)
         }
-        playbackLoadTask?.cancel()
-        nowPlayingArtworkTask?.cancel()
-        gainPrefetchTask?.cancel()
-        magicMixRefillTask?.cancel()
-        infiniteRefillTask?.cancel()
-        playbackLoadTask = nil
-        nowPlayingArtworkTask = nil
-        gainPrefetchTask = nil
-        magicMixRefillTask = nil
-        infiniteRefillTask = nil
+        if let audioInterruptionObserver {
+            NotificationCenter.default.removeObserver(audioInterruptionObserver)
+        }
+        if let networkChangeObserver {
+            NotificationCenter.default.removeObserver(networkChangeObserver)
+        }
+        cancelAllBackgroundTasks()
         tearDownObservers()
     }
 
@@ -248,15 +266,38 @@ final class AudioPlayerService: @unchecked Sendable {
         #endif
     }
 
-    private func logPlayback(_ event: String, _ details: String = "") {
+    private func logPlayback(_ event: String, _ details: @autoclosure () -> String = "") {
+        #if DEBUG
         guard diagnosticsEnabled else { return }
         let trackKey = currentTrack?.ratingKey ?? "none"
         let prefix = "[AudioPlayer][\(event)] track=\(trackKey) idx=\(currentIndex)/\(max(queue.count - 1, 0))"
-        if details.isEmpty {
+        let detailStr = details()
+        if detailStr.isEmpty {
             print(prefix)
         } else {
-            print("\(prefix) \(details)")
+            print("\(prefix) \(detailStr)")
         }
+        #endif
+    }
+
+    private var bestKnownPlaybackSeconds: TimeInterval {
+        if let playerTime = player?.currentTime().seconds, playerTime.isFinite {
+            return playerTime
+        }
+        return currentTime
+    }
+
+    private var isCurrentItemFullyBuffered: Bool {
+        guard let item = player?.currentItem else { return false }
+        if item.isPlaybackBufferFull { return true }
+        let trackDuration = item.duration.seconds
+        guard trackDuration.isFinite, trackDuration > 0 else { return false }
+        let bufferedEnd = item.loadedTimeRanges.reduce(0.0) { result, value in
+            let range = value.timeRangeValue
+            let end = CMTimeAdd(range.start, range.duration).seconds
+            return end.isFinite ? max(result, end) : result
+        }
+        return bufferedEnd >= trackDuration - 2
     }
 
     private func preferredResumeTimeForRecovery() -> TimeInterval? {
@@ -272,14 +313,8 @@ final class AudioPlayerService: @unchecked Sendable {
     private func isStuckWaitingForBuffer() -> Bool {
         guard let player else { return false }
         guard player.timeControlStatus == .waitingToPlayAtSpecifiedRate else { return false }
-        guard let reason = player.reasonForWaitingToPlay else { return false }
+        guard player.reasonForWaitingToPlay == .toMinimizeStalls else { return false }
         guard let item = player.currentItem else { return false }
-
-        let isBufferingWait =
-            reason == .toMinimizeStalls ||
-            reason.rawValue == AVPlayer.WaitingReason.evaluatingBufferingRate.rawValue
-        guard isBufferingWait else { return false }
-
         return item.isPlaybackBufferEmpty || !item.isPlaybackLikelyToKeepUp
     }
 
@@ -548,20 +583,12 @@ final class AudioPlayerService: @unchecked Sendable {
 
     func resetPlayback() {
         playbackGeneration += 1
-        playbackLoadTask?.cancel()
-        nowPlayingArtworkTask?.cancel()
-        magicMixRefillTask?.cancel()
-        infiniteRefillTask?.cancel()
+        cancelAllBackgroundTasks()
+        discardPreloadedNext()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
         player = nil
         tearDownObservers()
-        gainPrefetchTask?.cancel()
-        playbackLoadTask = nil
-        nowPlayingArtworkTask = nil
-        magicMixRefillTask = nil
-        infiniteRefillTask = nil
-        gainPrefetchTask = nil
         queue = []
         originalQueue = []
         currentIndex = 0
@@ -589,6 +616,23 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     // MARK: - Private
+
+    private func cancelAllBackgroundTasks() {
+        playbackLoadTask?.cancel()
+        nowPlayingArtworkTask?.cancel()
+        gainPrefetchTask?.cancel()
+        magicMixRefillTask?.cancel()
+        infiniteRefillTask?.cancel()
+        networkRecoveryTask?.cancel()
+        nextTrackPreloadTask?.cancel()
+        playbackLoadTask = nil
+        nowPlayingArtworkTask = nil
+        gainPrefetchTask = nil
+        magicMixRefillTask = nil
+        infiniteRefillTask = nil
+        networkRecoveryTask = nil
+        nextTrackPreloadTask = nil
+    }
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
         AVPlayerItem(url: url)
@@ -664,6 +708,19 @@ final class AudioPlayerService: @unchecked Sendable {
         tearDownObservers()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+
+        // Fast path: use preloaded next track URL/session if it matches.
+        // Saves the universalDecision API round-trip on track transitions.
+        if let preloaded = consumePreloadedNextTrack(for: track.ratingKey) {
+            universalCandidatesForCurrentItem = preloaded.candidates
+            universalCandidateIndexForCurrentItem = 0
+            universalStreamURL = preloaded.streamURL
+            currentSessionID = preloaded.sessionID
+            isConstrainedPlaybackPath = preloaded.shouldConstrain
+            logPlayback("load_using_preload", "track=\(track.ratingKey)")
+            startPlayback(url: preloaded.streamURL)
+            return
+        }
 
         let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
         let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
@@ -762,7 +819,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
         let item = makePlayerItem(url: url)
-        item.preferredForwardBufferDuration = isConstrainedPlaybackPath ? 8 : 20
+        item.preferredForwardBufferDuration = preferredFullTrackBufferDuration()
         player = AVPlayer(playerItem: item)
         player?.automaticallyWaitsToMinimizeStalling = true
         player?.volume = soundCheckVolume(for: currentTrack)
@@ -771,7 +828,6 @@ final class AudioPlayerService: @unchecked Sendable {
 
         observeItemStatus(item)
         observePlayerState()
-        observeErrorLog(item)
         observePlaybackFailures(item)
         addTimeObserver()
         observeTrackEnd()
@@ -812,7 +868,7 @@ final class AudioPlayerService: @unchecked Sendable {
                 seedTrackKey: seedTrackKey,
                 seedAlbumKey: seedAlbumKey,
                 seedArtistKey: seedArtistKey,
-                limit: 50,
+                limit: 100,
                 minMatchingStyles: styleMatch
             )) ?? []
 
@@ -826,12 +882,14 @@ final class AudioPlayerService: @unchecked Sendable {
 
             let selected: [PlexMetadata] = await MainActor.run {
                 let fresh = allTracks.filter { !self.magicMixPreviousKeys.contains($0.ratingKey) }
-                if fresh.count >= 25 {
-                    return Array(fresh.shuffled().prefix(25))
+                let pool: [PlexMetadata]
+                if fresh.count >= 50 {
+                    pool = Array(fresh.shuffled().prefix(50))
                 } else {
                     let repeats = allTracks.filter { self.magicMixPreviousKeys.contains($0.ratingKey) }
-                    return Array((fresh + repeats).prefix(25)).shuffled()
+                    pool = Array((fresh + repeats).prefix(50))
                 }
+                return Self.albumDistributedShuffle(pool)
             }
 
             guard !selected.isEmpty else { return }
@@ -844,6 +902,34 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.logPlayback("magic_mix_refill_complete", "added=\(selected.count) upcoming=\(self.upcomingTracks.count)")
             }
         }
+    }
+
+    /// Shuffles tracks so songs from the same album are spread evenly across the result.
+    /// Groups by album, shuffles within each group, then round-robins one track from each
+    /// group per pass. With N albums of total M tracks, any two tracks from the same album
+    /// are at least N positions apart.
+    nonisolated static func albumDistributedShuffle(_ tracks: [PlexMetadata]) -> [PlexMetadata] {
+        guard tracks.count > 1 else { return tracks }
+        var byAlbum: [String: [PlexMetadata]] = [:]
+        for track in tracks {
+            let key = track.parentRatingKey ?? track.ratingKey
+            byAlbum[key, default: []].append(track)
+        }
+        var groups = byAlbum.values.map { $0.shuffled() }
+        var result: [PlexMetadata] = []
+        result.reserveCapacity(tracks.count)
+        while !groups.isEmpty {
+            groups.shuffle()
+            var nextGroups: [[PlexMetadata]] = []
+            for var group in groups {
+                result.append(group.removeFirst())
+                if !group.isEmpty {
+                    nextGroups.append(group)
+                }
+            }
+            groups = nextGroups
+        }
+        return result
     }
 
     func requestMagicMixRefill(freshMix: Bool = false) {
@@ -940,12 +1026,264 @@ final class AudioPlayerService: @unchecked Sendable {
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
             queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            let reason: AVAudioSession.RouteChangeReason? = {
+                guard let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt else { return nil }
+                return AVAudioSession.RouteChangeReason(rawValue: raw)
+            }()
+            Task { @MainActor in
+                self.refreshAirPlayConnectionState()
+                if reason == .oldDeviceUnavailable, self.isPlaying {
+                    self.logPlayback("route_old_device_unavailable_pausing")
+                    self.pauseCurrent()
+                }
+            }
+        }
+    }
+
+    private func observeAudioInterruptions() {
+        audioInterruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            guard let userInfo = notification.userInfo,
+                  let raw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            let options: AVAudioSession.InterruptionOptions = {
+                guard let raw = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return [] }
+                return AVAudioSession.InterruptionOptions(rawValue: raw)
+            }()
+            Task { @MainActor in
+                self.handleAudioInterruption(type: type, options: options)
+            }
+        }
+    }
+
+    private func handleAudioInterruption(type: AVAudioSession.InterruptionType, options: AVAudioSession.InterruptionOptions) {
+        switch type {
+        case .began:
+            wasInterruptedWhilePlaying = isPlaying
+            if isPlaying {
+                isPlaying = false
+                updateNowPlayingInfo()
+            }
+            logPlayback("audio_interruption_began", "was_playing=\(wasInterruptedWhilePlaying)")
+        case .ended:
+            let shouldResume = options.contains(.shouldResume) && wasInterruptedWhilePlaying
+            logPlayback("audio_interruption_ended", "should_resume=\(shouldResume)")
+            wasInterruptedWhilePlaying = false
+            guard shouldResume else { return }
+            do {
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                logPlayback("audio_session_reactivate_failed", "error=\(error.localizedDescription)")
+                return
+            }
+            if let player, let item = player.currentItem, item.status != .failed {
+                player.play()
+                isPlaying = true
+                updateNowPlayingInfo()
+                reportTimelineState("playing")
+            } else {
+                recoverAndPlayCurrentTrackIfPossible(resumeAt: preferredResumeTimeForRecovery())
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    private func observeNetworkChanges() {
+        lastNetworkInterfaceType = NetworkStatus.shared.interfaceType
+        lastNetworkIsConnected = NetworkStatus.shared.isConnected
+        networkChangeObserver = NotificationCenter.default.addObserver(
+            forName: NetworkStatus.didChangeNotification,
+            object: nil,
+            queue: .main
         ) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor in
-                self.refreshAirPlayConnectionState()
+                self.handleNetworkPathChange()
             }
         }
+    }
+
+    private func handleNetworkPathChange() {
+        let newType = NetworkStatus.shared.interfaceType
+        let newConnected = NetworkStatus.shared.isConnected
+        let oldType = lastNetworkInterfaceType
+        let oldConnected = lastNetworkIsConnected
+        lastNetworkInterfaceType = newType
+        lastNetworkIsConnected = newConnected
+
+        let interfaceChanged = newType != oldType
+        let lostConnection = oldConnected && !newConnected
+        let reconnected = !oldConnected && newConnected
+        guard interfaceChanged || reconnected || lostConnection else { return }
+        guard isPlaying, currentTrack != nil else { return }
+
+        logPlayback("network_path_change", "interface_changed=\(interfaceChanged) lost=\(lostConnection) reconnected=\(reconnected)")
+
+        isNetworkRecovering = true
+        networkRecoveryTask?.cancel()
+        let generation = playbackGeneration
+        networkRecoveryTask = Task {
+            defer {
+                Task { @MainActor in
+                    self.isNetworkRecovering = false
+                }
+            }
+
+            let connectivityDeadline = Date().addingTimeInterval(30)
+            while !NetworkStatus.shared.isConnected && Date() < connectivityDeadline {
+                try? await Task.sleep(for: .milliseconds(500))
+                if Task.isCancelled { return }
+                if self.playbackGeneration != generation { return }
+                if !self.isPlaying { return }
+            }
+            guard NetworkStatus.shared.isConnected else {
+                self.logPlayback("network_recovery_no_connectivity")
+                return
+            }
+
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled, self.playbackGeneration == generation, self.isPlaying else { return }
+
+            await AppContext.shared.serverConnection?.reprobe()
+            guard !Task.isCancelled, self.playbackGeneration == generation, self.isPlaying else { return }
+
+            if let updatedServer = AppContext.shared.serverConnection?.currentServer {
+                self.server = updatedServer
+            }
+
+            if self.isCurrentItemFullyBuffered {
+                self.logPlayback("network_recovery_skipped", "reason=fully_buffered")
+                return
+            }
+
+            self.recoveryAttemptsForTrack = 0
+            self.recoverAndPlayCurrentTrackIfPossible(resumeAt: self.preferredResumeTimeForRecovery())
+            self.logPlayback("network_recovery_rebuild")
+        }
+    }
+
+    /// Buffer enough of the current track to make playback resilient to network changes.
+    /// Caps at 30 minutes to avoid runaway memory on very long items.
+    private func preferredFullTrackBufferDuration() -> TimeInterval {
+        let known = duration
+        let target = known > 0 ? known + 30 : 600
+        return min(target, 1800)
+    }
+
+    // MARK: - Next Track Preload
+
+    private func maybePreloadNextTrack() {
+        guard duration > 0 else { return }
+        let remaining = duration - currentTime
+        guard remaining > 0, remaining <= 25 else { return }
+        guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
+        guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+
+        let nextTrack: PlexMetadata?
+        if repeatMode == .one {
+            nextTrack = currentTrack
+        } else if currentIndex < queue.count - 1 {
+            nextTrack = queue[currentIndex + 1]
+        } else if repeatMode == .all, !queue.isEmpty {
+            nextTrack = queue[0]
+        } else {
+            nextTrack = nil
+        }
+        guard let track = nextTrack else { return }
+
+        nextTrackPreloadTask = Task { [weak self] in
+            await self?.performPreload(track)
+        }
+    }
+
+    private func performPreload(_ track: PlexMetadata) async {
+        defer { nextTrackPreloadTask = nil }
+        guard let server, let client else { return }
+
+        let playbackPath = resolvedPlaybackPath(for: server)
+        let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
+        let cellularBitrate = Self.validatedCellularTranscodeBitrate(
+            UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
+        )
+        let shouldConstrain: Bool = switch playbackPath {
+        case .cellular, .wan, .relay: !disableCellularTranscoding
+        case .lan: false
+        }
+
+        let sessionID = UUID().uuidString
+        let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
+        let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
+        let headers = client.playbackHeaders(
+            server: server,
+            sessionID: sessionID,
+            preferAACTranscode: shouldConstrain,
+            avoidAudioTranscode: !shouldConstrain
+        )
+
+        do {
+            try await client.universalDecision(
+                server: server,
+                metadataPath: normalizedPath,
+                sessionID: sessionID,
+                headers: headers,
+                location: playbackPath.locationQueryValue,
+                constrainAudioBitrate: shouldConstrain,
+                cellularTranscodeBitrate: cellularBitrate
+            )
+        } catch {
+            logPlayback("preload_decision_failed", "error=\(error.localizedDescription)")
+            return
+        }
+        guard !Task.isCancelled else { return }
+
+        let candidates = client.universalStreamURLCandidates(
+            server: server,
+            mediaPathCandidates: [normalizedPath],
+            sessionID: sessionID,
+            location: playbackPath.locationQueryValue,
+            constrainAudioBitrate: shouldConstrain,
+            cellularTranscodeBitrate: cellularBitrate
+        )
+        guard let streamURL = candidates.first else {
+            logPlayback("preload_no_url")
+            return
+        }
+
+        preloadedNext = PreloadedNextTrack(
+            ratingKey: track.ratingKey,
+            streamURL: streamURL,
+            candidates: candidates,
+            sessionID: sessionID,
+            shouldConstrain: shouldConstrain
+        )
+        logPlayback("preload_complete", "track=\(track.ratingKey)")
+    }
+
+    private func consumePreloadedNextTrack(for ratingKey: String) -> PreloadedNextTrack? {
+        guard let preloaded = preloadedNext else { return nil }
+        guard preloaded.ratingKey == ratingKey else {
+            discardPreloadedNext()
+            return nil
+        }
+        preloadedNext = nil
+        return preloaded
+    }
+
+    private func discardPreloadedNext() {
+        nextTrackPreloadTask?.cancel()
+        nextTrackPreloadTask = nil
+        if let preloaded = preloadedNext, let server, let client {
+            let sessionID = preloaded.sessionID
+            Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+        }
+        preloadedNext = nil
     }
 
     private func refreshAirPlayConnectionState() {
@@ -1023,6 +1361,10 @@ final class AudioPlayerService: @unchecked Sendable {
                 case .failed:
                     self.isReadyToPlay = false
                     self.logPlayback("item_failed", "error=\(errorDesc ?? "unknown")")
+                    if self.isNetworkRecovering {
+                        self.logPlayback("item_failed_deferred_network_recovery")
+                        return
+                    }
                     let nextIndex = self.universalCandidateIndexForCurrentItem + 1
                     if self.universalCandidatesForCurrentItem.indices.contains(nextIndex) {
                         self.universalCandidateIndexForCurrentItem = nextIndex
@@ -1039,20 +1381,6 @@ final class AudioPlayerService: @unchecked Sendable {
         }
     }
 
-    /// Listens for error-log entries the server may emit (e.g. seek failures
-    /// on servers that don't support HTTP Range requests).
-    private func observeErrorLog(_ item: AVPlayerItem) {
-        errorLogObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemNewErrorLogEntry,
-            object: item,
-            queue: .main
-        ) { notification in
-            guard let item = notification.object as? AVPlayerItem,
-                  let _ = item.errorLog()?.events.last else { return }
-            // Non-fatal HLS error log entries (e.g. bandwidth mismatch) — no action needed
-        }
-    }
-
     private func observePlaybackFailures(_ item: AVPlayerItem) {
         let observedGeneration = playbackGeneration
 
@@ -1065,32 +1393,29 @@ final class AudioPlayerService: @unchecked Sendable {
                 guard let self else { return }
                 guard self.playbackGeneration == observedGeneration else { return }
 
+                if self.isNetworkRecovering {
+                    self.logPlayback("stall_deferred_network_recovery")
+                    return
+                }
+
                 self.logPlayback("playback_stalled")
                 self.player?.play()
 
-                let stallStartTime = {
-                    if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
-                        return playerTime
-                    }
-                    return self.currentTime
-                }()
+                let stallStartTime = self.bestKnownPlaybackSeconds
 
                 try? await Task.sleep(for: .seconds(6))
                 guard self.playbackGeneration == observedGeneration else { return }
                 guard self.currentTrack?.ratingKey == self.recoveryTrackRatingKey else { return }
+                if self.isNetworkRecovering {
+                    self.logPlayback("stall_deferred_network_recovery")
+                    return
+                }
 
                 let status = self.player?.timeControlStatus
                 let waitingReason = self.player?.reasonForWaitingToPlay
-                let waitingReasonRaw = waitingReason?.rawValue ?? "none"
-                let checkTime = {
-                    if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
-                        return playerTime
-                    }
-                    return self.currentTime
-                }()
-                let progressed = checkTime - stallStartTime
+                let progressed = self.bestKnownPlaybackSeconds - stallStartTime
 
-                self.logPlayback("stall_check", "status=\(status?.rawValue ?? -1) waiting_reason=\(waitingReasonRaw) progressed=\(progressed)")
+                self.logPlayback("stall_check", "status=\(status?.rawValue ?? -1) waiting_reason=\(waitingReason?.rawValue ?? "none") progressed=\(progressed)")
 
                 if status == .playing || progressed > 1 {
                     return
@@ -1101,17 +1426,14 @@ final class AudioPlayerService: @unchecked Sendable {
                     try? await Task.sleep(for: .seconds(10))
                     guard self.playbackGeneration == observedGeneration else { return }
                     guard self.currentTrack?.ratingKey == self.recoveryTrackRatingKey else { return }
+                    if self.isNetworkRecovering {
+                        self.logPlayback("stall_deferred_network_recovery")
+                        return
+                    }
 
                     let recheckStatus = self.player?.timeControlStatus
-                    let recheckReason = self.player?.reasonForWaitingToPlay?.rawValue ?? "none"
-                    let recheckTime = {
-                        if let playerTime = self.player?.currentTime().seconds, playerTime.isFinite {
-                            return playerTime
-                        }
-                        return self.currentTime
-                    }()
-                    let recheckProgressed = recheckTime - stallStartTime
-                    self.logPlayback("stall_recheck", "status=\(recheckStatus?.rawValue ?? -1) waiting_reason=\(recheckReason) progressed=\(recheckProgressed)")
+                    let recheckProgressed = self.bestKnownPlaybackSeconds - stallStartTime
+                    self.logPlayback("stall_recheck", "status=\(recheckStatus?.rawValue ?? -1) progressed=\(recheckProgressed)")
 
                     if recheckStatus == .playing || recheckProgressed > 1 {
                         return
@@ -1130,6 +1452,10 @@ final class AudioPlayerService: @unchecked Sendable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard self.playbackGeneration == observedGeneration else { return }
+                if self.isNetworkRecovering {
+                    self.logPlayback("item_failed_deferred_network_recovery")
+                    return
+                }
                 self.logPlayback("failed_to_play_to_end")
                 self.handlePlaybackFailure("failed_to_end")
             }
@@ -1142,10 +1468,6 @@ final class AudioPlayerService: @unchecked Sendable {
         statusObservation = nil
         timeControlObservation?.invalidate()
         timeControlObservation = nil
-        if let errorLogObserver {
-            NotificationCenter.default.removeObserver(errorLogObserver)
-        }
-        errorLogObserver = nil
         if let trackEndObserver {
             NotificationCenter.default.removeObserver(trackEndObserver)
         }
@@ -1182,6 +1504,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
                 self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
                 self.maybeReportScrobble()
+                self.maybePreloadNextTrack()
             }
         }
     }
@@ -1204,10 +1527,12 @@ final class AudioPlayerService: @unchecked Sendable {
                 // Preserve the current "playing intent" while AVPlayer is briefly
                 // buffering so transport controls do not flicker.
                 let playing = status == .playing || (waitingForPlayback && self.isPlaying)
+                #if DEBUG
                 if self.lastLoggedTimeControlStatus != status {
                     self.lastLoggedTimeControlStatus = status
                     self.logPlayback("time_control", "status=\(status.rawValue)")
                 }
+                #endif
                 self.isPlaying = playing
                 self.updateNowPlayingInfo()
             }
@@ -1388,7 +1713,7 @@ final class AudioPlayerService: @unchecked Sendable {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            // Audio session setup failed
+            logPlayback("audio_session_setup_failed", "error=\(error.localizedDescription)")
         }
     }
 
