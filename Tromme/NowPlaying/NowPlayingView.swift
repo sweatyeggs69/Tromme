@@ -785,8 +785,10 @@ struct NowPlayingBackground: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
 
+    @State private var backgroundImage: UIImage?
+
     private var thumbPath: String? {
-        player.currentTrack?.parentThumb ?? player.currentTrack?.thumb
+        player.currentTrack?.parentThumb
     }
 
     private var artworkColor: Color {
@@ -794,21 +796,42 @@ struct NowPlayingBackground: View {
     }
 
     var body: some View {
-        LinearGradient(
-            colors: [artworkColor, .black],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+        ZStack {
+            artworkColor
+            if let backgroundImage {
+                Image(uiImage: backgroundImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .blur(radius: 60)
+                    .scaleEffect(1.3)
+            }
+            Rectangle()
+                .fill(.thinMaterial)
+        }
+        .clipped()
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: artworkColor)
+        .animation(.easeInOut(duration: 0.6), value: backgroundImage)
         .task(id: thumbPath) {
             guard let server = serverConnection.currentServer else { return }
-            await ArtworkColorCache.shared.resolveColor(
+            async let _: Void = ArtworkColorCache.shared.resolveColor(
                 for: thumbPath,
                 using: client,
                 server: server
             )
+            await loadBackgroundImage(server: server)
         }
+    }
+
+    private func loadBackgroundImage(server: PlexServer) async {
+        guard let thumbPath,
+              let url = client.artworkURL(server: server, path: thumbPath, width: 896, height: 896) else {
+            backgroundImage = nil
+            return
+        }
+        let image = await ImageCache.shared.image(for: url, targetPixelSize: 896)
+        guard !Task.isCancelled, thumbPath == player.currentTrack?.parentThumb else { return }
+        backgroundImage = image
     }
 }
 

@@ -91,11 +91,8 @@ extension ArtworkView {
         let safePointSize = max(pointSize, 1)
         let target = Int(ceil(safePointSize * displayScale))
         switch target {
-        case ...128: return 160
-        case ...220: return 256
-        case ...360: return 384
-        case ...520: return 512
-        case ...760: return 640
+        case ...256: return 256
+        case ...640: return 512
         default: return 896
         }
     }
