@@ -161,42 +161,47 @@ struct AlbumDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var albumHeader: some View {
+    private func albumHeader(
+        includesTitleAndArtist: Bool = true,
+        includesInfoLine: Bool = true
+    ) -> some View {
         VStack {
             ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
-            Text(album.title)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(titleColor)
-                .multilineTextAlignment(.center)
-                .padding(.top, 12)
-                .padding(.horizontal, 20)
+            if includesTitleAndArtist {
+                Text(album.title)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(titleColor)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 12)
+                    .padding(.horizontal, 20)
 
-            if let artistTarget = artistNavigationTarget {
-                if shouldPopToSourceArtist {
-                    Button {
-                        dismiss()
-                    } label: {
-                        centeredArtistHeaderText(artistTarget.title)
+                if let artistTarget = artistNavigationTarget {
+                    if shouldPopToSourceArtist {
+                        Button {
+                            dismiss()
+                        } label: {
+                            centeredArtistHeaderText(artistTarget.title)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        Button {
+                            selectedArtist = artistTarget
+                        } label: {
+                            centeredArtistHeaderText(artistTarget.title)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                } else {
-                    Button {
-                        selectedArtist = artistTarget
-                    } label: {
-                        centeredArtistHeaderText(artistTarget.title)
-                    }
-                    .buttonStyle(.plain)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                } else if let artist = album.parentTitle, !artist.isEmpty {
+                    centeredArtistHeaderText(artist)
                 }
-            } else if let artist = album.parentTitle, !artist.isEmpty {
-                centeredArtistHeaderText(artist)
             }
 
-            if let infoLine = albumInfoLine {
+            if includesInfoLine, let infoLine = albumInfoLine {
                 Text(infoLine)
                     .font(.caption)
                     .foregroundStyle(tertiaryTextColor)
@@ -205,69 +210,73 @@ struct AlbumDetailView: View {
                     .padding(.horizontal, 20)
             }
 
-            HStack(spacing: 14) {
-                Button {
-                    guard !controlsDisabled else { return }
-                    var shuffled = tracks
-                    shuffled.shuffle()
-                    player.play(tracks: shuffled, startingAt: 0)
-                } label: {
-                    Image(systemName: "shuffle")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(iconForegroundColor)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                        .shadow(color: controlShadowColor, radius: 6, y: -2)
-                }
-                .buttonStyle(.plain)
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-
-                Button {
-                    guard !controlsDisabled else { return }
-                    player.play(tracks: tracks, startingAt: 0)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.fill")
-                        Text("Play")
-                    }
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(artworkColor)
-                    .padding(.horizontal, 56)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule().fill(artworkColor.isLightColor ? Color.black : Color.white)
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-
-                Menu {
-                    Button("Play Next", systemImage: "text.insert") {
-                        playAlbumNext()
-                    }
-                    Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
-                        addAlbumToQueueEnd()
-                    }
-                    Button("Add to Playlist", systemImage: "text.badge.plus") {
-                        presentAddToPlaylist(for: tracks.map(\.ratingKey))
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(iconForegroundColor)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                        .shadow(color: controlShadowColor, radius: 6, y: -2)
-                }
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 20)
+            albumActionButtons
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var albumActionButtons: some View {
+        HStack(spacing: 14) {
+            Button {
+                guard !controlsDisabled else { return }
+                var shuffled = tracks
+                shuffled.shuffle()
+                player.play(tracks: shuffled, startingAt: 0)
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(iconForegroundColor)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+            }
+            .buttonStyle(.plain)
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+            Button {
+                guard !controlsDisabled else { return }
+                player.play(tracks: tracks, startingAt: 0)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                    Text("Play")
+                }
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(artworkColor)
+                .padding(.horizontal, 56)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule().fill(artworkColor.isLightColor ? Color.black : Color.white)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+            Menu {
+                Button("Play Next", systemImage: "text.insert") {
+                    playAlbumNext()
+                }
+                Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                    addAlbumToQueueEnd()
+                }
+                Button("Add to Playlist", systemImage: "text.badge.plus") {
+                    presentAddToPlaylist(for: tracks.map(\.ratingKey))
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(iconForegroundColor)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+            }
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+        }
+        .padding(.top, 6)
+        .padding(.bottom, 20)
     }
 
     private let isPreviewMode: Bool
@@ -354,6 +363,46 @@ struct AlbumDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var landscapeAlbumTitleAndArtist: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(album.title)
+                .font(.largeTitle.weight(.bold))
+                .foregroundStyle(titleColor)
+                .lineLimit(2)
+
+            if let artistTarget = artistNavigationTarget {
+                if shouldPopToSourceArtist {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text(artistTarget.title)
+                            .font(.title3)
+                            .foregroundStyle(secondaryTextColor)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        selectedArtist = artistTarget
+                    } label: {
+                        Text(artistTarget.title)
+                            .font(.title3)
+                            .foregroundStyle(secondaryTextColor)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else if let artist = album.parentTitle, !artist.isEmpty {
+                Text(artist)
+                    .font(.title3)
+                    .foregroundStyle(secondaryTextColor)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var albumFooter: some View {
         HStack {
             if let studio = albumDetails.studio {
@@ -377,30 +426,50 @@ struct AlbumDetailView: View {
                     .ignoresSafeArea()
 
                 if isPadLandscape {
-                    VStack(spacing: 0) {
-                        HStack(alignment: .top, spacing: 0) {
-                            albumHeader
-                                .padding(.bottom, 20)
-                                .frame(width: geo.size.width * 0.4)
+                    HStack(alignment: .top, spacing: 0) {
+                        VStack(spacing: 0) {
+                            ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
+                                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                                .padding(.top, 12)
+
+                            albumActionButtons
+                                .padding(.top, 16)
+
+                            if let infoLine = albumInfoLine {
+                                Text(infoLine)
+                                    .font(.caption)
+                                    .foregroundStyle(tertiaryTextColor)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                        .padding(.bottom, 20)
+                        .frame(width: geo.size.width * 0.33)
+
+                        VStack(alignment: .leading, spacing: 0) {
+                            landscapeAlbumTitleAndArtist
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20)
+                                .padding(.bottom, 8)
 
                             List {
                                 Section {
                                     trackListRows
+
+                                    albumFooter
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
                                 }
                             }
                             .scrollContentBackground(.hidden)
                             .listStyle(.plain)
-                            .frame(width: geo.size.width * 0.6)
                         }
-
-                        albumFooter
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
+                        .frame(width: geo.size.width * 0.67)
                     }
                 } else {
                     List {
                         Section {
-                            albumHeader
+                            albumHeader()
                                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                                 .listRowSeparator(.hidden, edges: .top)
                                 .listRowSeparator(.visible, edges: .bottom)

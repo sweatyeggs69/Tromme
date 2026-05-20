@@ -67,6 +67,7 @@ struct QueueView: View {
                                 Label("Delete", systemImage: "trash")
                                     .labelStyle(.iconOnly)
                             }
+                            .tint(.red)
                         }
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -74,6 +75,20 @@ struct QueueView: View {
                     }
                     .onMove { source, destination in
                         player.moveInQueue(from: source, to: destination)
+                    }
+
+                    if isInfiniteModeActive {
+                        HStack {
+                            Spacer()
+                            Image(systemName: "infinity")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.4))
+                            Spacer()
+                        }
+                        .padding(.vertical, 12)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets())
                     }
                 }
                 .listStyle(.plain)

@@ -64,6 +64,10 @@ struct LoginView: View {
                 onAuthenticated(token)
             }
         }
+        .task {
+            guard authService.authToken == nil, !authService.isAuthenticating else { return }
+            await authService.startAuth(client: client)
+        }
     }
 }
 

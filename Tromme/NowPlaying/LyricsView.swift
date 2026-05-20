@@ -8,6 +8,9 @@ struct LyricsScrollView: View {
     @State private var isUserScrolling = false
     @State private var scrollResumeTask: Task<Void, Never>?
 
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    private var lineFontSize: CGFloat { isPad ? 44 : 32 }
+
     private var currentIndex: Int {
         lyricsService.currentLineIndex(at: player.currentTime)
     }
@@ -78,7 +81,7 @@ struct LyricsScrollView: View {
             } else if let plainLyrics = lyricsService.plainLyrics, !plainLyrics.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
                     Text(plainLyrics)
-                        .font(.title3.weight(.semibold))
+                        .font(isPad ? .title.weight(.semibold) : .title3.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -93,7 +96,7 @@ struct LyricsScrollView: View {
 
     private func lyricLine(text: String, isActive: Bool) -> some View {
         Text(text)
-            .font(.system(size: 32, weight: .bold))
+            .font(.system(size: lineFontSize, weight: .bold))
             .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
             .multilineTextAlignment(.center)

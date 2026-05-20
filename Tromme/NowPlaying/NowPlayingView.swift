@@ -73,12 +73,12 @@ struct NowPlayingView: View {
             let landscapeOuterHorizontalPadding: CGFloat = 40
             let landscapeColumnSpacing: CGFloat = 36
             let landscapeContentWidth = max(0.0, width - (landscapeOuterHorizontalPadding * 2))
-            let landscapeLeftWidth = landscapeContentWidth * 0.4
+            let landscapeLeftWidth = landscapeContentWidth * 0.33
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
             let landscapeControlsHorizontalPadding: CGFloat = 12
             let landscapeArtworkMaxByWidth = landscapeLeftWidth - (landscapeControlsHorizontalPadding * 2)
-            let landscapeControlsHeight: CGFloat = 400
-            let landscapeArtworkMaxByHeight = max(110.0, height - landscapeControlsHeight)
+            let landscapeReservedHeight: CGFloat = 290
+            let landscapeArtworkMaxByHeight = max(110.0, height - landscapeReservedHeight)
             let landscapeArtworkSize = max(110.0, min(landscapeArtworkMaxByWidth, landscapeArtworkMaxByHeight))
 
 
@@ -97,10 +97,11 @@ struct NowPlayingView: View {
                                 size: landscapeArtworkSize,
                                 cornerRadius: 8
                             )
-                            .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+                            .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
                             .padding(.top, 10)
+                            .padding(.bottom, 24)
 
-                            Spacer(minLength: 8)
+                            Spacer(minLength: 0)
 
                             trackInfo
                                 .padding(.horizontal, landscapeControlsHorizontalPadding)
@@ -134,6 +135,15 @@ struct NowPlayingView: View {
                         Spacer()
 
                         HStack(spacing: 10) {
+                            Menu {
+                                trackContextMenuItems
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                                    .frame(width: 38, height: 38)
+                            }
+                            .buttonStyle(.plain)
+
                             Button {
                                 toggleLyricsPanel()
                             } label: {
@@ -153,8 +163,9 @@ struct NowPlayingView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
-                    .padding(.bottom, 0)
+                    .padding(.bottom, iPadBottomActionsExtraPadding)
                 }
+                .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 16)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
                 .animation(.easeInOut(duration: 0.25), value: showQueue)
             } else {
@@ -174,7 +185,7 @@ struct NowPlayingView: View {
                             size: isCompact ? 72 : artworkSize,
                             cornerRadius: 6
                         )
-                        .shadow(color: .black.opacity(isCompact ? 0.3 : 0.5), radius: isCompact ? 8 : 40, y: isCompact ? 4 : 20)
+                        .shadow(color: .black.opacity(isCompact ? 0.2 : 0.3), radius: isCompact ? 6 : 22, y: isCompact ? 3 : 10)
                         .scaleEffect(!isCompact && player.isPlaying ? 1.0 : !isCompact ? 0.85 : 1.0)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                         .zIndex(1)
@@ -384,8 +395,8 @@ struct NowPlayingView: View {
         bottomPadding: CGFloat = 20,
         isPadPortrait: Bool = false
     ) -> some View {
-        let sliderBottomPadding: CGFloat = isPadPortrait ? 42 : 28
-        let transportBottomPadding: CGFloat = isPadPortrait ? 64 : 52
+        let sliderBottomPadding: CGFloat = isPadPortrait ? 42 : 18
+        let transportBottomPadding: CGFloat = isPadPortrait ? 64 : 32
         let volumeBottomPadding: CGFloat = isPadPortrait ? 38 : (bottomPadding + 6)
         let showsRouteNotice = player.isCarPlayConnected || player.isAirPlayConnected
 
@@ -398,24 +409,15 @@ struct NowPlayingView: View {
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, transportBottomPadding)
             if showsRouteNotice {
-                HStack {
-                    Spacer()
-                    HStack(spacing: 8) {
-                        Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
-                            .font(.caption.weight(.semibold))
-                        Text(player.isCarPlayConnected ? "CarPlay Connected" : "AirPlay Connected")
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(.white.opacity(0.12))
-                    )
-                    Spacer()
+                HStack(spacing: 5) {
+                    Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
+                        .font(.caption2)
+                    Text(player.isCarPlayConnected ? "CarPlay" : "AirPlay")
+                        .font(.caption2)
+                        .lineLimit(1)
                 }
-                .foregroundStyle(.white.opacity(0.52))
+                .foregroundStyle(.white.opacity(0.35))
+                .frame(maxWidth: .infinity)
                 .frame(height: 32)
                 .offset(y: -10)
                 .padding(.horizontal, horizontalPadding)
