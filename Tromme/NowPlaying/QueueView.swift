@@ -69,8 +69,8 @@ struct QueueView: View {
                             }
                         }
                         .listRowBackground(Color.clear)
-                        .listRowSeparatorTint(.white.opacity(0.1))
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppStyle.Spacing.nowPlayingHorizontal, bottom: 6, trailing: AppStyle.Spacing.nowPlayingHorizontal))
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 4, leading: AppStyle.Spacing.nowPlayingHorizontal, bottom: 4, trailing: AppStyle.Spacing.nowPlayingHorizontal))
                     }
                     .onMove { source, destination in
                         player.moveInQueue(from: source, to: destination)
@@ -154,8 +154,8 @@ private struct QueueRow: View {
         HStack(spacing: 12) {
             ArtworkView(
                 thumbPath: track.parentThumb ?? track.thumb,
-                size: 44,
-                cornerRadius: 8
+                size: 48,
+                cornerRadius: 6
             )
 
             VStack(alignment: .leading, spacing: 2) {
@@ -170,8 +170,11 @@ private struct QueueRow: View {
             }
 
             Spacer()
+
+            Image(systemName: "line.3.horizontal")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.35))
         }
-        .padding(.vertical, 4)
     }
 }
 

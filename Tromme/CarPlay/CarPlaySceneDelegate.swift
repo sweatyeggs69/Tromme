@@ -127,12 +127,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         // Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played
         var slots: [CPListSection?] = [nil, nil, nil]
         var completedCount = 0
-        var anySuccess = false
 
         func rebuildSections() {
             completedCount += 1
+            guard completedCount == 3 else { return }
             var sections = slots.compactMap { $0 }
-            if completedCount == 3, !anySuccess, sections.isEmpty {
+            if sections.isEmpty {
                 let retry = makeRetryItem(into: template) { [weak self] in
                     self?.loadHomeContent(into: template)
                 }
@@ -145,7 +145,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         Task {
             if let favorites = try? await client.getFavoriteTracks(server: server, sectionId: sectionId),
                !favorites.isEmpty {
-                anySuccess = true
                 let sorted = Array(favorites
                     .sorted { ($0.userRating ?? 0) > ($1.userRating ?? 0) }
                     .prefix(10))
@@ -164,7 +163,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         Task {
             if let recentlyAdded = try? await client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10),
                !recentlyAdded.isEmpty {
-                anySuccess = true
                 let limited = Array(recentlyAdded.prefix(10))
                 let imageRow = await makeImageRow(
                     title: "Recently Added",
@@ -188,7 +186,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         Task {
             if let recentlyPlayed = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
                !recentlyPlayed.isEmpty {
-                anySuccess = true
                 let limited = Array(recentlyPlayed.prefix(10))
                 let imageRow = await makeImageRow(
                     title: "Recently Played",
@@ -301,7 +298,40 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 template.updateSections([CPListSection(items: [retry])])
                 return
             }
-            let items = children.filter { $0.type == "album" }.prefix(CPListTemplate.maximumItemCount).map { album -> CPListItem in
+            let albums = children.filter { $0.type == "album" }
+            guard !albums.isEmpty else {
+                template.updateSections([])
+                return
+            }
+
+            let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(albums.count) albums", image: UIImage(systemName: "shuffle"))
+            shuffleItem.handler = { [weak self] _, completion in
+                Task {
+                    let allTracks = await withTaskGroup(of: [PlexMetadata].self) { group in
+                        for album in albums {
+                            let key = album.ratingKey
+                            group.addTask {
+                                (try? await client.cachedChildren(server: server, ratingKey: key)) ?? []
+                            }
+                        }
+                        var result: [PlexMetadata] = []
+                        for await tracks in group {
+                            result.append(contentsOf: tracks.filter { $0.type == "track" })
+                        }
+                        return result
+                    }
+                    guard !allTracks.isEmpty, let self, let player = self.player else {
+                        completion()
+                        return
+                    }
+                    if !player.isShuffled { player.toggleShuffle() }
+                    player.play(tracks: allTracks, startingAt: 0)
+                    self.pushNowPlaying()
+                    completion()
+                }
+            }
+
+            let albumItems: [CPListTemplateItem] = albums.prefix(CPListTemplate.maximumItemCount - 1).map { album -> CPListItem in
                 let item = CPListItem(text: album.title, detailText: album.releaseYear)
                 item.accessoryType = .disclosureIndicator
                 loadArtwork(path: album.thumb, into: item, server: server, client: client)
@@ -313,7 +343,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 }
                 return item
             }
-            template.updateSections([CPListSection(items: items)])
+
+            var allItems: [CPListTemplateItem] = [shuffleItem]
+            allItems.append(contentsOf: albumItems)
+            template.updateSections([CPListSection(items: allItems)])
         }
     }
 

@@ -7,7 +7,8 @@ import ImageIO
 actor ImageCache {
     static let shared = ImageCache()
 
-    private let memoryCache = NSCache<NSString, UIImage>()
+    // NSCache is documented thread-safe, so reads/writes from nonisolated contexts are fine.
+    nonisolated(unsafe) private let memoryCache = NSCache<NSString, UIImage>()
     private let diskURL: URL
     private let maxDiskBytes: Int = 500 * 1024 * 1024 // 500 MB
     private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
@@ -96,6 +97,16 @@ actor ImageCache {
                 }
             }
         }
+    }
+
+    /// Synchronously returns an in-memory cached image if present. Used by views that need
+    /// to render cached art on the very first frame without waiting for an actor hop.
+    nonisolated func memoryCachedImage(for url: URL, targetPixelSize: Int? = nil) -> UIImage? {
+        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let baseKey = hash.map { String(format: "%02x", $0) }.joined()
+        let bucket = (targetPixelSize ?? 0) / 32 * 32
+        let memoryKey = "\(baseKey)_\(bucket)" as NSString
+        return memoryCache.object(forKey: memoryKey)
     }
 
     func clearMemory() {

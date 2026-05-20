@@ -23,18 +23,6 @@ struct MiniLyricsLineView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: 48)
-        .overlay(alignment: .leading) {
-            Image(systemName: "music.note")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.72))
-                .padding(.leading, 4)
-        }
-        .overlay(alignment: .trailing) {
-            Image(systemName: "music.note")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.72))
-                .padding(.trailing, 4)
-        }
         .animation(.easeInOut(duration: 0.28), value: text)
     }
 }

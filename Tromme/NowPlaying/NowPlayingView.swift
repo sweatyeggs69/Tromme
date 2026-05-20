@@ -35,7 +35,7 @@ struct NowPlayingView: View {
     private let actionIconActiveOpacity: Double = 0.82
     private let actionIconInactiveOpacity: Double = 0.45
     private let actionBackgroundOpacity: Double = 0.12
-    private let actionBackgroundActiveOpacity: Double = 0.2
+    private let actionBackgroundActiveOpacity: Double = 0.4
     private let controlTintOpacity: Double = 0.45
     private let iPadBottomActionsExtraPadding: CGFloat = 12
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
@@ -171,12 +171,13 @@ struct NowPlayingView: View {
                     HStack(spacing: 12) {
                         ArtworkView(
                             thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                            size: isCompact ? 62 : artworkSize,
-                            cornerRadius: 8
+                            size: isCompact ? 72 : artworkSize,
+                            cornerRadius: 6
                         )
                         .shadow(color: .black.opacity(isCompact ? 0.3 : 0.5), radius: isCompact ? 8 : 40, y: isCompact ? 4 : 20)
                         .scaleEffect(!isCompact && player.isPlaying ? 1.0 : !isCompact ? 0.85 : 1.0)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                        .zIndex(1)
 
                         if isCompact {
                             VStack(alignment: .leading, spacing: 2) {
@@ -189,11 +190,12 @@ struct NowPlayingView: View {
                                     .foregroundStyle(.white.opacity(0.6))
                                     .lineLimit(1)
                             }
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                            .transition(.opacity)
 
                             Spacer()
 
                             trackContextMenu
+                                .transition(.opacity)
                         }
                     }
                     .frame(maxWidth: isCompact ? .infinity : nil)
@@ -216,6 +218,7 @@ struct NowPlayingView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, isPadPortrait ? 0 : AppStyle.Spacing.nowPlayingHorizontal)
                             .transition(.opacity)
+                            .zIndex(2)
                         Spacer(minLength: 0)
                     } else {
                         Spacer()
@@ -479,6 +482,14 @@ struct NowPlayingView: View {
                     Label("Go to Album", systemImage: "square.stack")
                 }
             }
+            if showLyrics {
+                Divider()
+                Button {
+                    Task { await lyricsService.refresh(track: track) }
+                } label: {
+                    Label("Refresh Lyrics", systemImage: "arrow.clockwise")
+                }
+            }
         }
     }
 
@@ -486,10 +497,10 @@ struct NowPlayingView: View {
         Menu {
             trackContextMenuItems
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.body.weight(.semibold))
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.6))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
         }
     }
 
@@ -549,7 +560,7 @@ struct NowPlayingView: View {
                 tintOpacity: CGFloat(controlTintOpacity),
                 activeTintOpacity: CGFloat(actionIconActiveOpacity)
             )
-                .frame(width: 46, height: 46)
+                .frame(width: 38, height: 38)
 
             Spacer()
 
@@ -577,9 +588,7 @@ struct NowPlayingView: View {
     }
 
     private func toggleLyricsPanel() {
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
+        withAnimation(.easeInOut(duration: 0.2)) {
             if showLyrics {
                 showLyrics = false
             } else {
@@ -590,9 +599,7 @@ struct NowPlayingView: View {
     }
 
     private func toggleQueuePanel() {
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
+        withAnimation(.easeInOut(duration: 0.2)) {
             if showQueue {
                 showQueue = false
             } else {
@@ -606,7 +613,7 @@ struct NowPlayingView: View {
     private func panelToggleIcon(systemName: String, isActive: Bool) -> some View {
         if isActive {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                Circle()
                     .fill(.white.opacity(actionBackgroundActiveOpacity))
                 Image(systemName: systemName)
                     .foregroundStyle(.black)
@@ -614,12 +621,10 @@ struct NowPlayingView: View {
             }
             .compositingGroup()
             .frame(width: 38, height: 38)
-            .animation(.none, value: isActive)
         } else {
             Image(systemName: systemName)
                 .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
                 .frame(width: 38, height: 38)
-                .animation(.none, value: isActive)
         }
     }
 }
@@ -791,15 +796,25 @@ struct NowPlayingBackground: View {
         player.currentTrack?.parentThumb
     }
 
-    private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: thumbPath) ?? .gray
+    private var backgroundURL: URL? {
+        guard let thumbPath, let server = serverConnection.currentServer else { return nil }
+        return client.artworkURL(server: server, path: thumbPath, width: 896, height: 896)
+    }
+
+    /// Prefer the State image (set after the async load); fall back to a synchronous
+    /// in-memory cache peek so cached art renders on the first frame instead of
+    /// flashing a placeholder color.
+    private var resolvedImage: UIImage? {
+        if let backgroundImage { return backgroundImage }
+        guard let backgroundURL else { return nil }
+        return ImageCache.shared.memoryCachedImage(for: backgroundURL, targetPixelSize: 896)
     }
 
     var body: some View {
         ZStack {
-            artworkColor
-            if let backgroundImage {
-                Image(uiImage: backgroundImage)
+            Color.black
+            if let resolvedImage {
+                Image(uiImage: resolvedImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .blur(radius: 60)
@@ -810,7 +825,6 @@ struct NowPlayingBackground: View {
         }
         .clipped()
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 0.6), value: artworkColor)
         .animation(.easeInOut(duration: 0.6), value: backgroundImage)
         .task(id: thumbPath) {
             guard let server = serverConnection.currentServer else { return }

@@ -43,6 +43,8 @@ final class AudioPlayerService: @unchecked Sendable {
     private var playbackStalledObserver: Any?
     private var itemFailedToEndObserver: Any?
     private var playbackGeneration: Int = 0
+    private var playbackIntent: Bool = false
+    private var lastPublishedNowPlayingTrackKey: String?
     private let maxRecoveryAttemptsPerTrack = 2
     private let scrobbleThreshold: Double = 0.9
     private var recoveryTrackRatingKey: String?
@@ -63,6 +65,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var soundCheckObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var audioInterruptionObserver: NSObjectProtocol?
+    private var willResignActiveObserver: NSObjectProtocol?
     private var wasInterruptedWhilePlaying = false
     private var networkChangeObserver: NSObjectProtocol?
     private var networkRecoveryTask: Task<Void, Never>?
@@ -73,6 +76,9 @@ final class AudioPlayerService: @unchecked Sendable {
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     #endif
     private var pendingInitialSeekTime: TimeInterval?
+    private var lastPersistedPositionSeconds: TimeInterval = -1
+    private var lastSavedQueueHash: Int?
+    private var lastSavedOriginalQueueHash: Int?
     private var scrobbledTrackRatingKey: String?
     private var gainPrefetchTask: Task<Void, Never>?
     private var playbackLoadTask: Task<Void, Never>?
@@ -108,6 +114,7 @@ final class AudioPlayerService: @unchecked Sendable {
         observeSoundCheckToggle()
         observeAudioRouteChanges()
         observeAudioInterruptions()
+        observeAppLifecycle()
         observeNetworkChanges()
         refreshAirPlayConnectionState()
     }
@@ -121,6 +128,9 @@ final class AudioPlayerService: @unchecked Sendable {
         }
         if let audioInterruptionObserver {
             NotificationCenter.default.removeObserver(audioInterruptionObserver)
+        }
+        if let willResignActiveObserver {
+            NotificationCenter.default.removeObserver(willResignActiveObserver)
         }
         if let networkChangeObserver {
             NotificationCenter.default.removeObserver(networkChangeObserver)
@@ -142,6 +152,7 @@ final class AudioPlayerService: @unchecked Sendable {
             return
         }
         logPlayback("play_request", "count=\(tracks.count) start=\(index) shuffled=\(isShuffled)")
+        playbackIntent = true
         originalQueue = tracks
         if isShuffled {
             var shuffled = tracks
@@ -176,9 +187,12 @@ final class AudioPlayerService: @unchecked Sendable {
         if player.timeControlStatus == .playing {
             player.pause()
             isPlaying = false
+            playbackIntent = false
             logPlayback("paused")
             reportTimelineState("paused")
+            persistPlaybackPosition()
         } else {
+            playbackIntent = true
             if isStuckWaitingForBuffer() {
                 recoveryAttemptsForTrack = 0
                 let resumeAt = preferredResumeTimeForRecovery()
@@ -221,6 +235,7 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func playCurrent() {
+        playbackIntent = true
         if player == nil || player?.currentItem == nil || player?.currentItem?.status == .failed {
             recoverAndPlayCurrentTrackIfPossible()
             return
@@ -255,7 +270,9 @@ final class AudioPlayerService: @unchecked Sendable {
         guard let player else { return }
         player.pause()
         isPlaying = false
+        playbackIntent = false
         updateNowPlayingInfo()
+        persistPlaybackPosition()
     }
 
     private var diagnosticsEnabled: Bool {
@@ -319,6 +336,7 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func recoverAndPlayCurrentTrackIfPossible(resumeAt: TimeInterval? = nil) {
+        playbackIntent = true
         let effectiveResumeAt = resumeAt ?? pendingInitialSeekTime ?? preferredResumeTimeForRecovery()
 
         if queue.indices.contains(currentIndex) {
@@ -346,8 +364,8 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func handlePlaybackFailure(_ reason: String) {
         guard let track = currentTrack else { return }
-        guard isPlaying else {
-            logPlayback("recovery_ignored", "reason=\(reason) playback_inactive=true")
+        guard playbackIntent else {
+            logPlayback("recovery_ignored", "reason=\(reason) intent=false")
             return
         }
 
@@ -382,6 +400,7 @@ final class AudioPlayerService: @unchecked Sendable {
         }
 
         isPlaying = false
+        playbackIntent = false
         updateNowPlayingInfo()
     }
 
@@ -390,6 +409,7 @@ final class AudioPlayerService: @unchecked Sendable {
             logPlayback("next_ignored", "reason=empty_queue")
             return
         }
+        playbackIntent = true
         if repeatMode == .one {
             logPlayback("next_repeat_one_reload")
             loadAndPlay(queue[currentIndex])
@@ -404,6 +424,7 @@ final class AudioPlayerService: @unchecked Sendable {
         } else {
             player?.pause()
             isPlaying = false
+            playbackIntent = false
             currentTime = 0
             player?.seek(to: .zero)
             updateNowPlayingInfo()
@@ -416,6 +437,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     func previous() {
         guard !queue.isEmpty else { return }
+        playbackIntent = true
         if currentTime > 3 {
             seek(to: 0)
             return
@@ -455,6 +477,7 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.currentTime = boundedTime
                 self.updateNowPlayingInfo()
                 self.reportTimelineState(self.isPlaying ? "playing" : "paused")
+                self.persistPlaybackPosition()
             }
         }
     }
@@ -594,6 +617,8 @@ final class AudioPlayerService: @unchecked Sendable {
         currentIndex = 0
         currentTrack = nil
         isPlaying = false
+        playbackIntent = false
+        lastPublishedNowPlayingTrackKey = nil
         currentTime = 0
         duration = 0
         isMagicMixActive = false
@@ -1070,6 +1095,7 @@ final class AudioPlayerService: @unchecked Sendable {
                 isPlaying = false
                 updateNowPlayingInfo()
             }
+            persistPlaybackPosition()
             logPlayback("audio_interruption_began", "was_playing=\(wasInterruptedWhilePlaying)")
         case .ended:
             let shouldResume = options.contains(.shouldResume) && wasInterruptedWhilePlaying
@@ -1092,6 +1118,19 @@ final class AudioPlayerService: @unchecked Sendable {
             }
         @unknown default:
             break
+        }
+    }
+
+    private func observeAppLifecycle() {
+        willResignActiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.persistPlaybackPosition()
+            }
         }
     }
 
@@ -1505,6 +1544,7 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
                 self.maybeReportScrobble()
                 self.maybePreloadNextTrack()
+                self.persistPlaybackPositionThrottled()
             }
         }
     }
@@ -1533,6 +1573,7 @@ final class AudioPlayerService: @unchecked Sendable {
                     self.logPlayback("time_control", "status=\(status.rawValue)")
                 }
                 #endif
+                guard playing != self.isPlaying else { return }
                 self.isPlaying = playing
                 self.updateNowPlayingInfo()
             }
@@ -1635,6 +1676,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let queueKey = "playbackQueue"
     private static let originalQueueKey = "playbackOriginalQueue"
     private static let currentIndexKey = "playbackCurrentIndex"
+    private static let currentTimeKey = "playbackCurrentTime"
     private static let soundCheckKey = "soundCheckEnabled"
     private static let soundCheckGainSourceKey = "soundCheckGainSource"
     private static let shuffleKey = "playbackShuffle"
@@ -1653,6 +1695,15 @@ final class AudioPlayerService: @unchecked Sendable {
         supportedCellularTranscodeBitrates.contains(bitrate) ? bitrate : 320
     }
 
+    private static func queueIdentityHash(_ items: [PlexMetadata]) -> Int {
+        var hasher = Hasher()
+        hasher.combine(items.count)
+        for item in items {
+            hasher.combine(item.ratingKey)
+        }
+        return hasher.finalize()
+    }
+
     private func savePlaybackState() {
         let defaults = UserDefaults.standard
         if let track = currentTrack,
@@ -1661,19 +1712,33 @@ final class AudioPlayerService: @unchecked Sendable {
         } else {
             defaults.removeObject(forKey: Self.trackKey)
         }
-        if queue.isEmpty {
-            defaults.removeObject(forKey: Self.queueKey)
-        } else if let queueData = try? JSONEncoder().encode(queue) {
-            defaults.set(queueData, forKey: Self.queueKey)
+
+        let queueHash = Self.queueIdentityHash(queue)
+        if queueHash != lastSavedQueueHash {
+            if queue.isEmpty {
+                defaults.removeObject(forKey: Self.queueKey)
+                lastSavedQueueHash = queueHash
+            } else if let queueData = try? JSONEncoder().encode(queue) {
+                defaults.set(queueData, forKey: Self.queueKey)
+                lastSavedQueueHash = queueHash
+            }
         }
-        if originalQueue.isEmpty {
-            defaults.removeObject(forKey: Self.originalQueueKey)
-        } else if let origData = try? JSONEncoder().encode(originalQueue) {
-            defaults.set(origData, forKey: Self.originalQueueKey)
+
+        let origHash = Self.queueIdentityHash(originalQueue)
+        if origHash != lastSavedOriginalQueueHash {
+            if originalQueue.isEmpty {
+                defaults.removeObject(forKey: Self.originalQueueKey)
+                lastSavedOriginalQueueHash = origHash
+            } else if let origData = try? JSONEncoder().encode(originalQueue) {
+                defaults.set(origData, forKey: Self.originalQueueKey)
+                lastSavedOriginalQueueHash = origHash
+            }
         }
+
         defaults.set(currentIndex, forKey: Self.currentIndexKey)
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
+        persistPlaybackPosition()
     }
 
     func restorePlaybackState() {
@@ -1700,6 +1765,29 @@ final class AudioPlayerService: @unchecked Sendable {
             currentTrack = track
             duration = Double(track.duration ?? 0) / 1000.0
         }
+        let savedTime = defaults.double(forKey: Self.currentTimeKey)
+        if currentTrack != nil, savedTime.isFinite, savedTime > 0 {
+            currentTime = duration > 0 ? min(savedTime, duration) : savedTime
+            lastPersistedPositionSeconds = currentTime
+        }
+        lastSavedQueueHash = Self.queueIdentityHash(queue)
+        lastSavedOriginalQueueHash = Self.queueIdentityHash(originalQueue)
+    }
+
+    private func persistPlaybackPosition() {
+        let defaults = UserDefaults.standard
+        if currentTrack != nil, currentTime.isFinite, currentTime > 0 {
+            defaults.set(currentTime, forKey: Self.currentTimeKey)
+            lastPersistedPositionSeconds = currentTime
+        } else {
+            defaults.removeObject(forKey: Self.currentTimeKey)
+            lastPersistedPositionSeconds = 0
+        }
+    }
+
+    private func persistPlaybackPositionThrottled() {
+        guard abs(currentTime - lastPersistedPositionSeconds) >= 5 else { return }
+        persistPlaybackPosition()
     }
 
     nonisolated private static func makeArtwork(from image: UIImage) -> MPMediaItemArtwork {
@@ -1831,35 +1919,56 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func updateNowPlayingInfo() {
+        guard let currentTrack else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            lastPublishedNowPlayingTrackKey = nil
+            cachedArtwork = nil
+            cachedArtworkThumbPath = nil
+            nowPlayingArtworkTask?.cancel()
+            nowPlayingArtworkTask = nil
+            return
+        }
+
+        let trackKey = currentTrack.ratingKey
+
+        if trackKey == lastPublishedNowPlayingTrackKey,
+           var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
+            info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+            info[MPMediaItemPropertyPlaybackDuration] = duration
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            return
+        }
+
         var info = [String: Any]()
-        info[MPMediaItemPropertyTitle] = currentTrack?.title ?? ""
-        info[MPMediaItemPropertyArtist] = currentTrack?.artistDisplayName ?? ""
-        info[MPMediaItemPropertyAlbumTitle] = currentTrack?.albumName ?? ""
+        info[MPMediaItemPropertyTitle] = currentTrack.title
+        info[MPMediaItemPropertyArtist] = currentTrack.artistDisplayName
+        info[MPMediaItemPropertyAlbumTitle] = currentTrack.albumName
         info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
         info[MPMediaItemPropertyPlaybackDuration] = duration
         info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
-
-        let thumbPath = currentTrack?.thumb ?? currentTrack?.parentThumb
 
         if let cachedArtwork {
             info[MPMediaItemPropertyArtwork] = cachedArtwork
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        lastPublishedNowPlayingTrackKey = trackKey
 
+        let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
         if thumbPath != cachedArtworkThumbPath {
             cachedArtworkThumbPath = thumbPath
             cachedArtwork = nil
             nowPlayingArtworkTask?.cancel()
             if let client, let server,
-               let url = client.artworkURL(server: server, path: thumbPath, width: 1000, height: 1000) {
+               let url = client.artworkURL(server: server, path: thumbPath, width: 600, height: 600) {
                 let generation = playbackGeneration
-                let trackKey = currentTrack?.ratingKey
+                let capturedTrackKey = trackKey
                 nowPlayingArtworkTask = Task {
                     guard let image = await ImageCache.shared.image(for: url) else { return }
                     guard !Task.isCancelled else { return }
                     guard self.playbackGeneration == generation else { return }
-                    guard self.currentTrack?.ratingKey == trackKey else { return }
+                    guard self.currentTrack?.ratingKey == capturedTrackKey else { return }
                     let artwork = Self.makeArtwork(from: image)
                     self.cachedArtwork = artwork
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork

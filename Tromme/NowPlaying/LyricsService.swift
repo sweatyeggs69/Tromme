@@ -26,6 +26,14 @@ final class LyricsService {
         return Self.looksInstrumental(plainLyrics)
     }
 
+    /// Discards the cached lyrics for this track and re-fetches from the network.
+    func refresh(track: PlexMetadata) async {
+        let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistName)
+        await LibraryCache.shared.remove(forKey: cacheKey)
+        inFlightTrackKey = nil
+        await fetch(track: track)
+    }
+
     func fetch(track: PlexMetadata) async {
         if isLoading, inFlightTrackKey == track.ratingKey {
             return
