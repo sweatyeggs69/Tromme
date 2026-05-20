@@ -450,7 +450,7 @@ struct AlbumDetailView: View {
                             landscapeAlbumTitleAndArtist
                                 .padding(.horizontal, 20)
                                 .padding(.top, 20)
-                                .padding(.bottom, 8)
+                                .padding(.bottom, 18)
 
                             List {
                                 Section {
