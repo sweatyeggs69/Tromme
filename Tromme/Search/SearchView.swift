@@ -9,6 +9,7 @@ struct SearchView: View {
     @State private var searchText = ""
     @State private var hubs: [Hub] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var isSearchPresented = false
     @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
 
     private let maxRecentSearches = 12
@@ -88,7 +89,16 @@ struct SearchView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "Artists, Songs, Albums & More")
+        .navigationTitle(
+            UIDevice.current.userInterfaceIdiom == .pad
+                ? Text(Image(systemName: "hourglass"))
+                : Text("Search")
+        )
+        .navigationBarTitleDisplayMode(.large)
+        .searchable(text: $searchText, isPresented: $isSearchPresented, placement: .navigationBarDrawer(displayMode: .always), prompt: "Artists, Songs, Albums & More")
+        .onAppear {
+            isSearchPresented = true
+        }
         .onSubmit(of: .search) {
             rememberSearch(searchText)
         }

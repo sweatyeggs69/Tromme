@@ -148,10 +148,19 @@ struct ContentView: View {
                 }
             }
 
-            Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
-                NavigationStack {
-                    SearchView()
-                        .navigationDestinations()
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                Tab("Search", systemImage: "magnifyingglass", value: "search") {
+                    NavigationStack {
+                        SearchView()
+                            .navigationDestinations()
+                    }
+                }
+            } else {
+                Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
+                    NavigationStack {
+                        SearchView()
+                            .navigationDestinations()
+                    }
                 }
             }
         }
@@ -172,7 +181,7 @@ struct ContentView: View {
                 }
             }
 
-        let withNavigation = base
+        return base
             .onChange(of: showNowPlaying) { oldValue, newValue in
                 if oldValue && !newValue, let target = pendingNavigation {
                     pendingNavigation = nil
@@ -182,12 +191,6 @@ struct ContentView: View {
                     }
                 }
             }
-
-        if UIDevice.current.userInterfaceIdiom == .pad {
-            return AnyView(withNavigation.tabViewStyle(.sidebarAdaptable))
-        } else {
-            return AnyView(withNavigation)
-        }
     }
 
     private func signOut() {

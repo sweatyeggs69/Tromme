@@ -73,7 +73,7 @@ struct NowPlayingView: View {
             let landscapeOuterHorizontalPadding: CGFloat = 40
             let landscapeColumnSpacing: CGFloat = 36
             let landscapeContentWidth = max(0.0, width - (landscapeOuterHorizontalPadding * 2))
-            let landscapeLeftWidth = landscapeContentWidth * 0.33
+            let landscapeLeftWidth = landscapeContentWidth * 0.40
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
             let landscapeControlsHorizontalPadding: CGFloat = 12
             let landscapeArtworkMaxByWidth = landscapeLeftWidth - (landscapeControlsHorizontalPadding * 2)
@@ -92,22 +92,25 @@ struct NowPlayingView: View {
 
                     HStack(alignment: .top, spacing: landscapeColumnSpacing) {
                         VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+
                             ArtworkView(
                                 thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
                                 size: landscapeArtworkSize,
                                 cornerRadius: 8
                             )
                             .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
-                            .padding(.top, 10)
-                            .padding(.bottom, 24)
-
-                            Spacer(minLength: 0)
+                            .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                            .padding(.bottom, 32)
 
                             trackInfo
                                 .padding(.horizontal, landscapeControlsHorizontalPadding)
-                                .padding(.bottom, 28)
-                            controlsStack(horizontalPadding: landscapeControlsHorizontalPadding, bottomPadding: 4)
+                                .padding(.bottom, 16)
+                            controlsStack(horizontalPadding: landscapeControlsHorizontalPadding)
                                 .layoutPriority(1)
+
+                            Spacer(minLength: 0)
                         }
                         .frame(width: landscapeLeftWidth)
 
