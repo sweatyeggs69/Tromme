@@ -91,6 +91,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     continue
                 }
 
+                // Reconcile any state that was set between polling iterations,
+                // before the observer below was installed.
+                self.updateRootTemplate()
+
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = manager.currentServer
