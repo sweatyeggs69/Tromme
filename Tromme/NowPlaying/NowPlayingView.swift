@@ -41,6 +41,11 @@ struct NowPlayingView: View {
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
     private let portraitTrackInfoBottomPadding: CGFloat = 18
+    private let portraitBottomControlsHeightFraction: CGFloat = 0.40
+    private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
+    private let bottomActionsTopPadding: CGFloat = 10
+    private let bottomScreenPaddingWithSafeArea: CGFloat = 4
+    private let bottomScreenPaddingWithoutSafeArea: CGFloat = 8
 
     // MARK: - Computed Properties
 
@@ -68,8 +73,12 @@ struct NowPlayingView: View {
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
             let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geo.size.width > geo.size.height
             let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && geo.size.height > geo.size.width
-            let controlsContainerWidth = isPadPortrait ? artworkSize : nil
-            let controlsHorizontalPadding: CGFloat = isPadPortrait ? 0 : AppStyle.Spacing.nowPlayingHorizontal
+            let controlsContainerWidth = artworkSize
+            let controlsHorizontalPadding: CGFloat = 0
+            let bottomControlsHeightFraction = isPortrait
+                ? portraitBottomControlsHeightFraction
+                : landscapeBottomControlsHeightFraction
+            let bottomControlsHeight = height * bottomControlsHeightFraction
             let landscapeOuterHorizontalPadding: CGFloat = 40
             let landscapeColumnSpacing: CGFloat = 36
             let landscapeContentWidth = max(0.0, width - (landscapeOuterHorizontalPadding * 2))
@@ -77,9 +86,20 @@ struct NowPlayingView: View {
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
             let landscapeControlsHorizontalPadding: CGFloat = 12
             let landscapeArtworkMaxByWidth = landscapeLeftWidth - (landscapeControlsHorizontalPadding * 2)
-            let landscapeReservedHeight: CGFloat = 290
-            let landscapeArtworkMaxByHeight = max(110.0, height - landscapeReservedHeight)
-            let landscapeArtworkSize = max(110.0, min(landscapeArtworkMaxByWidth, landscapeArtworkMaxByHeight))
+            let bottomScreenPadding = geo.safeAreaInsets.bottom > 0
+                ? bottomScreenPaddingWithSafeArea
+                : bottomScreenPaddingWithoutSafeArea
+            let landscapeBottomInsetPadding = bottomScreenPadding
+            let landscapeHandleHeight: CGFloat = 21
+            let landscapeBottomActionsHeight: CGFloat = 38 + iPadBottomActionsExtraPadding
+            let landscapeMainHeight = max(
+                0.0,
+                height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
+            )
+            let landscapePlayerControlsHeight = min(bottomControlsHeight, landscapeMainHeight)
+            let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight)
+            let landscapeArtworkMaxByHeight = max(96.0, landscapeArtworkAreaHeight - 16)
+            let landscapeArtworkSize = max(96.0, min(landscapeArtworkMaxByWidth, landscapeArtworkMaxByHeight))
 
 
             let _ = applyInitialLandscapeLyrics(isPadLandscape: isPadLandscape)
@@ -92,25 +112,29 @@ struct NowPlayingView: View {
 
                     HStack(alignment: .top, spacing: landscapeColumnSpacing) {
                         VStack(spacing: 0) {
-                            Spacer(minLength: 0)
+                            VStack(spacing: 0) {
+                                Spacer(minLength: 0)
 
-                            ArtworkView(
-                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                                size: landscapeArtworkSize,
-                                cornerRadius: 8
+                                ArtworkView(
+                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
+                                    size: landscapeArtworkSize,
+                                    cornerRadius: 8
+                                )
+                                .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
+                                .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+
+                                Spacer(minLength: 0)
+                            }
+                            .frame(height: landscapeArtworkAreaHeight)
+
+                            trackAndPlaybackControls(
+                                horizontalPadding: 0,
+                                isPadPortrait: false,
+                                trackInfoBottomPadding: 10
                             )
-                            .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
-                            .scaleEffect(player.isPlaying ? 1.0 : 0.85)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
-                            .padding(.bottom, 32)
-
-                            trackInfo
-                                .padding(.horizontal, landscapeControlsHorizontalPadding)
-                                .padding(.bottom, 16)
-                            controlsStack(horizontalPadding: landscapeControlsHorizontalPadding)
-                                .layoutPriority(1)
-
-                            Spacer(minLength: 0)
+                            .frame(width: landscapeArtworkSize)
+                            .frame(height: landscapePlayerControlsHeight)
                         }
                         .frame(width: landscapeLeftWidth)
 
@@ -125,7 +149,7 @@ struct NowPlayingView: View {
                                 .frame(width: landscapeRightWidth)
                         }
                     }
-                    .frame(maxHeight: .infinity)
+                    .frame(height: landscapeMainHeight)
 
                     // Bottom action row
                     HStack {
@@ -133,7 +157,7 @@ struct NowPlayingView: View {
                             tintOpacity: CGFloat(controlTintOpacity),
                             activeTintOpacity: CGFloat(actionIconActiveOpacity)
                         )
-                        .frame(width: 46, height: 46)
+                        .frame(width: 38, height: 38)
 
                         Spacer()
 
@@ -168,7 +192,7 @@ struct NowPlayingView: View {
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
                     .padding(.bottom, iPadBottomActionsExtraPadding)
                 }
-                .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 16)
+                .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
                 .animation(.easeInOut(duration: 0.25), value: showQueue)
             } else {
@@ -240,21 +264,22 @@ struct NowPlayingView: View {
 
                     // Bottom controls — pinned to bottom
                     VStack(spacing: 0) {
-                        if !isCompact {
-                            trackInfo
-                                .padding(.horizontal, controlsHorizontalPadding)
-                                .padding(.bottom, portraitTrackInfoBottomPadding)
-                                .transition(.opacity)
-                        }
-                        controlsStack(horizontalPadding: controlsHorizontalPadding, isPadPortrait: isPadPortrait)
+                        trackAndPlaybackControls(
+                            horizontalPadding: controlsHorizontalPadding,
+                            isPadPortrait: isPadPortrait,
+                            trackInfoBottomPadding: portraitTrackInfoBottomPadding
+                        )
+                        .frame(maxHeight: .infinity)
                         bottomActions
                             .frame(height: 32)
                             .padding(.horizontal, controlsHorizontalPadding)
+                            .padding(.top, bottomActionsTopPadding)
                             .padding(.bottom, isPadPortrait ? iPadBottomActionsExtraPadding : 0)
                     }
                     .frame(maxWidth: controlsContainerWidth)
                     .frame(maxWidth: .infinity)
-                    .padding(.bottom, geo.safeAreaInsets.bottom > 0 ? 8 : 16)
+                    .frame(height: bottomControlsHeight)
+                    .padding(.bottom, bottomScreenPadding)
                 }
                 .animation(.easeInOut(duration: 0.4), value: isCompact)
                 .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showsMiniLyricsSlot)
@@ -393,50 +418,104 @@ struct NowPlayingView: View {
 
     // MARK: - Controls Stack
 
+    private func trackAndPlaybackControls(
+        horizontalPadding: CGFloat,
+        isPadPortrait: Bool,
+        trackInfoBottomPadding: CGFloat
+    ) -> some View {
+        VStack(spacing: 0) {
+            trackInfo
+                .padding(.horizontal, horizontalPadding)
+                .padding(.bottom, trackInfoBottomPadding)
+                .transition(.opacity)
+
+            controlsStack(
+                horizontalPadding: horizontalPadding,
+                isPadPortrait: isPadPortrait,
+                usesEvenSpacing: true
+            )
+            .frame(maxHeight: .infinity)
+        }
+    }
+
     private func controlsStack(
         horizontalPadding: CGFloat,
         bottomPadding: CGFloat = 20,
-        isPadPortrait: Bool = false
+        isPadPortrait: Bool = false,
+        usesEvenSpacing: Bool = false,
+        usesCompactSpacing: Bool = false
     ) -> some View {
-        let sliderBottomPadding: CGFloat = isPadPortrait ? 42 : 18
-        let transportBottomPadding: CGFloat = isPadPortrait ? 64 : 32
-        let volumeBottomPadding: CGFloat = isPadPortrait ? 38 : (bottomPadding + 6)
+        let sliderBottomPadding: CGFloat = usesCompactSpacing ? 10 : (isPadPortrait ? 42 : 18)
+        let transportBottomPadding: CGFloat = usesCompactSpacing ? 16 : (isPadPortrait ? 64 : 32)
+        let volumeBottomPadding: CGFloat = usesCompactSpacing ? 8 : (isPadPortrait ? 38 : (bottomPadding + 6))
         let showsRouteNotice = player.isCarPlayConnected || player.isAirPlayConnected
 
-        return VStack(spacing: 0) {
-            TimelineSlider()
-                .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, sliderBottomPadding)
-            transportControls
-                .frame(height: 56)
-                .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, transportBottomPadding)
-            if showsRouteNotice {
-                HStack(spacing: 5) {
-                    Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
-                        .font(.caption2)
-                    Text(player.isCarPlayConnected ? "CarPlay" : "AirPlay")
-                        .font(.caption2)
-                        .lineLimit(1)
+        return Group {
+            if usesEvenSpacing {
+                VStack(spacing: 0) {
+                    TimelineSlider(usesOverlayedTimeLabels: true)
+                        .padding(.horizontal, horizontalPadding)
+
+                    Spacer(minLength: 0)
+
+                    transportControls
+                        .frame(height: 56)
+                        .padding(.horizontal, horizontalPadding)
+
+                    Spacer(minLength: 0)
+
+                    routeOrVolumeRow(
+                        showsRouteNotice: showsRouteNotice,
+                        horizontalPadding: horizontalPadding
+                    )
                 }
-                .foregroundStyle(.white.opacity(0.35))
-                .frame(maxWidth: .infinity)
-                .frame(height: 32)
-                .offset(y: -10)
-                .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, volumeBottomPadding)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
-                VolumeSlider(
-                    isEnabled: true
-                )
-                .frame(height: 32)
-                .padding(.horizontal, horizontalPadding)
-                .padding(.bottom, volumeBottomPadding)
-                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                VStack(spacing: 0) {
+                    TimelineSlider()
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.bottom, sliderBottomPadding)
+                    transportControls
+                        .frame(height: 56)
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.bottom, transportBottomPadding)
+                    routeOrVolumeRow(
+                        showsRouteNotice: showsRouteNotice,
+                        horizontalPadding: horizontalPadding
+                    )
+                    .padding(.bottom, volumeBottomPadding)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.22), value: showsRouteNotice)
+    }
+
+    @ViewBuilder
+    private func routeOrVolumeRow(
+        showsRouteNotice: Bool,
+        horizontalPadding: CGFloat
+    ) -> some View {
+        if showsRouteNotice {
+            HStack(spacing: 5) {
+                Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
+                    .font(.caption2)
+                Text(player.isCarPlayConnected ? "CarPlay" : "AirPlay")
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white.opacity(0.35))
+            .frame(maxWidth: .infinity)
+            .frame(height: 32)
+            .offset(y: -10)
+            .padding(.horizontal, horizontalPadding)
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        } else {
+            VolumeSlider(
+                isEnabled: true
+            )
+            .frame(height: 32)
+            .padding(.horizontal, horizontalPadding)
+            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+        }
     }
 
     // MARK: - Track Context Menu
@@ -662,6 +741,8 @@ struct TimelineSlider: View {
     @State private var isDragging = false
     @State private var sliderValue: TimeInterval = 0
 
+    var usesOverlayedTimeLabels = false
+
     var body: some View {
         let duration = max(player.duration, 1)
         let isReady = player.isReadyToPlay || player.hasTrack
@@ -669,29 +750,19 @@ struct TimelineSlider: View {
         let anchoredLiveValue: TimeInterval = (!player.isPlaying && liveValue < 1) ? 0 : liveValue
         let displayValue = isDragging ? sliderValue : anchoredLiveValue
 
-        VStack(spacing: 6) {
-            Slider(
-                value: $sliderValue,
-                in: 0...duration,
-                onEditingChanged: { editing in
-                    isDragging = editing
-                    if !editing {
-                        player.seek(to: sliderValue)
+        Group {
+            if usesOverlayedTimeLabels {
+                sliderControl(duration: duration, isReady: isReady)
+                    .overlay(alignment: .bottom) {
+                        timeLabels(displayValue: displayValue, duration: duration)
+                            .offset(y: 18)
                     }
+            } else {
+                VStack(spacing: 6) {
+                    sliderControl(duration: duration, isReady: isReady)
+                    timeLabels(displayValue: displayValue, duration: duration)
                 }
-            )
-            .tint(.white)
-            .disabled(!isReady)
-            .opacity(isReady ? 1 : 0.5)
-
-            HStack {
-                Text(formatTime(displayValue))
-                Spacer()
-                Text("-\(formatTime(max(0, duration - displayValue)))")
             }
-            .font(.caption2)
-            .foregroundStyle(.white.opacity(0.45))
-            .monospacedDigit()
         }
         .onChange(of: player.currentTime) { _, newValue in
             if !isDragging {
@@ -712,6 +783,33 @@ struct TimelineSlider: View {
         .onAppear {
             sliderValue = player.currentTime
         }
+    }
+
+    private func sliderControl(duration: TimeInterval, isReady: Bool) -> some View {
+        Slider(
+            value: $sliderValue,
+            in: 0...duration,
+            onEditingChanged: { editing in
+                isDragging = editing
+                if !editing {
+                    player.seek(to: sliderValue)
+                }
+            }
+        )
+        .tint(.white)
+        .disabled(!isReady)
+        .opacity(isReady ? 1 : 0.5)
+    }
+
+    private func timeLabels(displayValue: TimeInterval, duration: TimeInterval) -> some View {
+        HStack {
+            Text(formatTime(displayValue))
+            Spacer()
+            Text("-\(formatTime(max(0, duration - displayValue)))")
+        }
+        .font(.caption2)
+        .foregroundStyle(.white.opacity(0.45))
+        .monospacedDigit()
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
