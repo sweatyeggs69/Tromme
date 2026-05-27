@@ -9,7 +9,7 @@ enum AppStyle {
         static let sectionGap: CGFloat = 12
         static let cardGap: CGFloat = 16
         static let pageHorizontal: CGFloat = 20
-        static let nowPlayingHorizontal: CGFloat = 32
+        static let nowPlayingHorizontal: CGFloat = 0
         static let listItemGap: CGFloat = 0
     }
 

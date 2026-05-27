@@ -39,7 +39,6 @@ struct LyricsScrollView: View {
 
                             Color.clear.frame(height: bufferHeight)
                         }
-                        .padding(.horizontal, 32)
                     }
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.height

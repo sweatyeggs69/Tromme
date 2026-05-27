@@ -10,7 +10,6 @@ struct SettingsView: View {
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
-    @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @State private var showReviewPrompt = false
     @State private var showSignOutConfirmation = false
@@ -31,13 +30,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section {
-                Toggle("Mini Mode", isOn: $miniLyricsModeEnabled)
-                    .tint(.green)
-            } header: {
-                Text("Lyrics")
-            }
-            
             Section {
                 Picker("Style Match", selection: $magicMixStyleMatch) {
                     ForEach(1...5, id: \.self) { value in

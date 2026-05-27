@@ -19,7 +19,6 @@ struct NowPlayingView: View {
     @State private var lyricsService = LyricsService()
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
-    @AppStorage("miniLyricsModeEnabled") private var miniLyricsModeEnabled = false
 
     init(startPanel: NowPlayingStartPanel = .none, onNavigate: ((PlexMetadata) -> Void)? = nil) {
         self.startPanel = startPanel
@@ -41,7 +40,7 @@ struct NowPlayingView: View {
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
     private let portraitTrackInfoBottomPadding: CGFloat = 18
-    private let portraitBottomControlsHeightFraction: CGFloat = 0.40
+    private let portraitBottomControlsHeightFraction: CGFloat = 0.45
     private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
     private let bottomActionsTopPadding: CGFloat = 10
     private let bottomScreenPaddingWithSafeArea: CGFloat = 4
@@ -62,13 +61,7 @@ struct NowPlayingView: View {
             let width = geo.size.width
             let height = geo.size.height
             let isPortrait = height >= width
-            let showsMiniLyricsSlot = miniLyricsModeEnabled
-                && !showLyrics
-                && !showQueue
-                && isPortrait
-                && lyricsService.hasSynced
-                && !lyricsService.lines.isEmpty
-            let baseArtworkWidth = width - 64.0
+            let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
             let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geo.size.width > geo.size.height
@@ -79,13 +72,9 @@ struct NowPlayingView: View {
                 ? portraitBottomControlsHeightFraction
                 : landscapeBottomControlsHeightFraction
             let bottomControlsHeight = height * bottomControlsHeightFraction
-            let landscapeOuterHorizontalPadding: CGFloat = 40
-            let landscapeColumnSpacing: CGFloat = 36
+            let landscapeOuterHorizontalPadding: CGFloat = 24
+            let landscapeColumnSpacing: CGFloat = 24
             let landscapeContentWidth = max(0.0, width - (landscapeOuterHorizontalPadding * 2))
-            let landscapeLeftWidth = landscapeContentWidth * 0.40
-            let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
-            let landscapeControlsHorizontalPadding: CGFloat = 12
-            let landscapeArtworkMaxByWidth = landscapeLeftWidth - (landscapeControlsHorizontalPadding * 2)
             let bottomScreenPadding = geo.safeAreaInsets.bottom > 0
                 ? bottomScreenPaddingWithSafeArea
                 : bottomScreenPaddingWithoutSafeArea
@@ -96,10 +85,11 @@ struct NowPlayingView: View {
                 0.0,
                 height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
             )
-            let landscapePlayerControlsHeight = min(bottomControlsHeight, landscapeMainHeight)
+            let landscapePlayerControlsHeight = landscapeMainHeight * portraitBottomControlsHeightFraction
             let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight)
-            let landscapeArtworkMaxByHeight = max(96.0, landscapeArtworkAreaHeight - 16)
-            let landscapeArtworkSize = max(96.0, min(landscapeArtworkMaxByWidth, landscapeArtworkMaxByHeight))
+            let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight)
+            let landscapeLeftWidth = landscapeArtworkSize
+            let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
 
 
             let _ = applyInitialLandscapeLyrics(isPadLandscape: isPadLandscape)
@@ -150,6 +140,7 @@ struct NowPlayingView: View {
                         }
                     }
                     .frame(height: landscapeMainHeight)
+                    .padding(.horizontal, landscapeOuterHorizontalPadding)
 
                     // Bottom action row
                     HStack {
@@ -162,15 +153,6 @@ struct NowPlayingView: View {
                         Spacer()
 
                         HStack(spacing: 10) {
-                            Menu {
-                                trackContextMenuItems
-                            } label: {
-                                Image(systemName: "ellipsis")
-                                    .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
-                                    .frame(width: 38, height: 38)
-                            }
-                            .buttonStyle(.plain)
-
                             Button {
                                 toggleLyricsPanel()
                             } label: {
@@ -201,66 +183,34 @@ struct NowPlayingView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 6)
 
-                    if !isCompact {
-                        Spacer(minLength: 16)
-                    }
+                    Spacer(minLength: 16)
 
-                    // Artwork header — scales between full and compact
-                    HStack(spacing: 12) {
-                        ArtworkView(
-                            thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                            size: isCompact ? 72 : artworkSize,
-                            cornerRadius: 6
-                        )
-                        .shadow(color: .black.opacity(isCompact ? 0.2 : 0.3), radius: isCompact ? 6 : 22, y: isCompact ? 3 : 10)
-                        .scaleEffect(!isCompact && player.isPlaying ? 1.0 : !isCompact ? 0.85 : 1.0)
+                    // Artwork and panel content crossfade in the same visual area.
+                    ZStack {
+                        VStack(spacing: 0) {
+                            Spacer(minLength: 0)
+
+                            ArtworkView(
+                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
+                                size: artworkSize,
+                                cornerRadius: 6
+                            )
+                            .shadow(color: .black.opacity(0.3), radius: 22, y: 10)
+                            .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
-                        .zIndex(1)
 
-                        if isCompact {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(player.currentTrack?.title ?? "Not Playing")
-                                    .font(.callout.bold())
-                                    .foregroundStyle(.white)
-                                    .lineLimit(1)
-                                Text(player.currentTrack?.artistDisplayName ?? "")
-                                    .font(.callout)
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .lineLimit(1)
-                            }
-                            .transition(.opacity)
-
-                            Spacer()
-
-                            trackContextMenu
-                                .transition(.opacity)
+                            Spacer(minLength: 0)
                         }
-                    }
-                    .frame(maxWidth: isCompact ? .infinity : nil)
-                    .padding(.horizontal, isCompact ? 32 : 0)
-                    .padding(.top, isCompact ? 8 : 0)
-                    .padding(.bottom, showsMiniLyricsSlot ? 0 : portraitArtworkBottomPadding)
-                    .offset(y: 0)
-                    .zIndex(1)
+                        .opacity(isCompact ? 0 : 1)
 
-                    // Content area when compact
-                    if isCompact {
                         lyricsQueueContent
-                            .transaction { $0.animation = nil }
+                            .frame(width: controlsContainerWidth)
+                            .opacity(isCompact ? 1 : 0)
                     }
-
-                    if showsMiniLyricsSlot {
-                        Spacer(minLength: 0)
-                        MiniLyricLineContainer(lyricsService: lyricsService)
-                            .frame(maxWidth: controlsContainerWidth)
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, isPadPortrait ? 0 : AppStyle.Spacing.nowPlayingHorizontal)
-                            .transition(.opacity)
-                            .zIndex(2)
-                        Spacer(minLength: 0)
-                    } else {
-                        Spacer()
-                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity)
+                    .padding(.bottom, portraitArtworkBottomPadding)
+                    .zIndex(1)
 
                     // Bottom controls — pinned to bottom
                     VStack(spacing: 0) {
@@ -282,7 +232,6 @@ struct NowPlayingView: View {
                     .padding(.bottom, bottomScreenPadding)
                 }
                 .animation(.easeInOut(duration: 0.4), value: isCompact)
-                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: showsMiniLyricsSlot)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -359,9 +308,13 @@ struct NowPlayingView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
                     }
+
                 }
                 .animation(.easeInOut(duration: 0.25), value: lyricsService.isLoading)
                 .animation(.easeInOut(duration: 0.25), value: lyricsService.hasLyrics)
+                .overlay(alignment: .bottomLeading) {
+                    lyricsRefreshButton
+                }
             } else if showQueue {
                 QueueView(player: player)
                     .mask(
@@ -387,32 +340,29 @@ struct NowPlayingView: View {
                     .font(.title3.bold())
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                Menu {
-                    trackContextMenuItems
-                } label: {
-                    Text(player.currentTrack?.artistDisplayName ?? "")
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                }
+                Text(player.currentTrack?.artistDisplayName ?? "")
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 12)
 
-            HStack(spacing: 16) {
-                Button { player.toggleShuffle() } label: {
-                    Image(systemName: "shuffle")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white.opacity(player.isShuffled ? 1 : 0.4))
-                }
-
-                Button { player.cycleRepeatMode() } label: {
-                    Image(systemName: player.repeatMode.iconName)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white.opacity(player.repeatMode.isActive ? 1 : 0.4))
-                        .contentTransition(.symbolEffect(.replace))
-                }
+            Menu {
+                trackContextMenuItems
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                    .frame(width: 30, height: 30)
+                    .background {
+                        Circle()
+                            .fill(.white.opacity(actionBackgroundOpacity))
+                    }
+                    .contentShape(Circle())
             }
+            .menuOrder(.fixed)
+            .buttonStyle(.plain)
         }
     }
 
@@ -427,7 +377,6 @@ struct NowPlayingView: View {
             trackInfo
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, trackInfoBottomPadding)
-                .transition(.opacity)
 
             controlsStack(
                 horizontalPadding: horizontalPadding,
@@ -523,27 +472,6 @@ struct NowPlayingView: View {
     @ViewBuilder
     private var trackContextMenuItems: some View {
         if let track = player.currentTrack {
-            if let artistKey = track.grandparentRatingKey {
-                Button {
-                    let artist = PlexMetadata(
-                        ratingKey: artistKey, key: nil, type: "artist", subtype: nil,
-                        title: track.grandparentTitle ?? track.artistName,
-                        titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
-                        index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                        updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
-                        thumb: track.grandparentThumb, art: nil, parentThumb: nil,
-                        grandparentThumb: nil, grandparentArt: nil, parentTitle: nil,
-                        grandparentTitle: nil, parentRatingKey: nil,
-                        grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                        media: nil, genre: nil, style: nil, country: nil,
-                        subformat: nil, originallyAvailableAt: nil
-                    )
-                    onNavigate?(artist)
-                    dismiss()
-                } label: {
-                    Label("Go to Artist", systemImage: "music.mic")
-                }
-            }
             if let albumKey = track.parentRatingKey {
                 Button {
                     let album = PlexMetadata(
@@ -566,26 +494,46 @@ struct NowPlayingView: View {
                     Label("Go to Album", systemImage: "square.stack")
                 }
             }
-            if showLyrics {
-                Divider()
+            if let artistKey = track.grandparentRatingKey {
                 Button {
-                    Task { await lyricsService.refresh(track: track) }
+                    let artist = PlexMetadata(
+                        ratingKey: artistKey, key: nil, type: "artist", subtype: nil,
+                        title: track.grandparentTitle ?? track.artistName,
+                        titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
+                        index: nil, parentIndex: nil, duration: nil, addedAt: nil,
+                        updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
+                        thumb: track.grandparentThumb, art: nil, parentThumb: nil,
+                        grandparentThumb: nil, grandparentArt: nil, parentTitle: nil,
+                        grandparentTitle: nil, parentRatingKey: nil,
+                        grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
+                        media: nil, genre: nil, style: nil, country: nil,
+                        subformat: nil, originallyAvailableAt: nil
+                    )
+                    onNavigate?(artist)
+                    dismiss()
                 } label: {
-                    Label("Refresh Lyrics", systemImage: "arrow.clockwise")
+                    Label("Go to Artist", systemImage: "music.mic")
                 }
             }
         }
     }
 
-    private var trackContextMenu: some View {
-        Menu {
-            trackContextMenuItems
+    // MARK: - Lyrics Refresh Button
+
+    private var lyricsRefreshButton: some View {
+        Button {
+            guard let track = player.currentTrack else { return }
+            Task { await lyricsService.refresh(track: track) }
         } label: {
-            Image(systemName: "ellipsis.circle.fill")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.6))
-                .frame(width: 36, height: 36)
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                .frame(width: 30, height: 30)
+                .symbolEffect(.rotate, options: .repeat(.continuous), isActive: lyricsService.isLoading)
+                .contentShape(Circle())
         }
+        .buttonStyle(.plain)
+        .disabled(lyricsService.isLoading)
     }
 
     // MARK: - Drag Handle
@@ -710,27 +658,6 @@ struct NowPlayingView: View {
                 .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
                 .frame(width: 38, height: 38)
         }
-    }
-}
-
-// MARK: - Mini Lyric Line Container
-
-/// Owns the per-tick read of `player.currentTime` so the parent NowPlayingView
-/// body doesn't re-evaluate every time the playhead advances.
-private struct MiniLyricLineContainer: View {
-    @Environment(AudioPlayerService.self) private var player
-    let lyricsService: LyricsService
-
-    private var text: String? {
-        guard lyricsService.hasSynced else { return nil }
-        let index = lyricsService.currentLineIndex(at: player.currentTime)
-        guard lyricsService.lines.indices.contains(index) else { return nil }
-        let line = lyricsService.lines[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return line.isEmpty ? nil : line
-    }
-
-    var body: some View {
-        MiniLyricsLineView(text: text ?? " ")
     }
 }
 
