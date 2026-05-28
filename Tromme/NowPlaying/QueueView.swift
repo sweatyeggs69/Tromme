@@ -37,8 +37,8 @@ struct QueueView: View {
                     .foregroundStyle(.white.opacity(0.6))
                 }
                 .padding(.horizontal, AppStyle.Spacing.nowPlayingHorizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
+                .padding(.top, 12)
+                .padding(.bottom, 12)
             }
 
             if player.upcomingTracks.isEmpty {

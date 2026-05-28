@@ -19,6 +19,8 @@ struct NowPlayingView: View {
     @State private var lyricsService = LyricsService()
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
+    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistItemKeys: [String] = []
 
     init(startPanel: NowPlayingStartPanel = .none, onNavigate: ((PlexMetadata) -> Void)? = nil) {
         self.startPanel = startPanel
@@ -40,7 +42,7 @@ struct NowPlayingView: View {
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
     private let portraitTrackInfoBottomPadding: CGFloat = 18
-    private let portraitBottomControlsHeightFraction: CGFloat = 0.45
+    private let portraitBottomControlsHeightFraction: CGFloat = 0.40
     private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
     private let bottomActionsTopPadding: CGFloat = 10
     private let bottomScreenPaddingWithSafeArea: CGFloat = 4
@@ -267,6 +269,9 @@ struct NowPlayingView: View {
                 await lyricsService.fetch(track: track)
             }
         }
+        .sheet(isPresented: $showingAddToPlaylistSheet) {
+            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        }
     }
 
     @ViewBuilder
@@ -397,7 +402,6 @@ struct NowPlayingView: View {
         let sliderBottomPadding: CGFloat = usesCompactSpacing ? 10 : (isPadPortrait ? 42 : 18)
         let transportBottomPadding: CGFloat = usesCompactSpacing ? 16 : (isPadPortrait ? 64 : 32)
         let volumeBottomPadding: CGFloat = usesCompactSpacing ? 8 : (isPadPortrait ? 38 : (bottomPadding + 6))
-        let showsRouteNotice = player.isCarPlayConnected || player.isAirPlayConnected
 
         return Group {
             if usesEvenSpacing {
@@ -413,10 +417,7 @@ struct NowPlayingView: View {
 
                     Spacer(minLength: 0)
 
-                    routeOrVolumeRow(
-                        showsRouteNotice: showsRouteNotice,
-                        horizontalPadding: horizontalPadding
-                    )
+                    volumeRow(horizontalPadding: horizontalPadding)
                 }
             } else {
                 VStack(spacing: 0) {
@@ -427,44 +428,33 @@ struct NowPlayingView: View {
                         .frame(height: 56)
                         .padding(.horizontal, horizontalPadding)
                         .padding(.bottom, transportBottomPadding)
-                    routeOrVolumeRow(
-                        showsRouteNotice: showsRouteNotice,
-                        horizontalPadding: horizontalPadding
-                    )
-                    .padding(.bottom, volumeBottomPadding)
+                    volumeRow(horizontalPadding: horizontalPadding)
+                        .padding(.bottom, volumeBottomPadding)
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: showsRouteNotice)
     }
 
     @ViewBuilder
-    private func routeOrVolumeRow(
-        showsRouteNotice: Bool,
-        horizontalPadding: CGFloat
-    ) -> some View {
-        if showsRouteNotice {
-            HStack(spacing: 5) {
-                Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
-                    .font(.caption2)
-                Text(player.isCarPlayConnected ? "CarPlay" : "AirPlay")
-                    .font(.caption2)
-                    .lineLimit(1)
+    private func volumeRow(horizontalPadding: CGFloat) -> some View {
+        let showsRouteLabel = player.isCarPlayConnected || player.isAirPlayConnected
+        VStack(spacing: 6) {
+            VolumeSlider(isEnabled: !player.isCarPlayConnected)
+                .frame(height: 32)
+            if showsRouteLabel {
+                let fallbackName = player.isCarPlayConnected ? "CarPlay" : "AirPlay"
+                HStack(spacing: 5) {
+                    Image(systemName: player.isCarPlayConnected ? "car.fill" : "airplayaudio")
+                    Text(player.activeRouteName ?? fallbackName)
+                        .lineLimit(1)
+                }
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.45))
+                .transition(.opacity)
             }
-            .foregroundStyle(.white.opacity(0.35))
-            .frame(maxWidth: .infinity)
-            .frame(height: 32)
-            .offset(y: -10)
-            .padding(.horizontal, horizontalPadding)
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-        } else {
-            VolumeSlider(
-                isEnabled: true
-            )
-            .frame(height: 32)
-            .padding(.horizontal, horizontalPadding)
-            .transition(.opacity.combined(with: .scale(scale: 0.98)))
         }
+        .padding(.horizontal, horizontalPadding)
+        .animation(.easeInOut(duration: 0.22), value: showsRouteLabel)
     }
 
     // MARK: - Track Context Menu
@@ -514,6 +504,12 @@ struct NowPlayingView: View {
                 } label: {
                     Label("Go to Artist", systemImage: "music.mic")
                 }
+            }
+            Button {
+                addToPlaylistItemKeys = [track.ratingKey]
+                showingAddToPlaylistSheet = true
+            } label: {
+                Label("Add to Playlist", systemImage: "text.badge.plus")
             }
         }
     }
@@ -888,6 +884,7 @@ struct NowPlayingBackground: View {
 #Preview("CarPlay Connected") {
     let player = AudioPlayerService()
     player.isCarPlayConnected = true
+    player.activeRouteName = "Tesla"
     return NowPlayingView()
         .environment(player)
 }
@@ -895,6 +892,7 @@ struct NowPlayingBackground: View {
 #Preview("AirPlay Connected") {
     let player = AudioPlayerService()
     player.isAirPlayConnected = true
+    player.activeRouteName = "Living Room"
     return NowPlayingView()
         .environment(player)
 }
