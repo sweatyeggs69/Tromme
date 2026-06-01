@@ -13,6 +13,7 @@ struct AllAlbumsView: View {
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
+    @State private var selectedAlbum: PlexMetadata?
 
     private let previewAlbums: [PlexMetadata]?
 
@@ -29,6 +30,12 @@ struct AllAlbumsView: View {
         return albums.filter { album in
             album.title.localizedCaseInsensitiveContains(query)
             || (album.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    private var albumSections: [(title: String, items: [PlexMetadata])] {
+        alphabetSections(for: filteredAlbums) { album in
+            album.titleSort ?? album.title
         }
     }
 
@@ -79,6 +86,9 @@ struct AllAlbumsView: View {
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }
+        .navigationDestination(item: $selectedAlbum) { album in
+            AlbumDetailView(album: album)
+        }
     }
 
     @ViewBuilder
@@ -88,67 +98,83 @@ struct AllAlbumsView: View {
             if filteredAlbums.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-                        ForEach(filteredAlbums) { album in
-                            NavigationLink(value: album) {
-                                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                                    GeometryReader { geo in
-                                        ArtworkView(
-                                            thumbPath: album.thumb,
-                                            size: geo.size.width,
-                                            cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                                        )
+                List {
+                    ForEach(albumSections, id: \.title) { section in
+                        Section(section.title) {
+                            LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+                                ForEach(section.items) { album in
+                                    Button {
+                                        selectedAlbum = album
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                            GeometryReader { geo in
+                                                ArtworkView(
+                                                    thumbPath: album.thumb,
+                                                    size: geo.size.width,
+                                                    cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                                )
+                                            }
+                                            .aspectRatio(1, contentMode: .fit)
+
+                                            Text(album.title)
+                                                .appItemTitleStyle()
+
+                                            Text(album.parentTitle ?? "")
+                                                .appItemSubtitleStyle()
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    .aspectRatio(1, contentMode: .fit)
-
-                                    Text(album.title)
-                                        .appItemTitleStyle()
-
-                                    Text(album.parentTitle ?? "")
-                                        .appItemSubtitleStyle()
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        albumContextMenu(for: album)
+                                    }
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                albumContextMenu(for: album)
-                            }
+                            .padding(.bottom, 12)
+                            .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+                            .listRowSeparator(.hidden)
                         }
                     }
-                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-                    .padding(.vertical, AppStyle.AlbumLayout.gridVerticalPadding)
                 }
+                .listStyle(.plain)
             }
 
         case .list:
             if filteredAlbums.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
-                List(filteredAlbums) { album in
-                    NavigationLink(value: album) {
-                        HStack(spacing: 10) {
-                            ArtworkView(
-                                thumbPath: album.thumb,
-                                size: AppStyle.AlbumLayout.listArtworkSize,
-                                cornerRadius: AppStyle.AlbumLayout.listArtworkCornerRadius
-                            )
+                List {
+                    ForEach(albumSections, id: \.title) { section in
+                        Section(section.title) {
+                            ForEach(section.items) { album in
+                                Button {
+                                    selectedAlbum = album
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        ArtworkView(
+                                            thumbPath: album.thumb,
+                                            size: AppStyle.AlbumLayout.listArtworkSize,
+                                            cornerRadius: AppStyle.AlbumLayout.listArtworkCornerRadius
+                                        )
 
-                            VStack(alignment: .leading, spacing: AppStyle.AlbumLayout.listTextSpacing) {
-                                Text(album.title)
-                                    .appItemTitleStyle()
+                                        VStack(alignment: .leading, spacing: AppStyle.AlbumLayout.listTextSpacing) {
+                                            Text(album.title)
+                                                .appItemTitleStyle()
 
-                                Text(album.parentTitle ?? "")
-                                    .appItemSubtitleStyle()
+                                            Text(album.parentTitle ?? "")
+                                                .appItemSubtitleStyle()
+                                        }
+                                    }
+                                    .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    albumContextMenu(for: album)
+                                }
+                                .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                             }
                         }
-                        .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        albumContextMenu(for: album)
-                    }
-                    .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                 }
                 .listStyle(.plain)
             }
@@ -228,6 +254,31 @@ struct AllAlbumsView: View {
         addToPlaylistItemKeys = tracks.map(\.ratingKey)
         showingAddToPlaylistSheet = true
     }
+
+    private func alphabetSections(
+        for items: [PlexMetadata],
+        sortKey: (PlexMetadata) -> String
+    ) -> [(title: String, items: [PlexMetadata])] {
+        var sections: [(title: String, items: [PlexMetadata])] = []
+
+        for item in items {
+            let title = alphabetSectionTitle(for: sortKey(item))
+            if let index = sections.firstIndex(where: { $0.title == title }) {
+                sections[index].items.append(item)
+            } else {
+                sections.append((title: title, items: [item]))
+            }
+        }
+
+        return sections
+    }
+
+    private func alphabetSectionTitle(for value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "#" }
+        let letter = String(first).uppercased()
+        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
+    }
 }
 
 private enum AlbumViewMode: String {
@@ -240,5 +291,6 @@ private enum AlbumViewMode: String {
     NavigationStack {
         AllAlbumsView(previewAlbums: DevelopmentMockData.allAlbums)
     }
+    .environment(AudioPlayerService())
 }
 #endif

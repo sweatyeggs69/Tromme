@@ -42,6 +42,12 @@ struct ArtistsView: View {
         }
     }
 
+    private var artistSections: [(title: String, items: [PlexMetadata])] {
+        alphabetSections(for: filteredArtists) { artist in
+            artistSortKey(for: artist.title)
+        }
+    }
+
     var body: some View {
         Group {
             if isLoading {
@@ -84,16 +90,22 @@ struct ArtistsView: View {
             if filteredArtists.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
-                List(filteredArtists) { artist in
-                    NavigationLink(value: artist) {
-                        HStack(spacing: 10) {
-                            ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
+                List {
+                    ForEach(artistSections, id: \.title) { section in
+                        Section(section.title) {
+                            ForEach(section.items) { artist in
+                                NavigationLink(value: artist) {
+                                    HStack(spacing: 10) {
+                                        ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
 
-                            Text(artist.title)
-                                .font(.body)
+                                        Text(artist.title)
+                                            .font(.body)
+                                    }
+                                }
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            }
                         }
                     }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 }
                 .listStyle(.plain)
             }
@@ -103,27 +115,36 @@ struct ArtistsView: View {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: columns, spacing: gridRowSpacing) {
-                        ForEach(filteredArtists) { artist in
-                            NavigationLink(value: artist) {
-                                VStack(alignment: .center, spacing: 4) {
-                                    GeometryReader { geo in
-                                        let size = geo.size.width
-                                        ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
-                                    }
-                                    .aspectRatio(1, contentMode: .fit)
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(artistSections, id: \.title) { section in
+                            Text(section.title)
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, gridHorizontalPadding)
 
-                                    Text(artist.title)
-                                        .appItemTitleStyle()
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity)
+                            LazyVGrid(columns: columns, spacing: gridRowSpacing) {
+                                ForEach(section.items) { artist in
+                                    NavigationLink(value: artist) {
+                                        VStack(alignment: .center, spacing: 4) {
+                                            GeometryReader { geo in
+                                                let size = geo.size.width
+                                                ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
+                                            }
+                                            .aspectRatio(1, contentMode: .fit)
+
+                                            Text(artist.title)
+                                                .appItemTitleStyle()
+                                                .multilineTextAlignment(.center)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .center)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .center)
                             }
-                            .buttonStyle(.plain)
+                            .padding(.horizontal, gridHorizontalPadding)
                         }
                     }
-                    .padding(.horizontal, gridHorizontalPadding)
                     .padding(.vertical, 8)
                 }
             }
@@ -204,6 +225,31 @@ struct ArtistsView: View {
             .first.map(String.init) ?? normalized
 
         return "\(firstWord.lowercased())|\(normalized.lowercased())"
+    }
+
+    private func alphabetSections(
+        for items: [PlexMetadata],
+        sortKey: (PlexMetadata) -> String
+    ) -> [(title: String, items: [PlexMetadata])] {
+        var sections: [(title: String, items: [PlexMetadata])] = []
+
+        for item in items {
+            let title = alphabetSectionTitle(for: sortKey(item))
+            if let index = sections.firstIndex(where: { $0.title == title }) {
+                sections[index].items.append(item)
+            } else {
+                sections.append((title: title, items: [item]))
+            }
+        }
+
+        return sections
+    }
+
+    private func alphabetSectionTitle(for value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "#" }
+        let letter = String(first).uppercased()
+        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
     }
 }
 

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 struct AlbumDetailView: View {
@@ -13,6 +14,8 @@ struct AlbumDetailView: View {
     @State private var firstTrackDetails: PlexMetadata?
     @State private var isLoadingTracks: Bool
     @State private var selectedArtist: PlexMetadata?
+    @State private var selectedMoreByAlbum: PlexMetadata?
+    @State private var artistAlbums: [PlexMetadata]
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistResultMessage: String?
@@ -58,8 +61,16 @@ struct AlbumDetailView: View {
         artworkColor.isLightColor ? .black : .white
     }
 
+    private var moreBySectionBackgroundColor: Color {
+        .black.opacity(0.08)
+    }
+
     private var controlsDisabled: Bool {
         tracks.isEmpty
+    }
+
+    private var moreByArtistAlbums: [PlexMetadata] {
+        artistAlbums.filter { $0.ratingKey != album.ratingKey }
     }
 
     private var albumFooterRight: String {
@@ -81,6 +92,33 @@ struct AlbumDetailView: View {
             }
         }
         return parts.joined(separator: ", ")
+    }
+
+    private var releaseDateText: String? {
+        let dateString = albumDetails.originallyAvailableAt ?? album.originallyAvailableAt
+        guard let dateString, !dateString.isEmpty else { return nil }
+
+        let components = dateString.split(separator: "-").compactMap { Int($0) }
+        guard components.count == 3 else { return dateString }
+
+        var dateComponents = DateComponents()
+        dateComponents.year = components[0]
+        dateComponents.month = components[1]
+        dateComponents.day = components[2]
+
+        guard let date = Calendar.current.date(from: dateComponents) else { return dateString }
+        return date.formatted(.dateTime.month(.wide).day().year())
+    }
+
+    private var labelLine: String? {
+        var parts: [String] = []
+        if let year = albumDetails.year ?? album.year {
+            parts.append(String(year))
+        }
+        if let studio = albumDetails.studio, !studio.isEmpty {
+            parts.append(studio)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     private var albumInfoLine: String? {
@@ -154,7 +192,8 @@ struct AlbumDetailView: View {
             Text(text)
                 .font(.title3)
                 .foregroundStyle(secondaryTextColor)
-                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 .padding(.horizontal, 20)
             Spacer(minLength: 0)
         }
@@ -167,6 +206,10 @@ struct AlbumDetailView: View {
     ) -> some View {
         VStack {
             ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                )
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
@@ -242,7 +285,7 @@ struct AlbumDetailView: View {
                     Image(systemName: "play.fill")
                     Text("Play")
                 }
-                .font(.title3.weight(.semibold))
+                .font(.body.weight(.semibold))
                 .foregroundStyle(artworkColor)
                 .padding(.horizontal, 56)
                 .padding(.vertical, 14)
@@ -281,11 +324,17 @@ struct AlbumDetailView: View {
 
     private let isPreviewMode: Bool
 
-    init(album: PlexMetadata, sourceArtistRatingKey: String? = nil, previewTracks: [PlexMetadata]? = nil) {
+    init(
+        album: PlexMetadata,
+        sourceArtistRatingKey: String? = nil,
+        previewTracks: [PlexMetadata]? = nil,
+        previewArtistAlbums: [PlexMetadata] = []
+    ) {
         self.album = album
         self.sourceArtistRatingKey = sourceArtistRatingKey
         _albumDetails = State(initialValue: album)
         _tracks = State(initialValue: previewTracks ?? [])
+        _artistAlbums = State(initialValue: previewArtistAlbums)
         _isLoadingTracks = State(initialValue: previewTracks == nil)
         self.isPreviewMode = previewTracks != nil
     }
@@ -320,6 +369,26 @@ struct AlbumDetailView: View {
         isLoadingTracks = false
     }
 
+    @MainActor
+    private func loadArtistAlbums() async {
+        guard let server = serverConnection.currentServer,
+              let artistKey = (albumDetails.parentRatingKey ?? album.parentRatingKey),
+              !artistKey.isEmpty else { return }
+
+        do {
+            artistAlbums = try await client.cachedChildren(server: server, ratingKey: artistKey)
+                .sorted {
+                    let date0 = $0.originallyAvailableAt ?? ""
+                    let date1 = $1.originallyAvailableAt ?? ""
+                    if date0 != date1 { return date0 > date1 }
+                    if ($0.year ?? 0) != ($1.year ?? 0) { return ($0.year ?? 0) > ($1.year ?? 0) }
+                    return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
+                }
+        } catch {
+            artistAlbums = []
+        }
+    }
+
     private func playAlbumNext() {
         guard !tracks.isEmpty else { return }
         for track in tracks.reversed() {
@@ -335,6 +404,11 @@ struct AlbumDetailView: View {
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var albumGridColumns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
+    }
 
     private var trackListRows: some View {
         Group {
@@ -380,6 +454,7 @@ struct AlbumDetailView: View {
                             .font(.title3)
                             .foregroundStyle(secondaryTextColor)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -390,6 +465,7 @@ struct AlbumDetailView: View {
                             .font(.title3)
                             .foregroundStyle(secondaryTextColor)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     .buttonStyle(.plain)
                 }
@@ -398,23 +474,78 @@ struct AlbumDetailView: View {
                     .font(.title3)
                     .foregroundStyle(secondaryTextColor)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var albumFooter: some View {
-        HStack {
-            if let studio = albumDetails.studio {
-                Text(studio)
+        VStack(alignment: .leading, spacing: 3) {
+            if let releaseDateText {
+                Text(releaseDateText)
             }
 
-            Spacer()
+            if !albumFooterRight.isEmpty {
+                Text(albumFooterRight)
+            }
 
-            Text(albumFooterRight)
+            if let labelLine {
+                Text(labelLine)
+            }
         }
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(tertiaryTextColor)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func albumSectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .foregroundStyle(titleColor)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
+            .listRowBackground(moreBySectionBackgroundColor)
+            .listRowSeparator(.hidden)
+    }
+
+    private func moreByArtistGrid(_ albums: [PlexMetadata]) -> some View {
+        LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+            ForEach(albums) { album in
+                Button {
+                    selectedMoreByAlbum = album
+                } label: {
+                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                        GeometryReader { geo in
+                            ArtworkView(
+                                thumbPath: album.thumb,
+                                size: geo.size.width,
+                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                            )
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                        Text(album.title)
+                            .font(AppStyle.Typography.itemTitle)
+                            .foregroundStyle(titleColor)
+                            .lineLimit(1)
+
+                        Text(album.releaseYear)
+                            .font(AppStyle.Typography.itemSubtitle)
+                            .foregroundStyle(tertiaryTextColor)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 24)
+        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowBackground(moreBySectionBackgroundColor)
+        .listRowSeparator(.hidden)
     }
 
     var body: some View {
@@ -429,6 +560,10 @@ struct AlbumDetailView: View {
                     HStack(alignment: .top, spacing: 0) {
                         VStack(spacing: 0) {
                             ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                                )
                                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                                 .padding(.top, 12)
 
@@ -459,6 +594,13 @@ struct AlbumDetailView: View {
                                     albumFooter
                                         .listRowBackground(Color.clear)
                                         .listRowSeparator(.hidden)
+
+                                    if artistAlbums.count > 1,
+                                       !moreByArtistAlbums.isEmpty,
+                                       let artistName = artistNavigationTarget?.title {
+                                        albumSectionHeader("More By \(artistName)")
+                                        moreByArtistGrid(moreByArtistAlbums)
+                                    }
                                 }
                             }
                             .scrollContentBackground(.hidden)
@@ -482,6 +624,13 @@ struct AlbumDetailView: View {
                             albumFooter
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
+
+                            if artistAlbums.count > 1,
+                               !moreByArtistAlbums.isEmpty,
+                               let artistName = artistNavigationTarget?.title {
+                                albumSectionHeader("More By \(artistName)")
+                                moreByArtistGrid(moreByArtistAlbums)
+                            }
                         }
                     }
                     .scrollContentBackground(.hidden)
@@ -492,6 +641,12 @@ struct AlbumDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedArtist) { artist in
             ArtistDetailView(artist: artist)
+        }
+        .navigationDestination(item: $selectedMoreByAlbum) { album in
+            AlbumDetailView(
+                album: album,
+                sourceArtistRatingKey: albumDetails.parentRatingKey ?? self.album.parentRatingKey
+            )
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -533,6 +688,7 @@ struct AlbumDetailView: View {
             async let detailsTask: Void = loadAlbumDetails()
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
+            await loadArtistAlbums()
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {
@@ -754,21 +910,282 @@ private struct AlbumTrackRow: View {
 
 #if DEBUG
 #Preview {
+    let previewAlbum = PlexMetadata(
+        ratingKey: "preview-album",
+        key: nil,
+        type: "album",
+        subtype: nil,
+        title: "Midnight Signals",
+        titleSort: nil,
+        originalTitle: nil,
+        summary: "A preview album with release metadata for Canvas.",
+        studio: "Tromme Records",
+        year: 2026,
+        index: nil,
+        parentIndex: nil,
+        duration: nil,
+        addedAt: nil,
+        updatedAt: nil,
+        viewCount: nil,
+        lastViewedAt: nil,
+        userRating: nil,
+        thumb: nil,
+        art: nil,
+        parentThumb: nil,
+        grandparentThumb: nil,
+        grandparentArt: nil,
+        parentTitle: "The Canvas Band",
+        grandparentTitle: nil,
+        parentRatingKey: "preview-artist",
+        grandparentRatingKey: nil,
+        leafCount: 4,
+        viewedLeafCount: nil,
+        media: [
+            PlexMedia(audioCodec: "flac", container: "flac")
+        ],
+        genre: [
+            PlexTag(tag: "Alternative")
+        ],
+        style: nil,
+        country: nil,
+        subformat: nil,
+        originallyAvailableAt: "2026-05-31"
+    )
+
+    let previewTracks = [
+        PlexMetadata(
+            ratingKey: "preview-track-1",
+            key: nil,
+            type: "track",
+            subtype: nil,
+            title: "Signal One",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: nil,
+            year: nil,
+            index: 1,
+            parentIndex: 1,
+            duration: 214_000,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "Midnight Signals",
+            grandparentTitle: "The Canvas Band",
+            parentRatingKey: "preview-album",
+            grandparentRatingKey: "preview-artist",
+            leafCount: nil,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: nil
+        ),
+        PlexMetadata(
+            ratingKey: "preview-track-2",
+            key: nil,
+            type: "track",
+            subtype: nil,
+            title: "Late Drive",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: nil,
+            year: nil,
+            index: 2,
+            parentIndex: 1,
+            duration: 188_000,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "Midnight Signals",
+            grandparentTitle: "The Canvas Band",
+            parentRatingKey: "preview-album",
+            grandparentRatingKey: "preview-artist",
+            leafCount: nil,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: nil
+        ),
+        PlexMetadata(
+            ratingKey: "preview-track-3",
+            key: nil,
+            type: "track",
+            subtype: nil,
+            title: "Soft Static",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: nil,
+            year: nil,
+            index: 3,
+            parentIndex: 1,
+            duration: 246_000,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "Midnight Signals",
+            grandparentTitle: "The Canvas Band",
+            parentRatingKey: "preview-album",
+            grandparentRatingKey: "preview-artist",
+            leafCount: nil,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: nil
+        ),
+        PlexMetadata(
+            ratingKey: "preview-track-4",
+            key: nil,
+            type: "track",
+            subtype: nil,
+            title: "Afterimage",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: nil,
+            year: nil,
+            index: 4,
+            parentIndex: 1,
+            duration: 201_000,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "Midnight Signals",
+            grandparentTitle: "The Canvas Band",
+            parentRatingKey: "preview-album",
+            grandparentRatingKey: "preview-artist",
+            leafCount: nil,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: nil
+        )
+    ]
+
+    let previewArtistAlbums = [
+        previewAlbum,
+        PlexMetadata(
+            ratingKey: "preview-album-2",
+            key: nil,
+            type: "album",
+            subtype: nil,
+            title: "Glass Roads",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: "Tromme Records",
+            year: 2024,
+            index: nil,
+            parentIndex: nil,
+            duration: nil,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "The Canvas Band",
+            grandparentTitle: nil,
+            parentRatingKey: "preview-artist",
+            grandparentRatingKey: nil,
+            leafCount: 10,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: "2024-09-13"
+        ),
+        PlexMetadata(
+            ratingKey: "preview-album-3",
+            key: nil,
+            type: "album",
+            subtype: nil,
+            title: "North Terminal",
+            titleSort: nil,
+            originalTitle: nil,
+            summary: nil,
+            studio: "Tromme Records",
+            year: 2022,
+            index: nil,
+            parentIndex: nil,
+            duration: nil,
+            addedAt: nil,
+            updatedAt: nil,
+            viewCount: nil,
+            lastViewedAt: nil,
+            userRating: nil,
+            thumb: nil,
+            art: nil,
+            parentThumb: nil,
+            grandparentThumb: nil,
+            grandparentArt: nil,
+            parentTitle: "The Canvas Band",
+            grandparentTitle: nil,
+            parentRatingKey: "preview-artist",
+            grandparentRatingKey: nil,
+            leafCount: 8,
+            viewedLeafCount: nil,
+            media: nil,
+            genre: nil,
+            style: nil,
+            country: nil,
+            subformat: nil,
+            originallyAvailableAt: "2022-03-18"
+        )
+    ]
+
     NavigationStack {
         AlbumDetailView(
-            album: DevelopmentMockData.recentAlbums.first ?? PlexMetadata(
-                ratingKey: "album-1", key: nil, type: "album", subtype: nil, title: "Album",
-                titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
-                index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
-                thumb: nil, art: nil, parentThumb: nil, grandparentThumb: nil,
-                grandparentArt: nil, parentTitle: "Preview Artist",
-                grandparentTitle: nil, parentRatingKey: nil,
-                grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                media: nil, genre: nil, style: nil, country: nil,
-                subformat: nil, originallyAvailableAt: nil
-            ),
-            previewTracks: DevelopmentMockData.recentTracks
+            album: previewAlbum,
+            previewTracks: previewTracks,
+            previewArtistAlbums: previewArtistAlbums
         )
     }
     .environment(AudioPlayerService())
