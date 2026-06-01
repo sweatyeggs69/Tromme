@@ -33,6 +33,44 @@ extension PlexAPIClient {
         return albums
     }
 
+    func cachedArtistReleases(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
+        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey)
+        let releaseKeys = Set(releases.map(\.ratingKey))
+        let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
+        let artistTracks = tracksByArtist(allTracks, artist: artist)
+        let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey))
+            .subtracting(releaseKeys)
+
+        if !missingReleaseKeys.isEmpty {
+            let missingReleases = await withTaskGroup(of: PlexMetadata?.self) { group in
+                for key in missingReleaseKeys {
+                    group.addTask {
+                        try? await self.cachedMetadata(server: server, ratingKey: key)
+                    }
+                }
+
+                var results: [PlexMetadata] = []
+                for await release in group {
+                    if let release {
+                        results.append(release)
+                    }
+                }
+                return results
+            }
+            releases.append(contentsOf: missingReleases)
+        }
+
+        var seenKeys = Set<String>()
+        return releases
+            .filter { seenKeys.insert($0.ratingKey).inserted }
+            .sorted(by: releaseSort)
+    }
+
+    func cachedArtistTracks(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
+        let tracks = try await cachedTracks(server: server, sectionId: sectionId)
+        return tracksByArtist(tracks, artist: artist)
+    }
+
     // MARK: - Cached Album Styles
 
     func cachedAlbumStyles(server: PlexServer, sectionId: String) async throws -> [String: [String]] {
@@ -526,6 +564,21 @@ extension PlexAPIClient {
             prefetchArtwork(for: items, server: server, size: 256)
         }
         return items
+    }
+
+    private func tracksByArtist(_ tracks: [PlexMetadata], artist: PlexMetadata) -> [PlexMetadata] {
+        tracks.filter { track in
+            track.grandparentRatingKey == artist.ratingKey
+            || track.grandparentTitle?.localizedCaseInsensitiveCompare(artist.title) == .orderedSame
+        }
+    }
+
+    private func releaseSort(_ lhs: PlexMetadata, _ rhs: PlexMetadata) -> Bool {
+        let leftDate = lhs.originallyAvailableAt ?? ""
+        let rightDate = rhs.originallyAvailableAt ?? ""
+        if leftDate != rightDate { return leftDate > rightDate }
+        if (lhs.year ?? 0) != (rhs.year ?? 0) { return (lhs.year ?? 0) > (rhs.year ?? 0) }
+        return (lhs.titleSort ?? lhs.title) < (rhs.titleSort ?? rhs.title)
     }
 
     @discardableResult

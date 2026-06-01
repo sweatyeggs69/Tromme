@@ -372,18 +372,11 @@ struct AlbumDetailView: View {
     @MainActor
     private func loadArtistAlbums() async {
         guard let server = serverConnection.currentServer,
-              let artistKey = (albumDetails.parentRatingKey ?? album.parentRatingKey),
-              !artistKey.isEmpty else { return }
+              let sectionId = serverConnection.currentLibrarySectionId,
+              let artist = artistNavigationTarget else { return }
 
         do {
-            artistAlbums = try await client.cachedChildren(server: server, ratingKey: artistKey)
-                .sorted {
-                    let date0 = $0.originallyAvailableAt ?? ""
-                    let date1 = $1.originallyAvailableAt ?? ""
-                    if date0 != date1 { return date0 > date1 }
-                    if ($0.year ?? 0) != ($1.year ?? 0) { return ($0.year ?? 0) > ($1.year ?? 0) }
-                    return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
-                }
+            artistAlbums = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
         } catch {
             artistAlbums = []
         }
@@ -511,39 +504,43 @@ struct AlbumDetailView: View {
             .listRowSeparator(.hidden)
     }
 
-    private func moreByArtistGrid(_ albums: [PlexMetadata]) -> some View {
-        LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-            ForEach(albums) { album in
-                Button {
-                    selectedMoreByAlbum = album
-                } label: {
-                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                        GeometryReader { geo in
+    private func moreByArtistRail(_ albums: [PlexMetadata]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 12) {
+                ForEach(albums) { album in
+                    Button {
+                        selectedMoreByAlbum = album
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
                             ArtworkView(
                                 thumbPath: album.thumb,
-                                size: geo.size.width,
-                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                size: 170,
+                                cornerRadius: AppStyle.Radius.card
                             )
+
+                            Text(album.title)
+                                .appItemTitleStyle()
+
+                            HStack(spacing: 4) {
+                                Text(album.releaseYear)
+                                if let format = album.formatLabel {
+                                    Text("·")
+                                    Text(format)
+                                }
+                            }
+                            .appItemSubtitleStyle()
                         }
-                        .aspectRatio(1, contentMode: .fit)
-
-                        Text(album.title)
-                            .font(AppStyle.Typography.itemTitle)
-                            .foregroundStyle(titleColor)
-                            .lineLimit(1)
-
-                        Text(album.releaseYear)
-                            .font(AppStyle.Typography.itemSubtitle)
-                            .foregroundStyle(tertiaryTextColor)
-                            .lineLimit(1)
+                        .frame(width: 170, alignment: .topLeading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
+            .scrollTargetLayout()
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
         }
+        .scrollTargetBehavior(.viewAligned)
         .padding(.bottom, 24)
-        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         .listRowBackground(moreBySectionBackgroundColor)
         .listRowSeparator(.hidden)
     }
@@ -599,7 +596,7 @@ struct AlbumDetailView: View {
                                        !moreByArtistAlbums.isEmpty,
                                        let artistName = artistNavigationTarget?.title {
                                         albumSectionHeader("More By \(artistName)")
-                                        moreByArtistGrid(moreByArtistAlbums)
+                                        moreByArtistRail(moreByArtistAlbums)
                                     }
                                 }
                             }
@@ -629,7 +626,7 @@ struct AlbumDetailView: View {
                                !moreByArtistAlbums.isEmpty,
                                let artistName = artistNavigationTarget?.title {
                                 albumSectionHeader("More By \(artistName)")
-                                moreByArtistGrid(moreByArtistAlbums)
+                                moreByArtistRail(moreByArtistAlbums)
                             }
                         }
                     }

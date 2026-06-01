@@ -225,47 +225,14 @@ struct ArtistDetailView: View {
             // Load all data in parallel instead of sequentially
             async let metadataReq = client.cachedMetadata(server: server, ratingKey: artist.ratingKey)
             async let topTracksReq = client.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
-            async let childrenReq = client.cachedChildren(server: server, ratingKey: artist.ratingKey)
-            async let allTracksReq = client.cachedTracks(server: server, sectionId: sectionId)
+            async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
+            async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
 
             resolvedArtist = try? await metadataReq
 
             let fetchedTopTracks = (try? await topTracksReq) ?? []
-
-            var children = (try? await childrenReq) ?? []
-
-            let allTracks = (try? await allTracksReq) ?? []
-            artistTracks = allTracks.filter {
-                $0.grandparentRatingKey == artist.ratingKey
-                || $0.grandparentTitle?.localizedCaseInsensitiveCompare(artist.title) == .orderedSame
-            }
-
-            // Find releases referenced by tracks but missing from children
-            let childrenKeys = Set(children.map(\.ratingKey))
-            let missingKeys = Set(artistTracks.compactMap(\.parentRatingKey))
-                .subtracting(childrenKeys)
-
-            if !missingKeys.isEmpty {
-                let missing = await withTaskGroup(of: PlexMetadata?.self) { group in
-                    for key in missingKeys {
-                        group.addTask { try? await client.cachedMetadata(server: server, ratingKey: key) }
-                    }
-                    var results: [PlexMetadata] = []
-                    for await item in group {
-                        if let item { results.append(item) }
-                    }
-                    return results
-                }
-                children.append(contentsOf: missing)
-            }
-
-            artistAlbums = children.sorted {
-                let date0 = $0.originallyAvailableAt ?? ""
-                let date1 = $1.originallyAvailableAt ?? ""
-                if date0 != date1 { return date0 > date1 }
-                if ($0.year ?? 0) != ($1.year ?? 0) { return ($0.year ?? 0) > ($1.year ?? 0) }
-                return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
-            }
+            artistTracks = (try? await artistTracksReq) ?? []
+            artistAlbums = (try? await releasesReq) ?? []
 
             // Fallback: if Plex returned no top tracks, use local sort by viewCount
             topTracks = fetchedTopTracks.isEmpty
