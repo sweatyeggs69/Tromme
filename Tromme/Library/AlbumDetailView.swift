@@ -7,6 +7,8 @@ struct AlbumDetailView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dismiss) private var dismiss
 
+    @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
+
     let album: PlexMetadata
     let sourceArtistRatingKey: String?
     @State private var albumDetails: PlexMetadata
@@ -16,6 +18,8 @@ struct AlbumDetailView: View {
     @State private var selectedArtist: PlexMetadata?
     @State private var selectedMoreByAlbum: PlexMetadata?
     @State private var artistAlbums: [PlexMetadata]
+    @State private var recommendedAlbums: [PlexMetadata]
+    @State private var showsAllRecommendedAlbums = false
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistResultMessage: String?
@@ -328,13 +332,15 @@ struct AlbumDetailView: View {
         album: PlexMetadata,
         sourceArtistRatingKey: String? = nil,
         previewTracks: [PlexMetadata]? = nil,
-        previewArtistAlbums: [PlexMetadata] = []
+        previewArtistAlbums: [PlexMetadata] = [],
+        previewRecommendedAlbums: [PlexMetadata] = []
     ) {
         self.album = album
         self.sourceArtistRatingKey = sourceArtistRatingKey
         _albumDetails = State(initialValue: album)
         _tracks = State(initialValue: previewTracks ?? [])
         _artistAlbums = State(initialValue: previewArtistAlbums)
+        _recommendedAlbums = State(initialValue: previewRecommendedAlbums)
         _isLoadingTracks = State(initialValue: previewTracks == nil)
         self.isPreviewMode = previewTracks != nil
     }
@@ -346,6 +352,24 @@ struct AlbumDetailView: View {
             albumDetails = try await client.cachedAlbumMetadata(server: server, ratingKey: album.ratingKey) ?? album
         } catch {
             albumDetails = album
+        }
+    }
+
+    @MainActor
+    private func loadRecommendedAlbums() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+
+        do {
+            recommendedAlbums = try await client.recommendedAlbums(
+                server: server,
+                sectionId: sectionId,
+                seedAlbum: albumDetails,
+                seedArtistKey: albumDetails.parentRatingKey ?? album.parentRatingKey,
+                minMatchingStyles: magicMixStyleMatch
+            )
+        } catch {
+            recommendedAlbums = []
         }
     }
 
@@ -493,18 +517,41 @@ struct AlbumDetailView: View {
     }
 
     private func albumSectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.title3.bold())
-            .foregroundStyle(titleColor)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        albumSectionHeader(title, showsDisclosure: false) {}
+    }
+
+    private func albumSectionHeader(
+        _ title: String,
+        showsDisclosure: Bool,
+        disclosureAction: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.title3.bold())
+                .foregroundStyle(titleColor)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            if showsDisclosure {
+                Button(action: disclosureAction) {
+                    Image(systemName: "chevron.right")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(secondaryTextColor)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show all \(title)")
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
             .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
             .listRowBackground(moreBySectionBackgroundColor)
             .listRowSeparator(.hidden)
     }
 
-    private func moreByArtistRail(_ albums: [PlexMetadata]) -> some View {
+    private func albumRail(_ albums: [PlexMetadata]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: 12) {
                 ForEach(albums) { album in
@@ -519,7 +566,9 @@ struct AlbumDetailView: View {
                             )
 
                             Text(album.title)
-                                .appItemTitleStyle()
+                                .font(AppStyle.Typography.itemTitle)
+                                .foregroundStyle(titleColor)
+                                .lineLimit(1)
 
                             HStack(spacing: 4) {
                                 Text(album.releaseYear)
@@ -528,7 +577,9 @@ struct AlbumDetailView: View {
                                     Text(format)
                                 }
                             }
-                            .appItemSubtitleStyle()
+                            .font(AppStyle.Typography.itemSubtitle)
+                            .foregroundStyle(tertiaryTextColor)
+                            .lineLimit(1)
                         }
                         .frame(width: 170, alignment: .topLeading)
                     }
@@ -596,8 +647,19 @@ struct AlbumDetailView: View {
                                        !moreByArtistAlbums.isEmpty,
                                        let artistName = artistNavigationTarget?.title {
                                         albumSectionHeader("More By \(artistName)")
-                                        moreByArtistRail(moreByArtistAlbums)
+                                        albumRail(moreByArtistAlbums)
                                     }
+
+                                    if !recommendedAlbums.isEmpty {
+                                        albumSectionHeader(
+                                            "You Might Also Like",
+                                            showsDisclosure: true
+                                        ) {
+                                            showsAllRecommendedAlbums = true
+                                        }
+                                        albumRail(Array(recommendedAlbums.prefix(8)))
+                                    }
+
                                 }
                             }
                             .scrollContentBackground(.hidden)
@@ -626,8 +688,19 @@ struct AlbumDetailView: View {
                                !moreByArtistAlbums.isEmpty,
                                let artistName = artistNavigationTarget?.title {
                                 albumSectionHeader("More By \(artistName)")
-                                moreByArtistRail(moreByArtistAlbums)
+                                albumRail(moreByArtistAlbums)
                             }
+
+                            if !recommendedAlbums.isEmpty {
+                                albumSectionHeader(
+                                    "You Might Also Like",
+                                    showsDisclosure: true
+                                ) {
+                                    showsAllRecommendedAlbums = true
+                                }
+                                albumRail(Array(recommendedAlbums.prefix(8)))
+                            }
+
                         }
                     }
                     .scrollContentBackground(.hidden)
@@ -643,6 +716,12 @@ struct AlbumDetailView: View {
             AlbumDetailView(
                 album: album,
                 sourceArtistRatingKey: albumDetails.parentRatingKey ?? self.album.parentRatingKey
+            )
+        }
+        .navigationDestination(isPresented: $showsAllRecommendedAlbums) {
+            AlbumRecommendationGridView(
+                title: "You Might Also Like",
+                albums: recommendedAlbums
             )
         }
         .toolbar {
@@ -685,7 +764,9 @@ struct AlbumDetailView: View {
             async let detailsTask: Void = loadAlbumDetails()
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
-            await loadArtistAlbums()
+            async let artistAlbumsTask: Void = loadArtistAlbums()
+            async let recommendationsTask: Void = loadRecommendedAlbums()
+            _ = await (artistAlbumsTask, recommendationsTask)
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {
@@ -905,7 +986,67 @@ private struct AlbumTrackRow: View {
     }
 }
 
+private struct AlbumRecommendationGridView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selectedAlbum: PlexMetadata?
+
+    let title: String
+    let albums: [PlexMetadata]
+
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+                ForEach(albums) { album in
+                    Button {
+                        selectedAlbum = album
+                    } label: {
+                        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                            GeometryReader { geo in
+                                ArtworkView(
+                                    thumbPath: album.thumb,
+                                    size: geo.size.width,
+                                    cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                )
+                            }
+                            .aspectRatio(1, contentMode: .fit)
+
+                            Text(album.title)
+                                .appItemTitleStyle()
+
+                            Text(album.parentTitle ?? album.releaseYear)
+                                .appItemSubtitleStyle()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+            .padding(.vertical, AppStyle.AlbumLayout.gridVerticalPadding)
+        }
+        .navigationTitle(title)
+        .navigationDestination(item: $selectedAlbum) { album in
+            AlbumDetailView(album: album)
+        }
+    }
+}
+
 #if DEBUG
+#Preview("Recommendation Grid") {
+    NavigationStack {
+        AlbumRecommendationGridView(
+            title: "You Might Also Like",
+            albums: DevelopmentMockData.recommendationAlbums
+        )
+    }
+    .environment(AudioPlayerService())
+}
+
 #Preview {
     let previewAlbum = PlexMetadata(
         ratingKey: "preview-album",
@@ -1182,7 +1323,8 @@ private struct AlbumTrackRow: View {
         AlbumDetailView(
             album: previewAlbum,
             previewTracks: previewTracks,
-            previewArtistAlbums: previewArtistAlbums
+            previewArtistAlbums: previewArtistAlbums,
+            previewRecommendedAlbums: DevelopmentMockData.recommendationAlbums
         )
     }
     .environment(AudioPlayerService())

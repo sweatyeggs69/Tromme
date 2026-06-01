@@ -71,6 +71,51 @@ extension PlexAPIClient {
         return tracksByArtist(tracks, artist: artist)
     }
 
+    func recommendedAlbums(
+        server: PlexServer,
+        sectionId: String,
+        seedAlbum: PlexMetadata,
+        seedArtistKey: String?,
+        minMatchingStyles: Int
+    ) async throws -> [PlexMetadata] {
+        guard minMatchingStyles > 0 else { return [] }
+
+        let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
+        let allAlbumsByKey = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.ratingKey, $0) })
+
+        var seedStyles = stylesByAlbum[seedAlbum.ratingKey] ?? []
+        if seedStyles.isEmpty {
+            let seedDetails = try await cachedAlbumMetadata(server: server, ratingKey: seedAlbum.ratingKey)
+            seedStyles = metadataTags(seedDetails ?? seedAlbum)
+        }
+        seedStyles = deduplicateTags(seedStyles)
+        guard !seedStyles.isEmpty else { return [] }
+
+        let normalizedSeed = Set(seedStyles.map(normalizedTag))
+        let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, normalizedSeed.count))
+
+        var scoredAlbums: [(album: PlexMetadata, score: Int)] = []
+        for (albumKey, styles) in stylesByAlbum {
+            guard albumKey != seedAlbum.ratingKey else { continue }
+            if let seedArtistKey, allAlbumsByKey[albumKey]?.parentRatingKey == seedArtistKey {
+                continue
+            }
+
+            let normalizedStyles = Set(styles.map(normalizedTag))
+            let score = normalizedSeed.intersection(normalizedStyles).count
+            guard score >= effectiveMinMatchingStyles, let album = allAlbumsByKey[albumKey] else { continue }
+            scoredAlbums.append((album: album, score: score))
+        }
+
+        return scoredAlbums
+            .sorted {
+                if $0.score != $1.score { return $0.score > $1.score }
+                return releaseSort($0.album, $1.album)
+            }
+            .map(\.album)
+    }
+
     // MARK: - Cached Album Styles
 
     func cachedAlbumStyles(server: PlexServer, sectionId: String) async throws -> [String: [String]] {
@@ -571,6 +616,16 @@ extension PlexAPIClient {
             track.grandparentRatingKey == artist.ratingKey
             || track.grandparentTitle?.localizedCaseInsensitiveCompare(artist.title) == .orderedSame
         }
+    }
+
+    private func metadataTags(_ metadata: PlexMetadata) -> [String] {
+        (metadata.style ?? [])
+            .compactMap(\.tag)
+            .filter { !$0.isEmpty }
+    }
+
+    private func normalizedTag(_ tag: String) -> String {
+        tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func releaseSort(_ lhs: PlexMetadata, _ rhs: PlexMetadata) -> Bool {

@@ -63,6 +63,19 @@ enum DevelopmentMockData {
         )
     }
 
+    static let recommendationAlbums: [PlexMetadata] = [
+        makeAlbum(ratingKey: "recommended-album-1", title: "Low Light Patterns", artistTitle: "North Channel", year: 2025, addedAt: 1_700_000_200),
+        makeAlbum(ratingKey: "recommended-album-2", title: "Glass Harbor", artistTitle: "Mira Vale", year: 2024, addedAt: 1_700_000_100),
+        makeAlbum(ratingKey: "recommended-album-3", title: "Static Bloom", artistTitle: "Signal Drift", year: 2023, addedAt: 1_700_000_000),
+        makeAlbum(ratingKey: "recommended-album-4", title: "After Hours Sketches", artistTitle: "The Pale Lines", year: 2022, addedAt: 1_699_999_900),
+        makeAlbum(ratingKey: "recommended-album-5", title: "Quiet Geometry", artistTitle: "Forma", year: 2021, addedAt: 1_699_999_800),
+        makeAlbum(ratingKey: "recommended-album-6", title: "Neon Weather", artistTitle: "Late Current", year: 2020, addedAt: 1_699_999_700),
+        makeAlbum(ratingKey: "recommended-album-7", title: "Side Streets", artistTitle: "Soft Arcade", year: 2019, addedAt: 1_699_999_600),
+        makeAlbum(ratingKey: "recommended-album-8", title: "Blue Room Echoes", artistTitle: "Tide Index", year: 2018, addedAt: 1_699_999_500),
+        makeAlbum(ratingKey: "recommended-album-9", title: "Silver Static", artistTitle: "Mono Field", year: 2017, addedAt: 1_699_999_400),
+        makeAlbum(ratingKey: "recommended-album-10", title: "Half Awake", artistTitle: "Vessel Tone", year: 2016, addedAt: 1_699_999_300)
+    ]
+
     static let allSongs: [PlexMetadata] = (1...50).map { index in
         makeTrack(
             ratingKey: "all-songs-preview-\(index)",
