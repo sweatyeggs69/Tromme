@@ -39,6 +39,7 @@ struct LyricsScrollView: View {
 
                             Color.clear.frame(height: bufferHeight)
                         }
+                        .padding(.horizontal, 20)
                     }
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.height
@@ -101,7 +102,7 @@ struct LyricsScrollView: View {
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
-            .scaleEffect(isActive ? 1.08 : 1.0)
+            .scaleEffect(isActive ? 1.08 : 0.90)
             .animation(.easeInOut(duration: 0.35), value: isActive)
     }
 
