@@ -33,21 +33,19 @@ struct NowPlayingView: View {
 
     private let bottomActionsLeadingButtonPadding: CGFloat = 48
     private let bottomActionsTrailingButtonPadding: CGFloat = 48
-    private let actionIconActiveOpacity: Double = 0.58
+    private let actionIconActiveOpacity: Double = 0.82
     private let actionIconInactiveOpacity: Double = 0.45
     private let actionBackgroundOpacity: Double = 0.12
     private let actionBackgroundActiveOpacity: Double = 0.4
     private let controlTintOpacity: Double = 0.45
+    private let bottomActionIconSize: CGFloat = 42
     private let iPadBottomActionsExtraPadding: CGFloat = 12
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
     private let portraitTrackInfoBottomPadding: CGFloat = 18
-    private let portraitBottomControlsHeightFraction: CGFloat = 0.40
+    private let portraitBottomControlsHeightFraction: CGFloat = 0.42
     private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
     private let bottomActionsTopPadding: CGFloat = 10
-    private let bottomActionButtonSize: CGFloat = 42
-    private let bottomActionRowHeight: CGFloat = 60
-    private let portraitBottomActionsBottomPadding: CGFloat = 4
     private let bottomScreenPaddingWithSafeArea: CGFloat = 4
     private let bottomScreenPaddingWithoutSafeArea: CGFloat = 8
 
@@ -85,7 +83,7 @@ struct NowPlayingView: View {
                 : bottomScreenPaddingWithoutSafeArea
             let landscapeBottomInsetPadding = bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
-            let landscapeBottomActionsHeight: CGFloat = 38 + iPadBottomActionsExtraPadding
+            let landscapeBottomActionsHeight: CGFloat = 62 + iPadBottomActionsExtraPadding
             let landscapeMainHeight = max(
                 0.0,
                 height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
@@ -147,37 +145,11 @@ struct NowPlayingView: View {
                     .frame(height: landscapeMainHeight)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
 
-                    // Bottom action row
-                    HStack(alignment: .top) {
-                        AirPlayRouteButton(
-                            tintOpacity: CGFloat(controlTintOpacity),
-                            activeTintOpacity: CGFloat(actionIconActiveOpacity),
-                            showsRouteName: true
-                        )
-                        .frame(width: 120, height: bottomActionRowHeight, alignment: .top)
-
-                        Spacer()
-
-                        HStack(spacing: 10) {
-                            Button {
-                                toggleLyricsPanel()
-                            } label: {
-                                panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
-                            }
-                            .buttonStyle(.plain)
-                            .frame(height: bottomActionRowHeight, alignment: .top)
-
-                            Button {
-                                toggleQueuePanel()
-                            } label: {
-                                panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
-                            }
-                            .buttonStyle(.plain)
-                            .frame(height: bottomActionRowHeight, alignment: .top)
-                        }
-                        .font(.title3.weight(.semibold))
+                    VStack(spacing: 6) {
+                        landscapeBottomActionsRow
+                        connectedRouteMetadata
                     }
-                    .frame(height: bottomActionRowHeight, alignment: .top)
+                    .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
                     .padding(.bottom, iPadBottomActionsExtraPadding)
@@ -229,13 +201,11 @@ struct NowPlayingView: View {
                         )
                         .frame(maxHeight: .infinity)
                         bottomActions
-                            .frame(height: bottomActionRowHeight, alignment: .top)
                             .padding(.horizontal, controlsHorizontalPadding)
                             .padding(.top, bottomActionsTopPadding)
-                            .padding(
-                                .bottom,
-                                portraitBottomActionsBottomPadding + (isPadPortrait ? iPadBottomActionsExtraPadding : 0)
-                            )
+                        connectedRouteMetadata
+                            .padding(.top, 6)
+                            .padding(.bottom, isPadPortrait ? iPadBottomActionsExtraPadding : 0)
                     }
                     .frame(maxWidth: controlsContainerWidth)
                     .frame(maxWidth: .infinity)
@@ -411,6 +381,7 @@ struct NowPlayingView: View {
         let sliderBottomPadding: CGFloat = usesCompactSpacing ? 10 : (isPadPortrait ? 42 : 18)
         let transportBottomPadding: CGFloat = usesCompactSpacing ? 16 : (isPadPortrait ? 64 : 32)
         let volumeBottomPadding: CGFloat = usesCompactSpacing ? 8 : (isPadPortrait ? 38 : (bottomPadding + 6))
+
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
@@ -445,10 +416,8 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private func volumeRow(horizontalPadding: CGFloat) -> some View {
-        VStack(spacing: 6) {
-            VolumeSlider(isEnabled: !player.isCarPlayConnected)
-                .frame(height: 32)
-        }
+        VolumeSlider(isEnabled: !player.isCarPlayConnected)
+            .frame(height: 32)
         .padding(.horizontal, horizontalPadding)
     }
 
@@ -567,25 +536,52 @@ struct NowPlayingView: View {
 
     // MARK: - Bottom Actions
 
+    private var landscapeBottomActionsRow: some View {
+        HStack {
+            AirPlayButton(
+                tintOpacity: CGFloat(controlTintOpacity),
+                activeTintOpacity: CGFloat(actionIconActiveOpacity)
+            )
+            .frame(width: bottomActionIconSize, height: bottomActionIconSize)
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                Button {
+                    toggleLyricsPanel()
+                } label: {
+                    panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    toggleQueuePanel()
+                } label: {
+                    panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
+                }
+                .buttonStyle(.plain)
+            }
+            .font(.title3.weight(.semibold))
+        }
+    }
+
     private var bottomActions: some View {
-        HStack(alignment: .top) {
+        HStack {
             Button {
                 toggleLyricsPanel()
             } label: {
                 panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
             }
             .buttonStyle(.plain)
-            .frame(height: bottomActionRowHeight, alignment: .top)
             .padding(.leading, bottomActionsLeadingButtonPadding)
 
             Spacer()
 
-            AirPlayRouteButton(
+            AirPlayButton(
                 tintOpacity: CGFloat(controlTintOpacity),
-                activeTintOpacity: CGFloat(actionIconActiveOpacity),
-                showsRouteName: true
+                activeTintOpacity: CGFloat(actionIconActiveOpacity)
             )
-                .frame(width: 120, height: bottomActionRowHeight, alignment: .top)
+                .frame(width: bottomActionIconSize, height: bottomActionIconSize)
 
             Spacer()
 
@@ -595,10 +591,30 @@ struct NowPlayingView: View {
                 panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
             }
             .buttonStyle(.plain)
-            .frame(height: bottomActionRowHeight, alignment: .top)
             .padding(.trailing, bottomActionsTrailingButtonPadding)
         }
         .font(.title3.weight(.semibold))
+    }
+
+    @ViewBuilder
+    private var connectedRouteMetadata: some View {
+        if let routeStatusText {
+            Text(routeStatusText)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.45))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.22), value: routeStatusText)
+        }
+    }
+
+    private var routeStatusText: String? {
+        guard player.isCarPlayConnected || player.isAirPlayConnected else {
+            return nil
+        }
+
+        return player.activeRouteName ?? (player.isCarPlayConnected ? "CarPlay" : "AirPlay")
     }
 
     @discardableResult
@@ -646,11 +662,11 @@ struct NowPlayingView: View {
                     .blendMode(.destinationOut)
             }
             .compositingGroup()
-            .frame(width: bottomActionButtonSize, height: bottomActionButtonSize)
+            .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         } else {
             Image(systemName: systemName)
                 .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
-                .frame(width: bottomActionButtonSize, height: bottomActionButtonSize)
+                .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         }
     }
 }
@@ -741,73 +757,24 @@ struct TimelineSlider: View {
 
 // MARK: - AirPlay (AVRoutePickerView)
 
-struct AirPlayRouteButton: View {
-    @Environment(AudioPlayerService.self) private var player
-
+struct AirPlayButton: UIViewRepresentable {
     var tintOpacity: CGFloat = 0.7
     var activeTintOpacity: CGFloat = 0.92
-    var showsRouteName = false
-
-    private var symbolName: String {
-        player.activeRouteSymbolName ?? "airplayaudio"
-    }
-
-    private var symbolOpacity: Double {
-        (player.isAirPlayConnected || player.isCarPlayConnected || player.isBluetoothConnected)
-            ? Double(activeTintOpacity)
-            : Double(tintOpacity)
-    }
-
-    private var routeDisplayName: String? {
-        guard showsRouteName, let routeName = player.activeRouteName else { return nil }
-        return routeName
-    }
-
-    var body: some View {
-        VStack(spacing: 2) {
-            ZStack {
-                AirPlayButtonRepresentable()
-                    .opacity(0.015)
-                Image(systemName: symbolName)
-                    .foregroundStyle(.white.opacity(symbolOpacity))
-                    .allowsHitTesting(false)
-            }
-            .frame(width: 42, height: 42)
-
-            if let routeDisplayName {
-                Text(verbatim: routeDisplayName)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .allowsTightening(true)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .contentShape(Rectangle())
-        .animation(.easeInOut(duration: 0.22), value: routeDisplayName)
-        .accessibilityLabel(routeDisplayName ?? player.activeRouteName ?? "AirPlay")
-    }
-}
-
-struct AirPlayButtonRepresentable: UIViewRepresentable {
-    var tintOpacity: CGFloat = 0.7
-    var activeTintOpacity: CGFloat = 0.92
+    var iconScale: CGFloat = 1.12
 
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView(frame: .zero)
-        picker.backgroundColor = .clear
         picker.tintColor = UIColor.white.withAlphaComponent(tintOpacity)
         picker.activeTintColor = UIColor.white.withAlphaComponent(activeTintOpacity)
+        picker.prioritizesVideoDevices = false
+        picker.transform = CGAffineTransform(scaleX: iconScale, y: iconScale)
         return picker
     }
 
     func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
         uiView.tintColor = UIColor.white.withAlphaComponent(tintOpacity)
         uiView.activeTintColor = UIColor.white.withAlphaComponent(activeTintOpacity)
+        uiView.transform = CGAffineTransform(scaleX: iconScale, y: iconScale)
     }
 }
 
@@ -927,83 +894,23 @@ struct NowPlayingBackground: View {
 }
 
 
-#if DEBUG
-@MainActor
-private func makeNowPlayingPreviewPlayer(
-    routeName: String? = nil,
-    symbolName: String? = nil,
-    isAirPlayConnected: Bool = false,
-    isBluetoothConnected: Bool = false,
-    isCarPlayConnected: Bool = false
-) -> AudioPlayerService {
-    let player = AudioPlayerService()
-    player.currentTrack = DevelopmentMockData.allSongs.first
-    player.currentTime = 74
-    player.duration = 213
-    player.isReadyToPlay = true
-    player.isPlaying = true
-    player.activeRouteName = routeName
-    player.activeRouteSymbolName = symbolName
-    player.isAirPlayConnected = isAirPlayConnected
-    player.isBluetoothConnected = isBluetoothConnected
-    player.isCarPlayConnected = isCarPlayConnected
-    return player
-}
-#endif
-
-#if DEBUG
 #Preview {
     NowPlayingView()
-        .environment(makeNowPlayingPreviewPlayer())
+        .environment(AudioPlayerService())
 }
 
 #Preview("CarPlay Connected") {
-    let player = makeNowPlayingPreviewPlayer(
-        routeName: "Tesla",
-        symbolName: "car.fill",
-        isCarPlayConnected: true
-    )
+    let player = AudioPlayerService()
+    player.isCarPlayConnected = true
+    player.activeRouteName = "Tesla"
     return NowPlayingView()
         .environment(player)
 }
 
-#Preview("AirPlay Sonos") {
-    let player = makeNowPlayingPreviewPlayer(
-        routeName: "Sonos One",
-        symbolName: "airplayaudio",
-        isAirPlayConnected: true
-    )
+#Preview("AirPlay Connected") {
+    let player = AudioPlayerService()
+    player.isAirPlayConnected = true
+    player.activeRouteName = "Living Room"
     return NowPlayingView()
         .environment(player)
 }
-
-#Preview("AirPlay HomePod") {
-    let player = makeNowPlayingPreviewPlayer(
-        routeName: "HomePod Mini",
-        symbolName: "homepodmini.fill",
-        isAirPlayConnected: true
-    )
-    return NowPlayingView()
-        .environment(player)
-}
-
-#Preview("Bluetooth AirPods Pro") {
-    let player = makeNowPlayingPreviewPlayer(
-        routeName: "AirPods Pro",
-        symbolName: "airpodspro",
-        isBluetoothConnected: true
-    )
-    return NowPlayingView()
-        .environment(player)
-}
-
-#Preview("AirPlay MacBook") {
-    let player = makeNowPlayingPreviewPlayer(
-        routeName: "Kyle's MacBook Pro",
-        symbolName: "laptopcomputer",
-        isAirPlayConnected: true
-    )
-    return NowPlayingView()
-        .environment(player)
-}
-#endif

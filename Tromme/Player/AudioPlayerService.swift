@@ -21,12 +21,8 @@ final class AudioPlayerService: @unchecked Sendable {
     var isAirPlayConnected = false
     /// True when the active audio output route is CarPlay.
     var isCarPlayConnected = false
-    /// True when the active audio output route is Bluetooth audio.
-    var isBluetoothConnected = false
     /// Display name of the active AirPlay or CarPlay route, if any.
     var activeRouteName: String?
-    /// SF Symbol name that best matches the active output route, if any.
-    var activeRouteSymbolName: String?
 
     enum RepeatMode: String, Sendable {
         case off, all, one
@@ -1335,96 +1331,9 @@ final class AudioPlayerService: @unchecked Sendable {
         let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
         let airPlayOutput = outputs.first { $0.portType == .airPlay }
         let carPlayOutput = outputs.first { $0.portType == .carAudio }
-        let bluetoothOutput = outputs.first {
-            $0.portType == .bluetoothA2DP
-                || $0.portType == .bluetoothLE
-                || $0.portType == .bluetoothHFP
-        }
-        let primaryExternalOutput = carPlayOutput ?? airPlayOutput ?? bluetoothOutput
-        let primaryOutput = primaryExternalOutput ?? outputs.first
         isAirPlayConnected = airPlayOutput != nil
         isCarPlayConnected = carPlayOutput != nil
-        isBluetoothConnected = bluetoothOutput != nil
-        activeRouteName = primaryExternalOutput?.portName
-        activeRouteSymbolName = primaryOutput.map(symbolName(for:))
-    }
-
-    private func symbolName(for output: AVAudioSessionPortDescription) -> String {
-        switch output.portType {
-        case .carAudio:
-            return "car.fill"
-        case .airPlay:
-            return symbolNameForAirPlayRoute(named: output.portName)
-        case .bluetoothA2DP, .bluetoothLE, .bluetoothHFP:
-            return symbolNameForBluetoothRoute(named: output.portName)
-        case .headphones, .headsetMic, .lineOut, .usbAudio:
-            return "headphones"
-        case .builtInReceiver:
-            return "iphone"
-        case .builtInSpeaker:
-            return "hifispeaker.fill"
-        default:
-            return "speaker.wave.2.fill"
-        }
-    }
-
-    private func symbolNameForAirPlayRoute(named routeName: String) -> String {
-        let normalizedName = routeName.lowercased()
-
-        if normalizedName.contains("apple tv") || normalizedName.hasSuffix(" tv") {
-            return "tv.fill"
-        }
-        if normalizedName.contains("homepod mini") {
-            return "homepodmini.fill"
-        }
-        if normalizedName.contains("homepod") {
-            return "homepod.fill"
-        }
-        if normalizedName.contains("sonos") {
-            return "hifispeaker.fill"
-        }
-        if let macSymbolName = symbolNameForMacRoute(named: normalizedName) {
-            return macSymbolName
-        }
-
-        return "airplayaudio"
-    }
-
-    private func symbolNameForBluetoothRoute(named routeName: String) -> String {
-        let normalizedName = routeName.lowercased()
-
-        if let macSymbolName = symbolNameForMacRoute(named: normalizedName) {
-            return macSymbolName
-        }
-        if normalizedName.contains("airpods max") || normalizedName.contains("airpods-max") {
-            return "airpodsmax"
-        }
-        if normalizedName.contains("airpods pro")
-            || normalizedName.contains("airpods-pro")
-            || normalizedName.contains("beats fit pro") {
-            return "airpodspro"
-        }
-        if normalizedName.contains("airpods")
-            || normalizedName.contains("airpod")
-            || normalizedName.contains("earpods") {
-            return "airpods"
-        }
-
-        return "headphones"
-    }
-
-    private func symbolNameForMacRoute(named routeName: String) -> String? {
-        if routeName.contains("macbook") {
-            return "laptopcomputer"
-        }
-        if routeName.contains("imac")
-            || routeName.contains("mac mini")
-            || routeName.contains("mac studio")
-            || routeName.contains("studio display") {
-            return "desktopcomputer"
-        }
-
-        return nil
+        activeRouteName = carPlayOutput?.portName ?? airPlayOutput?.portName
     }
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.

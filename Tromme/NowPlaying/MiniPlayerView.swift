@@ -220,7 +220,7 @@ struct MiniPlayerView: View {
     }
 
     private var airPlayButton: some View {
-        AirPlayRouteButton(tintOpacity: 0.7, activeTintOpacity: 0.92)
+        AirPlayButton(tintOpacity: 0.7, activeTintOpacity: 0.92)
             .frame(width: 36, height: 44)
     }
 
