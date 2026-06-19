@@ -951,6 +951,7 @@ private func makeNowPlayingPreviewPlayer(
 }
 #endif
 
+#if DEBUG
 #Preview {
     NowPlayingView()
         .environment(makeNowPlayingPreviewPlayer())
@@ -1005,3 +1006,4 @@ private func makeNowPlayingPreviewPlayer(
     return NowPlayingView()
         .environment(player)
 }
+#endif
