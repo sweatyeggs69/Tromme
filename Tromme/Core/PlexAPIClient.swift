@@ -423,6 +423,33 @@ final class PlexAPIClient: Sendable {
         }
     }
 
+    /// Rate a library item. rating=10 means 5 stars (favorited), rating=0 clears the rating.
+    /// Endpoint: PUT /:/rate
+    func rateItem(server: PlexServer, ratingKey: String, rating: Int) async throws {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw PlexAPIError.invalidURL
+        }
+        components.path = "/:/rate"
+        components.queryItems = [
+            URLQueryItem(name: "key", value: ratingKey),
+            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
+            URLQueryItem(name: "rating", value: "\(rating)"),
+        ]
+        guard let url = components.url else { throw PlexAPIError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let (_, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200...299).contains(statusCode) else {
+            if statusCode == 401 { throw PlexAPIError.unauthorized }
+            throw PlexAPIError.serverError(statusCode)
+        }
+    }
+
     /// Mark an item as played in Plex history.
     /// Endpoint: /:/scrobble
     func reportScrobble(server: PlexServer, ratingKey: String) async throws {

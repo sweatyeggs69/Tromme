@@ -891,6 +891,9 @@ private extension Color {
 }
 
 private struct AlbumTrackRow: View {
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
+
     let track: PlexMetadata
     let index: Int
     let tracks: [PlexMetadata]
@@ -899,6 +902,29 @@ private struct AlbumTrackRow: View {
     let tertiaryTextColor: Color
     let titleColor: Color
     let onAddToPlaylist: (PlexMetadata) -> Void
+
+    @State private var favoriteOverride: Double? = nil
+    @State private var isRating = false
+
+    private var isFavorited: Bool {
+        (favoriteOverride ?? track.userRating ?? 0) >= 10
+    }
+
+    private func toggleFavorite() {
+        guard let server = serverConnection.currentServer else { return }
+        let previous = favoriteOverride ?? track.userRating
+        let removing = isFavorited
+        favoriteOverride = removing ? nil : 10
+        isRating = true
+        Task {
+            do {
+                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: removing ? -1 : 10)
+            } catch {
+                favoriteOverride = previous
+            }
+            isRating = false
+        }
+    }
 
     private var trackArtistCredit: String {
         track.artistDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -956,6 +982,13 @@ private struct AlbumTrackRow: View {
             .buttonStyle(.plain)
 
             Menu {
+                Button(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star") {
+                    toggleFavorite()
+                }
+                .disabled(isRating)
+
+                Divider()
+
                 Button("Play Next", systemImage: "text.insert") {
                     player.addToQueue(track)
                 }
@@ -973,6 +1006,13 @@ private struct AlbumTrackRow: View {
             }
         }
         .contextMenu {
+            Button(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star") {
+                toggleFavorite()
+            }
+            .disabled(isRating)
+
+            Divider()
+
             Button("Play Next", systemImage: "text.insert") {
                 player.addToQueue(track)
             }

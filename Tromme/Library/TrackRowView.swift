@@ -22,6 +22,8 @@ struct TrackRowView: View {
     @State private var isDeletingTrack = false
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
+    @State private var favoriteOverride: Double? = nil
+    @State private var isRating = false
 
     var body: some View {
         trackRow
@@ -47,13 +49,36 @@ struct TrackRowView: View {
         }
     }
 
+    private var isFavorited: Bool {
+        (favoriteOverride ?? track.userRating ?? 0) >= 10
+    }
+
+    private func toggleFavorite() {
+        guard let server = serverConnection.currentServer else { return }
+        let previous = favoriteOverride ?? track.userRating
+        let removing = isFavorited
+        favoriteOverride = removing ? nil : 10
+        isRating = true
+        Task {
+            do {
+                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: removing ? -1 : 10)
+            } catch {
+                favoriteOverride = previous
+            }
+            isRating = false
+        }
+    }
+
     @ViewBuilder
     private var trackContextMenu: some View {
         Button {
-            player.play(tracks: tracks, startingAt: index)
+            toggleFavorite()
         } label: {
-            Label("Play", systemImage: "play.fill")
+            Label(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star")
         }
+        .disabled(isRating)
+
+        Divider()
 
         Button {
             player.addToQueue(track)

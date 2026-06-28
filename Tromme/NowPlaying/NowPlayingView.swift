@@ -8,6 +8,8 @@ struct NowPlayingView: View {
 
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
 
     let startPanel: NowPlayingStartPanel
     var onNavigate: ((PlexMetadata) -> Void)?
@@ -21,6 +23,7 @@ struct NowPlayingView: View {
     @State private var appliedInitialLandscapeLyrics = false
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistItemKeys: [String] = []
+    @State private var isRating = false
 
     init(startPanel: NowPlayingStartPanel = .none, onNavigate: ((PlexMetadata) -> Void)? = nil) {
         self.startPanel = startPanel
@@ -55,6 +58,10 @@ struct NowPlayingView: View {
 
     private var artworkColor: Color {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
+    }
+
+    private var isFavorited: Bool {
+        (player.currentTrack?.userRating ?? 0) >= 10
     }
 
     // MARK: - Body
@@ -332,18 +339,34 @@ struct NowPlayingView: View {
 
             Spacer(minLength: 12)
 
+            Button {
+                toggleFavorite()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(actionBackgroundOpacity))
+                    Image(systemName: isFavorited ? "star.fill" : "star")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(isFavorited ? actionIconActiveOpacity : actionIconInactiveOpacity))
+                }
+                .frame(width: 30, height: 30)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isRating || player.currentTrack == nil)
+
             Menu {
                 trackContextMenuItems
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
-                    .frame(width: 30, height: 30)
-                    .background {
-                        Circle()
-                            .fill(.white.opacity(actionBackgroundOpacity))
-                    }
-                    .contentShape(Circle())
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(actionBackgroundOpacity))
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                }
+                .frame(width: 30, height: 30)
+                .contentShape(Circle())
             }
             .menuOrder(.fixed)
             .buttonStyle(.plain)
@@ -446,6 +469,7 @@ struct NowPlayingView: View {
                     dismiss()
                 } label: {
                     Label("Go to Album", systemImage: "square.stack")
+                    Text(track.parentTitle ?? "")
                 }
             }
             if let artistKey = track.grandparentRatingKey {
@@ -467,6 +491,7 @@ struct NowPlayingView: View {
                     dismiss()
                 } label: {
                     Label("Go to Artist", systemImage: "music.mic")
+                    Text(track.grandparentTitle ?? track.artistName)
                 }
             }
             Button {
@@ -475,6 +500,28 @@ struct NowPlayingView: View {
             } label: {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }
+        }
+    }
+
+    // MARK: - Favorite
+
+    private func toggleFavorite() {
+        guard let track = player.currentTrack,
+              let server = serverConnection.currentServer else { return }
+        let previousRating = track.userRating
+        let removing = isFavorited
+        let apiRating = removing ? -1 : 10
+
+        player.currentTrack?.userRating = removing ? nil : 10
+        isRating = true
+
+        Task {
+            do {
+                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: apiRating)
+            } catch {
+                player.currentTrack?.userRating = previousRating
+            }
+            isRating = false
         }
     }
 
