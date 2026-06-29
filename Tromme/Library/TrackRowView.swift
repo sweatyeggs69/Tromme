@@ -13,6 +13,7 @@ struct TrackRowView: View {
     var subtitle: String? = nil
     var showTrackNumber: Bool = true
     var artworkSize: CGFloat = 42
+    var artworkCornerRadius: CGFloat = 8
     var showsMenu: Bool = true
     var isCompact: Bool = false
     var titleFont: Font? = nil
@@ -20,16 +21,15 @@ struct TrackRowView: View {
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
     @State private var isDeletingTrack = false
-    @State private var addToPlaylistItemKeys: [String] = []
-    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistTrack: PlexMetadata? = nil
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
 
     var body: some View {
         trackRow
             .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu })
-        .sheet(isPresented: $showingAddToPlaylistSheet) {
-            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        .sheet(item: $addToPlaylistTrack) { trackToAdd in
+            AddToPlaylistSheet(itemRatingKeys: [trackToAdd.ratingKey])
         }
         .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
             Button("Delete Track", role: .destructive) {
@@ -93,8 +93,7 @@ struct TrackRowView: View {
         }
 
         Button {
-            addToPlaylistItemKeys = [track.ratingKey]
-            showingAddToPlaylistSheet = true
+            addToPlaylistTrack = track
         } label: {
             Label("Add to Playlist", systemImage: "text.badge.plus")
         }
@@ -137,7 +136,7 @@ struct TrackRowView: View {
     private var rowContent: some View {
         HStack(spacing: isCompact ? 8 : 10) {
             if showArtwork {
-                ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: 8)
+                ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: artworkCornerRadius)
             } else if showTrackNumber {
                 ZStack {
                     if isCurrentTrack && player.isPlaying {

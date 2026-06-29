@@ -339,37 +339,39 @@ struct NowPlayingView: View {
 
             Spacer(minLength: 12)
 
-            Button {
-                toggleFavorite()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(actionBackgroundOpacity))
-                    Image(systemName: isFavorited ? "star.fill" : "star")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white.opacity(isFavorited ? actionIconActiveOpacity : actionIconInactiveOpacity))
+            HStack(spacing: 10) {
+                Button {
+                    toggleFavorite()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(actionBackgroundOpacity))
+                        Image(systemName: isFavorited ? "star.fill" : "star")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 34, height: 34)
+                    .contentShape(Circle())
                 }
-                .frame(width: 30, height: 30)
-                .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(isRating || player.currentTrack == nil)
+                .buttonStyle(.plain)
+                .disabled(isRating || player.currentTrack == nil)
 
-            Menu {
-                trackContextMenuItems
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(actionBackgroundOpacity))
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                Menu {
+                    trackContextMenuItems
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(.white.opacity(actionBackgroundOpacity))
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 34, height: 34)
+                    .contentShape(Circle())
                 }
-                .frame(width: 30, height: 30)
-                .contentShape(Circle())
+                .menuOrder(.fixed)
+                .buttonStyle(.plain)
             }
-            .menuOrder(.fixed)
-            .buttonStyle(.plain)
         }
     }
 

@@ -66,8 +66,27 @@ struct HomeView: View {
 
     private var favoritesSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-            Text("Favorites")
-                .appSectionTitleStyle()
+            Group {
+                if !favoriteTracks.isEmpty {
+                    NavigationLink {
+                        FavoritesView()
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("Favorites")
+                                .font(AppStyle.Typography.sectionTitle)
+                            Image(systemName: "chevron.right")
+                                .font(.title2.weight(.semibold))
+                                .imageScale(.small)
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                    .tint(.primary)
+                } else {
+                    Text("Favorites")
+                        .font(AppStyle.Typography.sectionTitle)
+                }
+            }
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
             if isLoading {
                 ProgressView()

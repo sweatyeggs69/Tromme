@@ -14,6 +14,7 @@
 		0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */; };
 		0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */; };
 		0E4345EB2F8EC60700424676 /* DevelopmentMockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */; };
+		0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */; };
 		0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */; };
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
 		25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB6B7139BCB32BF5F17D78 /* LoginView.swift */; };
@@ -69,6 +70,7 @@
 		0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStartPanel.swift; sourceTree = "<group>"; };
 		0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToPlaylistSheet.swift; sourceTree = "<group>"; };
 		0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentMockData.swift; sourceTree = "<group>"; };
+		0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PERFORMANCE_BASELINE.md; sourceTree = "<group>"; };
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		0E91C64D2F91AE8800775275 /* Tromme.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tromme.entitlements; sourceTree = "<group>"; };
@@ -240,6 +242,7 @@
 				E2B3C4D5F60718293A4B5C6D /* HorizontalTrackGrid.swift */,
 				30B32F38AB3FBE4BA037947B /* TrackRowView.swift */,
 				0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */,
+				0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -323,7 +326,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastUpgradeCheck = 1430;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					948DC4C9D6D8FFC7C390C83C = {
 						TestTargetID = D30EC8376540E6DD4AC70B02;
@@ -408,6 +411,7 @@
 				B1C2D3E4F50617283940A1B2 /* KeychainHelper.swift in Sources */,
 				D3E4F50617283940A1B2C3D5 /* NetworkStatus.swift in Sources */,
 				96546FB0EC41ADF4AA99D125 /* PlexAPIClient.swift in Sources */,
+				0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */,
 				3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */,
 				4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */,
 				616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */,
@@ -437,7 +441,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YV58QH8DA2;
 				INFOPLIST_FILE = Yes;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -492,8 +495,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = YV58QH8DA2;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -507,6 +512,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
@@ -520,7 +526,6 @@
 				CODE_SIGN_ENTITLEMENTS = Tromme/Tromme.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YV58QH8DA2;
 				INFOPLIST_FILE = Tromme/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -545,7 +550,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YV58QH8DA2;
 				INFOPLIST_FILE = Yes;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -572,7 +576,6 @@
 				CODE_SIGN_ENTITLEMENTS = Tromme/Tromme.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = YV58QH8DA2;
 				INFOPLIST_FILE = Tromme/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -626,8 +629,10 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = YV58QH8DA2;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -648,6 +653,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;

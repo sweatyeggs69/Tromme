@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct AllSongsView: View {
+struct FavoritesView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
@@ -27,21 +27,6 @@ struct AllSongsView: View {
         }
     }
 
-    private var trackSections: [(title: String, items: [(index: Int, track: PlexMetadata)])] {
-        var sections: [(title: String, items: [(index: Int, track: PlexMetadata)])] = []
-
-        for item in filteredTracks.enumerated() {
-            let title = alphabetSectionTitle(for: item.element.titleSort ?? item.element.title)
-            if let index = sections.firstIndex(where: { $0.title == title }) {
-                sections[index].items.append((index: item.offset, track: item.element))
-            } else {
-                sections.append((title: title, items: [(index: item.offset, track: item.element)]))
-            }
-        }
-
-        return sections
-    }
-
     var body: some View {
         Group {
             if isLoading {
@@ -50,24 +35,26 @@ struct AllSongsView: View {
             } else {
                 if filteredTracks.isEmpty, !searchText.isEmpty {
                     ContentUnavailableView.search(text: searchText)
+                } else if tracks.isEmpty {
+                    ContentUnavailableView(
+                        "No Favorites",
+                        systemImage: "heart",
+                        description: Text("Favorite songs in Plex to see them here.")
+                    )
                 } else {
                     List {
-                        ForEach(trackSections, id: \.title) { section in
-                            Section(section.title) {
-                                ForEach(section.items, id: \.track.id) { item in
-                                    TrackRowView(
-                                        track: item.track,
-                                        tracks: filteredTracks,
-                                        index: item.index,
-                                        showArtwork: true,
-                                        showArtist: true,
-                                        showTrackNumber: false,
-                                        artworkSize: 48,
-                                        artworkCornerRadius: 4
-                                    )
-                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                }
-                            }
+                        ForEach(Array(filteredTracks.enumerated()), id: \.element.id) { index, track in
+                            TrackRowView(
+                                track: track,
+                                tracks: filteredTracks,
+                                index: index,
+                                showArtwork: true,
+                                showArtist: true,
+                                showTrackNumber: false,
+                                artworkSize: 48,
+                                artworkCornerRadius: 4
+                            )
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                         }
                     }
                     .listStyle(.plain)
@@ -75,12 +62,12 @@ struct AllSongsView: View {
                 }
             }
         }
-        .navigationTitle("Songs")
+        .navigationTitle("Favorites")
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter songs"
+            prompt: "Filter favorites"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -109,26 +96,24 @@ struct AllSongsView: View {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
-            tracks = try await client.cachedTracks(server: server, sectionId: sectionId)
-            tracks.sort { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
+            let favorites = try await client.getFavoriteTracks(server: server, sectionId: sectionId)
+            tracks = favorites.sorted {
+                if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
+                    return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
+                }
+                return ($0.userRating ?? 0) > ($1.userRating ?? 0)
+            }
         } catch {
             // Handle error
         }
         isLoading = false
-    }
-
-    private func alphabetSectionTitle(for value: String) -> String {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.first else { return "#" }
-        let letter = String(first).uppercased()
-        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
     }
 }
 
 #if DEBUG
 #Preview {
     NavigationStack {
-        AllSongsView(previewTracks: DevelopmentMockData.allSongs)
+        FavoritesView(previewTracks: DevelopmentMockData.recentTracks)
     }
     .environment(AudioPlayerService())
 }

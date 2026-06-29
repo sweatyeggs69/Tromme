@@ -175,8 +175,11 @@ struct PlaylistDetailView: View {
                         index: index,
                         showArtwork: true,
                         showArtist: true,
-                        showTrackNumber: false
+                        showTrackNumber: false,
+                        artworkSize: 48,
+                        artworkCornerRadius: 4
                     )
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
@@ -215,6 +218,7 @@ struct PlaylistDetailView: View {
                             }
                             .scrollContentBackground(.hidden)
                             .listStyle(.plain)
+                            .listRowSpacing(2)
                             .frame(width: geo.size.width * 0.6)
                         }
 
@@ -242,6 +246,7 @@ struct PlaylistDetailView: View {
                     }
                     .scrollContentBackground(.hidden)
                     .listStyle(.plain)
+                    .listRowSpacing(2)
                 }
             }
         }
