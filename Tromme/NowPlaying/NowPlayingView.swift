@@ -45,7 +45,7 @@ struct NowPlayingView: View {
     private let iPadBottomActionsExtraPadding: CGFloat = 12
     private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
     private let portraitArtworkBottomPadding: CGFloat = 10
-    private let portraitTrackInfoBottomPadding: CGFloat = 18
+    private let portraitTrackInfoBottomPadding: CGFloat = 6
     private let portraitBottomControlsHeightFraction: CGFloat = 0.42
     private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
     private let bottomActionsTopPadding: CGFloat = 10
@@ -422,6 +422,7 @@ struct NowPlayingView: View {
                 VStack(spacing: 0) {
                     TimelineSlider(usesOverlayedTimeLabels: true, showLosslessBadge: isLossless)
                         .padding(.horizontal, horizontalPadding)
+                        .padding(.top, 12)
 
                     Spacer(minLength: 0)
 
@@ -751,13 +752,13 @@ struct TimelineSlider: View {
             if usesOverlayedTimeLabels {
                 sliderControl(duration: duration, isReady: isReady)
                     .overlay(alignment: .bottom) {
-                        VStack(spacing: 2) {
-                            timeLabels(displayValue: displayValue, duration: duration)
-                            losslessBadge
-                                .opacity(showLosslessBadge ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
-                        }
-                        .offset(y: 28)
+                        timeLabels(displayValue: displayValue, duration: duration)
+                            .overlay {
+                                losslessBadge
+                                    .opacity(showLosslessBadge ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
+                            }
+                            .offset(y: 20)
                     }
             } else {
                 VStack(spacing: 6) {
@@ -825,7 +826,7 @@ struct TimelineSlider: View {
             Text("Lossless")
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(.white.opacity(0.60))
+        .foregroundStyle(.white.opacity(0.51))
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.12)))
