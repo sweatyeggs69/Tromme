@@ -420,7 +420,7 @@ struct NowPlayingView: View {
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
-                    TimelineSlider(usesOverlayedTimeLabels: true, showLosslessBadge: isLossless)
+                    TimelineSlider(showLosslessBadge: isLossless)
                         .padding(.horizontal, horizontalPadding)
                         .padding(.top, 12)
 
@@ -737,6 +737,7 @@ struct TimelineSlider: View {
     @Environment(AudioPlayerService.self) private var player
     @State private var isDragging = false
     @State private var sliderValue: TimeInterval = 0
+    @State private var dragStartValue: TimeInterval = 0
 
     var usesOverlayedTimeLabels = false
     var showLosslessBadge: Bool = false
@@ -764,6 +765,11 @@ struct TimelineSlider: View {
                 VStack(spacing: 6) {
                     sliderControl(duration: duration, isReady: isReady)
                     timeLabels(displayValue: displayValue, duration: duration)
+                        .overlay {
+                            losslessBadge
+                                .opacity(showLosslessBadge ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
+                        }
                 }
             }
         }
@@ -789,19 +795,42 @@ struct TimelineSlider: View {
     }
 
     private func sliderControl(duration: TimeInterval, isReady: Bool) -> some View {
-        Slider(
-            value: $sliderValue,
-            in: 0...duration,
-            onEditingChanged: { editing in
-                isDragging = editing
-                if !editing {
-                    player.seek(to: sliderValue)
-                }
+        let progress = duration > 0 ? sliderValue / duration : 0
+
+        return GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.3))
+                    .frame(height: isDragging ? 16 : 7)
+                    .frame(maxHeight: .infinity)
+                Capsule()
+                    .fill(.white)
+                    .frame(width: max(0, geo.size.width * CGFloat(progress)), height: isDragging ? 16 : 7)
+                    .frame(maxHeight: .infinity, alignment: .leading)
             }
-        )
-        .tint(.white)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { drag in
+                        if !isDragging {
+                            isDragging = true
+                            dragStartValue = sliderValue
+                        }
+                        let width = max(1, geo.size.width)
+                        let delta = (drag.translation.width / width) * duration
+                        sliderValue = min(max(dragStartValue + delta, 0), duration)
+                    }
+                    .onEnded { _ in
+                        isDragging = false
+                        player.seek(to: sliderValue)
+                    }
+            )
+        }
+        .frame(height: 28)
         .disabled(!isReady)
-        .opacity(isReady ? 1 : 0.5)
+        .opacity(isReady ? (isDragging ? 1.0 : 0.55) : 0.3)
+        .animation(.easeInOut(duration: 0.2), value: isDragging)
     }
 
     private func timeLabels(displayValue: TimeInterval, duration: TimeInterval) -> some View {
@@ -858,36 +887,117 @@ struct AirPlayButton: UIViewRepresentable {
 
 // MARK: - Volume Slider
 
-struct VolumeSlider: UIViewRepresentable {
+struct VolumeSlider: View {
+    let isEnabled: Bool
+    @State private var isDragging = false
+    @State private var volume: Float = AVAudioSession.sharedInstance().outputVolume
+    @State private var dragStartVolume: Float = 0
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.fill")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.white)
+                    .frame(width: 16, alignment: .center)
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(.white.opacity(0.3))
+                            .frame(height: isDragging ? 16 : 7)
+                            .frame(maxHeight: .infinity)
+                        Capsule()
+                            .fill(.white)
+                            .frame(width: max(0, geo.size.width * CGFloat(volume)), height: isDragging ? 16 : 7)
+                            .frame(maxHeight: .infinity, alignment: .leading)
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { drag in
+                                if !isDragging {
+                                    isDragging = true
+                                    dragStartVolume = volume
+                                }
+                                let delta = Float(drag.translation.width / max(1, geo.size.width))
+                                volume = min(max(dragStartVolume + delta, 0), 1)
+                            }
+                            .onEnded { _ in isDragging = false }
+                    )
+                }
+
+                Image(systemName: "speaker.wave.3.fill")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, alignment: .center)
+            }
+            .opacity(isDragging ? 1.0 : 0.55)
+            .animation(.easeInOut(duration: 0.2), value: isDragging)
+
+            MPVolumeSliderView(volume: $volume, isEnabled: isEnabled)
+                .frame(width: 1, height: 1)
+                .opacity(0.001)
+        }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.5)
+        .task {
+            await observeSystemVolume()
+        }
+    }
+
+    private func observeSystemVolume() async {
+        let audioSession = AVAudioSession.sharedInstance()
+        final class Box: @unchecked Sendable { var obs: NSKeyValueObservation? }
+        let box = Box()
+        let stream = AsyncStream<Float> { continuation in
+            box.obs = audioSession.observe(\.outputVolume, options: [.new]) { _, change in
+                if let v = change.newValue { continuation.yield(v) }
+            }
+            continuation.onTermination = { _ in box.obs?.invalidate() }
+        }
+        for await value in stream {
+            if !isDragging {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    volume = value
+                }
+            }
+        }
+    }
+}
+
+private struct MPVolumeSliderView: UIViewRepresentable {
+    @Binding var volume: Float
     let isEnabled: Bool
 
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsVolumeSlider = true
-        configure(view)
+        view.isUserInteractionEnabled = false
+        styleSubviews(in: view)
         return view
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {
-        configure(uiView)
+        guard isEnabled else { return }
+        for subview in uiView.subviews {
+            if let slider = subview as? UISlider {
+                slider.setValue(volume, animated: false)
+                return
+            }
+        }
     }
 
-    private func configure(_ view: MPVolumeView) {
-        view.isUserInteractionEnabled = isEnabled
-        view.alpha = isEnabled ? 1 : 0.5
+    private func styleSubviews(in view: MPVolumeView) {
         view.tintColor = .white
         for subview in view.subviews {
             if let slider = subview as? UISlider {
-                slider.isEnabled = isEnabled
-                slider.alpha = isEnabled ? 1 : 0.5
-                slider.minimumTrackTintColor = UIColor.white.withAlphaComponent(0.9)
-                slider.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.35)
-                slider.thumbTintColor = .white
+                slider.minimumTrackTintColor = .clear
+                slider.maximumTrackTintColor = .clear
+                slider.thumbTintColor = .clear
             } else if let button = subview as? UIButton {
                 button.isHidden = true
-                button.isUserInteractionEnabled = false
-            } else {
-                subview.isUserInteractionEnabled = false
             }
         }
     }
