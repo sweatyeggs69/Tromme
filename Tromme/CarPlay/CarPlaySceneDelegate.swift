@@ -10,8 +10,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var client: PlexAPIClient? { AppContext.shared.plexClient }
     private var player: AudioPlayerService? { AppContext.shared.audioPlayer }
 
+    private var shuffleNPButton: CPNowPlayingShuffleButton?
+    private var repeatNPButton: CPNowPlayingRepeatButton?
     private var infiniteButton: CPNowPlayingImageButton?
     private var magicMixButton: CPNowPlayingImageButton?
+    private var favFilledButton: CPNowPlayingImageButton?
+    private var favOutlineButton: CPNowPlayingImageButton?
+    private var currentTrackFavorited = false
     private var observationTask: Task<Void, Never>?
     private var connectionObservationTask: Task<Void, Never>?
     private var lastRootSignature: String?
@@ -342,8 +347,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 let ratingKey = album.ratingKey
                 let albumTitle = album.title
                 let albumThumb = album.thumb
+                let albumYear = album.releaseYear
                 item.handler = { [weak self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
+                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb, releaseYear: albumYear)
                     completion()
                 }
                 return item
@@ -420,8 +426,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             let ratingKey = album.ratingKey
             let albumTitle = album.title
             let albumThumb = album.thumb
+            let albumYear = album.releaseYear
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb, releaseYear: albumYear)
                 completion()
             }
             return item
@@ -595,8 +602,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             let ratingKey = album.ratingKey
             let albumTitle = album.title
             let albumThumb = album.thumb
+            let albumYear = album.releaseYear
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb, releaseYear: albumYear)
                 completion()
             }
             return item
@@ -655,14 +663,14 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     // MARK: - Album Tracks
 
-    private func showAlbumTracks(albumRatingKey: String, albumTitle: String, albumThumb: String? = nil) {
+    private func showAlbumTracks(albumRatingKey: String, albumTitle: String, albumThumb: String? = nil, releaseYear: String? = nil) {
         guard let server, let client else { return }
         Task {
             // Load tracks and artwork in parallel
             let artworkTask = Task<UIImage?, Never> {
                 guard let path = albumThumb,
-                      let url = client.artworkURL(server: server, path: path, width: 500, height: 500) else { return nil }
-                return await ImageCache.shared.image(for: url, targetPixelSize: 500)
+                      let url = client.artworkURL(server: server, path: path, width: 300, height: 300) else { return nil }
+                return await ImageCache.shared.image(for: url, targetPixelSize: 300)
             }
 
             let children: [PlexMetadata]
@@ -681,39 +689,40 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             guard !playableTracks.isEmpty else { return }
 
             let artistName = playableTracks.first?.grandparentTitle ?? playableTracks.first?.parentTitle
-            let iconConfig = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
+            let subtitleParts = [artistName, releaseYear].compactMap { $0 }
+            let subtitle = subtitleParts.isEmpty ? nil : subtitleParts.joined(separator: " · ")
+
             let thumbnail = CPThumbnailImage(image: artworkImage ?? (UIImage(systemName: "music.note") ?? UIImage()))
 
-            let playBtn = CPButton(image: UIImage(systemName: "play.fill", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
+            let playBtn = CPButton(image: UIImage(systemName: "play.fill") ?? UIImage()) { [weak self] _ in
                 guard let self, let player = self.player else { return }
                 if player.isShuffled { player.toggleShuffle() }
                 player.play(tracks: playableTracks, startingAt: 0)
                 self.pushNowPlaying()
             }
-            let shuffleBtn = CPButton(image: UIImage(systemName: "shuffle", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
+            playBtn.title = "Play"
+
+            let shuffleBtn = CPButton(image: UIImage(systemName: "shuffle") ?? UIImage()) { [weak self] _ in
                 guard let self, let player = self.player else { return }
                 if !player.isShuffled { player.toggleShuffle() }
                 player.play(tracks: playableTracks, startingAt: 0)
                 self.pushNowPlaying()
             }
-            let queueBtn = CPButton(image: UIImage(systemName: "text.badge.plus", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
-                guard let player = self?.player else { return }
-                for track in playableTracks { player.addToEndOfQueue(track) }
-            }
 
             let detailsHeader = CPListTemplateDetailsHeader(
                 thumbnail: thumbnail,
                 title: albumTitle,
-                subtitle: artistName,
-                actionButtons: [playBtn, shuffleBtn, queueBtn]
+                subtitle: subtitle,
+                actionButtons: [playBtn, shuffleBtn]
             )
 
             let trackItems: [CPListTemplateItem] = playableTracks
                 .prefix(CPListTemplate.maximumItemCount)
                 .enumerated()
                 .map { index, track -> CPListItem in
-                    let prefix = track.index.map { "\($0). " } ?? ""
-                    let item = CPListItem(text: "\(prefix)\(track.title)", detailText: nil)
+                    let star = (track.userRating ?? 0) >= 4 ? "⭑ " : ""
+                    let prefix = track.index.map { "\($0) " } ?? ""
+                    let item = CPListItem(text: "\(star)\(prefix)\(track.title)", detailText: nil)
                     let capturedTracks = playableTracks
                     item.handler = { [weak self] _, completion in
                         self?.player?.play(tracks: capturedTracks, startingAt: index)
@@ -723,12 +732,18 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     return item
                 }
 
+            let queueBarBtn = CPBarButton(image: UIImage(systemName: "text.badge.plus") ?? UIImage()) { [weak self] _ in
+                guard let player = self?.player else { return }
+                for track in playableTracks { player.addToEndOfQueue(track) }
+            }
+
             let template = CPListTemplate(
                 title: nil,
                 listHeader: detailsHeader,
                 sections: [CPListSection(items: trackItems)],
                 assistantCellConfiguration: nil
             )
+            template.trailingNavigationBarButtons = [queueBarBtn]
             interfaceController?.pushTemplate(template, animated: true, completion: nil)
         }
     }
@@ -744,9 +759,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let shuffleButton = CPNowPlayingShuffleButton { [weak self] _ in
             self?.player?.toggleShuffle()
         }
+        self.shuffleNPButton = shuffleButton
+
         let repeatButton = CPNowPlayingRepeatButton { [weak self] _ in
             self?.player?.cycleRepeatMode()
         }
+        self.repeatNPButton = repeatButton
 
         let infiniteImage = UIImage(systemName: "infinity") ?? UIImage()
         let infBtn = CPNowPlayingImageButton(image: infiniteImage) { [weak self] _ in
@@ -774,7 +792,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
         self.magicMixButton = mixBtn
 
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, infBtn, mixBtn])
+        let filled = CPNowPlayingImageButton(image: UIImage(systemName: "star.fill") ?? UIImage()) { [weak self] _ in
+            self?.toggleFavorite()
+        }
+        self.favFilledButton = filled
+
+        let outline = CPNowPlayingImageButton(image: UIImage(systemName: "star") ?? UIImage()) { [weak self] _ in
+            self?.toggleFavorite()
+        }
+        self.favOutlineButton = outline
+
+        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, infBtn, mixBtn])
         syncMixButtons()
     }
 
@@ -782,6 +810,31 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let player else { return }
         infiniteButton?.isSelected = player.isInfiniteModeActive
         magicMixButton?.isSelected = player.isMagicMixActive
+        syncFavoriteButton()
+    }
+
+    private func syncFavoriteButton() {
+        currentTrackFavorited = (player?.currentTrack?.userRating ?? 0) >= 4
+        rebuildNowPlayingButtons()
+    }
+
+    private func rebuildNowPlayingButtons() {
+        guard let s = shuffleNPButton, let r = repeatNPButton,
+              let inf = infiniteButton, let mix = magicMixButton,
+              let filled = favFilledButton, let outline = favOutlineButton else { return }
+        let fav = currentTrackFavorited ? filled : outline
+        CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, inf, mix])
+    }
+
+    private func toggleFavorite() {
+        guard let player, let track = player.currentTrack,
+              let server, let client else { return }
+        currentTrackFavorited.toggle()
+        rebuildNowPlayingButtons()
+        let newRating = currentTrackFavorited ? 10 : 0
+        Task {
+            try? await client.rateItem(server: server, ratingKey: track.ratingKey, rating: newRating)
+        }
     }
 
     private func startObservingPlayer() {
@@ -836,6 +889,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             item.setImage(image)
         }
     }
+
 }
 
 // MARK: - CPNowPlayingTemplateObserver
