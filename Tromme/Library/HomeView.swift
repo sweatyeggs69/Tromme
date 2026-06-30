@@ -219,8 +219,27 @@ struct HomeView: View {
 
     private var playlistsSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-            Text("Playlists")
-                .appSectionTitleStyle()
+            Group {
+                if !playlists.isEmpty {
+                    NavigationLink {
+                        PlaylistsView()
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("Playlists")
+                                .font(AppStyle.Typography.sectionTitle)
+                            Image(systemName: "chevron.right")
+                                .font(.title2.weight(.semibold))
+                                .imageScale(.small)
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                    .tint(.primary)
+                } else {
+                    Text("Playlists")
+                        .font(AppStyle.Typography.sectionTitle)
+                }
+            }
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
             if isLoading {
                 ProgressView()

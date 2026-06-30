@@ -59,7 +59,7 @@ struct AllAlbumsView: View {
             text: $searchText,
             isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter albums"
+            prompt: "Search albums"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -259,18 +259,14 @@ struct AllAlbumsView: View {
         for items: [PlexMetadata],
         sortKey: (PlexMetadata) -> String
     ) -> [(title: String, items: [PlexMetadata])] {
-        var sections: [(title: String, items: [PlexMetadata])] = []
-
+        var sectionItems: [String: [PlexMetadata]] = [:]
+        var sectionOrder: [String] = []
         for item in items {
             let title = alphabetSectionTitle(for: sortKey(item))
-            if let index = sections.firstIndex(where: { $0.title == title }) {
-                sections[index].items.append(item)
-            } else {
-                sections.append((title: title, items: [item]))
-            }
+            if sectionItems[title] == nil { sectionOrder.append(title) }
+            sectionItems[title, default: []].append(item)
         }
-
-        return sections
+        return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
     private func alphabetSectionTitle(for value: String) -> String {

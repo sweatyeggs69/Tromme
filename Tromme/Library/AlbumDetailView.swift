@@ -136,11 +136,35 @@ struct AlbumDetailView: View {
             components.append(String(year))
         }
 
-        if let plexStyle = plexAudioStyleText {
+        if !isLosslessAlbumFormat, let plexStyle = plexAudioStyleText {
             components.append(plexStyle)
         }
 
         return components.isEmpty ? nil : components.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func albumInfoLineView(centered: Bool = true) -> some View {
+        let alignment: TextAlignment = centered ? .center : .leading
+        let dimColor = tertiaryTextColor
+        if isLosslessAlbumFormat {
+            if let line = albumInfoLine {
+                Text("\(line) · \(Image(systemName: "waveform.mid")) Lossless")
+                    .font(.caption)
+                    .foregroundStyle(dimColor)
+                    .multilineTextAlignment(alignment)
+            } else {
+                Text("\(Image(systemName: "waveform.mid")) Lossless")
+                    .font(.caption)
+                    .foregroundStyle(dimColor)
+                    .multilineTextAlignment(alignment)
+            }
+        } else if let line = albumInfoLine {
+            Text(line)
+                .font(.caption)
+                .foregroundStyle(dimColor)
+                .multilineTextAlignment(alignment)
+        }
     }
 
     private var albumInfoText: String {
@@ -169,6 +193,18 @@ struct AlbumDetailView: View {
     private var shouldPopToSourceArtist: Bool {
         guard let sourceArtistRatingKey, let artistTarget = artistNavigationTarget else { return false }
         return sourceArtistRatingKey == artistTarget.ratingKey
+    }
+
+    private var isLosslessAlbumFormat: Bool {
+        let media = firstTrackDetails?.media?.first
+            ?? tracks.compactMap(\.media?.first).first
+            ?? albumDetails.media?.first
+            ?? album.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        let codec = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
+        return codec == "flac" || codec == "alac"
     }
 
     private var plexAudioStyleText: String? {
@@ -248,11 +284,8 @@ struct AlbumDetailView: View {
                 }
             }
 
-            if includesInfoLine, let infoLine = albumInfoLine {
-                Text(infoLine)
-                    .font(.caption)
-                    .foregroundStyle(tertiaryTextColor)
-                    .multilineTextAlignment(.center)
+            if includesInfoLine {
+                albumInfoLineView(centered: true)
                     .padding(.top, 0.5)
                     .padding(.horizontal, 20)
             }
@@ -618,13 +651,8 @@ struct AlbumDetailView: View {
                             albumActionButtons
                                 .padding(.top, 16)
 
-                            if let infoLine = albumInfoLine {
-                                Text(infoLine)
-                                    .font(.caption)
-                                    .foregroundStyle(tertiaryTextColor)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 20)
-                            }
+                            albumInfoLineView(centered: true)
+                                .padding(.horizontal, 20)
                         }
                         .padding(.bottom, 20)
                         .frame(width: geo.size.width * 0.33)

@@ -158,29 +158,11 @@ struct ArtistsView: View {
     private func loadArtists() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
+
+        // Phase 1: Show the standard artist list immediately from cache.
         do {
             var result = try await client.cachedArtists(server: server, sectionId: sectionId)
-            let knownKeys = Set(result.map(\.ratingKey))
-
-            // Discover artists that only have singles/tracks but no artist entry
-            let tracks = try await client.cachedTracks(server: server, sectionId: sectionId)
-            var seen = Set<String>()
-            for track in tracks {
-                guard let key = track.grandparentRatingKey,
-                      !knownKeys.contains(key),
-                      seen.insert(key).inserted,
-                      let name = track.grandparentTitle else { continue }
-                result.append(PlexMetadata(
-                    ratingKey: key,
-                    title: name,
-                    type: "artist",
-                    thumb: track.grandparentThumb
-                ))
-            }
-
-            result.sort {
-                artistSortKey(for: $0.title) < artistSortKey(for: $1.title)
-            }
+            result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
             artists = result
         } catch {
             #if DEBUG
@@ -188,6 +170,29 @@ struct ArtistsView: View {
             #endif
         }
         isLoading = false
+
+        // Phase 2: Discover artists that only appear in track metadata (no standalone entry).
+        // Runs after the view is already visible so it never delays the initial display.
+        let knownKeys = Set(artists.map(\.ratingKey))
+        guard let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) else { return }
+        var seen = Set<String>()
+        var orphans: [PlexMetadata] = []
+        for track in tracks {
+            guard let key = track.grandparentRatingKey,
+                  !knownKeys.contains(key),
+                  seen.insert(key).inserted,
+                  let name = track.grandparentTitle else { continue }
+            orphans.append(PlexMetadata(
+                ratingKey: key,
+                title: name,
+                type: "artist",
+                thumb: track.grandparentThumb
+            ))
+        }
+        guard !orphans.isEmpty else { return }
+        var merged = artists + orphans
+        merged.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
+        artists = merged
     }
 
     private func prefetchVisibleArtwork() async {
@@ -231,18 +236,14 @@ struct ArtistsView: View {
         for items: [PlexMetadata],
         sortKey: (PlexMetadata) -> String
     ) -> [(title: String, items: [PlexMetadata])] {
-        var sections: [(title: String, items: [PlexMetadata])] = []
-
+        var sectionItems: [String: [PlexMetadata]] = [:]
+        var sectionOrder: [String] = []
         for item in items {
             let title = alphabetSectionTitle(for: sortKey(item))
-            if let index = sections.firstIndex(where: { $0.title == title }) {
-                sections[index].items.append(item)
-            } else {
-                sections.append((title: title, items: [item]))
-            }
+            if sectionItems[title] == nil { sectionOrder.append(title) }
+            sectionItems[title, default: []].append(item)
         }
-
-        return sections
+        return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
     private func alphabetSectionTitle(for value: String) -> String {

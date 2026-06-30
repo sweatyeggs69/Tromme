@@ -36,8 +36,7 @@ extension PlexAPIClient {
     func cachedArtistReleases(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
         var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey)
         let releaseKeys = Set(releases.map(\.ratingKey))
-        let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
-        let artistTracks = tracksByArtist(allTracks, artist: artist)
+        let artistTracks = try await cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
         let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey))
             .subtracting(releaseKeys)
 
@@ -67,8 +66,12 @@ extension PlexAPIClient {
     }
 
     func cachedArtistTracks(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
-        let tracks = try await cachedTracks(server: server, sectionId: sectionId)
-        return tracksByArtist(tracks, artist: artist)
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.artistTracks(artistRatingKey: artist.ratingKey),
+            policy: .detail
+        ) {
+            try await self.getArtistTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
+        }
     }
 
     func recommendedAlbums(
@@ -458,7 +461,6 @@ extension PlexAPIClient {
         await withTaskGroup(of: (String, [PlexMetadata]).self) { group in
             group.addTask { ("artists", (try? await self.cachedArtists(server: server, sectionId: sectionId)) ?? []) }
             group.addTask { ("albums", (try? await self.cachedAlbums(server: server, sectionId: sectionId)) ?? []) }
-            group.addTask { ("tracks", (try? await self.cachedTracks(server: server, sectionId: sectionId)) ?? []) }
             group.addTask {
                 _ = try? await self.cachedPlaylists(server: server)
                 return ("playlists", [])

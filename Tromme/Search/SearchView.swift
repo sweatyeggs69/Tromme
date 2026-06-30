@@ -8,6 +8,7 @@ struct SearchView: View {
 
     @State private var searchText = ""
     @State private var hubs: [Hub] = []
+    @State private var matchedPlaylists: [PlexPlaylist] = []
     @State private var searchTask: Task<Void, Never>?
     @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
 
@@ -72,7 +73,7 @@ struct SearchView: View {
                         }
                     }
                 }
-            } else if hubs.isEmpty && !searchText.isEmpty {
+            } else if hubs.isEmpty && matchedPlaylists.isEmpty && !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 List {
@@ -81,6 +82,25 @@ struct SearchView: View {
                             Section(hub.title ?? "Results") {
                                 ForEach(Array(items.prefix(5).enumerated()), id: \.element.id) { index, item in
                                     searchResultRow(item: item, allItems: items, index: index)
+                                }
+                            }
+                        }
+                    }
+                    if !matchedPlaylists.isEmpty {
+                        Section("Playlists") {
+                            ForEach(matchedPlaylists.prefix(5)) { playlist in
+                                NavigationLink {
+                                    PlaylistDetailView(playlist: playlist)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 44, cornerRadius: 8)
+                                        VStack(alignment: .leading) {
+                                            Text(playlist.title).lineLimit(1)
+                                            if let count = playlist.leafCount {
+                                                Text("\(count) songs").font(.caption).foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -174,6 +194,7 @@ struct SearchView: View {
     private func performSearch(query: String) async {
         guard !query.isEmpty else {
             hubs = []
+            matchedPlaylists = []
             return
         }
         guard let server = serverConnection.currentServer,
@@ -184,6 +205,7 @@ struct SearchView: View {
         let artists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
         let albums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
         let tracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
+        let allPlaylists = (try? await client.cachedPlaylists(server: server)) ?? []
 
         var matchedArtists = artists.filter { $0.title.lowercased().contains(lowered) }
 
@@ -214,6 +236,10 @@ struct SearchView: View {
             || ($0.parentTitle?.lowercased().contains(lowered) ?? false)
         }
 
+        let playlists = allPlaylists.filter {
+            $0.isMusicPlaylist && $0.title.lowercased().contains(lowered)
+        }
+
         var results: [Hub] = []
         if !matchedArtists.isEmpty {
             results.append(Hub(hubIdentifier: "artists", title: "Artists", type: "artist", size: matchedArtists.count, metadata: Array(matchedArtists.prefix(5))))
@@ -225,6 +251,7 @@ struct SearchView: View {
             results.append(Hub(hubIdentifier: "tracks", title: "Songs", type: "track", size: matchedTracks.count, metadata: Array(matchedTracks.prefix(10))))
         }
         hubs = results
+        matchedPlaylists = playlists
         await prefetchArtwork(for: results, server: server)
     }
 

@@ -67,7 +67,7 @@ struct FavoritesView: View {
             text: $searchText,
             isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter favorites"
+            prompt: "Search favorites"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

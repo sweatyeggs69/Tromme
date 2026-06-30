@@ -175,7 +175,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     client: client,
                     onImageSelect: { [weak self] index in
                         let album = limited[index]
-                        self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title)
+                        self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title, albumThumb: album.thumb)
                     },
                     onRowSelect: { [weak self] in
                         self?.showRecentlyAddedList(limited)
@@ -341,8 +341,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 loadArtwork(path: album.thumb, into: item, server: server, client: client)
                 let ratingKey = album.ratingKey
                 let albumTitle = album.title
+                let albumThumb = album.thumb
                 item.handler = { [weak self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
+                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
                     completion()
                 }
                 return item
@@ -418,8 +419,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             loadArtwork(path: album.thumb, into: item, server: server, client: client)
             let ratingKey = album.ratingKey
             let albumTitle = album.title
+            let albumThumb = album.thumb
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
                 completion()
             }
             return item
@@ -592,8 +594,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             loadArtwork(path: album.thumb, into: item, server: server, client: client)
             let ratingKey = album.ratingKey
             let albumTitle = album.title
+            let albumThumb = album.thumb
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb)
                 completion()
             }
             return item
@@ -652,52 +655,81 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     // MARK: - Album Tracks
 
-    private func showAlbumTracks(albumRatingKey: String, albumTitle: String) {
+    private func showAlbumTracks(albumRatingKey: String, albumTitle: String, albumThumb: String? = nil) {
         guard let server, let client else { return }
-        let template = CPListTemplate(title: albumTitle, sections: [])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-        loadAlbumTracks(albumRatingKey: albumRatingKey, server: server, client: client, into: template)
-    }
-
-    private func loadAlbumTracks(albumRatingKey: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
         Task {
+            // Load tracks and artwork in parallel
+            let artworkTask = Task<UIImage?, Never> {
+                guard let path = albumThumb,
+                      let url = client.artworkURL(server: server, path: path, width: 500, height: 500) else { return nil }
+                return await ImageCache.shared.image(for: url, targetPixelSize: 500)
+            }
+
             let children: [PlexMetadata]
             do {
                 children = try await client.cachedChildren(server: server, ratingKey: albumRatingKey)
             } catch {
-                let retry = makeRetryItem(into: template) { [weak self] in
-                    self?.loadAlbumTracks(albumRatingKey: albumRatingKey, server: server, client: client, into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
+                let errItem = CPListItem(text: "Couldn't Load", detailText: "Go back and try again")
+                errItem.isEnabled = false
+                let errTemplate = CPListTemplate(title: nil, sections: [CPListSection(items: [errItem])])
+                interfaceController?.pushTemplate(errTemplate, animated: true, completion: nil)
                 return
             }
+
+            let artworkImage = await artworkTask.value
             let playableTracks = Array(children.filter { $0.type == "track" })
             guard !playableTracks.isEmpty else { return }
 
-            let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(playableTracks.count) songs", image: UIImage(systemName: "shuffle"))
-            shuffleItem.handler = { [weak self] _, completion in
-                guard let self, let player = self.player else { completion(); return }
+            let artistName = playableTracks.first?.grandparentTitle ?? playableTracks.first?.parentTitle
+            let iconConfig = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
+            let thumbnail = CPThumbnailImage(image: artworkImage ?? (UIImage(systemName: "music.note") ?? UIImage()))
+
+            let playBtn = CPButton(image: UIImage(systemName: "play.fill", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
+                guard let self, let player = self.player else { return }
+                if player.isShuffled { player.toggleShuffle() }
+                player.play(tracks: playableTracks, startingAt: 0)
+                self.pushNowPlaying()
+            }
+            let shuffleBtn = CPButton(image: UIImage(systemName: "shuffle", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
+                guard let self, let player = self.player else { return }
                 if !player.isShuffled { player.toggleShuffle() }
                 player.play(tracks: playableTracks, startingAt: 0)
                 self.pushNowPlaying()
-                completion()
+            }
+            let queueBtn = CPButton(image: UIImage(systemName: "text.badge.plus", withConfiguration: iconConfig) ?? UIImage()) { [weak self] _ in
+                guard let player = self?.player else { return }
+                for track in playableTracks { player.addToEndOfQueue(track) }
             }
 
-            let trackItems: [CPListTemplateItem] = playableTracks.prefix(CPListTemplate.maximumItemCount - 1).enumerated().map { index, track -> CPListItem in
-                let trackNumber = track.index.map { "\($0). " } ?? ""
-                let item = CPListItem(text: "\(trackNumber)\(track.title)", detailText: track.durationFormatted)
-                let capturedTracks = playableTracks
-                item.handler = { [weak self] _, completion in
-                    self?.player?.play(tracks: capturedTracks, startingAt: index)
-                    self?.pushNowPlaying()
-                    completion()
+            let detailsHeader = CPListTemplateDetailsHeader(
+                thumbnail: thumbnail,
+                title: albumTitle,
+                subtitle: artistName,
+                actionButtons: [playBtn, shuffleBtn, queueBtn]
+            )
+
+            let trackItems: [CPListTemplateItem] = playableTracks
+                .prefix(CPListTemplate.maximumItemCount)
+                .enumerated()
+                .map { index, track -> CPListItem in
+                    let prefix = track.index.map { "\($0). " } ?? ""
+                    let item = CPListItem(text: "\(prefix)\(track.title)", detailText: nil)
+                    let capturedTracks = playableTracks
+                    item.handler = { [weak self] _, completion in
+                        self?.player?.play(tracks: capturedTracks, startingAt: index)
+                        self?.pushNowPlaying()
+                        completion()
+                    }
+                    return item
                 }
-                return item
-            }
 
-            var allItems: [CPListTemplateItem] = [shuffleItem]
-            allItems.append(contentsOf: trackItems)
-            template.updateSections([CPListSection(items: allItems)])
+            let template = CPListTemplate(
+                title: nil,
+                listHeader: detailsHeader,
+                sections: [CPListSection(items: trackItems)],
+                assistantCellConfiguration: nil
+            )
+            interfaceController?.pushTemplate(template, animated: true, completion: nil)
         }
     }
 
@@ -827,6 +859,6 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
     func nowPlayingTemplateAlbumArtistButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
         guard let player, let track = player.currentTrack,
               let albumRatingKey = track.parentRatingKey else { return }
-        showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName)
+        showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName, albumThumb: track.parentThumb)
     }
 }

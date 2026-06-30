@@ -15,7 +15,7 @@ actor LibraryCache {
     private let diskURL: URL
     private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
-    private let maxDiskSize: Int = 50 * 1024 * 1024 // 50 MB
+    private let maxDiskSize: Int = 256 * 1024 * 1024 // 256 MB
 
     /// Tracks in-flight fetch tasks by cache key so concurrent callers
     /// share one network request instead of firing duplicates.
@@ -319,6 +319,9 @@ enum CacheKey {
     }
     static func search(query: String, sectionId: String?) -> String {
         "search_\(query)_\(sectionId ?? "all")"
+    }
+    static func artistTracks(artistRatingKey: String) -> String {
+        "artist_tracks_\(artistRatingKey)"
     }
     static func topTracks(artistRatingKey: String) -> String {
         "top_tracks_\(artistRatingKey)"

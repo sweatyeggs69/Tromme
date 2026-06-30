@@ -108,6 +108,9 @@ final class AudioPlayerService: @unchecked Sendable {
 
     var hasTrack: Bool { currentTrack != nil }
 
+    /// True when the current track is being transcoded rather than direct-streamed.
+    var isTranscoding: Bool { isConstrainedPlaybackPath }
+
     init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -753,12 +756,11 @@ final class AudioPlayerService: @unchecked Sendable {
         let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
             UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
         )
-        let shouldConstrainConstrainedPaths = !disableCellularTranscoding
         let playbackPath = resolvedPlaybackPath(for: server)
         let shouldConstrainForNetwork: Bool
         switch playbackPath {
         case .cellular, .wan, .relay:
-            shouldConstrainForNetwork = shouldConstrainConstrainedPaths
+            shouldConstrainForNetwork = !disableCellularTranscoding
         case .lan:
             shouldConstrainForNetwork = false
         }

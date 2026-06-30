@@ -64,6 +64,16 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
+    private var isLossless: Bool {
+        guard !player.isTranscoding else { return false }
+        let media = player.currentTrack?.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        let codec = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
+        return codec == "flac" || codec == "alac"
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -410,7 +420,7 @@ struct NowPlayingView: View {
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
-                    TimelineSlider(usesOverlayedTimeLabels: true)
+                    TimelineSlider(usesOverlayedTimeLabels: true, showLosslessBadge: isLossless)
                         .padding(.horizontal, horizontalPadding)
 
                     Spacer(minLength: 0)
@@ -728,6 +738,7 @@ struct TimelineSlider: View {
     @State private var sliderValue: TimeInterval = 0
 
     var usesOverlayedTimeLabels = false
+    var showLosslessBadge: Bool = false
 
     var body: some View {
         let duration = max(player.duration, 1)
@@ -740,8 +751,13 @@ struct TimelineSlider: View {
             if usesOverlayedTimeLabels {
                 sliderControl(duration: duration, isReady: isReady)
                     .overlay(alignment: .bottom) {
-                        timeLabels(displayValue: displayValue, duration: duration)
-                            .offset(y: 18)
+                        VStack(spacing: 2) {
+                            timeLabels(displayValue: displayValue, duration: duration)
+                            losslessBadge
+                                .opacity(showLosslessBadge ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
+                        }
+                        .offset(y: 28)
                     }
             } else {
                 VStack(spacing: 6) {
@@ -801,6 +817,18 @@ struct TimelineSlider: View {
     private func formatTime(_ seconds: TimeInterval) -> String {
         let total = Int(max(0, seconds))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    private var losslessBadge: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "waveform.mid")
+            Text("Lossless")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.white.opacity(0.60))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.12)))
     }
 }
 
