@@ -130,7 +130,8 @@ struct NowPlayingView: View {
                                     size: landscapeArtworkSize,
                                     cornerRadius: 8
                                 )
-                                .shadow(color: .black.opacity(0.3), radius: 14, y: 6)
+                                .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 10)
+                                .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 3)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
@@ -189,7 +190,8 @@ struct NowPlayingView: View {
                                 size: artworkSize,
                                 cornerRadius: 6
                             )
-                            .shadow(color: .black.opacity(0.3), radius: 22, y: 10)
+                            .shadow(color: .black.opacity(0.38), radius: 36, x: 0, y: 18)
+                            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
                             .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
