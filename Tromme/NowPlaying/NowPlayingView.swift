@@ -1064,32 +1064,3 @@ struct NowPlayingBackground: View {
     NowPlayingView()
         .environment(AudioPlayerService())
 }
-
-#Preview("CarPlay Connected") {
-    let player = AudioPlayerService()
-    player.isCarPlayConnected = true
-    player.activeRouteName = "Tesla"
-    return NowPlayingView()
-        .environment(player)
-}
-
-#Preview("CarPlay + Lossless") {
-    let player = AudioPlayerService()
-    player.isCarPlayConnected = true
-    player.activeRouteName = "Tesla"
-    player.currentTrack = DevelopmentMockData.artistTopTracks.first
-    player.isPlaying = true
-    player.isReadyToPlay = true
-    player.duration = 210
-    player.currentTime = 72
-    return NowPlayingView()
-        .environment(player)
-}
-
-#Preview("AirPlay Connected") {
-    let player = AudioPlayerService()
-    player.isAirPlayConnected = true
-    player.activeRouteName = "Living Room"
-    return NowPlayingView()
-        .environment(player)
-}
