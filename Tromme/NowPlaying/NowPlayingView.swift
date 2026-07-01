@@ -162,14 +162,11 @@ struct NowPlayingView: View {
                     .frame(height: landscapeMainHeight)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
 
-                    VStack(spacing: 6) {
-                        landscapeBottomActionsRow
-                        connectedRouteMetadata
-                    }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .layoutPriority(1)
-                    .padding(.horizontal, landscapeOuterHorizontalPadding)
-                    .padding(.bottom, iPadBottomActionsExtraPadding)
+                    landscapeBottomActionsRow
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+                        .padding(.horizontal, landscapeOuterHorizontalPadding)
+                        .padding(.bottom, iPadBottomActionsExtraPadding)
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
@@ -220,9 +217,7 @@ struct NowPlayingView: View {
                         bottomActions
                             .padding(.horizontal, controlsHorizontalPadding)
                             .padding(.top, bottomActionsTopPadding)
-                        connectedRouteMetadata
-                            .padding(.top, 6)
-                            .padding(.bottom, isPadPortrait ? iPadBottomActionsExtraPadding : 0)
+
                     }
                     .frame(maxWidth: controlsContainerWidth)
                     .frame(maxWidth: .infinity)
@@ -420,7 +415,7 @@ struct NowPlayingView: View {
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
-                    TimelineSlider(showLosslessBadge: isLossless)
+                    TimelineSlider(usesOverlayedTimeLabels: true, showLosslessBadge: isLossless)
                         .padding(.horizontal, horizontalPadding)
                         .padding(.top, 12)
 
@@ -656,27 +651,6 @@ struct NowPlayingView: View {
         .font(.title3.weight(.semibold))
     }
 
-    @ViewBuilder
-    private var connectedRouteMetadata: some View {
-        if let routeStatusText {
-            Text(routeStatusText)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.45))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.22), value: routeStatusText)
-        }
-    }
-
-    private var routeStatusText: String? {
-        guard player.isCarPlayConnected || player.isAirPlayConnected else {
-            return nil
-        }
-
-        return player.activeRouteName ?? (player.isCarPlayConnected ? "CarPlay" : "AirPlay")
-    }
-
     @discardableResult
     private func applyInitialLandscapeLyrics(isPadLandscape: Bool) -> Bool {
         if !appliedInitialLandscapeLyrics, startPanel == .none, isPadLandscape {
@@ -759,7 +733,7 @@ struct TimelineSlider: View {
                                     .opacity(showLosslessBadge ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
                             }
-                            .offset(y: 20)
+                            .offset(y: 12)
                     }
             } else {
                 VStack(spacing: 6) {
@@ -850,15 +824,16 @@ struct TimelineSlider: View {
     }
 
     private var losslessBadge: some View {
-        HStack(spacing: 2) {
-            Image(systemName: "waveform.mid")
+        HStack(spacing: 3) {
+            Image(systemName: "waveform")
+                .font(.system(size: 10, weight: .medium))
             Text("Lossless")
+                .font(.caption2.weight(.medium))
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.white.opacity(0.51))
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.12)))
+        .foregroundStyle(.white.opacity(0.45))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.08)))
     }
 }
 
@@ -909,7 +884,7 @@ struct VolumeSlider: View {
                             .frame(maxHeight: .infinity)
                         Capsule()
                             .fill(.white)
-                            .frame(width: max(0, geo.size.width * CGFloat(volume)), height: isDragging ? 16 : 7)
+                            .frame(width: max(0, geo.size.width * CGFloat(isEnabled ? volume : 0)), height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity, alignment: .leading)
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
@@ -984,6 +959,7 @@ private struct MPVolumeSliderView: UIViewRepresentable {
         for subview in uiView.subviews {
             if let slider = subview as? UISlider {
                 slider.setValue(volume, animated: false)
+                slider.sendActions(for: .valueChanged)
                 return
             }
         }
@@ -1091,6 +1067,19 @@ struct NowPlayingBackground: View {
     let player = AudioPlayerService()
     player.isCarPlayConnected = true
     player.activeRouteName = "Tesla"
+    return NowPlayingView()
+        .environment(player)
+}
+
+#Preview("CarPlay + Lossless") {
+    let player = AudioPlayerService()
+    player.isCarPlayConnected = true
+    player.activeRouteName = "Tesla"
+    player.currentTrack = DevelopmentMockData.artistTopTracks.first
+    player.isPlaying = true
+    player.isReadyToPlay = true
+    player.duration = 210
+    player.currentTime = 72
     return NowPlayingView()
         .environment(player)
 }
