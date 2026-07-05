@@ -360,6 +360,37 @@ extension PlexAPIClient {
         return interleaveTracksAvoidingAdjacentAlbums(picked, limit: limit)
     }
 
+    // MARK: - Appears On Albums
+
+    /// Albums where the given artist is credited as a featured performer but is not the primary artist.
+    /// Uses the cached full track list and filters by `originalTitle` containing the artist name.
+    func appearsOnAlbums(server: PlexServer, sectionId: String, artistRatingKey: String, artistTitle: String) async throws -> [PlexMetadata] {
+        let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
+
+        let artistTitleLower = artistTitle.lowercased()
+        let featuredAlbumKeys = Set(
+            allTracks.filter { track in
+                guard track.grandparentRatingKey != artistRatingKey else { return false }
+                guard let credit = track.originalTitle?.lowercased(), !credit.isEmpty else { return false }
+                return credit.contains(artistTitleLower)
+            }
+            .compactMap(\.parentRatingKey)
+        )
+
+        guard !featuredAlbumKeys.isEmpty else { return [] }
+
+        return allAlbums
+            .filter { featuredAlbumKeys.contains($0.ratingKey) }
+            .sorted { lhs, rhs in
+                let leftDate = lhs.originallyAvailableAt ?? ""
+                let rightDate = rhs.originallyAvailableAt ?? ""
+                if leftDate != rightDate { return leftDate > rightDate }
+                if (lhs.year ?? 0) != (rhs.year ?? 0) { return (lhs.year ?? 0) > (rhs.year ?? 0) }
+                return (lhs.titleSort ?? lhs.title) < (rhs.titleSort ?? rhs.title)
+            }
+    }
+
     // MARK: - Cached Tracks
 
     func cachedTracks(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {

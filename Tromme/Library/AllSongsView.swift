@@ -58,7 +58,7 @@ struct AllSongsView: View {
             text: $searchText,
             isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Search songs"
+            prompt: "Filter songs"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

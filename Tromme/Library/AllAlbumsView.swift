@@ -59,7 +59,7 @@ struct AllAlbumsView: View {
             text: $searchText,
             isPresented: $isSearchPresented,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Search albums"
+            prompt: "Filter albums"
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

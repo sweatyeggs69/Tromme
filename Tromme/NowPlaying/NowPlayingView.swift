@@ -334,16 +334,14 @@ struct NowPlayingView: View {
     private var trackInfo: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                MarqueeText(
-                    text: player.currentTrack?.title ?? "Not Playing",
-                    font: .title3.bold(),
-                    foregroundStyle: Color.white
-                )
-                MarqueeText(
-                    text: player.currentTrack?.artistDisplayName ?? "",
-                    font: .body,
-                    foregroundStyle: Color.white.opacity(0.6)
-                )
+                Text(player.currentTrack?.title ?? "Not Playing")
+                    .font(.title3.bold())
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                Text(player.currentTrack?.artistDisplayName ?? "")
+                    .font(.body)
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 12)

@@ -11,6 +11,8 @@ struct ArtistDetailView: View {
     @State private var topTracks: [PlexMetadata] = []
     @State private var artistAlbums: [PlexMetadata] = []
     @State private var selectedAlbum: PlexMetadata?
+    @State private var appearsOnAlbums: [PlexMetadata] = []
+    @State private var selectedAppearsOnAlbum: PlexMetadata?
     @State private var heroMinY: CGFloat = 0
     @State private var showsBioSheet = false
 
@@ -30,6 +32,7 @@ struct ArtistDetailView: View {
         let artistTracks: [PlexMetadata]
         let topTracks: [PlexMetadata]
         let artistAlbums: [PlexMetadata]
+        var appearsOnAlbums: [PlexMetadata] = []
     }
 
     init(artist: PlexMetadata, previewData: PreviewData? = nil) {
@@ -39,6 +42,7 @@ struct ArtistDetailView: View {
         _artistTracks = State(initialValue: previewData?.artistTracks ?? [])
         _topTracks = State(initialValue: previewData?.topTracks ?? [])
         _artistAlbums = State(initialValue: previewData?.artistAlbums ?? [])
+        _appearsOnAlbums = State(initialValue: previewData?.appearsOnAlbums ?? [])
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -76,6 +80,40 @@ struct ArtistDetailView: View {
                             .appItemTitleStyle()
 
                         Text(album.releaseYear)
+                            .appItemSubtitleStyle()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.bottom, 24)
+        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowSeparator(.hidden)
+    }
+
+    private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
+        LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+            ForEach(albums) { album in
+                Button {
+                    selectedAppearsOnAlbum = album
+                } label: {
+                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                        GeometryReader { geo in
+                            ArtworkView(
+                                thumbPath: album.thumb,
+                                size: geo.size.width,
+                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                            )
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                        Text(album.title)
+                            .appItemTitleStyle()
+
+                        Text([album.releaseYear, album.parentTitle]
+                            .compactMap { s in (s?.isEmpty == false) ? s : nil }
+                            .joined(separator: " · "))
                             .appItemSubtitleStyle()
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -182,12 +220,20 @@ struct ArtistDetailView: View {
                 releaseGrid(artistAlbums)
             }
 
+            if !appearsOnAlbums.isEmpty {
+                sectionHeader("Appears On")
+                appearsOnGrid(appearsOnAlbums)
+            }
+
         }
         .coordinateSpace(name: "artistDetailScroll")
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedAlbum) { album in
             AlbumDetailView(album: album, sourceArtistRatingKey: artist.ratingKey)
+        }
+        .navigationDestination(item: $selectedAppearsOnAlbum) { album in
+            AlbumDetailView(album: album, sourceArtistRatingKey: album.parentRatingKey)
         }
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -227,12 +273,14 @@ struct ArtistDetailView: View {
             async let topTracksReq = client.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
             async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
             async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
+            async let appearsOnReq = client.appearsOnAlbums(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
 
             resolvedArtist = try? await metadataReq
 
             let fetchedTopTracks = (try? await topTracksReq) ?? []
             artistTracks = (try? await artistTracksReq) ?? []
             artistAlbums = (try? await releasesReq) ?? []
+            appearsOnAlbums = (try? await appearsOnReq) ?? []
 
             // Fallback: if Plex returned no top tracks, use local sort by viewCount
             topTracks = fetchedTopTracks.isEmpty
