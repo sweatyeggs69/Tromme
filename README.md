@@ -1,12 +1,1 @@
-<img width="25%" alt="queue" src="https://github.com/user-attachments/assets/6fc414b2-998c-45d1-a6ec-05b83d5a8c44" />
-<img width="25%" alt="no_playing" src="https://github.com/user-attachments/assets/bb7e9d0e-f86d-48b5-9203-ba6e0d195ae6" />
-<img width="25%" alt="lyrics" src="https://github.com/user-attachments/assets/97403d3f-7323-439a-817d-ef11121361ed" />
-<img width="25%" alt="home" src="https://github.com/user-attachments/assets/ad44e97f-8367-4eae-a168-1f7a339f00a6" />
-<img width="25%" alt="artist" src="https://github.com/user-attachments/assets/08420199-2432-4c6a-b877-17e7f46327f2" />
-<img width="25%" alt="album" src="https://github.com/user-attachments/assets/66d6920e-3d10-4b9e-bd9f-1f263244933e" />
-<img width="25%" alt="queue" src="https://github.com/user-attachments/assets/5e4c22f3-3e0d-4262-82c9-e91e5e343efd" />
-<img width="25%" alt="now_playing" src="https://github.com/user-attachments/assets/c54a892d-5a5e-4554-af1e-3feefb130040" />
-<img width="25%" alt="lyrics" src="https://github.com/user-attachments/assets/7f3e3993-d538-45ec-bd19-b62a4ea8bcbd" />
-<img width="25%" alt="home" src="https://github.com/user-attachments/assets/ba41df32-2341-4338-ac89-e2b0a25f9f9a" />
-<img width="25%" alt="artist" src="https://github.com/user-attachments/assets/95436e91-fedd-41bb-8744-d4ddfce598de" />
-<img width="25%" alt="album" src="https://github.com/user-attachments/assets/86e294b0-831d-4003-a8dc-39044a7cb167" />
+
