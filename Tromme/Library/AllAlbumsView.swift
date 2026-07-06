@@ -11,6 +11,7 @@ struct AllAlbumsView: View {
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
+    @AppStorage("allAlbumsSortOrder") private var sortOrder: AlbumSortOrder = .titleAscending
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
     @State private var selectedAlbum: PlexMetadata?
@@ -26,16 +27,51 @@ struct AllAlbumsView: View {
 
     private var filteredAlbums: [PlexMetadata] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return albums }
-        return albums.filter { album in
+        var result = query.isEmpty ? albums : albums.filter { album in
             album.title.localizedCaseInsensitiveContains(query)
             || (album.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
         }
+        switch sortOrder {
+        case .titleAscending:
+            result.sort {
+                ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        case .titleDescending:
+            result.sort {
+                ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedDescending
+            }
+        case .artistAscending:
+            result.sort {
+                ($0.parentTitle ?? "").localizedStandardCompare($1.parentTitle ?? "") == .orderedAscending
+            }
+        case .artistDescending:
+            result.sort {
+                ($0.parentTitle ?? "").localizedStandardCompare($1.parentTitle ?? "") == .orderedDescending
+            }
+        case .yearOldest:
+            result.sort {
+                let y0 = releaseYearInt(for: $0), y1 = releaseYearInt(for: $1)
+                if y0 != y1 { return y0 < y1 }
+                return ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        case .yearNewest:
+            result.sort {
+                let y0 = releaseYearInt(for: $0), y1 = releaseYearInt(for: $1)
+                if y0 != y1 { return y0 > y1 }
+                return ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        }
+        return result
     }
 
     private var albumSections: [(title: String, items: [PlexMetadata])] {
-        alphabetSections(for: filteredAlbums) { album in
-            album.titleSort ?? album.title
+        switch sortOrder {
+        case .artistAscending, .artistDescending:
+            return alphabetSections(for: filteredAlbums) { $0.parentTitle ?? "" }
+        case .yearOldest, .yearNewest:
+            return decadeSections(for: filteredAlbums)
+        default:
+            return alphabetSections(for: filteredAlbums) { $0.titleSort ?? $0.title }
         }
     }
 
@@ -63,13 +99,57 @@ struct AllAlbumsView: View {
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    viewMode = viewMode == .grid ? .list : .grid
+                Menu {
+                    Button {
+                        sortOrder = sortOrder == .titleAscending ? .titleDescending : .titleAscending
+                    } label: {
+                        if isTitleSortActive {
+                            Label("Title", systemImage: "checkmark")
+                            Text(sortOrder == .titleDescending ? "Z to A" : "A to Z")
+                        } else {
+                            Text("Title")
+                        }
+                    }
+
+                    Button {
+                        sortOrder = sortOrder == .artistAscending ? .artistDescending : .artistAscending
+                    } label: {
+                        if isArtistSortActive {
+                            Label("Artist", systemImage: "checkmark")
+                            Text(sortOrder == .artistDescending ? "Z to A" : "A to Z")
+                        } else {
+                            Text("Artist")
+                        }
+                    }
+
+                    Button {
+                        sortOrder = sortOrder == .yearOldest ? .yearNewest : .yearOldest
+                    } label: {
+                        if isYearSortActive {
+                            Label("Year", systemImage: "checkmark")
+                            Text(sortOrder == .yearNewest ? "Newest First" : "Oldest First")
+                        } else {
+                            Text("Year")
+                        }
+                    }
                 } label: {
-                    Image(systemName: viewMode == .grid ? "list.bullet" : "square.grid.2x2")
+                    Image(systemName: "arrow.up.arrow.down")
                 }
                 .tint(.primary)
-                .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker(selection: $viewMode) {
+                        Label("Grid", systemImage: "square.grid.2x2").tag(AlbumViewMode.grid)
+                        Label("List", systemImage: "list.bullet").tag(AlbumViewMode.list)
+                    } label: {
+                        EmptyView()
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: viewMode == .grid ? "square.grid.2x2" : "list.bullet")
+                }
+                .tint(.primary)
             }
         }
         .task {
@@ -134,9 +214,12 @@ struct AllAlbumsView: View {
                             .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
                             .listRowSeparator(.hidden)
                         }
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
+                .listSectionIndexVisibility(isYearSortActive ? .hidden : .automatic)
+                .tint(.secondary)
             }
 
         case .list:
@@ -174,15 +257,30 @@ struct AllAlbumsView: View {
                                 .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                             }
                         }
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
+                .listSectionIndexVisibility(isYearSortActive ? .hidden : .automatic)
+                .tint(.secondary)
             }
         }
     }
 
+    private var isTitleSortActive: Bool {
+        sortOrder == .titleAscending || sortOrder == .titleDescending
+    }
+
+    private var isArtistSortActive: Bool {
+        sortOrder == .artistAscending || sortOrder == .artistDescending
+    }
+
+    private var isYearSortActive: Bool {
+        sortOrder == .yearOldest || sortOrder == .yearNewest
+    }
+
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(filteredAlbums.count)|\(searchText)"
+        "\(viewMode.rawValue)|\(filteredAlbums.count)|\(searchText)|\(sortOrder.rawValue)"
     }
 
     private func loadAlbums() async {
@@ -190,7 +288,6 @@ struct AllAlbumsView: View {
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
             albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
-            albums.sort { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
         } catch {
             // Handle error
         }
@@ -269,6 +366,25 @@ struct AllAlbumsView: View {
         return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
+    private func releaseYearInt(for album: PlexMetadata) -> Int {
+        if let dateStr = album.originallyAvailableAt, dateStr.count >= 4, let y = Int(dateStr.prefix(4)) {
+            return y
+        }
+        return album.year ?? 0
+    }
+
+    private func decadeSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
+        var sectionItems: [String: [PlexMetadata]] = [:]
+        var sectionOrder: [String] = []
+        for item in items {
+            let year = releaseYearInt(for: item)
+            let title = year > 0 ? "\((year / 10) * 10)s" : "#"
+            if sectionItems[title] == nil { sectionOrder.append(title) }
+            sectionItems[title, default: []].append(item)
+        }
+        return sectionOrder.map { ($0, sectionItems[$0]!) }
+    }
+
     private func alphabetSectionTitle(for value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = trimmed.first else { return "#" }
@@ -280,6 +396,15 @@ struct AllAlbumsView: View {
 private enum AlbumViewMode: String {
     case grid
     case list
+}
+
+private enum AlbumSortOrder: String {
+    case titleAscending
+    case titleDescending
+    case artistAscending
+    case artistDescending
+    case yearOldest
+    case yearNewest
 }
 
 #if DEBUG

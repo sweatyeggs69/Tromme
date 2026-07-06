@@ -105,9 +105,12 @@ struct ArtistsView: View {
                                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                             }
                         }
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
+                .listSectionIndexVisibility(.automatic)
+                .tint(.secondary)
             }
 
         case .grid:

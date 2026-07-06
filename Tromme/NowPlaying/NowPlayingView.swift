@@ -948,6 +948,15 @@ private struct MPVolumeSliderView: UIViewRepresentable {
     @Binding var volume: Float
     let isEnabled: Bool
 
+    final class Coordinator {
+        // On first updateUIView, read from the slider instead of writing to it.
+        // This prevents macOS from incorrectly reporting outputVolume as 1.0 and
+        // immediately blasting the system volume to max when the view appears.
+        var didReadInitialVolume = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> MPVolumeView {
         let view = MPVolumeView(frame: .zero)
         view.showsVolumeSlider = true
@@ -957,9 +966,17 @@ private struct MPVolumeSliderView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {
-        guard isEnabled else { return }
         for subview in uiView.subviews {
             if let slider = subview as? UISlider {
+                if !context.coordinator.didReadInitialVolume {
+                    context.coordinator.didReadInitialVolume = true
+                    let actual = slider.value
+                    if abs(actual - volume) > 0.001 {
+                        DispatchQueue.main.async { volume = actual }
+                    }
+                    return
+                }
+                guard isEnabled else { return }
                 slider.setValue(volume, animated: false)
                 slider.sendActions(for: .valueChanged)
                 return

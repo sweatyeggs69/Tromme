@@ -5,16 +5,13 @@ struct AllSongsView: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
 
-    // Stable sorted list of all tracks — never mutated after initial load.
-    @State private var tracks: [PlexMetadata] = []
-    // Pre-built sections for the full list — rebuilt once after load.
-    @State private var allSections: [(title: String, items: [(index: Int, track: PlexMetadata)])] = []
-    // Current display state — either allSections or a filtered subset.
+    @State private var loadedTracks: [PlexMetadata] = []
     @State private var displayTracks: [PlexMetadata] = []
     @State private var displaySections: [(title: String, items: [(index: Int, track: PlexMetadata)])] = []
     @State private var isLoading = true
     @State private var searchText = ""
     @State private var isSearchPresented = false
+    @AppStorage("allSongsSortOrder") private var sortOrder: SongSortOrder = .titleAscending
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
@@ -47,10 +44,13 @@ struct AllSongsView: View {
                                 .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                             }
                         }
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
                 .listRowSpacing(2)
+                .listSectionIndexVisibility(isDateAddedSortActive ? .hidden : .automatic)
+                .tint(.secondary)
             }
         }
         .navigationTitle("Songs")
@@ -61,6 +61,45 @@ struct AllSongsView: View {
             prompt: "Filter songs"
         )
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        sortOrder = sortOrder == .titleAscending ? .titleDescending : .titleAscending
+                    } label: {
+                        if isTitleSortActive {
+                            Label("Title", systemImage: "checkmark")
+                            Text(sortOrder == .titleDescending ? "Z to A" : "A to Z")
+                        } else {
+                            Text("Title")
+                        }
+                    }
+
+                    Button {
+                        sortOrder = sortOrder == .artistAscending ? .artistDescending : .artistAscending
+                    } label: {
+                        if isArtistSortActive {
+                            Label("Artist", systemImage: "checkmark")
+                            Text(sortOrder == .artistDescending ? "Z to A" : "A to Z")
+                        } else {
+                            Text("Artist")
+                        }
+                    }
+
+                    Button {
+                        sortOrder = sortOrder == .dateAddedNewest ? .dateAddedOldest : .dateAddedNewest
+                    } label: {
+                        if isDateAddedSortActive {
+                            Label("Date Added", systemImage: "checkmark")
+                            Text(sortOrder == .dateAddedOldest ? "Oldest First" : "Newest First")
+                        } else {
+                            Text("Date Added")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .tint(.primary)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     var shuffled = displayTracks
@@ -75,19 +114,16 @@ struct AllSongsView: View {
         }
         .task {
             if let preview = previewTracks {
-                let (sorted, sections) = await Self.sortAndBuildSections(preview)
-                tracks = sorted
-                allSections = sections
-                displayTracks = sorted
-                displaySections = sections
+                loadedTracks = preview
                 isLoading = false
+                await applyDisplayState()
             } else {
                 await loadTracks()
             }
         }
-        // Cancels and restarts whenever searchText changes; keeps search responsive.
-        .task(id: searchText) {
-            await applySearch()
+        // Cancels and restarts whenever sort order or search text changes.
+        .task(id: "\(sortOrder.rawValue)|\(searchText)") {
+            await applyDisplayState()
         }
         .onDisappear {
             searchText = ""
@@ -95,54 +131,99 @@ struct AllSongsView: View {
         }
     }
 
+    private var isTitleSortActive: Bool {
+        sortOrder == .titleAscending || sortOrder == .titleDescending
+    }
+
+    private var isArtistSortActive: Bool {
+        sortOrder == .artistAscending || sortOrder == .artistDescending
+    }
+
+    private var isDateAddedSortActive: Bool {
+        sortOrder == .dateAddedNewest || sortOrder == .dateAddedOldest
+    }
+
     private func loadTracks() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
-            let fetched = try await client.cachedTracks(server: server, sectionId: sectionId)
-            // Sort and index off the main actor — avoids blocking UI on large libraries.
-            let (sorted, sections) = await Self.sortAndBuildSections(fetched)
-            tracks = sorted
-            allSections = sections
-            displayTracks = sorted
-            displaySections = sections
+            loadedTracks = try await client.cachedTracks(server: server, sectionId: sectionId)
         } catch {}
         isLoading = false
+        await applyDisplayState()
     }
 
-    private func applySearch() async {
+    // Sorts, filters, and sections all off the main actor to keep UI responsive at 100k tracks.
+    private func applyDisplayState() async {
+        guard !loadedTracks.isEmpty else { return }
+        let snapshot = loadedTracks
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            displayTracks = tracks
-            displaySections = allSections
-            return
-        }
-        let snapshot = tracks
-        // Filter off the main actor so keystrokes stay responsive at 100k tracks.
-        let filtered = await Task.detached(priority: .userInitiated) {
-            snapshot.filter { track in
+        let currentSort = sortOrder
+
+        let (sorted, sections) = await Task.detached(priority: .userInitiated) {
+            let base = query.isEmpty ? snapshot : snapshot.filter { track in
                 track.title.localizedCaseInsensitiveContains(query)
                 || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
                 || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
             }
+            let sorted = Self.sort(base, by: currentSort)
+            return (sorted, Self.buildSections(from: sorted, sortOrder: currentSort))
         }.value
-        displayTracks = filtered
-        displaySections = Self.buildSections(from: filtered)
+
+        displayTracks = sorted
+        displaySections = sections
     }
 
-    // Offloads the sort (O(n log n)) and section indexing (O(n)) off the main actor.
-    nonisolated private static func sortAndBuildSections(_ unsorted: [PlexMetadata]) async -> ([PlexMetadata], [(title: String, items: [(index: Int, track: PlexMetadata)])]) {
-        await Task.detached(priority: .userInitiated) {
-            let sorted = unsorted.sorted { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
-            return (sorted, Self.buildSections(from: sorted))
-        }.value
+    nonisolated private static func sort(_ tracks: [PlexMetadata], by order: SongSortOrder) -> [PlexMetadata] {
+        switch order {
+        case .titleAscending:
+            return tracks.sorted {
+                ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        case .titleDescending:
+            return tracks.sorted {
+                ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedDescending
+            }
+        case .artistAscending:
+            return tracks.sorted {
+                let a0 = $0.grandparentTitle ?? "", a1 = $1.grandparentTitle ?? ""
+                if a0 != a1 { return a0.localizedStandardCompare(a1) == .orderedAscending }
+                return ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        case .artistDescending:
+            return tracks.sorted {
+                let a0 = $0.grandparentTitle ?? "", a1 = $1.grandparentTitle ?? ""
+                if a0 != a1 { return a0.localizedStandardCompare(a1) == .orderedDescending }
+                return ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+        case .dateAddedNewest:
+            return tracks.sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }
+        case .dateAddedOldest:
+            return tracks.sorted { ($0.addedAt ?? 0) < ($1.addedAt ?? 0) }
+        }
     }
 
-    nonisolated private static func buildSections(from tracks: [PlexMetadata]) -> [(title: String, items: [(index: Int, track: PlexMetadata)])] {
+    nonisolated private static func buildSections(
+        from tracks: [PlexMetadata],
+        sortOrder: SongSortOrder
+    ) -> [(title: String, items: [(index: Int, track: PlexMetadata)])] {
         var sectionItems: [String: [(index: Int, track: PlexMetadata)]] = [:]
         var sectionOrder: [String] = []
         for (offset, track) in tracks.enumerated() {
-            let title = alphabetSectionTitle(for: track.titleSort ?? track.title)
+            let title: String
+            switch sortOrder {
+            case .titleAscending, .titleDescending:
+                title = alphabetSectionTitle(for: track.titleSort ?? track.title)
+            case .artistAscending, .artistDescending:
+                title = alphabetSectionTitle(for: track.grandparentTitle ?? "")
+            case .dateAddedNewest, .dateAddedOldest:
+                if let ts = track.addedAt {
+                    let year = Calendar.current.component(.year, from: Date(timeIntervalSince1970: TimeInterval(ts)))
+                    title = String(year)
+                } else {
+                    title = "#"
+                }
+            }
             if sectionItems[title] == nil { sectionOrder.append(title) }
             sectionItems[title, default: []].append((index: offset, track: track))
         }
@@ -155,6 +236,15 @@ struct AllSongsView: View {
         let letter = String(first).uppercased()
         return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
     }
+}
+
+private enum SongSortOrder: String {
+    case titleAscending
+    case titleDescending
+    case artistAscending
+    case artistDescending
+    case dateAddedNewest
+    case dateAddedOldest
 }
 
 #if DEBUG

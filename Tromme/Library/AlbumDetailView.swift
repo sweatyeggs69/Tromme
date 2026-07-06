@@ -460,28 +460,65 @@ struct AlbumDetailView: View {
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
     }
 
+    private var hasMultipleDiscs: Bool {
+        guard tracks.count > 1 else { return false }
+        return Set(tracks.map { $0.parentIndex ?? 1 }).count > 1
+    }
+
+    private var tracksByDisc: [(discNumber: Int, tracks: [(globalIndex: Int, track: PlexMetadata)])] {
+        var discMap: [Int: [(globalIndex: Int, track: PlexMetadata)]] = [:]
+        for (i, track) in tracks.enumerated() {
+            let disc = track.parentIndex ?? 1
+            discMap[disc, default: []].append((globalIndex: i, track: track))
+        }
+        return discMap.keys.sorted().map { disc in
+            (discNumber: disc, tracks: discMap[disc]!)
+        }
+    }
+
+    @ViewBuilder
+    private func discHeaderRow(_ discNumber: Int) -> some View {
+        Text("Disc \(discNumber)")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(tertiaryTextColor)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 4, trailing: 20))
+    }
+
+    private func trackRow(track: PlexMetadata, globalIndex: Int) -> some View {
+        AlbumTrackRow(
+            track: track,
+            index: globalIndex,
+            tracks: tracks,
+            albumArtistName: albumDetails.parentTitle ?? album.parentTitle,
+            player: player,
+            tertiaryTextColor: tertiaryTextColor,
+            titleColor: titleColor,
+            onAddToPlaylist: { track in
+                presentAddToPlaylist(for: [track.ratingKey])
+            }
+        )
+        .listRowBackground(Color.clear)
+        .listRowSeparatorTint(titleColor.opacity(0.22))
+    }
+
     private var trackListRows: some View {
         Group {
             if isLoadingTracks {
                 ProgressView()
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
+            } else if hasMultipleDiscs {
+                ForEach(tracksByDisc, id: \.discNumber) { group in
+                    discHeaderRow(group.discNumber)
+                    ForEach(group.tracks, id: \.globalIndex) { item in
+                        trackRow(track: item.track, globalIndex: item.globalIndex)
+                    }
+                }
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
-                    AlbumTrackRow(
-                        track: track,
-                        index: index,
-                        tracks: tracks,
-                        albumArtistName: albumDetails.parentTitle ?? album.parentTitle,
-                        player: player,
-                        tertiaryTextColor: tertiaryTextColor,
-                        titleColor: titleColor,
-                        onAddToPlaylist: { track in
-                            presentAddToPlaylist(for: [track.ratingKey])
-                        }
-                    )
-                    .listRowBackground(Color.clear)
-                    .listRowSeparatorTint(titleColor.opacity(0.22))
+                    trackRow(track: track, globalIndex: index)
                 }
             }
         }
@@ -1244,8 +1281,8 @@ private struct AlbumRecommendationGridView: View {
             summary: nil,
             studio: nil,
             year: nil,
-            index: 3,
-            parentIndex: 1,
+            index: 1,
+            parentIndex: 2,
             duration: 246_000,
             addedAt: nil,
             updatedAt: nil,
@@ -1281,8 +1318,8 @@ private struct AlbumRecommendationGridView: View {
             summary: nil,
             studio: nil,
             year: nil,
-            index: 4,
-            parentIndex: 1,
+            index: 2,
+            parentIndex: 2,
             duration: 201_000,
             addedAt: nil,
             updatedAt: nil,

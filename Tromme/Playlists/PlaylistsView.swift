@@ -15,6 +15,24 @@ struct PlaylistsView: View {
         return playlists.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
+    private var playlistSections: [(title: String, items: [PlexPlaylist])] {
+        var sectionItems: [String: [PlexPlaylist]] = [:]
+        var sectionOrder: [String] = []
+        for playlist in filteredPlaylists {
+            let title = alphabetSectionTitle(for: playlist.title)
+            if sectionItems[title] == nil { sectionOrder.append(title) }
+            sectionItems[title, default: []].append(playlist)
+        }
+        return sectionOrder.map { ($0, sectionItems[$0]!) }
+    }
+
+    private func alphabetSectionTitle(for value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "#" }
+        let letter = String(first).uppercased()
+        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
+    }
+
     var body: some View {
         Group {
             if isLoading {
@@ -30,30 +48,37 @@ struct PlaylistsView: View {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 List {
-                    ForEach(filteredPlaylists) { playlist in
-                        NavigationLink {
-                            PlaylistDetailView(playlist: playlist)
-                        } label: {
-                            HStack(spacing: 12) {
-                                ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 48, cornerRadius: 4)
+                    ForEach(playlistSections, id: \.title) { section in
+                        Section(section.title) {
+                            ForEach(section.items) { playlist in
+                                NavigationLink {
+                                    PlaylistDetailView(playlist: playlist)
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 48, cornerRadius: 4)
 
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(playlist.title)
-                                        .appItemTitleStyle()
-                                        .lineLimit(1)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(playlist.title)
+                                                .appItemTitleStyle()
+                                                .lineLimit(1)
 
-                                    if let count = playlist.leafCount {
-                                        Text("\(count) songs")
-                                            .appItemSubtitleStyle()
+                                            if let count = playlist.leafCount {
+                                                Text("\(count) songs")
+                                                    .appItemSubtitleStyle()
+                                            }
+                                        }
                                     }
                                 }
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                             }
                         }
-                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
                 .listRowSpacing(2)
+                .listSectionIndexVisibility(.automatic)
+                .tint(.secondary)
             }
         }
         .navigationTitle("Playlists")
