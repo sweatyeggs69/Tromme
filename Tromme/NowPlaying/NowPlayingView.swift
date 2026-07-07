@@ -107,8 +107,8 @@ struct NowPlayingView: View {
             )
             let landscapePlayerControlsHeight = landscapeMainHeight * portraitBottomControlsHeightFraction
             let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight)
-            let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight)
-            let landscapeLeftWidth = landscapeArtworkSize
+            let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight - 16)
+            let landscapeLeftWidth = max(96.0, landscapeArtworkAreaHeight)
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
 
 
@@ -913,7 +913,7 @@ struct VolumeSlider: View {
             .opacity(isDragging ? 1.0 : 0.55)
             .animation(.easeInOut(duration: 0.2), value: isDragging)
 
-            MPVolumeSliderView(volume: $volume, isEnabled: isEnabled)
+            MPVolumeSliderView(volume: $volume, isEnabled: isEnabled, isDragging: isDragging)
                 .frame(width: 1, height: 1)
                 .opacity(0.001)
         }
@@ -929,7 +929,7 @@ struct VolumeSlider: View {
         final class Box: @unchecked Sendable { var obs: NSKeyValueObservation? }
         let box = Box()
         let stream = AsyncStream<Float> { continuation in
-            box.obs = audioSession.observe(\.outputVolume, options: [.new]) { _, change in
+            box.obs = audioSession.observe(\.outputVolume, options: [.initial, .new]) { _, change in
                 if let v = change.newValue { continuation.yield(v) }
             }
             continuation.onTermination = { _ in box.obs?.invalidate() }
@@ -947,12 +947,10 @@ struct VolumeSlider: View {
 private struct MPVolumeSliderView: UIViewRepresentable {
     @Binding var volume: Float
     let isEnabled: Bool
+    let isDragging: Bool
 
     final class Coordinator {
-        // On first updateUIView, read from the slider instead of writing to it.
-        // This prevents macOS from incorrectly reporting outputVolume as 1.0 and
-        // immediately blasting the system volume to max when the view appears.
-        var didReadInitialVolume = false
+        var didSyncInitialVolume = false
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -966,17 +964,22 @@ private struct MPVolumeSliderView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MPVolumeView, context: Context) {
+        // On first render, read back the real system volume from the MPVolumeView
+        // slider to correct the visual display. AVAudioSession.outputVolume always
+        // returns 1.0 on macOS Catalyst so we can't trust it for initialization.
+        if !context.coordinator.didSyncInitialVolume {
+            context.coordinator.didSyncInitialVolume = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                if let slider = uiView.subviews.compactMap({ $0 as? UISlider }).first {
+                    volume = slider.value
+                }
+            }
+        }
+        // Only push to the system while the user is actively dragging — never on
+        // automatic re-renders, which prevents corrupting volume on open.
+        guard isEnabled, isDragging else { return }
         for subview in uiView.subviews {
             if let slider = subview as? UISlider {
-                if !context.coordinator.didReadInitialVolume {
-                    context.coordinator.didReadInitialVolume = true
-                    let actual = slider.value
-                    if abs(actual - volume) > 0.001 {
-                        DispatchQueue.main.async { volume = actual }
-                    }
-                    return
-                }
-                guard isEnabled else { return }
                 slider.setValue(volume, animated: false)
                 slider.sendActions(for: .valueChanged)
                 return
