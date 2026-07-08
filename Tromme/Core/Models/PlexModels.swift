@@ -205,7 +205,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     var userRating: Double? = nil
     let thumb: String?
     let art: String?
-    let parentThumb: String?
+    var parentThumb: String?
     let grandparentThumb: String?
     let grandparentArt: String?
     let parentTitle: String?

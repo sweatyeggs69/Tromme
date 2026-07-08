@@ -149,6 +149,18 @@ final class AudioPlayerService: @unchecked Sendable {
         self.client = client
     }
 
+    func updateAlbumThumb(albumRatingKey: String, newThumb: String?) {
+        if currentTrack?.parentRatingKey == albumRatingKey {
+            currentTrack?.parentThumb = newThumb
+        }
+        for i in queue.indices where queue[i].parentRatingKey == albumRatingKey {
+            queue[i].parentThumb = newThumb
+        }
+        for i in originalQueue.indices where originalQueue[i].parentRatingKey == albumRatingKey {
+            originalQueue[i].parentThumb = newThumb
+        }
+    }
+
     // MARK: - Playback Control
 
     func play(tracks: [PlexMetadata], startingAt index: Int = 0) {

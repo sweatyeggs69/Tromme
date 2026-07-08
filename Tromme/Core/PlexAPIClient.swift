@@ -397,6 +397,17 @@ final class PlexAPIClient: Sendable {
         )
     }
 
+    func renamePlaylist(server: PlexServer, playlistId: String, newTitle: String) async throws {
+        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/playlists/\(playlistId)",
+            method: "PUT",
+            queryItems: [URLQueryItem(name: "title", value: trimmed)]
+        )
+    }
+
     func deleteLibraryItem(server: PlexServer, ratingKey: String) async throws {
         _ = try await rawServerRequest(
             server: server,

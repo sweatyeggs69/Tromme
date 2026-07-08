@@ -13,6 +13,9 @@ struct PlaylistDetailView: View {
     @State private var isDeletingPlaylist = false
     @State private var showDeletePlaylistConfirmation = false
     @State private var playlistDeleteErrorMessage: String?
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+    @State private var displayTitle: String
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
 
@@ -79,6 +82,7 @@ struct PlaylistDetailView: View {
         self.isPreviewMode = previewTracks != nil
         _tracks = State(initialValue: previewTracks ?? [])
         _isLoading = State(initialValue: previewTracks == nil)
+        _displayTitle = State(initialValue: playlist.title)
     }
 
     private var playlistHeader: some View {
@@ -87,7 +91,7 @@ struct PlaylistDetailView: View {
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
-            Text(playlist.title)
+            Text(displayTitle)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(titleColor)
                 .multilineTextAlignment(.center)
@@ -256,6 +260,10 @@ struct PlaylistDetailView: View {
             if canDeletePlaylist {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("Rename", systemImage: "pencil") {
+                            renameText = displayTitle
+                            showRenameAlert = true
+                        }
                         Button("Delete Playlist", systemImage: "trash", role: .destructive) {
                             showDeletePlaylistConfirmation = true
                         }
@@ -275,7 +283,7 @@ struct PlaylistDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently remove \"\(playlist.title)\".")
+            Text("This will permanently remove \"\(displayTitle)\".")
         }
         .alert("Unable to Delete Playlist", isPresented: .init(
             get: { playlistDeleteErrorMessage != nil },
@@ -284,6 +292,13 @@ struct PlaylistDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(playlistDeleteErrorMessage ?? "")
+        }
+        .alert("Rename Playlist", isPresented: $showRenameAlert) {
+            TextField("Playlist name", text: $renameText)
+            Button("Save") {
+                Task { await performRename() }
+            }
+            Button("Cancel", role: .cancel) {}
         }
         .task(id: artworkPath) {
             guard !isPreviewMode else { return }
@@ -322,6 +337,20 @@ struct PlaylistDetailView: View {
             tracks = []
         }
         isLoading = false
+    }
+
+    @MainActor
+    private func performRename() async {
+        guard let server = serverConnection.currentServer else { return }
+        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != displayTitle else { return }
+        do {
+            try await client.renamePlaylist(server: server, playlistId: playlist.ratingKey, newTitle: trimmed)
+            displayTitle = trimmed
+            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
+        } catch {
+            // silently fail — displayTitle remains unchanged
+        }
     }
 
     @MainActor

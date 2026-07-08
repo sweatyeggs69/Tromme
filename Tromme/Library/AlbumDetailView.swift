@@ -858,6 +858,7 @@ struct AlbumDetailView: View {
                 albumRatingKey: album.ratingKey
             ) {
                 await loadAlbumDetails()
+                player.updateAlbumThumb(albumRatingKey: album.ratingKey, newThumb: albumDetails.thumb)
             }
         }
         .alert("Added to Playlist", isPresented: .init(
