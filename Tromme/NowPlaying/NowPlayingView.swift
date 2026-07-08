@@ -24,6 +24,14 @@ struct NowPlayingView: View {
     @State private var showingAddToPlaylistSheet = false
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var isRating = false
+    // Caches the last valid geometry to recover from the transient invalid
+    // dimensions GeometryReader reports during CarPlay + app-switch transitions.
+    @State private var geoSize: CGSize = {
+        if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            return scene.screen.bounds.size
+        }
+        return CGSize(width: 390, height: 844)
+    }()
 
     init(startPanel: NowPlayingStartPanel = .none, onNavigate: ((PlexMetadata) -> Void)? = nil) {
         self.startPanel = startPanel
@@ -78,14 +86,14 @@ struct NowPlayingView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let width = geo.size.width
-            let height = geo.size.height
+            let width = geo.size.width > 100 ? geo.size.width : geoSize.width
+            let height = geo.size.height > 100 ? geo.size.height : geoSize.height
             let isPortrait = height >= width
             let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geo.size.width > geo.size.height
-            let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && geo.size.height > geo.size.width
+            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && width > height
+            let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && height > width
             let controlsContainerWidth = artworkSize
             let controlsHorizontalPadding: CGFloat = 0
             let bottomControlsHeightFraction = isPortrait
@@ -228,6 +236,15 @@ struct NowPlayingView: View {
                 }
                 .animation(.easeInOut(duration: 0.25), value: isCompact)
             }
+            // Tracks valid geometry to recover from the brief invalid dimensions
+            // reported during CarPlay + app-switch scene transitions.
+            Color.clear
+                .frame(width: 0, height: 0)
+                .onChange(of: geo.size, initial: true) { _, size in
+                    if size.width > 100 && size.height > 100 {
+                        geoSize = size
+                    }
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { NowPlayingBackground() }
