@@ -96,7 +96,7 @@ struct FavoritesView: View {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
-            let favorites = try await client.getFavoriteTracks(server: server, sectionId: sectionId)
+            let favorites = try await client.cachedFavoriteTracks(server: server, sectionId: sectionId)
             tracks = favorites.sorted {
                 if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
                     return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)

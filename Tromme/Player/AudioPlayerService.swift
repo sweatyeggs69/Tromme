@@ -197,6 +197,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
         if player.currentItem == nil || player.currentItem?.status == .failed {
             logPlayback("toggle_recover", "reason=item_missing_or_failed")
+            recoveryAttemptsForTrack = 0
             recoverAndPlayCurrentTrackIfPossible()
             return
         }
@@ -213,6 +214,7 @@ final class AudioPlayerService: @unchecked Sendable {
             if isStuckWaitingForBuffer() {
                 recoveryAttemptsForTrack = 0
                 let resumeAt = preferredResumeTimeForRecovery()
+
                 if let resumeAt {
                     logPlayback("toggle_recover", "reason=stuck_waiting resume_at=\(resumeAt)")
                 } else {
@@ -469,6 +471,19 @@ final class AudioPlayerService: @unchecked Sendable {
 
     func seek(to time: TimeInterval) {
         let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
+
+        // On remote connections, Plex's live HLS transcode can't handle in-stream seeks —
+        // AVPlayer would stall waiting for segments at the new position. Restart the
+        // transcode session from the seek point instead, which is what Plex expects.
+        if let server, resolvedPlaybackPath(for: server).isRemote,
+           queue.indices.contains(currentIndex) {
+            logPlayback("seek_restart_remote", "target=\(boundedTime)")
+            recoveryAttemptsForTrack = 0
+            currentTime = boundedTime
+            loadAndPlay(queue[currentIndex], resumeAt: boundedTime)
+            return
+        }
+
         guard let player else {
             pendingInitialSeekTime = boundedTime
             currentTime = boundedTime
@@ -481,6 +496,7 @@ final class AudioPlayerService: @unchecked Sendable {
             logPlayback("seek_queued", "reason=not_ready target=\(boundedTime)")
             return
         }
+        recoveryAttemptsForTrack = 0
         isSeeking = true
         currentTime = boundedTime
 

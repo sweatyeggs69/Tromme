@@ -161,18 +161,30 @@ final class PlexAPIClient: Sendable {
     /// Avoids loading the full library just to filter by artist.
     func getArtistTracks(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
         let pageSize = 1000
-        var items: [PlexMetadata] = []
-        var start = 0
-        repeat {
-            let path = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
-            let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-            let page = response.mediaContainer.metadata ?? []
-            items.append(contentsOf: page)
-            let total = response.mediaContainer.totalSize ?? items.count
-            start += page.count
-            if page.isEmpty || start >= total { break }
-        } while true
-        return items
+        let firstPath = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)"
+        let firstResponse: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: firstPath)
+        var allItems = firstResponse.mediaContainer.metadata ?? []
+        let total = firstResponse.mediaContainer.totalSize ?? allItems.count
+        guard total > allItems.count else { return allItems }
+
+        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
+        for batchOffset in stride(from: 0, to: pageStarts.count, by: 10) {
+            let batch = pageStarts[batchOffset..<min(batchOffset + 10, pageStarts.count)]
+            let batchItems = try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
+                for start in batch {
+                    let path = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
+                    group.addTask {
+                        let response: PlexResponse<PlexMetadata> = try await self.serverRequest(server: server, path: path)
+                        return response.mediaContainer.metadata ?? []
+                    }
+                }
+                var results: [PlexMetadata] = []
+                for try await items in group { results.append(contentsOf: items) }
+                return results
+            }
+            allItems.append(contentsOf: batchItems)
+        }
+        return allItems
     }
 
     func getTopTracks(server: PlexServer, sectionId: String, artistRatingKey: String, limit: Int = 10) async throws -> [PlexMetadata] {

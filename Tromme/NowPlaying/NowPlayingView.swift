@@ -632,6 +632,9 @@ struct NowPlayingView: View {
                     toggleQueuePanel()
                 } label: {
                     panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
+                        .overlay(alignment: .topTrailing) {
+                            if player.isShuffled && !showQueue { shuffleBadge }
+                        }
                 }
                 .buttonStyle(.plain)
             }
@@ -663,6 +666,9 @@ struct NowPlayingView: View {
                 toggleQueuePanel()
             } label: {
                 panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
+                    .overlay(alignment: .topTrailing) {
+                        if player.isShuffled && !showQueue { shuffleBadge }
+                    }
             }
             .buttonStyle(.plain)
             .padding(.trailing, bottomActionsTrailingButtonPadding)
@@ -702,6 +708,18 @@ struct NowPlayingView: View {
                 showQueue = true
             }
         }
+    }
+
+    private var shuffleBadge: some View {
+        ZStack {
+            Circle()
+                .fill(.white.opacity(0.25))
+            Image(systemName: "shuffle")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .frame(width: 17, height: 17)
+        .offset(x: 4, y: -3)
     }
 
     @ViewBuilder

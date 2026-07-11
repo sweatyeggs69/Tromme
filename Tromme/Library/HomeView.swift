@@ -343,7 +343,7 @@ struct HomeView: View {
         let loadResults: [HomeLoadResult] = await withTaskGroup(of: HomeLoadResult.self, returning: [HomeLoadResult].self) { group in
             group.addTask {
                 let value = await fetchWithRetryOnFailure {
-                    try await client.getFavoriteTracks(server: server, sectionId: sectionId)
+                    try await client.cachedFavoriteTracks(server: server, sectionId: sectionId)
                 }
                 return .favorites(value)
             }

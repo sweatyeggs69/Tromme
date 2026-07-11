@@ -29,7 +29,9 @@ extension PlexAPIClient {
     func cachedAlbums(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
         let albums = try await cachedLibraryContents(server: server, sectionId: sectionId, type: 9,
             key: CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId))
-        Task { try? await cachedAlbumStyles(server: server, sectionId: sectionId) }
+        if !NetworkStatus.shared.isExpensive, !ProcessInfo.processInfo.isLowPowerModeEnabled {
+            Task { try? await cachedAlbumStyles(server: server, sectionId: sectionId) }
+        }
         return albums
     }
 
@@ -122,16 +124,23 @@ extension PlexAPIClient {
     // MARK: - Cached Album Styles
 
     func cachedAlbumStyles(server: PlexServer, sectionId: String) async throws -> [String: [String]] {
-        let key = CacheKey.albumStyles(serverId: server.machineIdentifier, sectionId: sectionId)
-
-        if let cached = await LibraryCache.shared.get([String: [String]].self, forKey: key),
-           !cached.value.isEmpty {
-            if !cached.isStale { return cached.value }
-            Task { try? await refreshAlbumStyles(server: server, sectionId: sectionId, key: key) }
-            return cached.value
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.albumStyles(serverId: server.machineIdentifier, sectionId: sectionId),
+            policy: .styles
+        ) {
+            try await self.refreshAlbumStyles(server: server, sectionId: sectionId)
         }
+    }
 
-        return try await refreshAlbumStyles(server: server, sectionId: sectionId, key: key)
+    // MARK: - Cached Favorite Tracks
+
+    func cachedFavoriteTracks(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId),
+            policy: .userContent
+        ) {
+            try await self.getFavoriteTracks(server: server, sectionId: sectionId)
+        }
     }
 
     // MARK: - Magic Mix
@@ -497,7 +506,11 @@ extension PlexAPIClient {
                 return ("playlists", [])
             }
             group.addTask { ("recent", (try? await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 30)) ?? []) }
-            group.addTask { ("favorites", (try? await self.getFavoriteTracks(server: server, sectionId: sectionId)) ?? []) }
+            group.addTask { ("favorites", (try? await self.cachedFavoriteTracks(server: server, sectionId: sectionId)) ?? []) }
+            group.addTask {
+                _ = try? await self.cachedTracks(server: server, sectionId: sectionId)
+                return ("tracks", [])
+            }
 
             for await (key, items) in group {
                 switch key {
@@ -511,7 +524,13 @@ extension PlexAPIClient {
         }
 
         // Phase 2: Prefetch artwork for artists and albums in the background.
+        // No-op on expensive/low-power — guard is inside prefetchArtwork.
         prefetchArtwork(for: artists + albums, server: server, size: 256)
+
+        // Phases 3 and 4 are opportunistic prefetch that would flood a constrained connection.
+        // On metered or low-power, let the cache warm organically as the user navigates.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
 
         // Phase 3: Pre-fetch detail data for frequently accessed artists and albums.
         // Collect unique artist and album keys from recent + favorite tracks.
@@ -530,15 +549,20 @@ extension PlexAPIClient {
         await withTaskGroup(of: Void.self) { group in
             for key in topArtistKeys {
                 group.addTask {
-                    _ = try? await self.cachedChildren(server: server, ratingKey: key)
-                    _ = try? await self.cachedMetadata(server: server, ratingKey: key)
-                    _ = try? await self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
+                    async let children = self.cachedChildren(server: server, ratingKey: key)
+                    async let metadata = self.cachedMetadata(server: server, ratingKey: key)
+                    async let topTracks = self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
+                    _ = try? await children
+                    _ = try? await metadata
+                    _ = try? await topTracks
                 }
             }
             for key in topAlbumKeys {
                 group.addTask {
-                    _ = try? await self.cachedChildren(server: server, ratingKey: key)
-                    _ = try? await self.cachedMetadata(server: server, ratingKey: key)
+                    async let children = self.cachedChildren(server: server, ratingKey: key)
+                    async let metadata = self.cachedMetadata(server: server, ratingKey: key)
+                    _ = try? await children
+                    _ = try? await metadata
                 }
             }
         }
@@ -561,6 +585,8 @@ extension PlexAPIClient {
     /// Build artwork URLs for metadata items and prefetch them into the image cache.
     /// Fires in the background so it doesn't block the caller.
     func prefetchArtwork(for items: [PlexMetadata], server: PlexServer, size: Int = 256) {
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let maxPrefetchItems = 100
         var seen = Set<String>()
         let thumbPaths = items
@@ -670,7 +696,7 @@ extension PlexAPIClient {
     }
 
     @discardableResult
-    private func refreshAlbumStyles(server: PlexServer, sectionId: String, key: String) async throws -> [String: [String]] {
+    private func refreshAlbumStyles(server: PlexServer, sectionId: String) async throws -> [String: [String]] {
         let albums = try await cachedAlbums(server: server, sectionId: sectionId)
         var stylesByAlbum: [String: [String]] = [:]
 
@@ -711,7 +737,6 @@ extension PlexAPIClient {
             }
         }
 
-        await LibraryCache.shared.set(stylesByAlbum, forKey: key)
         return stylesByAlbum
     }
 }

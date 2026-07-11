@@ -341,6 +341,9 @@ enum CacheKey {
     static func homePlaylists(serverId: String) -> String {
         "home_playlists_\(serverId)"
     }
+    static func favoriteTracks(serverId: String, sectionId: String) -> String {
+        "favorite_tracks_\(serverId)_\(sectionId)"
+    }
 }
 
 // MARK: - String SHA256
