@@ -63,6 +63,7 @@ struct TrackRowView: View {
 
     private func toggleFavorite() {
         guard let server = serverConnection.currentServer else { return }
+        let sectionId = serverConnection.currentLibrarySectionId
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
         favoriteOverride = removing ? nil : 10
@@ -70,6 +71,11 @@ struct TrackRowView: View {
         Task {
             do {
                 try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: removing ? -1 : 10)
+                if let sectionId {
+                    await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId))
+                    await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId))
+                }
+                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             } catch {
                 favoriteOverride = previous
             }

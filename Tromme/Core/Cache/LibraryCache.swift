@@ -346,6 +346,12 @@ enum CacheKey {
     }
 }
 
+// MARK: - Notifications
+
+extension Notification.Name {
+    static let favoritesDidChange = Notification.Name("TrommeFavoritesDidChange")
+}
+
 // MARK: - String SHA256
 
 import CryptoKit

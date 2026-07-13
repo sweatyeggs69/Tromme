@@ -86,6 +86,13 @@ struct FavoritesView: View {
             guard previewTracks == nil else { return }
             await loadTracks()
         }
+        .task {
+            guard previewTracks == nil else { return }
+            for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
+                guard !Task.isCancelled else { break }
+                await loadTracks()
+            }
+        }
         .onDisappear {
             searchText = ""
             isSearchPresented = false

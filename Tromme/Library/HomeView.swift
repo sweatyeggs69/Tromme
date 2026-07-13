@@ -51,6 +51,21 @@ struct HomeView: View {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: true)
         }
+        .task {
+            guard previewRecentTracks == nil else { return }
+            for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
+                guard !Task.isCancelled,
+                      let server = serverConnection.currentServer,
+                      let sectionId = serverConnection.currentLibrarySectionId else { continue }
+                if let favorites = try? await client.cachedFavoriteTracks(server: server, sectionId: sectionId) {
+                    applyFavorites(plexFavorites: favorites)
+                    await LibraryCache.shared.set(
+                        favoriteTracks,
+                        forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
+                    )
+                }
+            }
+        }
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }
