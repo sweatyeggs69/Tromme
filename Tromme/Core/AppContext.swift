@@ -9,6 +9,7 @@ final class AppContext {
     var serverConnection: ServerConnectionManager?
     var plexClient: PlexAPIClient?
     var audioPlayer: AudioPlayerService?
+    var downloadManager: DownloadManager?
 
     private init() {}
 }

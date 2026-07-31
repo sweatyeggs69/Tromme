@@ -4,6 +4,7 @@ import StoreKit
 struct SettingsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(DownloadManager.self) private var downloadManager
 
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
@@ -11,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
+    @AppStorage("autoDownloadAllSongs") private var autoDownloadAllSongs = false
     @State private var showReviewPrompt = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
@@ -106,6 +108,40 @@ struct SettingsView: View {
                 Button("Clear Cache") {
                     showClearCacheConfirmation = true
                 }
+            }
+
+            Section {
+                NavigationLink {
+                    DownloadsView()
+                } label: {
+                    LabeledContent("Downloads") {
+                        let remaining = downloadManager.pendingDownloadCount
+                        if remaining > 0 {
+                            Text("\(remaining) remaining")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(downloadManager.storageDescription)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Toggle("Auto-Download Library", isOn: $autoDownloadAllSongs)
+                    .tint(.green)
+                    .onChange(of: autoDownloadAllSongs) { _, enabled in
+                        guard enabled,
+                              let server = serverConnection.currentServer,
+                              let sectionId = serverConnection.currentLibrarySectionId else { return }
+                        Task {
+                            if let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) {
+                                downloadManager.resumeAutoDownload(tracks: tracks, server: server, client: client)
+                            }
+                        }
+                    }
+            } header: {
+                Text("Offline")
+            } footer: {
+                Text("Downloads your entire library and any newly added tracks automatically.")
             }
 
             Section {

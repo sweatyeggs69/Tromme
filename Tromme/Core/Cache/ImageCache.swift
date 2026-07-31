@@ -33,6 +33,8 @@ actor ImageCache {
         let start = ContinuousClock.now
 #endif
         let key = cacheKey(for: url)
+        // Disk key strips width/height so a smaller cached image serves any size offline.
+        let diskKey = diskCacheKey(for: url)
         let memoryKey = memoryCacheKey(for: key, targetPixelSize: targetPixelSize)
 
         // 1. Memory
@@ -44,8 +46,8 @@ actor ImageCache {
             return cached
         }
 
-        // 2. Disk
-        if let diskImage = loadFromDisk(key: key, targetPixelSize: targetPixelSize) {
+        // 2. Disk (size-independent key — a 256px cached image satisfies a 512px request)
+        if let diskImage = loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize) {
             memoryCache.setObject(diskImage, forKey: memoryKey as NSString, cost: diskImage.decodedCost)
 #if DEBUG
             debugStats.diskHits += 1
@@ -58,7 +60,7 @@ actor ImageCache {
 #endif
 
         // 3. Coalesce in-flight requests for the same URL
-        let requestKey = "\(key)|\(targetPixelSize ?? 0)"
+        let requestKey = "\(diskKey)|\(targetPixelSize ?? 0)"
         if let existing = inFlightRequests[requestKey] {
 #if DEBUG
             debugStats.coalescedHits += 1
@@ -74,7 +76,7 @@ actor ImageCache {
         debugStats.networkRequests += 1
 #endif
         let task = Task<UIImage?, Never> {
-            await download(url: url, key: key, memoryKey: memoryKey, targetPixelSize: targetPixelSize)
+            await download(url: url, diskKey: diskKey, memoryKey: memoryKey, targetPixelSize: targetPixelSize)
         }
         inFlightRequests[requestKey] = task
         let result = await task.value
@@ -133,10 +135,13 @@ actor ImageCache {
 
     // MARK: - Private
 
-    private func download(url: URL, key: String, memoryKey: String, targetPixelSize: Int?) async -> UIImage? {
+    private func download(url: URL, diskKey: String, memoryKey: String, targetPixelSize: Int?) async -> UIImage? {
         let startGeneration = generation
+        // Always fetch at least 512px so the disk copy serves Now Playing (which needs 512-896px)
+        // without a second download. Memory is still decoded at the originally requested size.
+        let fetchURL = upgradedDownloadURL(from: url, minimumSize: 512)
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: fetchURL)
             // If cache was cleared during download, don't save stale data
             guard generation == startGeneration else { return nil }
             guard let http = response as? HTTPURLResponse,
@@ -144,7 +149,7 @@ actor ImageCache {
                   let image = decodeImage(from: data, targetPixelSize: targetPixelSize) else { return nil }
 
             memoryCache.setObject(image, forKey: memoryKey as NSString, cost: image.decodedCost)
-            saveToDisk(data: data, key: key)
+            saveToDisk(data: data, key: diskKey)
 #if DEBUG
             debugStats.networkSuccesses += 1
 #endif
@@ -206,6 +211,37 @@ actor ImageCache {
 
     private func cacheKey(for url: URL) -> String {
         let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+        return hash.map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Returns a URL with `width`/`height` params raised to at least `minimumSize`.
+    /// Used so every disk-cached file is high enough quality to serve Now Playing offline.
+    private func upgradedDownloadURL(from url: URL, minimumSize: Int) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems else { return url }
+        let currentW = items.first(where: { $0.name == "width" }).flatMap { Int($0.value ?? "") } ?? 0
+        let currentH = items.first(where: { $0.name == "height" }).flatMap { Int($0.value ?? "") } ?? 0
+        guard currentW < minimumSize || currentH < minimumSize else { return url }
+        components.queryItems = items.map { item in
+            if item.name == "width" { return URLQueryItem(name: "width", value: "\(max(currentW, minimumSize))") }
+            if item.name == "height" { return URLQueryItem(name: "height", value: "\(max(currentH, minimumSize))") }
+            return item
+        }
+        return components.url ?? url
+    }
+
+    /// Cache key for disk storage — strips `width` and `height` query params so images
+    /// fetched at any size (e.g., 256px from a track list) can satisfy larger requests
+    /// (e.g., 512px from Now Playing) when the device is offline.
+    private func diskCacheKey(for url: URL) -> String {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems,
+              items.contains(where: { $0.name == "width" || $0.name == "height" }) else {
+            return cacheKey(for: url)
+        }
+        components.queryItems = items.filter { $0.name != "width" && $0.name != "height" }
+        let normalized = components.url ?? url
+        let hash = SHA256.hash(data: Data(normalized.absoluteString.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()
     }
 

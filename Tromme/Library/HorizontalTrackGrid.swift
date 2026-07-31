@@ -4,6 +4,7 @@ struct HorizontalTrackGrid: View {
     let tracks: [PlexMetadata]
     var rowCount: Int = 2
     var showArtist: Bool = true
+    var showFavoriteStar: Bool = true
     var subtitleProvider: ((PlexMetadata) -> String?)? = nil
 
     var body: some View {
@@ -23,10 +24,12 @@ struct HorizontalTrackGrid: View {
                         showTrackNumber: false,
                         artworkSize: AppStyle.TrackGrid.artworkSize,
                         showsMenu: false,
+                        showFavoriteStar: showFavoriteStar,
                         isCompact: true,
                         titleFont: AppStyle.Typography.itemTitle,
                         artistFont: AppStyle.Typography.itemSubtitle
                     )
+                    .padding(.trailing, 16)
                     .frame(width: AppStyle.TrackGrid.itemWidth, alignment: .leading)
                 }
             }

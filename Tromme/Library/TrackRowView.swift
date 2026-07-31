@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrackRowView: View {
     @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
 
@@ -15,6 +16,7 @@ struct TrackRowView: View {
     var artworkSize: CGFloat = 42
     var artworkCornerRadius: CGFloat = 8
     var showsMenu: Bool = true
+    var showFavoriteStar: Bool = true
     var isCompact: Bool = false
     var titleFont: Font? = nil
     var artistFont: Font? = nil
@@ -66,7 +68,7 @@ struct TrackRowView: View {
         let sectionId = serverConnection.currentLibrarySectionId
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
-        favoriteOverride = removing ? nil : 10
+        favoriteOverride = removing ? 0 : 10
         isRating = true
         Task {
             do {
@@ -111,6 +113,10 @@ struct TrackRowView: View {
         } label: {
             Label("Add to Playlist", systemImage: "text.badge.plus")
         }
+
+        Divider()
+
+        downloadMenuButton
 
         Divider()
 
@@ -165,6 +171,61 @@ struct TrackRowView: View {
         .disabled(isDeletingTrack || serverConnection.currentServer == nil)
     }
 
+    @ViewBuilder
+    private var downloadMenuButton: some View {
+        let isDownloaded = downloadManager.isDownloaded(track.ratingKey)
+        let isActive = downloadManager.transientStates[track.ratingKey] != nil
+        if isDownloaded {
+            Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                downloadManager.deleteDownload(ratingKey: track.ratingKey)
+            }
+        } else {
+            Button {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.download(track: track, server: server, client: client)
+            } label: {
+                switch downloadManager.transientStates[track.ratingKey] {
+                case .queued:
+                    Label("Queued", systemImage: "clock")
+                case .downloading:
+                    Label("Downloading…", systemImage: "arrow.down.circle")
+                case .failed:
+                    Label("Retry Download", systemImage: "arrow.clockwise.circle")
+                case nil:
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            .disabled(isActive)
+        }
+    }
+
+    @ViewBuilder
+    private var downloadStateIndicator: some View {
+        if let state = downloadManager.transientStates[track.ratingKey] {
+            Group {
+                switch state {
+                case .queued:
+                    Image(systemName: "clock")
+                        .foregroundStyle(.secondary)
+                case .downloading:
+                    ProgressView()
+                case .failed:
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
+            }
+            .font(.subheadline)
+            .frame(width: 22)
+            .transition(.opacity.combined(with: .scale(scale: 0.8)))
+        } else if downloadManager.isDownloaded(track.ratingKey) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+        }
+    }
+
     private var trackRow: some View {
         Button {
             player.play(tracks: tracks, startingAt: index)
@@ -213,6 +274,16 @@ struct TrackRowView: View {
             }
 
             Spacer()
+
+            if isFavorited && showFavoriteStar {
+                Image(systemName: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+
+            downloadStateIndicator
 
             if showsMenu {
                 Menu {

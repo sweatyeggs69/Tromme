@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
+    @Environment(NetworkStatus.self) private var network
 
     @Environment(\.plexClient) private var client
 
@@ -119,11 +120,13 @@ struct ContentView: View {
 
     private var mainTabView: some View {
         let tabs = TabView(selection: $selectedTab) {
-            Tab("Home", systemImage: "house.fill", value: "home") {
-                NavigationStack {
-                    HomeView()
-                        .navigationDestinations()
-                        .accountToolbar(signOut: signOut)
+            if network.isConnected {
+                Tab("Home", systemImage: "house.fill", value: "home") {
+                    NavigationStack {
+                        HomeView()
+                            .navigationDestinations()
+                            .accountToolbar(signOut: signOut)
+                    }
                 }
             }
 
@@ -131,6 +134,7 @@ struct ContentView: View {
                 NavigationStack(path: $artistsPath) {
                     ArtistsView()
                         .navigationDestinations()
+                        .offlineSettingsToolbar(signOut: signOut)
                 }
             }
 
@@ -138,6 +142,7 @@ struct ContentView: View {
                 NavigationStack(path: $albumsPath) {
                     AllAlbumsView()
                         .navigationDestinations()
+                        .offlineSettingsToolbar(signOut: signOut)
                 }
             }
 
@@ -145,6 +150,7 @@ struct ContentView: View {
                 NavigationStack {
                     AllSongsView()
                         .navigationDestinations()
+                        .offlineSettingsToolbar(signOut: signOut)
                 }
             }
 
@@ -182,6 +188,11 @@ struct ContentView: View {
             }
 
         return base
+            .onChange(of: network.isConnected) { _, isConnected in
+                if !isConnected && selectedTab == "home" {
+                    selectedTab = "artists"
+                }
+            }
             .onChange(of: showNowPlaying) { oldValue, newValue in
                 if oldValue && !newValue, let target = pendingNavigation {
                     pendingNavigation = nil
@@ -191,6 +202,23 @@ struct ContentView: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !network.isConnected {
+                    offlineBanner
+                }
+            }
+    }
+
+    private var offlineBanner: some View {
+        Label("Offline", systemImage: "wifi.slash")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.bar, in: Capsule())
+            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+            .animation(.easeInOut, value: network.isConnected)
     }
 
     private func signOut() {
@@ -255,6 +283,34 @@ private extension View {
                 .tint(.primary)
             }
         }
+    }
+}
+
+// MARK: - Offline Settings Toolbar
+
+private struct OfflineSettingsToolbarModifier: ViewModifier {
+    @Environment(NetworkStatus.self) private var network
+    let signOut: () -> Void
+
+    func body(content: Content) -> some View {
+        content.toolbar {
+            if !network.isConnected {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink {
+                        SettingsView(onSignOut: signOut)
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .tint(.primary)
+                }
+            }
+        }
+    }
+}
+
+private extension View {
+    func offlineSettingsToolbar(signOut: @escaping () -> Void) -> some View {
+        modifier(OfflineSettingsToolbarModifier(signOut: signOut))
     }
 }
 

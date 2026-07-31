@@ -534,6 +534,21 @@ final class PlexAPIClient: Sendable {
         }
     }
 
+    /// Build a direct download URL for a part file with the original format preserved.
+    func downloadURL(server: PlexServer, partKey: String) -> URL? {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path = partKey
+        components.queryItems = [
+            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
+            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
+            URLQueryItem(name: "X-Plex-Product", value: Self.product),
+            URLQueryItem(name: "X-Plex-Platform", value: Self.platform),
+            URLQueryItem(name: "download", value: "1"),
+        ]
+        return components.url
+    }
+
     /// Build a direct stream URL with full Plex identification query params.
     func streamURL(server: PlexServer, partKey: String) -> URL? {
         guard let baseURL = server.baseURL,

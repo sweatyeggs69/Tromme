@@ -77,6 +77,7 @@ final class AudioPlayerService: @unchecked Sendable {
     #if DEBUG
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     #endif
+    private var isPlayingLocalFile = false
     private var pendingInitialSeekTime: TimeInterval?
     private var lastPersistedPositionSeconds: TimeInterval = -1
     private var lastSavedQueueHash: Int?
@@ -475,7 +476,8 @@ final class AudioPlayerService: @unchecked Sendable {
         // On remote connections, Plex's live HLS transcode can't handle in-stream seeks —
         // AVPlayer would stall waiting for segments at the new position. Restart the
         // transcode session from the seek point instead, which is what Plex expects.
-        if let server, resolvedPlaybackPath(for: server).isRemote,
+        // Skip this for locally downloaded files where normal seeking works fine.
+        if !isPlayingLocalFile, let server, resolvedPlaybackPath(for: server).isRemote,
            queue.indices.contains(currentIndex) {
             logPlayback("seek_restart_remote", "target=\(boundedTime)")
             recoveryAttemptsForTrack = 0
@@ -669,6 +671,7 @@ final class AudioPlayerService: @unchecked Sendable {
         cachedArtwork = nil
         cachedArtworkThumbPath = nil
         isConstrainedPlaybackPath = false
+        isPlayingLocalFile = false
         savePlaybackState()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -760,12 +763,22 @@ final class AudioPlayerService: @unchecked Sendable {
         stopActiveTranscodeSession()
         currentSessionID = UUID().uuidString
         isConstrainedPlaybackPath = false
+        isPlayingLocalFile = false
 
         guard let server, let client else { return }
 
         tearDownObservers()
         player?.pause()
         player?.replaceCurrentItem(with: nil)
+
+        // Fast path: locally downloaded file — skip network transcode entirely
+        if let localURL = AppContext.shared.downloadManager?.localURL(for: track.ratingKey) {
+            logPlayback("load_local_file", "track=\(track.ratingKey)")
+            isPlayingLocalFile = true
+            currentSessionID = nil
+            startPlayback(url: localURL)
+            return
+        }
 
         // Fast path: use preloaded next track URL/session if it matches.
         // Saves the universalDecision API round-trip on track transitions.

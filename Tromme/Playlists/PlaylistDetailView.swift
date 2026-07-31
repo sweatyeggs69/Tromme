@@ -5,6 +5,7 @@ struct PlaylistDetailView: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.dismiss) private var dismiss
     @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadManager.self) private var downloadManager
 
     let playlist: PlexPlaylist
 
@@ -49,6 +50,25 @@ struct PlaylistDetailView: View {
 
     private var controlsDisabled: Bool {
         tracks.isEmpty
+    }
+
+    @ViewBuilder
+    private var playlistDownloadButton: some View {
+        let allDownloaded = !tracks.isEmpty && tracks.allSatisfy { downloadManager.isDownloaded($0.ratingKey) }
+        let anyActive = tracks.contains { downloadManager.transientStates[$0.ratingKey] != nil }
+        if allDownloaded {
+            Button("Remove Downloads", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
+            }
+        } else {
+            Button {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.downloadBatch(tracks: tracks, server: server, client: client)
+            } label: {
+                Label(anyActive ? "Downloading…" : "Download Playlist", systemImage: "arrow.down.circle")
+            }
+            .disabled(anyActive || tracks.isEmpty)
+        }
     }
 
     private var canDeletePlaylist: Bool {
@@ -257,9 +277,11 @@ struct PlaylistDetailView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if canDeletePlaylist {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    playlistDownloadButton
+                    if canDeletePlaylist {
+                        Divider()
                         Button("Rename", systemImage: "pencil") {
                             renameText = displayTitle
                             showRenameAlert = true
@@ -267,14 +289,14 @@ struct PlaylistDetailView: View {
                         Button("Delete Playlist", systemImage: "trash", role: .destructive) {
                             showDeletePlaylistConfirmation = true
                         }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .symbolRenderingMode(.monochrome)
-                            .foregroundStyle(.primary)
                     }
-                    .tint(.primary)
-                    .disabled(isDeletingPlaylist)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundStyle(.primary)
                 }
+                .tint(.primary)
+                .disabled(isDeletingPlaylist)
             }
         }
         .alert("Delete Playlist?", isPresented: $showDeletePlaylistConfirmation) {

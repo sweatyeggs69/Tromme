@@ -4,6 +4,8 @@ struct ArtistsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
+    @Environment(NetworkStatus.self) private var network
+    @Environment(DownloadManager.self) private var downloadManager
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
@@ -75,7 +77,7 @@ struct ArtistsView: View {
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }
-        .task { await loadArtists() }
+        .task(id: network.isConnected) { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
         .onDisappear {
             searchText = ""
@@ -159,6 +161,33 @@ struct ArtistsView: View {
     }
 
     private func loadArtists() async {
+        if network.isConnected {
+            await loadArtistsOnline()
+        } else {
+            loadArtistsOffline()
+        }
+    }
+
+    private func loadArtistsOffline() {
+        var seen = Set<String>()
+        var result: [PlexMetadata] = []
+        for record in downloadManager.downloadedTracksSorted {
+            let key = record.artistRatingKey ?? record.artistName
+            guard seen.insert(key).inserted else { continue }
+            result.append(PlexMetadata(
+                ratingKey: record.artistRatingKey ?? "offline:\(record.artistName)",
+                title: record.artistName,
+                type: "artist",
+                parentTitle: nil,
+                thumb: record.thumbPath
+            ))
+        }
+        result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
+        artists = result
+        isLoading = false
+    }
+
+    private func loadArtistsOnline() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
 

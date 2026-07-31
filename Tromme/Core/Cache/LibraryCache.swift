@@ -86,7 +86,7 @@ actor LibraryCache {
         memoryCache.removeAllObjects()
     }
 
-    // MARK: - Cached Fetch (single entry point)
+// MARK: - Cached Fetch (single entry point)
 
     /// The single entry point for all cache-first data access. Encapsulates
     /// the entire stale-while-revalidate + request coalescing pattern:

@@ -43,13 +43,13 @@ struct HomeView: View {
             }
             .padding(.vertical, 8)
         }
-        .task(id: loadTaskID) {
-            guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
-            await loadHomeContent(forceRefresh: false)
-        }
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await loadHomeContent(forceRefresh: true)
+        }
+        .task(id: loadTaskID) {
+            guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
+            await loadHomeContent(forceRefresh: false)
         }
         .task {
             guard previewRecentTracks == nil else { return }
@@ -66,6 +66,8 @@ struct HomeView: View {
                 }
             }
         }
+        .navigationTitle(serverConnection.currentServer?.name ?? "Home")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }
@@ -75,8 +77,7 @@ struct HomeView: View {
         let sectionID = serverConnection.currentLibrarySectionId ?? "none"
         let serverURI = serverConnection.currentServer?.uri ?? "none"
         let networkType = NetworkStatus.shared.interfaceType.map { "\($0)" } ?? "none"
-        let connected = NetworkStatus.shared.isConnected
-        return "\(sectionID)|\(serverURI)|\(networkType)|\(connected)"
+        return "\(sectionID)|\(serverURI)|\(networkType)"
     }
 
     private var favoritesSection: some View {
@@ -114,11 +115,11 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
-                tracksHorizontalRow(tracks: favoriteTracks)
+                tracksHorizontalRow(tracks: favoriteTracks, showFavoriteStar: false)
             }
         }
     }
-    
+
     private var recentlyAddedSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
             Text("Recently Added")
@@ -189,8 +190,8 @@ struct HomeView: View {
         }
     }
 
-    private func tracksHorizontalRow(tracks: [PlexMetadata]) -> some View {
-        HorizontalTrackGrid(tracks: tracks)
+    private func tracksHorizontalRow(tracks: [PlexMetadata], showFavoriteStar: Bool = true) -> some View {
+        HorizontalTrackGrid(tracks: tracks, showFavoriteStar: showFavoriteStar)
     }
 
     @ViewBuilder

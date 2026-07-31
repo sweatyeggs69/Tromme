@@ -4,6 +4,8 @@ struct ArtistDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
+    @Environment(NetworkStatus.self) private var network
+    @Environment(DownloadManager.self) private var downloadManager
 
     let artist: PlexMetadata
     @State private var resolvedArtist: PlexMetadata?
@@ -14,6 +16,7 @@ struct ArtistDetailView: View {
     @State private var appearsOnAlbums: [PlexMetadata] = []
     @State private var selectedAppearsOnAlbum: PlexMetadata?
     @State private var heroMinY: CGFloat = 0
+    @State private var heroIsHidden = false
     @State private var showsBioSheet = false
 
     private var displayArtist: PlexMetadata {
@@ -21,7 +24,7 @@ struct ArtistDetailView: View {
     }
 
     private var showsCollapsedTitle: Bool {
-        heroMinY < -80
+        heroMinY < -80 || heroIsHidden
     }
 
     private let heroHeight: CGFloat = 400
@@ -136,7 +139,7 @@ struct ArtistDetailView: View {
 
     var body: some View {
         List {
-            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight) {
+            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight, isHidden: $heroIsHidden) {
                     guard !artistTracks.isEmpty else { return }
                     player.play(tracks: artistTracks)
                     if !player.isShuffled {
@@ -263,8 +266,14 @@ struct ArtistDetailView: View {
             heroMinY = value
         }
         .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
-        .task {
+        .task(id: network.isConnected) {
             guard previewData == nil else { return }
+
+            if !network.isConnected {
+                loadOfflineContent()
+                return
+            }
+
             guard let server = serverConnection.currentServer,
                   let sectionId = serverConnection.currentLibrarySectionId else { return }
 
@@ -303,14 +312,38 @@ struct ArtistDetailView: View {
         }
     }
 
+    private func loadOfflineContent() {
+        let artistKey = artist.ratingKey
+        let artistTitle = artist.title
+        let records = downloadManager.downloadedTracksSorted.filter { record in
+            record.artistRatingKey == artistKey || record.artistName == artistTitle
+        }
+        var seenAlbums = Set<String>()
+        artistAlbums = records.compactMap { record -> PlexMetadata? in
+            let key = record.albumRatingKey ?? record.albumName
+            guard seenAlbums.insert(key).inserted else { return nil }
+            return PlexMetadata(
+                ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
+                title: record.albumName,
+                type: "album",
+                parentTitle: record.artistName,
+                thumb: record.thumbPath
+            )
+        }
+        artistTracks = records.map { $0.asPlexMetadata() }
+        topTracks = artistTracks
+        appearsOnAlbums = []
+    }
 }
 
 private struct ArtistHeroHeaderView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(NetworkStatus.self) private var network
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
+    @Binding var isHidden: Bool
     var onShuffle: (() -> Void)?
 
     @State private var image: UIImage?
@@ -368,7 +401,8 @@ private struct ArtistHeroHeaderView: View {
             }
             .offset(y: stretchOffset)
         }
-        .frame(height: heroHeight)
+        .frame(height: isHidden ? 0 : heroHeight)
+        .clipped()
         .task(id: artist.thumb) {
             await loadImage()
         }
@@ -377,16 +411,19 @@ private struct ArtistHeroHeaderView: View {
     private func loadImage() async {
         guard let server = serverConnection.currentServer else {
             image = nil
+            isHidden = true
             return
         }
         let artworkPath = artist.thumb
         guard let url = client.artworkURL(server: server, path: artworkPath, width: 1000, height: 1000) else {
             image = nil
+            isHidden = !network.isConnected
             return
         }
         let resolvedImage = await ImageCache.shared.image(for: url)
         guard !Task.isCancelled else { return }
         image = resolvedImage?.squareCropped()
+        isHidden = image == nil && !network.isConnected
     }
 }
 

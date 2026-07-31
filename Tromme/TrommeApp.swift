@@ -8,6 +8,7 @@ struct TrommeApp: App {
     @State private var serverConnection = ServerConnectionManager()
     @State private var plexClient = PlexAPIClient()
     @State private var audioPlayer = AudioPlayerService()
+    @State private var downloadManager = DownloadManager()
     @State private var configuredCatalystSceneIDs: Set<String> = []
     @State private var lastForegroundLibraryCheck: Date = .distantPast
     /// Skip the foreground library check if it ran in the last 5 minutes —
@@ -20,6 +21,7 @@ struct TrommeApp: App {
         ctx.serverConnection = serverConnection
         ctx.plexClient = plexClient
         ctx.audioPlayer = audioPlayer
+        ctx.downloadManager = downloadManager
         if let server = serverConnection.currentServer {
             audioPlayer.configure(server: server, client: plexClient)
         }
@@ -49,6 +51,8 @@ struct TrommeApp: App {
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)
+                .environment(downloadManager)
+                .environment(NetworkStatus.shared)
                 .onChange(of: serverConnection.currentServer, initial: true) { old, server in
                     if let old, old.machineIdentifier != server?.machineIdentifier {
                         audioPlayer.resetPlayback()

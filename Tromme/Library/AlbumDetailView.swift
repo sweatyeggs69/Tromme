@@ -5,6 +5,8 @@ struct AlbumDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadManager.self) private var downloadManager
+    @Environment(NetworkStatus.self) private var network
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
@@ -71,6 +73,25 @@ struct AlbumDetailView: View {
 
     private var controlsDisabled: Bool {
         tracks.isEmpty
+    }
+
+    @ViewBuilder
+    private var albumDownloadButton: some View {
+        let allDownloaded = !tracks.isEmpty && tracks.allSatisfy { downloadManager.isDownloaded($0.ratingKey) }
+        let anyActive = tracks.contains { downloadManager.transientStates[$0.ratingKey] != nil }
+        if allDownloaded {
+            Button("Remove Downloads", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
+            }
+        } else {
+            Button {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.downloadBatch(tracks: tracks, server: server, client: client)
+            } label: {
+                Label(anyActive ? "Downloading…" : "Download Album", systemImage: anyActive ? "arrow.down.circle" : "arrow.down.circle")
+            }
+            .disabled(anyActive || tracks.isEmpty)
+        }
     }
 
     private var moreByArtistAlbums: [PlexMetadata] {
@@ -390,6 +411,7 @@ struct AlbumDetailView: View {
 
     @MainActor
     private func loadRecommendedAlbums() async {
+        guard network.isConnected else { return }
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
 
@@ -408,6 +430,16 @@ struct AlbumDetailView: View {
 
     @MainActor
     private func loadTracks() async {
+        guard network.isConnected else {
+            let albumKey = album.ratingKey
+            let albumTitle = album.title
+            let downloaded = downloadManager.downloadedTracksSorted.filter { record in
+                record.albumRatingKey == albumKey || record.albumName == albumTitle
+            }
+            tracks = downloaded.map { $0.asPlexMetadata() }
+            isLoadingTracks = false
+            return
+        }
         guard let server = serverConnection.currentServer else {
             isLoadingTracks = false
             return
@@ -428,10 +460,28 @@ struct AlbumDetailView: View {
 
     @MainActor
     private func loadArtistAlbums() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId,
-              let artist = artistNavigationTarget else { return }
+        guard let artist = artistNavigationTarget else { return }
 
+        guard network.isConnected else {
+            var seenAlbums = Set<String>()
+            artistAlbums = downloadManager.downloadedTracksSorted
+                .filter { $0.artistRatingKey == artist.ratingKey || $0.artistName == artist.title }
+                .compactMap { record -> PlexMetadata? in
+                    let key = record.albumRatingKey ?? record.albumName
+                    guard seenAlbums.insert(key).inserted else { return nil }
+                    return PlexMetadata(
+                        ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
+                        title: record.albumName,
+                        type: "album",
+                        parentTitle: record.artistName,
+                        thumb: record.thumbPath
+                    )
+                }
+            return
+        }
+
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
             artistAlbums = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
         } catch {
@@ -715,7 +765,7 @@ struct AlbumDetailView: View {
                                         albumRail(moreByArtistAlbums)
                                     }
 
-                                    if !recommendedAlbums.isEmpty {
+                                    if network.isConnected && !recommendedAlbums.isEmpty {
                                         albumSectionHeader(
                                             "You Might Also Like",
                                             showsDisclosure: true
@@ -756,7 +806,7 @@ struct AlbumDetailView: View {
                                 albumRail(moreByArtistAlbums)
                             }
 
-                            if !recommendedAlbums.isEmpty {
+                            if network.isConnected && !recommendedAlbums.isEmpty {
                                 albumSectionHeader(
                                     "You Might Also Like",
                                     showsDisclosure: true
@@ -804,6 +854,8 @@ struct AlbumDetailView: View {
                             Label("Change Artwork", systemImage: "photo")
                         }
                         Divider()
+                        albumDownloadButton
+                        Divider()
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
                         }
@@ -824,11 +876,13 @@ struct AlbumDetailView: View {
                 server: server
             )
         }
-        .task {
+        .task(id: network.isConnected) {
             guard !isPreviewMode else { return }
+            isLoadingTracks = true
             async let detailsTask: Void = loadAlbumDetails()
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
+            guard !Task.isCancelled else { return }
             async let artistAlbumsTask: Void = loadArtistAlbums()
             async let recommendationsTask: Void = loadRecommendedAlbums()
             _ = await (artistAlbumsTask, recommendationsTask)
@@ -980,7 +1034,7 @@ private struct AlbumTrackRow: View {
         guard let server = serverConnection.currentServer else { return }
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
-        favoriteOverride = removing ? nil : 10
+        favoriteOverride = removing ? 0 : 10
         isRating = true
         Task {
             do {
@@ -1025,7 +1079,7 @@ private struct AlbumTrackRow: View {
                                 .foregroundStyle(tertiaryTextColor)
                         }
                     }
-                    .frame(width: 22, alignment: .trailing)
+                    .frame(width: 22, alignment: .leading)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(track.title)
@@ -1046,6 +1100,13 @@ private struct AlbumTrackRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            if isFavorited {
+                Image(systemName: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(tertiaryTextColor)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
 
             Menu {
                 Button(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star") {

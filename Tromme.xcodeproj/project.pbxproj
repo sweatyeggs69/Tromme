@@ -10,6 +10,8 @@
 		01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311B274B9F165FE0F81E54FD /* SafariView.swift */; };
 		0603E2752890285A43E43246 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2FC699685A8C436EF372D6 /* ImageCache.swift */; };
 		0E0B926D2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */; };
+		0E10DE3A30112F3B0045130C /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10DE3930112F3B0045130C /* DownloadManager.swift */; };
+		0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10DE3B30112F4B0045130C /* DownloadsView.swift */; };
 		0E1110B9BACB9425E1322364 /* AllSongsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDEFE1EDC3B807A75155156D /* AllSongsView.swift */; };
 		0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */; };
 		0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */; };
@@ -67,6 +69,8 @@
 		054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuthService.swift; sourceTree = "<group>"; };
 		09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeAlbumArtworkSheet.swift; sourceTree = "<group>"; };
+		0E10DE3930112F3B0045130C /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
+		0E10DE3B30112F4B0045130C /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStartPanel.swift; sourceTree = "<group>"; };
 		0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToPlaylistSheet.swift; sourceTree = "<group>"; };
 		0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentMockData.swift; sourceTree = "<group>"; };
@@ -243,6 +247,7 @@
 				30B32F38AB3FBE4BA037947B /* TrackRowView.swift */,
 				0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */,
 				0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */,
+				0E10DE3B30112F4B0045130C /* DownloadsView.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -251,6 +256,7 @@
 			isa = PBXGroup;
 			children = (
 				3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */,
+				0E10DE3930112F3B0045130C /* DownloadManager.swift */,
 			);
 			path = Player;
 			sourceTree = "<group>";
@@ -403,6 +409,7 @@
 				CE9812586C3367CC672E5700 /* LyricsService.swift in Sources */,
 				A9BDE9C4493EBF7424C122DD /* LyricsView.swift in Sources */,
 				4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */,
+				0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */,
 				0E91C64F2F91B03000775275 /* AppContext.swift in Sources */,
 				7E1DCA19C4645D2EDFB2A565 /* NowPlayingView.swift in Sources */,
 				0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */,
@@ -415,6 +422,7 @@
 				3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */,
 				4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */,
 				616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */,
+				0E10DE3A30112F3B0045130C /* DownloadManager.swift in Sources */,
 				01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */,
 				3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */,
 				AE8F9BC18E978DFB09C39BE5 /* ServerConnectionManager.swift in Sources */,

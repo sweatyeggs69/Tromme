@@ -24,9 +24,13 @@ struct ArtworkView: View {
     }
 
     var body: some View {
+        let url = artworkURL(for: thumbPath)
+        let displayImage = image ?? url.flatMap {
+            ImageCache.shared.memoryCachedImage(for: $0, targetPixelSize: transcodePx)
+        }
         Group {
-            if let image {
-                Image(uiImage: image)
+            if let displayImage {
+                Image(uiImage: displayImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {

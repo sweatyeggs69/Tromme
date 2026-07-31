@@ -4,6 +4,8 @@ struct AllSongsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
+    @Environment(NetworkStatus.self) private var network
+    @Environment(DownloadManager.self) private var downloadManager
 
     @State private var loadedTracks: [PlexMetadata] = []
     @State private var displayTracks: [PlexMetadata] = []
@@ -12,6 +14,7 @@ struct AllSongsView: View {
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @AppStorage("allSongsSortOrder") private var sortOrder: SongSortOrder = .titleAscending
+    @AppStorage("autoDownloadAllSongs") private var autoDownloadAllSongs = false
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
@@ -26,6 +29,12 @@ struct AllSongsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if displaySections.isEmpty && !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
+            } else if displaySections.isEmpty && !network.isConnected {
+                ContentUnavailableView {
+                    Label("No Downloads", systemImage: "arrow.down.circle")
+                } description: {
+                    Text("You're offline. Download songs to listen without a connection.")
+                }
             } else {
                 List {
                     ForEach(displaySections, id: \.title) { section in
@@ -112,14 +121,18 @@ struct AllSongsView: View {
                 .disabled(displayTracks.isEmpty)
             }
         }
-        .task {
+        .task(id: previewTracks != nil ? "preview" : "\(network.isConnected)") {
             if let preview = previewTracks {
                 loadedTracks = preview
                 isLoading = false
                 await applyDisplayState()
             } else {
-                await loadTracks()
+                await loadTracksForCurrentState()
             }
+        }
+        .onChange(of: downloadManager.records.count) { _, _ in
+            guard previewTracks == nil, !network.isConnected else { return }
+            Task { await loadTracksForCurrentState() }
         }
         // Cancels and restarts whenever sort order or search text changes.
         .task(id: "\(sortOrder.rawValue)|\(searchText)") {
@@ -143,11 +156,24 @@ struct AllSongsView: View {
         sortOrder == .dateAddedNewest || sortOrder == .dateAddedOldest
     }
 
+    private func loadTracksForCurrentState() async {
+        if network.isConnected {
+            await loadTracks()
+        } else {
+            loadedTracks = downloadManager.downloadedTracksSorted.map { $0.asPlexMetadata() }
+            isLoading = false
+            await applyDisplayState()
+        }
+    }
+
     private func loadTracks() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
             loadedTracks = try await client.cachedTracks(server: server, sectionId: sectionId)
+            if autoDownloadAllSongs && !downloadManager.userStoppedAutoDownload {
+                downloadManager.downloadBatch(tracks: loadedTracks, server: server, client: client)
+            }
         } catch {}
         isLoading = false
         await applyDisplayState()
@@ -155,7 +181,11 @@ struct AllSongsView: View {
 
     // Sorts, filters, and sections all off the main actor to keep UI responsive at 100k tracks.
     private func applyDisplayState() async {
-        guard !loadedTracks.isEmpty else { return }
+        guard !loadedTracks.isEmpty else {
+            displayTracks = []
+            displaySections = []
+            return
+        }
         let snapshot = loadedTracks
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentSort = sortOrder

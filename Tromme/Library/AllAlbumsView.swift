@@ -5,6 +5,8 @@ struct AllAlbumsView: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
+    @Environment(NetworkStatus.self) private var network
+    @Environment(DownloadManager.self) private var downloadManager
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
@@ -152,7 +154,7 @@ struct AllAlbumsView: View {
                 .tint(.primary)
             }
         }
-        .task {
+        .task(id: network.isConnected) {
             guard previewAlbums == nil else { return }
             await loadAlbums()
         }
@@ -284,13 +286,38 @@ struct AllAlbumsView: View {
     }
 
     private func loadAlbums() async {
+        if network.isConnected {
+            await loadAlbumsOnline()
+        } else {
+            loadAlbumsOffline()
+        }
+    }
+
+    private func loadAlbumsOffline() {
+        var seen = Set<String>()
+        var result: [PlexMetadata] = []
+        for record in downloadManager.downloadedTracksSorted {
+            let key = record.albumRatingKey ?? record.albumName
+            guard seen.insert(key).inserted else { continue }
+            result.append(PlexMetadata(
+                ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
+                title: record.albumName,
+                type: "album",
+                parentTitle: record.artistName,
+                thumb: record.thumbPath
+            ))
+        }
+        result.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
+        albums = result
+        isLoading = false
+    }
+
+    private func loadAlbumsOnline() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
             albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
-        } catch {
-            // Handle error
-        }
+        } catch {}
         isLoading = false
     }
 

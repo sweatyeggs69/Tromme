@@ -308,6 +308,50 @@ extension PlexMetadata {
         self.subformat = nil; self.originallyAvailableAt = nil
     }
 
+    /// Convenience init for constructing a minimal album or artist from offline records.
+    init(ratingKey: String, title: String, type: String, parentTitle: String?, thumb: String?) {
+        self.ratingKey = ratingKey; self.title = title; self.type = type; self.thumb = thumb
+        self.parentTitle = parentTitle
+        self.subtype = nil; self.key = nil; self.titleSort = nil; self.originalTitle = nil
+        self.summary = nil; self.studio = nil; self.year = nil; self.index = nil
+        self.parentIndex = nil; self.duration = nil; self.addedAt = nil; self.updatedAt = nil
+        self.viewCount = nil; self.lastViewedAt = nil; self.userRating = nil; self.art = nil
+        self.parentThumb = nil; self.grandparentThumb = nil; self.grandparentArt = nil
+        self.grandparentTitle = nil; self.parentRatingKey = nil; self.grandparentRatingKey = nil
+        self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
+        self.genre = nil; self.style = nil; self.country = nil
+        self.subformat = nil; self.originallyAvailableAt = nil
+    }
+
+    /// Convenience init for recreating a downloaded track from a persisted record.
+    init(
+        ratingKey: String,
+        title: String,
+        grandparentTitle: String?,
+        parentTitle: String?,
+        parentRatingKey: String?,
+        thumbPath: String?,
+        durationMs: Int?
+    ) {
+        self.ratingKey = ratingKey
+        self.title = title
+        self.type = "track"
+        self.thumb = thumbPath
+        self.subtype = nil
+        self.key = nil; self.titleSort = nil; self.originalTitle = nil; self.summary = nil
+        self.studio = nil; self.year = nil; self.index = nil; self.parentIndex = nil
+        self.duration = durationMs; self.addedAt = nil; self.updatedAt = nil; self.viewCount = nil
+        self.lastViewedAt = nil; self.userRating = nil; self.art = nil
+        self.parentThumb = thumbPath
+        self.grandparentThumb = nil; self.grandparentArt = nil
+        self.parentTitle = parentTitle
+        self.grandparentTitle = grandparentTitle
+        self.parentRatingKey = parentRatingKey; self.grandparentRatingKey = nil
+        self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
+        self.genre = nil; self.style = nil; self.country = nil
+        self.subformat = nil; self.originallyAvailableAt = nil
+    }
+
     /// Decode a value that Plex may return as either String or Int.
     private static func decodeFlexibleString(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> String? {
         if let str = try? container.decode(String.self, forKey: key) { return str }
