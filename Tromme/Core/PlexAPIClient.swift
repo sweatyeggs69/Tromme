@@ -570,13 +570,15 @@ final class PlexAPIClient: Sendable {
         sessionID: String,
         location: String = "lan",
         constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320
+        cellularTranscodeBitrate: Int = 320,
+        offsetSeconds: Int = 0
     ) -> [URLQueryItem] {
         let musicBitrate = constrainAudioBitrate ? "\(cellularTranscodeBitrate)" : "40000"
         return [
             URLQueryItem(name: "path", value: metadataPath),
             URLQueryItem(name: "mediaIndex", value: "0"),
             URLQueryItem(name: "partIndex", value: "0"),
+            URLQueryItem(name: "offset", value: "\(max(offsetSeconds, 0))"),
             URLQueryItem(name: "protocol", value: "hls"),
             URLQueryItem(name: "directPlay", value: "0"),
             URLQueryItem(name: "directStream", value: "1"),
@@ -604,7 +606,8 @@ final class PlexAPIClient: Sendable {
         headers: [String: String],
         location: String = "lan",
         constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320
+        cellularTranscodeBitrate: Int = 320,
+        offsetSeconds: Int = 0
     ) async throws {
         guard let baseURL = server.baseURL,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -617,7 +620,8 @@ final class PlexAPIClient: Sendable {
             sessionID: sessionID,
             location: location,
             constrainAudioBitrate: constrainAudioBitrate,
-            cellularTranscodeBitrate: cellularTranscodeBitrate
+            cellularTranscodeBitrate: cellularTranscodeBitrate,
+            offsetSeconds: offsetSeconds
         )
 
         guard let url = components.url else { throw PlexAPIError.invalidURL }
@@ -688,7 +692,8 @@ final class PlexAPIClient: Sendable {
         sessionID: String,
         location: String = "lan",
         constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320
+        cellularTranscodeBitrate: Int = 320,
+        offsetSeconds: Int = 0
     ) -> [URL] {
         let path = mediaPathCandidates.first ?? "/library/metadata/0"
         let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
@@ -702,7 +707,8 @@ final class PlexAPIClient: Sendable {
             sessionID: sessionID,
             location: location,
             constrainAudioBitrate: constrainAudioBitrate,
-            cellularTranscodeBitrate: cellularTranscodeBitrate
+            cellularTranscodeBitrate: cellularTranscodeBitrate,
+            offsetSeconds: offsetSeconds
         )
 
         guard let url = components.url else { return [] }

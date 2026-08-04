@@ -67,7 +67,6 @@ final class AudioPlayerService: @unchecked Sendable {
     private var soundCheckObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var audioInterruptionObserver: NSObjectProtocol?
-    private var willResignActiveObserver: NSObjectProtocol?
     private var wasInterruptedWhilePlaying = false
     private var networkChangeObserver: NSObjectProtocol?
     private var networkRecoveryTask: Task<Void, Never>?
@@ -79,7 +78,11 @@ final class AudioPlayerService: @unchecked Sendable {
     #endif
     private var isPlayingLocalFile = false
     private var pendingInitialSeekTime: TimeInterval?
-    private var lastPersistedPositionSeconds: TimeInterval = -1
+    /// When a streamed transcode session is started at a seek point, AVPlayer's
+    /// timeline begins at 0 but actually represents this many seconds into the track.
+    private var streamTimeOffset: TimeInterval = 0
+    private var heldSeekTask: Task<Void, Never>?
+    private var heldSeekTargetTime: TimeInterval = 0
     private var lastSavedQueueHash: Int?
     private var lastSavedOriginalQueueHash: Int?
     private var scrobbledTrackRatingKey: String?
@@ -120,7 +123,6 @@ final class AudioPlayerService: @unchecked Sendable {
         observeSoundCheckToggle()
         observeAudioRouteChanges()
         observeAudioInterruptions()
-        observeAppLifecycle()
         observeNetworkChanges()
         refreshAirPlayConnectionState()
     }
@@ -134,9 +136,6 @@ final class AudioPlayerService: @unchecked Sendable {
         }
         if let audioInterruptionObserver {
             NotificationCenter.default.removeObserver(audioInterruptionObserver)
-        }
-        if let willResignActiveObserver {
-            NotificationCenter.default.removeObserver(willResignActiveObserver)
         }
         if let networkChangeObserver {
             NotificationCenter.default.removeObserver(networkChangeObserver)
@@ -209,7 +208,6 @@ final class AudioPlayerService: @unchecked Sendable {
             playbackIntent = false
             logPlayback("paused")
             reportTimelineState("paused")
-            persistPlaybackPosition()
         } else {
             playbackIntent = true
             if isStuckWaitingForBuffer() {
@@ -230,6 +228,11 @@ final class AudioPlayerService: @unchecked Sendable {
                item.status == .readyToPlay,
                item.duration.seconds.isFinite,
                CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
+                // An offset stream's position 0 is mid-track; restart from the real start.
+                if streamTimeOffset > 0 {
+                    seek(to: 0)
+                    return
+                }
                 currentTime = 0
                 let currentPlayer = player
                 let generation = playbackGeneration
@@ -266,6 +269,10 @@ final class AudioPlayerService: @unchecked Sendable {
            item.status == .readyToPlay,
            item.duration.seconds.isFinite,
            CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
+            if streamTimeOffset > 0 {
+                seek(to: 0)
+                return
+            }
             guard let currentPlayer = player else { return }
             let generation = playbackGeneration
             currentPlayer.seek(to: .zero) { [weak self] _ in
@@ -292,7 +299,6 @@ final class AudioPlayerService: @unchecked Sendable {
         isPlaying = false
         playbackIntent = false
         updateNowPlayingInfo()
-        persistPlaybackPosition()
     }
 
     private var diagnosticsEnabled: Bool {
@@ -319,7 +325,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private var bestKnownPlaybackSeconds: TimeInterval {
         if let playerTime = player?.currentTime().seconds, playerTime.isFinite {
-            return playerTime
+            return streamTimeOffset + playerTime
         }
         return currentTime
     }
@@ -341,8 +347,9 @@ final class AudioPlayerService: @unchecked Sendable {
         if currentTime.isFinite, currentTime > 2 {
             return currentTime
         }
-        if let playerTime = player?.currentTime().seconds, playerTime.isFinite, playerTime > 2 {
-            return playerTime
+        if let playerTime = player?.currentTime().seconds, playerTime.isFinite,
+           streamTimeOffset + playerTime > 2 {
+            return streamTimeOffset + playerTime
         }
         return nil
     }
@@ -473,13 +480,13 @@ final class AudioPlayerService: @unchecked Sendable {
     func seek(to time: TimeInterval) {
         let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
 
-        // On remote connections, Plex's live HLS transcode can't handle in-stream seeks —
-        // AVPlayer would stall waiting for segments at the new position. Restart the
-        // transcode session from the seek point instead, which is what Plex expects.
-        // Skip this for locally downloaded files where normal seeking works fine.
-        if !isPlayingLocalFile, let server, resolvedPlaybackPath(for: server).isRemote,
+        // Plex's live HLS transcode can't handle in-stream seeks — AVPlayer stalls
+        // waiting for segments the transcoder hasn't produced yet. Restart the
+        // transcode session with an offset so PMS begins transcoding at the seek
+        // point. Locally downloaded files seek in place.
+        if !isPlayingLocalFile, server != nil, player != nil,
            queue.indices.contains(currentIndex) {
-            logPlayback("seek_restart_remote", "target=\(boundedTime)")
+            logPlayback("seek_restart_stream", "target=\(boundedTime)")
             recoveryAttemptsForTrack = 0
             currentTime = boundedTime
             loadAndPlay(queue[currentIndex], resumeAt: boundedTime)
@@ -512,7 +519,6 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.currentTime = boundedTime
                 self.updateNowPlayingInfo()
                 self.reportTimelineState(self.isPlaying ? "playing" : "paused")
-                self.persistPlaybackPosition()
             }
         }
     }
@@ -520,6 +526,41 @@ final class AudioPlayerService: @unchecked Sendable {
     func seekToProgress(_ progress: Double) {
         let time = progress * duration
         seek(to: time)
+    }
+
+    // MARK: - Held Seek (press-and-hold skip buttons)
+
+    /// Starts a repeating ±10s scrub while a remote skip button is held
+    /// (CarPlay / lock screen send begin- and endSeeking events for this).
+    /// Only the timeline is advanced per step; the actual player seek is
+    /// committed once on release so a streamed transcode session restarts
+    /// once instead of once per step.
+    func beginHeldSeek(forward: Bool) {
+        guard hasTrack else { return }
+        heldSeekTask?.cancel()
+        isSeeking = true
+        heldSeekTargetTime = currentTime
+        logPlayback("held_seek_begin", "forward=\(forward)")
+        let step: TimeInterval = forward ? 10 : -10
+        heldSeekTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let upperBound = self.duration > 0 ? self.duration : .greatestFiniteMagnitude
+                self.heldSeekTargetTime = min(max(self.heldSeekTargetTime + step, 0), upperBound)
+                self.currentTime = self.heldSeekTargetTime
+                self.updateNowPlayingInfo()
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    func endHeldSeek() {
+        guard heldSeekTask != nil else { return }
+        heldSeekTask?.cancel()
+        heldSeekTask = nil
+        isSeeking = false
+        logPlayback("held_seek_end", "target=\(heldSeekTargetTime)")
+        seek(to: heldSeekTargetTime)
     }
 
     func addToQueue(_ track: PlexMetadata) {
@@ -664,6 +705,7 @@ final class AudioPlayerService: @unchecked Sendable {
         stopActiveTranscodeSession()
         currentSessionID = nil
         pendingInitialSeekTime = nil
+        streamTimeOffset = 0
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
@@ -686,6 +728,7 @@ final class AudioPlayerService: @unchecked Sendable {
         infiniteRefillTask?.cancel()
         networkRecoveryTask?.cancel()
         nextTrackPreloadTask?.cancel()
+        heldSeekTask?.cancel()
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
         gainPrefetchTask = nil
@@ -693,6 +736,7 @@ final class AudioPlayerService: @unchecked Sendable {
         infiniteRefillTask = nil
         networkRecoveryTask = nil
         nextTrackPreloadTask = nil
+        heldSeekTask = nil
     }
 
     private func makePlayerItem(url: URL) -> AVPlayerItem {
@@ -714,12 +758,6 @@ final class AudioPlayerService: @unchecked Sendable {
             }
         }
 
-        var isRemote: Bool {
-            switch self {
-            case .lan: false
-            case .wan, .relay, .cellular: true
-            }
-        }
     }
 
     private func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil) {
@@ -728,7 +766,8 @@ final class AudioPlayerService: @unchecked Sendable {
             return
         }
 
-        pendingInitialSeekTime = resumeAt
+        pendingInitialSeekTime = nil
+        streamTimeOffset = 0
         if let resumeAt {
             logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count) resume_at=\(resumeAt)")
         } else {
@@ -751,12 +790,8 @@ final class AudioPlayerService: @unchecked Sendable {
         playbackGeneration += 1
         isReadyToPlay = false
         duration = Double(track.duration ?? 0) / 1000.0
-        if let resumeAt {
-            let boundedResume = max(0, duration > 0 ? min(resumeAt, duration) : resumeAt)
-            currentTime = boundedResume
-        } else {
-            currentTime = 0
-        }
+        let boundedResume: TimeInterval? = resumeAt.map { max(0, duration > 0 ? min($0, duration) : $0) }
+        currentTime = boundedResume ?? 0
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
@@ -776,8 +811,14 @@ final class AudioPlayerService: @unchecked Sendable {
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
             currentSessionID = nil
+            pendingInitialSeekTime = boundedResume
             startPlayback(url: localURL)
             return
+        }
+
+        // A preloaded session always starts at 0, so it can't serve a mid-track resume.
+        if boundedResume != nil {
+            discardPreloadedNext()
         }
 
         // Fast path: use preloaded next track URL/session if it matches.
@@ -823,9 +864,21 @@ final class AudioPlayerService: @unchecked Sendable {
             avoidAudioTranscode: avoidAudioTranscode
         )
         isConstrainedPlaybackPath = shouldConstrainForNetwork
+
+        // Start the transcode at the resume point rather than seeking after the
+        // fact — PMS otherwise has to transcode everything up to the target first.
+        var offsetSeconds = 0
+        if let boundedResume, boundedResume > 0 {
+            let safeUpper = duration > 1 ? duration - 1 : boundedResume
+            offsetSeconds = Int(min(boundedResume, safeUpper))
+        }
+        streamTimeOffset = TimeInterval(offsetSeconds)
+        currentTime = streamTimeOffset > 0 ? streamTimeOffset : currentTime
+
         let generation = playbackGeneration
         let capturedClient = client
         let capturedServer = server
+        let capturedOffsetSeconds = offsetSeconds
 
         let soundCheckEnabled = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
         let ratingKey = track.ratingKey
@@ -840,7 +893,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 headers: headers,
                 location: playbackPath.locationQueryValue,
                 constrainAudioBitrate: shouldConstrainForNetwork,
-                cellularTranscodeBitrate: cellularTranscodeBitrate
+                cellularTranscodeBitrate: cellularTranscodeBitrate,
+                offsetSeconds: capturedOffsetSeconds
             )
             async let detailedTrack: PlexMetadata? = soundCheckEnabled
                 ? (try? await capturedClient.cachedMetadata(server: capturedServer, ratingKey: ratingKey))
@@ -868,7 +922,8 @@ final class AudioPlayerService: @unchecked Sendable {
                 sessionID: sessionID,
                 location: playbackPath.locationQueryValue,
                 constrainAudioBitrate: shouldConstrainForNetwork,
-                cellularTranscodeBitrate: cellularTranscodeBitrate
+                cellularTranscodeBitrate: cellularTranscodeBitrate,
+                offsetSeconds: capturedOffsetSeconds
             )
 
             guard let streamURL = candidates.first else {
@@ -1140,7 +1195,6 @@ final class AudioPlayerService: @unchecked Sendable {
                 isPlaying = false
                 updateNowPlayingInfo()
             }
-            persistPlaybackPosition()
             logPlayback("audio_interruption_began", "was_playing=\(wasInterruptedWhilePlaying)")
         case .ended:
             let shouldResume = options.contains(.shouldResume) && wasInterruptedWhilePlaying
@@ -1163,19 +1217,6 @@ final class AudioPlayerService: @unchecked Sendable {
             }
         @unknown default:
             break
-        }
-    }
-
-    private func observeAppLifecycle() {
-        willResignActiveObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.willResignActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.persistPlaybackPosition()
-            }
         }
     }
 
@@ -1417,10 +1458,12 @@ final class AudioPlayerService: @unchecked Sendable {
                 switch status {
                 case .readyToPlay:
                     self.isReadyToPlay = true
-                    if assetDuration.isFinite && assetDuration > 0 {
+                    // An offset stream's asset duration only covers the remainder
+                    // of the track, so keep the metadata duration in that case.
+                    if self.streamTimeOffset == 0, assetDuration.isFinite && assetDuration > 0 {
                         self.duration = assetDuration
                     }
-                    self.logPlayback("item_ready", "duration=\(self.duration)")
+                    self.logPlayback("item_ready", "duration=\(self.duration) offset=\(self.streamTimeOffset)")
 
                     if let pendingSeek = self.pendingInitialSeekTime {
                         self.pendingInitialSeekTime = nil
@@ -1584,15 +1627,16 @@ final class AudioPlayerService: @unchecked Sendable {
                 guard !self.isSeeking else { return }
                 guard seconds.isFinite && seconds >= 0 else { return }
 
-                if let itemDuration = self.player?.currentItem?.duration.seconds,
+                if self.streamTimeOffset == 0,
+                   let itemDuration = self.player?.currentItem?.duration.seconds,
                    itemDuration.isFinite && itemDuration > 0 {
                     self.duration = itemDuration
                 }
 
-                self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
+                let absoluteSeconds = self.streamTimeOffset + seconds
+                self.currentTime = self.duration > 0 ? min(absoluteSeconds, self.duration) : absoluteSeconds
                 self.maybeReportScrobble()
                 self.maybePreloadNextTrack()
-                self.persistPlaybackPositionThrottled()
             }
         }
     }
@@ -1786,7 +1830,6 @@ final class AudioPlayerService: @unchecked Sendable {
         defaults.set(currentIndex, forKey: Self.currentIndexKey)
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
-        persistPlaybackPosition()
     }
 
     func restorePlaybackState() {
@@ -1813,29 +1856,11 @@ final class AudioPlayerService: @unchecked Sendable {
             currentTrack = track
             duration = Double(track.duration ?? 0) / 1000.0
         }
-        let savedTime = defaults.double(forKey: Self.currentTimeKey)
-        if currentTrack != nil, savedTime.isFinite, savedTime > 0 {
-            currentTime = duration > 0 ? min(savedTime, duration) : savedTime
-            lastPersistedPositionSeconds = currentTime
-        }
+        // The track is recalled but always from the start; clear any position
+        // persisted by older builds.
+        defaults.removeObject(forKey: Self.currentTimeKey)
         lastSavedQueueHash = Self.queueIdentityHash(queue)
         lastSavedOriginalQueueHash = Self.queueIdentityHash(originalQueue)
-    }
-
-    private func persistPlaybackPosition() {
-        let defaults = UserDefaults.standard
-        if currentTrack != nil, currentTime.isFinite, currentTime > 0 {
-            defaults.set(currentTime, forKey: Self.currentTimeKey)
-            lastPersistedPositionSeconds = currentTime
-        } else {
-            defaults.removeObject(forKey: Self.currentTimeKey)
-            lastPersistedPositionSeconds = 0
-        }
-    }
-
-    private func persistPlaybackPositionThrottled() {
-        guard abs(currentTime - lastPersistedPositionSeconds) >= 5 else { return }
-        persistPlaybackPosition()
     }
 
     nonisolated private static func makeArtwork(from image: UIImage) -> MPMediaItemArtwork {
@@ -1917,6 +1942,25 @@ final class AudioPlayerService: @unchecked Sendable {
         center.changePlaybackPositionCommand.addTarget { [weak self] event in
             if let event = event as? MPChangePlaybackPositionCommandEvent {
                 self?.seek(to: event.positionTime)
+            }
+            return .success
+        }
+        // Press-and-hold on the CarPlay / lock screen skip buttons.
+        center.seekForwardCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPSeekCommandEvent else { return .commandFailed }
+            switch event.type {
+            case .beginSeeking: self.beginHeldSeek(forward: true)
+            case .endSeeking: self.endHeldSeek()
+            @unknown default: break
+            }
+            return .success
+        }
+        center.seekBackwardCommand.addTarget { [weak self] event in
+            guard let self, let event = event as? MPSeekCommandEvent else { return .commandFailed }
+            switch event.type {
+            case .beginSeeking: self.beginHeldSeek(forward: false)
+            case .endSeeking: self.endHeldSeek()
+            @unknown default: break
             }
             return .success
         }
