@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(AudioPlayerService.self) private var player
 
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
@@ -12,7 +13,9 @@ struct SettingsView: View {
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
-    @AppStorage("autoDownloadAllSongs") private var autoDownloadAllSongs = false
+    @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
+    @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
+    @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 10
     @State private var showReviewPrompt = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
@@ -21,6 +24,7 @@ struct SettingsView: View {
     var onSignOut: () -> Void
 
     private static let cellularTranscodeBitrateOptions: [Int] = [192, 256, 320]
+    private static let dynamicDownloadLimitOptions: [Int] = [10, 25, 50, 100]
 
     var body: some View {
         Form {
@@ -126,22 +130,36 @@ struct SettingsView: View {
                     }
                 }
 
-                Toggle("Auto-Download Library", isOn: $autoDownloadAllSongs)
+                Toggle("Auto-Download", isOn: $autoDownloadEnabled)
                     .tint(.green)
-                    .onChange(of: autoDownloadAllSongs) { _, enabled in
-                        guard enabled,
-                              let server = serverConnection.currentServer,
-                              let sectionId = serverConnection.currentLibrarySectionId else { return }
-                        Task {
-                            if let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) {
-                                downloadManager.resumeAutoDownload(tracks: tracks, server: server, client: client)
-                            }
+                    .onChange(of: autoDownloadEnabled) { _, enabled in
+                        guard enabled else { return }
+                        startAutoDownloadForCurrentMode()
+                    }
+                if autoDownloadEnabled {
+                    Picker("Mode", selection: $autoDownloadMode) {
+                        ForEach(AutoDownloadMode.allCases, id: \.rawValue) { mode in
+                            Text(mode.displayName).tag(mode.rawValue)
                         }
                     }
+                    .onChange(of: autoDownloadMode) { _, _ in
+                        startAutoDownloadForCurrentMode()
+                    }
+                    if autoDownloadMode == AutoDownloadMode.queue.rawValue {
+                        Picker("Song Limit", selection: $dynamicDownloadLimit) {
+                            ForEach(Self.dynamicDownloadLimitOptions, id: \.self) { limit in
+                                Text("\(limit) songs").tag(limit)
+                            }
+                        }
+                        .onChange(of: dynamicDownloadLimit) { _, _ in
+                            player.syncDynamicQueueDownloads()
+                        }
+                    }
+                }
             } header: {
                 Text("Offline")
             } footer: {
-                Text("Downloads your entire library and any newly added tracks automatically.")
+                Text(offlineFooterText)
             }
 
             Section {
@@ -204,6 +222,33 @@ struct SettingsView: View {
         return NetworkStatus.shared.isCellular || NetworkStatus.shared.interfaceType == .cellular
     }
 
+    private var offlineFooterText: String {
+        guard autoDownloadEnabled else {
+            return "Automatically download songs for offline playback."
+        }
+        switch AutoDownloadMode(rawValue: autoDownloadMode) ?? .defaultMode {
+        case .library:
+            return "Downloads your entire library and any newly added tracks automatically."
+        case .queue:
+            return "Dynamically downloads songs from your play queue, advancing as you listen."
+        }
+    }
+
+    private func startAutoDownloadForCurrentMode() {
+        switch AutoDownloadMode(rawValue: autoDownloadMode) ?? .defaultMode {
+        case .library:
+            guard let server = serverConnection.currentServer,
+                  let sectionId = serverConnection.currentLibrarySectionId else { return }
+            Task {
+                if let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) {
+                    downloadManager.resumeAutoDownload(tracks: tracks, server: server, client: client)
+                }
+            }
+        case .queue:
+            player.syncDynamicQueueDownloads()
+        }
+    }
+
     private var playbackFooterText: String {
         if supportsCellularSettings {
             return "Enable transcoding to use less data on mobile networks. Sound Check can use track or album gain to keep volume consistent."
@@ -255,5 +300,7 @@ struct SettingsView: View {
 #Preview {
     NavigationStack {
         SettingsView { }
+            .environment(DownloadManager())
+            .environment(AudioPlayerService())
     }
 }

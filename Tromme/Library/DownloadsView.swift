@@ -6,7 +6,8 @@ struct DownloadsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
 
-    @AppStorage("autoDownloadAllSongs") private var autoDownloadAllSongs = false
+    @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
+    @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @State private var showDeleteAllConfirmation = false
     @State private var isStartingDownloads = false
 
@@ -48,7 +49,7 @@ struct DownloadsView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if autoDownloadAllSongs {
+                if autoDownloadEnabled, autoDownloadMode == AutoDownloadMode.library.rawValue {
                     if downloadManager.hasActiveDownloads {
                         Button {
                             downloadManager.cancelAllPendingDownloads()

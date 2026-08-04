@@ -568,12 +568,14 @@ final class AudioPlayerService: @unchecked Sendable {
         queue.insert(track, at: min(insertIndex, queue.count))
         originalQueue.append(track)
         savePlaybackState()
+        syncDynamicQueueDownloads()
     }
 
     func addToEndOfQueue(_ track: PlexMetadata) {
         queue.append(track)
         originalQueue.append(track)
         savePlaybackState()
+        syncDynamicQueueDownloads()
     }
 
     func removeFromQueue(at index: Int) {
@@ -652,6 +654,35 @@ final class AudioPlayerService: @unchecked Sendable {
         var upcoming = Array(queue[(currentIndex + 1)...])
         upcoming.shuffle()
         queue.replaceSubrange((currentIndex + 1)..., with: upcoming)
+    }
+
+    // MARK: - Dynamic Downloads
+
+    private var isDynamicQueueDownloadEnabled: Bool {
+        guard UserDefaults.standard.bool(forKey: Self.autoDownloadEnabledKey) else { return false }
+        let mode = UserDefaults.standard.string(forKey: Self.autoDownloadModeKey)
+            .flatMap(AutoDownloadMode.init(rawValue:)) ?? AutoDownloadMode.defaultMode
+        return mode == .queue
+    }
+
+    /// When Auto-Download is in Dynamic mode, downloads the current track plus
+    /// upcoming queue tracks (capped at the configured limit) for offline
+    /// playback. The queue can hold an entire library, so the cap keeps a
+    /// rolling window that advances with playback rather than downloading
+    /// everything at once.
+    func syncDynamicQueueDownloads() {
+        guard isDynamicQueueDownloadEnabled else { return }
+        guard let server, let client,
+              let downloadManager = AppContext.shared.downloadManager,
+              queue.indices.contains(currentIndex) else { return }
+        let limit = Self.validatedDynamicDownloadLimit(
+            UserDefaults.standard.integer(forKey: Self.dynamicDownloadLimitKey)
+        )
+        downloadManager.downloadBatch(
+            tracks: Array(queue[currentIndex...].prefix(limit)),
+            server: server,
+            client: client
+        )
     }
 
     // MARK: - Queue Info
@@ -961,6 +992,7 @@ final class AudioPlayerService: @unchecked Sendable {
         prefetchUpcomingArtwork()
         maybeRefillMagicMixQueueIfNeeded(trigger: "start_playback")
         maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
+        syncDynamicQueueDownloads()
         reportTimelineState("playing")
         savePlaybackState()
     }
@@ -1776,7 +1808,11 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
     private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
     private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
+    private static let autoDownloadEnabledKey = "autoDownloadEnabled"
+    private static let autoDownloadModeKey = "autoDownloadMode"
+    private static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
+    private static let supportedDynamicDownloadLimits: Set<Int> = [10, 25, 50, 100]
 
     private enum SoundCheckGainSource: String {
         case track
@@ -1785,6 +1821,10 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {
         supportedCellularTranscodeBitrates.contains(bitrate) ? bitrate : 320
+    }
+
+    static func validatedDynamicDownloadLimit(_ limit: Int) -> Int {
+        supportedDynamicDownloadLimits.contains(limit) ? limit : 10
     }
 
     private static func queueIdentityHash(_ items: [PlexMetadata]) -> Int {

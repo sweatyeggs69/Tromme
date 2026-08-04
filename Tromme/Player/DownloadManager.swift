@@ -1,6 +1,20 @@
 import Foundation
 import Observation
 
+enum AutoDownloadMode: String, CaseIterable {
+    case library
+    case queue
+
+    static let defaultMode: AutoDownloadMode = .queue
+
+    var displayName: String {
+        switch self {
+        case .library: "Entire Library"
+        case .queue: "Dynamic"
+        }
+    }
+}
+
 struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
     let ratingKey: String
     let title: String
@@ -67,8 +81,26 @@ final class DownloadManager: @unchecked Sendable {
     }
 
     init() {
+        Self.migrateLegacyAutoDownloadPreferences()
         loadPersistedRecords()
         verifyExistingDownloads()
+    }
+
+    /// Maps the retired per-mode toggles ("autoDownloadAllSongs",
+    /// "dynamicQueueDownloads") onto the enabled + mode pair.
+    private static func migrateLegacyAutoDownloadPreferences() {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "autoDownloadEnabled") == nil {
+            if defaults.bool(forKey: "dynamicQueueDownloads") {
+                defaults.set(true, forKey: "autoDownloadEnabled")
+                defaults.set(AutoDownloadMode.queue.rawValue, forKey: "autoDownloadMode")
+            } else if defaults.bool(forKey: "autoDownloadAllSongs") {
+                defaults.set(true, forKey: "autoDownloadEnabled")
+                defaults.set(AutoDownloadMode.library.rawValue, forKey: "autoDownloadMode")
+            }
+        }
+        defaults.removeObject(forKey: "autoDownloadAllSongs")
+        defaults.removeObject(forKey: "dynamicQueueDownloads")
     }
 
     // MARK: - Public API
