@@ -15,7 +15,8 @@ struct SettingsView: View {
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
-    @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 10
+    @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
+    @AppStorage("downloadFormat") private var downloadFormat = DownloadFormat.defaultFormat.rawValue
     @State private var showReviewPrompt = false
     @State private var showSignOutConfirmation = false
     @State private var showClearCacheConfirmation = false
@@ -24,7 +25,7 @@ struct SettingsView: View {
     var onSignOut: () -> Void
 
     private static let cellularTranscodeBitrateOptions: [Int] = [192, 256, 320]
-    private static let dynamicDownloadLimitOptions: [Int] = [10, 25, 50, 100]
+    private static let dynamicDownloadLimitOptions: [Int] = [5, 10, 20]
 
     var body: some View {
         Form {
@@ -130,6 +131,12 @@ struct SettingsView: View {
                     }
                 }
 
+                Picker("Download Format", selection: $downloadFormat) {
+                    ForEach(DownloadFormat.allCases, id: \.rawValue) { format in
+                        Text(format.displayName).tag(format.rawValue)
+                    }
+                }
+
                 Toggle("Auto-Download", isOn: $autoDownloadEnabled)
                     .tint(.green)
                     .onChange(of: autoDownloadEnabled) { _, enabled in
@@ -223,15 +230,21 @@ struct SettingsView: View {
     }
 
     private var offlineFooterText: String {
-        guard autoDownloadEnabled else {
-            return "Automatically download songs for offline playback."
+        var text: String
+        if autoDownloadEnabled {
+            switch AutoDownloadMode(rawValue: autoDownloadMode) ?? .defaultMode {
+            case .library:
+                text = "Downloads your entire library and any newly added tracks automatically."
+            case .queue:
+                text = "Dynamically downloads songs from your play queue, advancing as you listen."
+            }
+        } else {
+            text = "Automatically download songs for offline playback."
         }
-        switch AutoDownloadMode(rawValue: autoDownloadMode) ?? .defaultMode {
-        case .library:
-            return "Downloads your entire library and any newly added tracks automatically."
-        case .queue:
-            return "Dynamically downloads songs from your play queue, advancing as you listen."
+        if let format = DownloadFormat(rawValue: downloadFormat), format != .original {
+            text += " New downloads are converted to \(format.rawValue.uppercased()) on the server to save space; existing downloads keep their original format."
         }
+        return text
     }
 
     private func startAutoDownloadForCurrentMode() {

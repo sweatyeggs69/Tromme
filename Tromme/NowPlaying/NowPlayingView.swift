@@ -434,7 +434,11 @@ struct NowPlayingView: View {
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
-                    TimelineSlider(usesOverlayedTimeLabels: true, showLosslessBadge: isLossless)
+                    TimelineSlider(
+                        usesOverlayedTimeLabels: true,
+                        showLosslessBadge: isLossless && !player.isPlayingLocalDownload,
+                        showLocalBadge: player.isPlayingLocalDownload
+                    )
                         .padding(.horizontal, horizontalPadding)
                         .padding(.top, 12)
 
@@ -758,6 +762,9 @@ struct TimelineSlider: View {
 
     var usesOverlayedTimeLabels = false
     var showLosslessBadge: Bool = false
+    var showLocalBadge: Bool = false
+
+    private var showsBadge: Bool { showLosslessBadge || showLocalBadge }
 
     var body: some View {
         let duration = max(player.duration, 1)
@@ -772,9 +779,9 @@ struct TimelineSlider: View {
                     .overlay(alignment: .bottom) {
                         timeLabels(displayValue: displayValue, duration: duration)
                             .overlay {
-                                losslessBadge
-                                    .opacity(showLosslessBadge ? 1 : 0)
-                                    .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
+                                playbackBadge
+                                    .opacity(showsBadge ? 1 : 0)
+                                    .animation(.easeInOut(duration: 0.2), value: showsBadge)
                             }
                             .offset(y: 12)
                     }
@@ -783,9 +790,9 @@ struct TimelineSlider: View {
                     sliderControl(duration: duration, isReady: isReady)
                     timeLabels(displayValue: displayValue, duration: duration)
                         .overlay {
-                            losslessBadge
-                                .opacity(showLosslessBadge ? 1 : 0)
-                                .animation(.easeInOut(duration: 0.2), value: showLosslessBadge)
+                            playbackBadge
+                                .opacity(showsBadge ? 1 : 0)
+                                .animation(.easeInOut(duration: 0.2), value: showsBadge)
                         }
                 }
             }
@@ -866,11 +873,13 @@ struct TimelineSlider: View {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    private var losslessBadge: some View {
+    private var playbackBadge: some View {
         HStack(spacing: 3) {
-            Image(systemName: "waveform")
-                .font(.system(size: 10, weight: .medium))
-            Text("Lossless")
+            if !showLocalBadge {
+                Image(systemName: "waveform")
+                    .font(.system(size: 10, weight: .medium))
+            }
+            Text(showLocalBadge ? "Local" : "Lossless")
                 .font(.caption2.weight(.medium))
         }
         .foregroundStyle(.white.opacity(0.45))

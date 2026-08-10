@@ -569,20 +569,23 @@ final class PlexAPIClient: Sendable {
         metadataPath: String,
         sessionID: String,
         location: String = "lan",
+        streamProtocol: String = "hls",
+        allowDirectStream: Bool = true,
         constrainAudioBitrate: Bool = false,
         cellularTranscodeBitrate: Int = 320,
         offsetSeconds: Int = 0
     ) -> [URLQueryItem] {
         let musicBitrate = constrainAudioBitrate ? "\(cellularTranscodeBitrate)" : "40000"
+        let directStream = allowDirectStream ? "1" : "0"
         return [
             URLQueryItem(name: "path", value: metadataPath),
             URLQueryItem(name: "mediaIndex", value: "0"),
             URLQueryItem(name: "partIndex", value: "0"),
             URLQueryItem(name: "offset", value: "\(max(offsetSeconds, 0))"),
-            URLQueryItem(name: "protocol", value: "hls"),
+            URLQueryItem(name: "protocol", value: streamProtocol),
             URLQueryItem(name: "directPlay", value: "0"),
-            URLQueryItem(name: "directStream", value: "1"),
-            URLQueryItem(name: "directStreamAudio", value: "1"),
+            URLQueryItem(name: "directStream", value: directStream),
+            URLQueryItem(name: "directStreamAudio", value: directStream),
             URLQueryItem(name: "musicBitrate", value: musicBitrate),
             URLQueryItem(name: "mediaBufferSize", value: "102400"),
             URLQueryItem(name: "location", value: location),
@@ -605,6 +608,8 @@ final class PlexAPIClient: Sendable {
         sessionID: String,
         headers: [String: String],
         location: String = "lan",
+        streamProtocol: String = "hls",
+        allowDirectStream: Bool = true,
         constrainAudioBitrate: Bool = false,
         cellularTranscodeBitrate: Int = 320,
         offsetSeconds: Int = 0
@@ -619,6 +624,8 @@ final class PlexAPIClient: Sendable {
             metadataPath: metadataPath,
             sessionID: sessionID,
             location: location,
+            streamProtocol: streamProtocol,
+            allowDirectStream: allowDirectStream,
             constrainAudioBitrate: constrainAudioBitrate,
             cellularTranscodeBitrate: cellularTranscodeBitrate,
             offsetSeconds: offsetSeconds
@@ -713,6 +720,53 @@ final class PlexAPIClient: Sendable {
 
         guard let url = components.url else { return [] }
         return [url]
+    }
+
+    /// Progressive (non-HLS) transcode URL for offline downloads. PMS converts
+    /// the track server-side and serves a complete file in the target format,
+    /// so the device never has to transcode locally.
+    func transcodeDownloadURL(
+        server: PlexServer,
+        metadataPath: String,
+        sessionID: String,
+        fileExtension: String,
+        bitrateKbps: Int
+    ) -> URL? {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
+        components.path = "/music/:/transcode/universal/start.\(fileExtension)"
+        components.queryItems = universalQueryItems(
+            server: server,
+            metadataPath: metadataPath,
+            sessionID: sessionID,
+            streamProtocol: "http",
+            allowDirectStream: false,
+            constrainAudioBitrate: true,
+            cellularTranscodeBitrate: bitrateKbps
+        )
+        return components.url
+    }
+
+    /// Transcode-target profile for converted offline downloads.
+    /// Must be context=streaming: the universal decision endpoint evaluates in
+    /// the streaming context, so a static target yields "No conversion profile
+    /// found for protocol http" and start returns 400. `replace=true` is
+    /// required so this target overrides the Generic profile's existing one.
+    /// Only MP3 works here — PMS's progressive http muxer produces zero bytes
+    /// for AAC (ADTS) and MP4 output.
+    static func profileExtraDownload(container: String, codec: String) -> String {
+        "add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=\(container)&audioCodec=\(codec)&replace=true)"
+    }
+
+    func downloadTranscodeHeaders(
+        server: PlexServer,
+        sessionID: String,
+        container: String,
+        codec: String
+    ) -> [String: String] {
+        var headers = playbackHeaders(server: server, sessionID: sessionID)
+        headers["X-Plex-Client-Profile-Extra"] = Self.profileExtraDownload(container: container, codec: codec)
+        return headers
     }
 
     /// ALAC profile for LAN — lossless, no quality loss.

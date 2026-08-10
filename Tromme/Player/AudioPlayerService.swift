@@ -115,6 +115,9 @@ final class AudioPlayerService: @unchecked Sendable {
     /// True when the current track is being transcoded rather than direct-streamed.
     var isTranscoding: Bool { isConstrainedPlaybackPath }
 
+    /// True when the current track is playing from a locally downloaded file.
+    var isPlayingLocalDownload: Bool { isPlayingLocalFile }
+
     init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -1812,7 +1815,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let autoDownloadModeKey = "autoDownloadMode"
     private static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
-    private static let supportedDynamicDownloadLimits: Set<Int> = [10, 25, 50, 100]
+    private static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
     private enum SoundCheckGainSource: String {
         case track
@@ -1824,7 +1827,7 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     static func validatedDynamicDownloadLimit(_ limit: Int) -> Int {
-        supportedDynamicDownloadLimits.contains(limit) ? limit : 10
+        supportedDynamicDownloadLimits.contains(limit) ? limit : 5
     }
 
     private static func queueIdentityHash(_ items: [PlexMetadata]) -> Int {

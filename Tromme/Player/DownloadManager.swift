@@ -15,6 +15,31 @@ enum AutoDownloadMode: String, CaseIterable {
     }
 }
 
+// MP3 is the only conversion PMS supports over the progressive http transcode
+// path — AAC (ADTS) and MP4 targets pass the decision but stream zero bytes.
+enum DownloadFormat: String, CaseIterable {
+    case original
+    case mp3
+
+    static let defaultFormat: DownloadFormat = .mp3
+
+    var displayName: String {
+        switch self {
+        case .original: "Original (Best Quality)"
+        case .mp3: "MP3 (Space Saver)"
+        }
+    }
+
+    /// Plex container name for the converted download; doubles as the file
+    /// extension. `nil` means download the source file untouched.
+    var container: String? {
+        switch self {
+        case .original: nil
+        case .mp3: "mp3"
+        }
+    }
+}
+
 struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
     let ratingKey: String
     let title: String
@@ -58,6 +83,14 @@ final class DownloadManager: @unchecked Sendable {
     private var activeDownloadCount = 0
     private let maxConcurrentDownloads = 3
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
+
+    static let downloadFormatKey = "downloadFormat"
+    static let downloadTranscodeBitrateKbps = 320
+
+    private var preferredDownloadFormat: DownloadFormat {
+        UserDefaults.standard.string(forKey: Self.downloadFormatKey)
+            .flatMap(DownloadFormat.init(rawValue:)) ?? .defaultFormat
+    }
 
     var hasActiveDownloads: Bool { !transientStates.isEmpty }
 
@@ -225,63 +258,162 @@ final class DownloadManager: @unchecked Sendable {
 
         try? FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
 
+        // Server-side conversion when a lossy download format is selected;
+        // falls back to the original file if the transcode fails.
+        if let targetContainer = preferredDownloadFormat.container {
+            let converted = await downloadConverted(
+                track: resolvedTrack,
+                container: targetContainer,
+                server: server,
+                client: client
+            )
+            if converted || Task.isCancelled { return }
+        }
+
         let container = resolvedTrack.media?.first?.container
             ?? resolvedTrack.media?.first?.part?.first?.container
             ?? "mp3"
-        let filename = "\(ratingKey).\(container)"
-        let destURL = downloadsDirectory.appendingPathComponent(filename)
 
         do {
-            let (tempURL, _) = try await URLSession.shared.download(for: URLRequest(url: downloadURL))
-
-            guard !Task.isCancelled else {
-                transientStates.removeValue(forKey: ratingKey)
-                return
-            }
-
-            if FileManager.default.fileExists(atPath: destURL.path) {
-                try FileManager.default.removeItem(at: destURL)
-            }
-            try FileManager.default.moveItem(at: tempURL, to: destURL)
-
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: destURL.path))?[.size] as? Int64 ?? 0
-            let thumbPath = resolvedTrack.thumb ?? resolvedTrack.parentThumb
-            let record = DownloadedTrackRecord(
-                ratingKey: ratingKey,
-                title: resolvedTrack.title,
-                artistName: resolvedTrack.artistName,
-                albumName: resolvedTrack.albumName,
-                albumRatingKey: resolvedTrack.parentRatingKey,
-                artistRatingKey: resolvedTrack.grandparentRatingKey,
-                thumbPath: thumbPath,
-                relativeFilePath: filename,
-                downloadedAt: Date(),
-                fileSize: fileSize,
-                durationMs: resolvedTrack.duration
+            try await fetchAndStore(
+                request: URLRequest(url: downloadURL),
+                filename: "\(ratingKey).\(container)",
+                track: resolvedTrack,
+                server: server,
+                client: client
             )
-            records[ratingKey] = record
-            transientStates.removeValue(forKey: ratingKey)
-            persistRecords()
-
-            // Prefetch artwork at all three bucket sizes so it's available offline
-            // in track rows (256), grids (512), and Now Playing / album headers (896).
-            if let thumbPath {
-                await withTaskGroup(of: Void.self) { group in
-                    for px in [256, 512, 896] {
-                        if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
-                            group.addTask {
-                                _ = await ImageCache.shared.image(for: url, targetPixelSize: px)
-                            }
-                        }
-                    }
-                }
-            }
-
         } catch {
             if Task.isCancelled {
                 transientStates.removeValue(forKey: ratingKey)
             } else {
                 transientStates[ratingKey] = .failed
+            }
+        }
+    }
+
+    /// Downloads the track converted to `container` (AAC/MP3) via the PMS
+    /// universal transcoder. Returns false when the server refuses or the
+    /// transfer fails, so the caller can fall back to the original file.
+    private func downloadConverted(
+        track: PlexMetadata,
+        container: String,
+        server: PlexServer,
+        client: PlexAPIClient
+    ) async -> Bool {
+        let ratingKey = track.ratingKey
+        let bitrate = Self.downloadTranscodeBitrateKbps
+        let metadataPath = track.key ?? "/library/metadata/\(ratingKey)"
+        let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
+        let sessionID = UUID().uuidString
+        let headers = client.downloadTranscodeHeaders(
+            server: server,
+            sessionID: sessionID,
+            container: container,
+            codec: container
+        )
+        guard let url = client.transcodeDownloadURL(
+            server: server,
+            metadataPath: normalizedPath,
+            sessionID: sessionID,
+            fileExtension: container,
+            bitrateKbps: bitrate
+        ) else { return false }
+
+        var request = URLRequest(url: url)
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+
+        defer {
+            Task { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+        }
+        do {
+            try await client.universalDecision(
+                server: server,
+                metadataPath: normalizedPath,
+                sessionID: sessionID,
+                headers: headers,
+                streamProtocol: "http",
+                allowDirectStream: false,
+                constrainAudioBitrate: true,
+                cellularTranscodeBitrate: bitrate
+            )
+            try await fetchAndStore(
+                request: request,
+                filename: "\(ratingKey).\(container)",
+                track: track,
+                server: server,
+                client: client
+            )
+            return true
+        } catch {
+            #if DEBUG
+            print("[DownloadManager] Converted download failed for \(ratingKey) (\(container)): \(error)")
+            #endif
+            if Task.isCancelled {
+                transientStates.removeValue(forKey: ratingKey)
+            }
+            return false
+        }
+    }
+
+    private func fetchAndStore(
+        request: URLRequest,
+        filename: String,
+        track: PlexMetadata,
+        server: PlexServer,
+        client: PlexAPIClient
+    ) async throws {
+        let ratingKey = track.ratingKey
+        let destURL = downloadsDirectory.appendingPathComponent(filename)
+
+        let (tempURL, response) = try await URLSession.shared.download(for: request)
+        if let statusCode = (response as? HTTPURLResponse)?.statusCode, statusCode >= 400 {
+            throw PlexAPIError.serverError(statusCode)
+        }
+        // A dying transcoder can return 200 with an empty body — don't record
+        // an empty file as a successful download.
+        let downloadedSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 ?? 0
+        guard downloadedSize > 0 else {
+            throw PlexAPIError.serverError(-1)
+        }
+        try Task.checkCancellation()
+
+        if FileManager.default.fileExists(atPath: destURL.path) {
+            try FileManager.default.removeItem(at: destURL)
+        }
+        try FileManager.default.moveItem(at: tempURL, to: destURL)
+
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: destURL.path))?[.size] as? Int64 ?? 0
+        let thumbPath = track.thumb ?? track.parentThumb
+        let record = DownloadedTrackRecord(
+            ratingKey: ratingKey,
+            title: track.title,
+            artistName: track.artistName,
+            albumName: track.albumName,
+            albumRatingKey: track.parentRatingKey,
+            artistRatingKey: track.grandparentRatingKey,
+            thumbPath: thumbPath,
+            relativeFilePath: filename,
+            downloadedAt: Date(),
+            fileSize: fileSize,
+            durationMs: track.duration
+        )
+        records[ratingKey] = record
+        transientStates.removeValue(forKey: ratingKey)
+        persistRecords()
+
+        // Prefetch artwork at all three bucket sizes so it's available offline
+        // in track rows (256), grids (512), and Now Playing / album headers (896).
+        if let thumbPath {
+            await withTaskGroup(of: Void.self) { group in
+                for px in [256, 512, 896] {
+                    if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
+                        group.addTask {
+                            _ = await ImageCache.shared.image(for: url, targetPixelSize: px)
+                        }
+                    }
+                }
             }
         }
     }
