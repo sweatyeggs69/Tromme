@@ -91,13 +91,19 @@ struct ArtworkView: View {
 }
 
 extension ArtworkView {
+    /// Largest transcode bucket, used for Now Playing and album/playlist headers.
+    /// A deliberate balance: slightly below native on the largest screens
+    /// (3x iPhones need ~1176px) in exchange for smaller downloads and cache files.
+    static let maxTranscodePx = 1000
+
     static func recommendedTranscodeSize(pointSize: CGFloat, displayScale: CGFloat) -> Int {
         let safePointSize = max(pointSize, 1)
         let target = Int(ceil(safePointSize * displayScale))
         switch target {
         case ...256: return 256
-        case ...640: return 512
-        default: return 896
+        case ...512: return 512
+        case ...640: return 640
+        default: return maxTranscodePx
         }
     }
 }

@@ -33,7 +33,7 @@ actor ImageCache {
         let start = ContinuousClock.now
 #endif
         let key = cacheKey(for: url)
-        // Disk key strips width/height so a smaller cached image serves any size offline.
+        // Disk key strips width/height so one stored copy per artwork serves every size.
         let diskKey = diskCacheKey(for: url)
         let memoryKey = memoryCacheKey(for: key, targetPixelSize: targetPixelSize)
 
@@ -46,8 +46,11 @@ actor ImageCache {
             return cached
         }
 
-        // 2. Disk (size-independent key — a 256px cached image satisfies a 512px request)
-        if let diskImage = loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize) {
+        // 2. Disk (size-independent key). Only serve the stored file if its pixels
+        // cover the requested size — an undersized copy falls through to a
+        // re-download so large surfaces (Now Playing, album headers) don't get
+        // a small image upscaled. The undersized file remains as an offline fallback.
+        if let diskImage = loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize, minimumPixelSize: targetPixelSize) {
             memoryCache.setObject(diskImage, forKey: memoryKey as NSString, cost: diskImage.decodedCost)
 #if DEBUG
             debugStats.diskHits += 1
@@ -76,7 +79,15 @@ actor ImageCache {
         debugStats.networkRequests += 1
 #endif
         let task = Task<UIImage?, Never> {
-            await download(url: url, diskKey: diskKey, memoryKey: memoryKey, targetPixelSize: targetPixelSize)
+            if let downloaded = await self.download(url: url, diskKey: diskKey, memoryKey: memoryKey, targetPixelSize: targetPixelSize) {
+                return downloaded
+            }
+            // Offline or failed fetch: serve an undersized disk copy rather than nothing.
+            if let fallback = self.loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize) {
+                self.memoryCache.setObject(fallback, forKey: memoryKey as NSString, cost: fallback.decodedCost)
+                return fallback
+            }
+            return nil
         }
         inFlightRequests[requestKey] = task
         let result = await task.value
@@ -137,8 +148,9 @@ actor ImageCache {
 
     private func download(url: URL, diskKey: String, memoryKey: String, targetPixelSize: Int?) async -> UIImage? {
         let startGeneration = generation
-        // Always fetch at least 512px so the disk copy serves Now Playing (which needs 512-896px)
-        // without a second download. Memory is still decoded at the originally requested size.
+        // Fetch at least 512px so small row requests still store a reasonably sharp shared
+        // copy. Larger surfaces re-fetch at their own size when the stored file is too small.
+        // Memory is still decoded at the originally requested size.
         let fetchURL = upgradedDownloadURL(from: url, minimumSize: 512)
         do {
             let (data, response) = try await URLSession.shared.data(from: fetchURL)
@@ -162,7 +174,10 @@ actor ImageCache {
         }
     }
 
-    private func loadFromDisk(key: String, targetPixelSize: Int?) -> UIImage? {
+    /// Loads and decodes a disk-cached image. When `minimumPixelSize` is set, returns nil
+    /// if the stored file's pixel dimensions are smaller — signaling the caller to re-fetch
+    /// a larger copy instead of upscaling.
+    private func loadFromDisk(key: String, targetPixelSize: Int?, minimumPixelSize: Int? = nil) -> UIImage? {
         let fileURL = diskURL.appendingPathComponent(key)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
         // Touch the file to update access time for LRU eviction
@@ -171,6 +186,12 @@ actor ImageCache {
             ofItemAtPath: fileURL.path
         )
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
+        if let minimumPixelSize, minimumPixelSize > 0 {
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+            let width = properties?[kCGImagePropertyPixelWidth] as? Int ?? 0
+            let height = properties?[kCGImagePropertyPixelHeight] as? Int ?? 0
+            guard max(width, height) >= minimumPixelSize else { return nil }
+        }
         return decodeImage(from: source, targetPixelSize: targetPixelSize)
     }
 

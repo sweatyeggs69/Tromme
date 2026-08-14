@@ -403,17 +403,13 @@ final class DownloadManager: @unchecked Sendable {
         transientStates.removeValue(forKey: ratingKey)
         persistRecords()
 
-        // Prefetch artwork at all three bucket sizes so it's available offline
-        // in track rows (256), grids (512), and Now Playing / album headers (896).
+        // Prefetch artwork once at the largest transcode bucket. The disk cache is
+        // keyed without width/height, so this single high-res copy serves track rows,
+        // grids, and Now Playing / album headers offline.
         if let thumbPath {
-            await withTaskGroup(of: Void.self) { group in
-                for px in [256, 512, 896] {
-                    if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
-                        group.addTask {
-                            _ = await ImageCache.shared.image(for: url, targetPixelSize: px)
-                        }
-                    }
-                }
+            let px = ArtworkView.maxTranscodePx
+            if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
+                _ = await ImageCache.shared.image(for: url, targetPixelSize: px)
             }
         }
     }

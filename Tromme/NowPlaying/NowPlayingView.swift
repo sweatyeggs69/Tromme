@@ -108,13 +108,14 @@ struct NowPlayingView: View {
                 : bottomScreenPaddingWithoutSafeArea
             let landscapeBottomInsetPadding = bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
-            let landscapeBottomActionsHeight: CGFloat = 62 + iPadBottomActionsExtraPadding
+            let landscapeBottomActionsHeight: CGFloat = bottomActionIconSize + iPadLandscapeBottomActionsExtraPadding
             let landscapeMainHeight = max(
                 0.0,
                 height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
             )
+            let landscapeArtworkControlsSpacing: CGFloat = 20
             let landscapePlayerControlsHeight = landscapeMainHeight * portraitBottomControlsHeightFraction
-            let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight)
+            let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight - landscapeArtworkControlsSpacing)
             let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight - 16)
             let landscapeLeftWidth = max(96.0, landscapeArtworkAreaHeight)
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
@@ -129,7 +130,7 @@ struct NowPlayingView: View {
                         .padding(.bottom, 6)
 
                     HStack(alignment: .top, spacing: landscapeColumnSpacing) {
-                        VStack(spacing: 0) {
+                        VStack(spacing: landscapeArtworkControlsSpacing) {
                             VStack(spacing: 0) {
                                 Spacer(minLength: 0)
 
@@ -175,7 +176,7 @@ struct NowPlayingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .layoutPriority(1)
                         .padding(.horizontal, landscapeOuterHorizontalPadding)
-                        .padding(.bottom, iPadBottomActionsExtraPadding)
+                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
@@ -1078,7 +1079,8 @@ struct NowPlayingBackground: View {
 
     private var backgroundURL: URL? {
         guard let thumbPath, let server = serverConnection.currentServer else { return nil }
-        return client.artworkURL(server: server, path: thumbPath, width: 896, height: 896)
+        // Same size as the main Now Playing artwork so both share one cached image.
+        return client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx)
     }
 
     /// Prefer the State image (set after the async load); fall back to a synchronous
@@ -1087,7 +1089,7 @@ struct NowPlayingBackground: View {
     private var resolvedImage: UIImage? {
         if let backgroundImage { return backgroundImage }
         guard let backgroundURL else { return nil }
-        return ImageCache.shared.memoryCachedImage(for: backgroundURL, targetPixelSize: 896)
+        return ImageCache.shared.memoryCachedImage(for: backgroundURL, targetPixelSize: ArtworkView.maxTranscodePx)
     }
 
     var body: some View {
@@ -1119,11 +1121,11 @@ struct NowPlayingBackground: View {
 
     private func loadBackgroundImage(server: PlexServer) async {
         guard let thumbPath,
-              let url = client.artworkURL(server: server, path: thumbPath, width: 896, height: 896) else {
+              let url = client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) else {
             backgroundImage = nil
             return
         }
-        let image = await ImageCache.shared.image(for: url, targetPixelSize: 896)
+        let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx)
         guard !Task.isCancelled, thumbPath == player.currentTrack?.parentThumb else { return }
         backgroundImage = image
     }

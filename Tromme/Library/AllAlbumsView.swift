@@ -62,6 +62,10 @@ struct AllAlbumsView: View {
                 if y0 != y1 { return y0 > y1 }
                 return ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
             }
+        case .dateAddedNewest:
+            result.sort { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }
+        case .dateAddedOldest:
+            result.sort { ($0.addedAt ?? 0) < ($1.addedAt ?? 0) }
         }
         return result
     }
@@ -72,6 +76,8 @@ struct AllAlbumsView: View {
             return alphabetSections(for: filteredAlbums) { $0.parentTitle ?? "" }
         case .yearOldest, .yearNewest:
             return decadeSections(for: filteredAlbums)
+        case .dateAddedNewest, .dateAddedOldest:
+            return addedYearSections(for: filteredAlbums)
         default:
             return alphabetSections(for: filteredAlbums) { $0.titleSort ?? $0.title }
         }
@@ -132,6 +138,17 @@ struct AllAlbumsView: View {
                             Text(sortOrder == .yearNewest ? "Newest First" : "Oldest First")
                         } else {
                             Text("Year")
+                        }
+                    }
+
+                    Button {
+                        sortOrder = sortOrder == .dateAddedNewest ? .dateAddedOldest : .dateAddedNewest
+                    } label: {
+                        if isDateAddedSortActive {
+                            Label("Date Added", systemImage: "checkmark")
+                            Text(sortOrder == .dateAddedOldest ? "Oldest First" : "Newest First")
+                        } else {
+                            Text("Date Added")
                         }
                     }
                 } label: {
@@ -220,7 +237,7 @@ struct AllAlbumsView: View {
                     }
                 }
                 .listStyle(.plain)
-                .listSectionIndexVisibility(isYearSortActive ? .hidden : .automatic)
+                .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
                 .tint(.secondary)
             }
 
@@ -263,7 +280,7 @@ struct AllAlbumsView: View {
                     }
                 }
                 .listStyle(.plain)
-                .listSectionIndexVisibility(isYearSortActive ? .hidden : .automatic)
+                .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
                 .tint(.secondary)
             }
         }
@@ -279,6 +296,10 @@ struct AllAlbumsView: View {
 
     private var isYearSortActive: Bool {
         sortOrder == .yearOldest || sortOrder == .yearNewest
+    }
+
+    private var isDateAddedSortActive: Bool {
+        sortOrder == .dateAddedNewest || sortOrder == .dateAddedOldest
     }
 
     private var artworkPrefetchKey: String {
@@ -400,6 +421,23 @@ struct AllAlbumsView: View {
         return album.year ?? 0
     }
 
+    private func addedYearSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
+        var sectionItems: [String: [PlexMetadata]] = [:]
+        var sectionOrder: [String] = []
+        for item in items {
+            let title: String
+            if let ts = item.addedAt {
+                let year = Calendar.current.component(.year, from: Date(timeIntervalSince1970: TimeInterval(ts)))
+                title = String(year)
+            } else {
+                title = "#"
+            }
+            if sectionItems[title] == nil { sectionOrder.append(title) }
+            sectionItems[title, default: []].append(item)
+        }
+        return sectionOrder.map { ($0, sectionItems[$0]!) }
+    }
+
     private func decadeSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
         var sectionItems: [String: [PlexMetadata]] = [:]
         var sectionOrder: [String] = []
@@ -432,6 +470,8 @@ private enum AlbumSortOrder: String {
     case artistDescending
     case yearOldest
     case yearNewest
+    case dateAddedNewest
+    case dateAddedOldest
 }
 
 #if DEBUG
