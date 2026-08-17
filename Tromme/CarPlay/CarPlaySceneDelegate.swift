@@ -247,20 +247,23 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         Task {
             if let recentlyPlayed = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
                !recentlyPlayed.isEmpty {
-                let limited = Array(recentlyPlayed.prefix(10))
-                let imageRow = await makeImageRow(
+                let limited = Array(recentlyPlayed.prefix(4))
+                let row = await makeCondensedImageRow(
                     title: "Recently Played",
                     items: limited,
                     server: server,
                     client: client,
-                    onImageSelect: { [weak self] index in
-                        self?.showTrackList(title: "Recently Played", tracks: limited, startAt: index)
+                    elementTitle: { $0.title },
+                    elementSubtitle: { $0.artistDisplayName },
+                    onElementSelect: { [weak self] index in
+                        self?.player?.play(tracks: limited, startingAt: index)
+                        self?.pushNowPlaying()
                     },
-                    onRowSelect: { [weak self] in
+                    onHeaderSelect: { [weak self] in
                         self?.showTrackList(title: "Recently Played", tracks: limited)
                     }
                 )
-                slots[2] = CPListSection(items: [imageRow])
+                slots[2] = CPListSection(items: [row])
             }
             rebuildSections()
         }
@@ -295,39 +298,42 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func populateArtists(_ artists: [PlexMetadata], into template: CPListTemplate) {
-        let letters = alphabetIndex(from: artists) { artist in
-            artist.titleSort ?? artist.title
+        let grouped = Dictionary(grouping: artists) { firstLetter(of: $0.titleSort ?? $0.title) }
+        let sortedKeys = grouped.keys.sorted { a, b in
+            if a == "#" { return false }
+            if b == "#" { return true }
+            return a < b
         }
-        let items = letters.map { letter -> CPListItem in
-            let count = artists.filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }.count
-            let item = CPListItem(text: letter, detailText: "\(count) artists")
-            item.accessoryType = .disclosureIndicator
-            item.handler = { [weak self] _, completion in
-                self?.showArtistsForLetter(letter, allArtists: artists)
-                completion()
-            }
-            return item
-        }
-        template.updateSections([CPListSection(items: items)])
-    }
 
-    private func showArtistsForLetter(_ letter: String, allArtists: [PlexMetadata]) {
-        let filtered = allArtists
-            .filter { firstLetter(of: $0.titleSort ?? $0.title) == letter }
-            .sorted { ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending }
-        let items = filtered.prefix(CPListTemplate.maximumItemCount).map { artist -> CPListItem in
-            let item = CPListItem(text: artist.title, detailText: nil)
-            item.accessoryType = .disclosureIndicator
-            let ratingKey = artist.ratingKey
-            let name = artist.title
-            item.handler = { [weak self] _, completion in
-                self?.showArtistAlbums(artistRatingKey: ratingKey, artistName: name)
-                completion()
+        let maxItems = CPListTemplate.maximumItemCount
+        var totalItems = 0
+        var sections: [CPListSection] = []
+
+        for letter in sortedKeys {
+            guard totalItems < maxItems, let letterArtists = grouped[letter] else { break }
+            let sorted = letterArtists.sorted {
+                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
             }
-            return item
+            var items: [CPListItem] = []
+            for artist in sorted {
+                guard totalItems < maxItems else { break }
+                let item = CPListItem(text: artist.title, detailText: nil)
+                item.accessoryType = .disclosureIndicator
+                let ratingKey = artist.ratingKey
+                let name = artist.title
+                item.handler = { [weak self] _, completion in
+                    self?.showArtistAlbums(artistRatingKey: ratingKey, artistName: name)
+                    completion()
+                }
+                items.append(item)
+                totalItems += 1
+            }
+            if !items.isEmpty {
+                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
+            }
         }
-        let template = CPListTemplate(title: letter, sections: [CPListSection(items: items)])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
+
+        template.updateSections(sections)
     }
 
     private func showArtistAlbums(artistRatingKey: String, artistName: String) {
@@ -439,41 +445,44 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func populateAlbums(_ albums: [PlexMetadata], into template: CPListTemplate) {
-        let letters = alphabetIndex(from: albums) { $0.title }
-        let items = letters.map { letter -> CPListItem in
-            let count = albums.filter { firstLetter(of: $0.title) == letter }.count
-            let item = CPListItem(text: letter, detailText: "\(count) albums")
-            item.accessoryType = .disclosureIndicator
-            item.handler = { [weak self] _, completion in
-                self?.showAlbumsForLetter(letter, allAlbums: albums)
-                completion()
-            }
-            return item
+        let grouped = Dictionary(grouping: albums) { firstLetter(of: $0.titleSort ?? $0.title) }
+        let sortedKeys = grouped.keys.sorted { a, b in
+            if a == "#" { return false }
+            if b == "#" { return true }
+            return a < b
         }
-        template.updateSections([CPListSection(items: items)])
-    }
 
-    private func showAlbumsForLetter(_ letter: String, allAlbums: [PlexMetadata]) {
-        let filtered = allAlbums
-            .filter { firstLetter(of: $0.title) == letter }
-            .sorted { ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending }
-        guard let server, let client else { return }
-        let items = filtered.prefix(CPListTemplate.maximumItemCount).map { album -> CPListItem in
-            let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
-            item.accessoryType = .disclosureIndicator
-            loadArtwork(path: album.thumb, into: item, server: server, client: client)
-            let ratingKey = album.ratingKey
-            let albumTitle = album.title
-            let albumThumb = album.thumb
-            let albumYear = album.releaseYear
-            item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb, releaseYear: albumYear)
-                completion()
+        let maxItems = CPListTemplate.maximumItemCount
+        var totalItems = 0
+        var sections: [CPListSection] = []
+
+        for letter in sortedKeys {
+            guard totalItems < maxItems, let letterAlbums = grouped[letter] else { break }
+            let sorted = letterAlbums.sorted {
+                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
             }
-            return item
+            var items: [CPListItem] = []
+            for album in sorted {
+                guard totalItems < maxItems else { break }
+                let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
+                item.accessoryType = .disclosureIndicator
+                let ratingKey = album.ratingKey
+                let albumTitle = album.title
+                let albumThumb = album.thumb
+                let albumYear = album.releaseYear
+                item.handler = { [weak self] _, completion in
+                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, albumThumb: albumThumb, releaseYear: albumYear)
+                    completion()
+                }
+                items.append(item)
+                totalItems += 1
+            }
+            if !items.isEmpty {
+                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
+            }
         }
-        let template = CPListTemplate(title: letter, sections: [CPListSection(items: items)])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
+
+        template.updateSections(sections)
     }
 
     // MARK: - Playlists
@@ -576,25 +585,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return "#"
     }
 
-    private func alphabetIndex(
-        from items: [PlexMetadata],
-        titleProvider: (PlexMetadata) -> String
-    ) -> [String] {
-        var seen = Set<String>()
-        var letters: [String] = []
-        for item in items {
-            let letter = firstLetter(of: titleProvider(item))
-            if seen.insert(letter).inserted {
-                letters.append(letter)
-            }
-        }
-        return letters.sorted { a, b in
-            if a == "#" { return false }
-            if b == "#" { return true }
-            return a < b
-        }
-    }
-
     // MARK: - Track List (with Shuffle)
 
     private func showTrackList(title: String, tracks: [PlexMetadata], startAt: Int? = nil) {
@@ -662,6 +652,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         items: [PlexMetadata],
         server: PlexServer,
         client: PlexAPIClient,
+        elementTitle: ((PlexMetadata) -> String?)? = nil,
+        elementSubtitle: ((PlexMetadata) -> String?)? = nil,
         onImageSelect: @escaping @MainActor (Int) -> Void,
         onRowSelect: @escaping @MainActor () -> Void
     ) async -> CPListImageRowItem {
@@ -686,8 +678,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             }
         }
 
-        let elements = limited.enumerated().map { i, _ -> CPListImageRowItemRowElement in
-            CPListImageRowItemRowElement(image: loadedImages[i] ?? placeholder, title: nil, subtitle: nil)
+        let elements = limited.enumerated().map { i, metadata -> CPListImageRowItemRowElement in
+            CPListImageRowItemRowElement(
+                image: loadedImages[i] ?? placeholder,
+                title: elementTitle?(metadata),
+                subtitle: elementSubtitle?(metadata)
+            )
         }
 
         let row = CPListImageRowItem(text: title, elements: elements, allowsMultipleLines: false)
@@ -703,10 +699,64 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         return row
     }
 
+    // MARK: - Condensed Image Row (artwork left, title/artist right, 2-wide grid)
+
+    private func makeCondensedImageRow(
+        title: String,
+        items: [PlexMetadata],
+        server: PlexServer,
+        client: PlexAPIClient,
+        elementTitle: (PlexMetadata) -> String?,
+        elementSubtitle: (PlexMetadata) -> String?,
+        onElementSelect: @escaping @MainActor (Int) -> Void,
+        onHeaderSelect: @escaping @MainActor () -> Void
+    ) async -> CPListImageRowItem {
+        let placeholder = UIImage(systemName: "music.note") ?? UIImage()
+
+        var loadedImages: [Int: UIImage] = [:]
+        await withTaskGroup(of: (Int, UIImage?).self) { group in
+            for (i, metadata) in items.enumerated() {
+                let thumbPath = metadata.thumb ?? metadata.parentThumb
+                group.addTask {
+                    guard let url = client.artworkURL(server: server, path: thumbPath, width: 300, height: 300) else {
+                        return (i, nil)
+                    }
+                    return (i, await ImageCache.shared.image(for: url, targetPixelSize: 300))
+                }
+            }
+            for await (i, img) in group {
+                if let img { loadedImages[i] = img }
+            }
+        }
+
+        let elements = items.enumerated().map { i, metadata -> CPListImageRowItemCondensedElement in
+            CPListImageRowItemCondensedElement(
+                image: loadedImages[i] ?? placeholder,
+                imageShape: .roundedRectangle,
+                title: elementTitle(metadata) ?? "",
+                subtitle: elementSubtitle(metadata),
+                accessorySymbolName: nil
+            )
+        }
+
+        let row = CPListImageRowItem(text: title, condensedElements: elements, allowsMultipleLines: true)
+        row.listImageRowHandler = { _, index, completion in
+            onElementSelect(index)
+            completion()
+        }
+        row.handler = { _, completion in
+            onHeaderSelect()
+            completion()
+        }
+        return row
+    }
+
     // MARK: - Album Tracks
 
     private func showAlbumTracks(albumRatingKey: String, albumTitle: String, albumThumb: String? = nil, releaseYear: String? = nil) {
         guard let server, let client else { return }
+        let loadingTemplate = CPListTemplate(title: albumTitle, sections: [])
+        interfaceController?.pushTemplate(loadingTemplate, animated: true, completion: nil)
         Task {
             // Load tracks and artwork in parallel
             let artworkTask = Task<UIImage?, Never> {
@@ -721,8 +771,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             } catch {
                 let errItem = CPListItem(text: "Couldn't Load", detailText: "Go back and try again")
                 errItem.isEnabled = false
-                let errTemplate = CPListTemplate(title: nil, sections: [CPListSection(items: [errItem])])
-                interfaceController?.pushTemplate(errTemplate, animated: true, completion: nil)
+                loadingTemplate.updateSections([CPListSection(items: [errItem])])
                 return
             }
 
@@ -750,6 +799,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 player.play(tracks: playableTracks, startingAt: 0)
                 self.pushNowPlaying()
             }
+            shuffleBtn.title = "Shuffle"
 
             let detailsHeader = CPListTemplateDetailsHeader(
                 thumbnail: thumbnail,
@@ -786,7 +836,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 assistantCellConfiguration: nil
             )
             template.trailingNavigationBarButtons = [queueBarBtn]
-            interfaceController?.pushTemplate(template, animated: true, completion: nil)
+            // Replace the loading placeholder with the full detail template.
+            interfaceController?.popTemplate(animated: false, completion: nil)
+            interfaceController?.pushTemplate(template, animated: false, completion: nil)
         }
     }
 
