@@ -20,6 +20,14 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var observationTask: Task<Void, Never>?
     private var connectionObservationTask: Task<Void, Never>?
     private var lastRootSignature: String?
+    private var lastServerURI: String?
+    private var homeTemplate: CPListTemplate?
+    private var artistsTemplate: CPListTemplate?
+    private var albumsTemplate: CPListTemplate?
+    private var playlistsTemplate: CPListTemplate?
+    /// Bumped whenever tab content is (re)loaded so an in-flight load against a
+    /// stale connection can't overwrite sections loaded after a reprobe.
+    private var contentGeneration = 0
 
     // MARK: - Scene Lifecycle
 
@@ -29,10 +37,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ) {
         self.interfaceController = interfaceController
         lastRootSignature = nil
+        lastServerURI = nil
         configureNowPlaying()
         updateRootTemplate()
         startObservingConnection()
         startObservingPlayer()
+        // The persisted server URI may be stale after a period of disconnection
+        // (the phone's network changed while the app was suspended). Re-probe so
+        // the connection observer can reload tab content against a reachable URI.
+        Task { await AppContext.shared.serverConnection?.reprobe() }
     }
 
     func templateApplicationScene(
@@ -48,15 +61,32 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             self.interfaceController = nil
         }
         lastRootSignature = nil
+        lastServerURI = nil
+        homeTemplate = nil
+        artistsTemplate = nil
+        albumsTemplate = nil
+        playlistsTemplate = nil
     }
 
     private func updateRootTemplate() {
         guard let interfaceController else { return }
         let signature = rootSignature()
-        guard signature != lastRootSignature else { return }
+        let uri = server?.uri
+        if signature == lastRootSignature {
+            // Same server and library. If the reachable connection URI changed
+            // (e.g. a reprobe after reconnecting on a different network), reload
+            // tab content in place instead of resetting the template stack.
+            if uri != lastServerURI {
+                lastServerURI = uri
+                reloadTabContent()
+            }
+            return
+        }
         lastRootSignature = signature
+        lastServerURI = uri
 
         if server != nil, sectionId != nil {
+            contentGeneration += 1
             let homeList = makeHomeList()
             homeList.tabTitle = "Home"
             homeList.tabImage = UIImage(systemName: "house.fill")
@@ -73,11 +103,31 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             playlistsList.tabTitle = "Playlists"
             playlistsList.tabImage = UIImage(systemName: "music.note.list")
 
+            homeTemplate = homeList
+            artistsTemplate = artistsList
+            albumsTemplate = albumsList
+            playlistsTemplate = playlistsList
+
             let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, playlistsList])
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
+            homeTemplate = nil
+            artistsTemplate = nil
+            albumsTemplate = nil
+            playlistsTemplate = nil
             interfaceController.setRootTemplate(makeSignInTemplate(), animated: true, completion: nil)
         }
+    }
+
+    /// Re-fetches the content of all four tabs against the current server
+    /// connection without replacing the root template (which would pop any
+    /// pushed templates, including Now Playing).
+    private func reloadTabContent() {
+        contentGeneration += 1
+        if let homeTemplate { loadHomeContent(into: homeTemplate) }
+        if let artistsTemplate { loadArtists(into: artistsTemplate) }
+        if let albumsTemplate { loadAlbums(into: albumsTemplate) }
+        if let playlistsTemplate { loadPlaylists(into: playlistsTemplate) }
     }
 
     private func rootSignature() -> String {
@@ -132,6 +182,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func loadHomeContent(into template: CPListTemplate) {
         guard let server, let sectionId, let client else { return }
+        let generation = contentGeneration
 
         // Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played
         var slots: [CPListSection?] = [nil, nil, nil]
@@ -140,6 +191,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         func rebuildSections() {
             completedCount += 1
             guard completedCount == 3 else { return }
+            guard generation == self.contentGeneration else { return }
             var sections = slots.compactMap { $0 }
             if sections.isEmpty {
                 let retry = makeRetryItem(into: template) { [weak self] in
@@ -218,36 +270,26 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func makeArtistsList() -> CPListTemplate {
         let template = CPListTemplate(title: "Artists", sections: [])
-        guard let server, let sectionId, let client else { return template }
-        Task {
-            let artists: [PlexMetadata]
-            do {
-                artists = try await client.cachedArtists(server: server, sectionId: sectionId)
-            } catch {
-                let retry = makeRetryItem(into: template) { [weak self] in
-                    self?.loadArtists(into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            populateArtists(artists, into: template)
-        }
+        loadArtists(into: template)
         return template
     }
 
     private func loadArtists(into template: CPListTemplate) {
         guard let server, let sectionId, let client else { return }
+        let generation = contentGeneration
         Task {
             let artists: [PlexMetadata]
             do {
                 artists = try await client.cachedArtists(server: server, sectionId: sectionId)
             } catch {
+                guard generation == contentGeneration else { return }
                 let retry = makeRetryItem(into: template) { [weak self] in
                     self?.loadArtists(into: template)
                 }
                 template.updateSections([CPListSection(items: [retry])])
                 return
             }
+            guard generation == contentGeneration else { return }
             populateArtists(artists, into: template)
         }
     }
@@ -320,7 +362,14 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                         for album in albums {
                             let key = album.ratingKey
                             group.addTask {
-                                (try? await client.cachedChildren(server: server, ratingKey: key)) ?? []
+                                do {
+                                    return try await client.cachedChildren(server: server, ratingKey: key)
+                                } catch {
+                                    #if DEBUG
+                                    print("[CarPlay] Failed to load tracks for album \(key): \(error)")
+                                    #endif
+                                    return []
+                                }
                             }
                         }
                         var result: [PlexMetadata] = []
@@ -365,36 +414,26 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func makeAlbumsList() -> CPListTemplate {
         let template = CPListTemplate(title: "Albums", sections: [])
-        guard let server, let sectionId, let client else { return template }
-        Task {
-            let albums: [PlexMetadata]
-            do {
-                albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
-            } catch {
-                let retry = makeRetryItem(into: template) { [weak self] in
-                    self?.loadAlbums(into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            populateAlbums(albums, into: template)
-        }
+        loadAlbums(into: template)
         return template
     }
 
     private func loadAlbums(into template: CPListTemplate) {
         guard let server, let sectionId, let client else { return }
+        let generation = contentGeneration
         Task {
             let albums: [PlexMetadata]
             do {
                 albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
             } catch {
+                guard generation == contentGeneration else { return }
                 let retry = makeRetryItem(into: template) { [weak self] in
                     self?.loadAlbums(into: template)
                 }
                 template.updateSections([CPListSection(items: [retry])])
                 return
             }
+            guard generation == contentGeneration else { return }
             populateAlbums(albums, into: template)
         }
     }
@@ -447,17 +486,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func loadPlaylists(into template: CPListTemplate) {
         guard let server, let client else { return }
+        let generation = contentGeneration
         Task {
             let playlists: [PlexPlaylist]
             do {
                 playlists = try await client.cachedPlaylists(server: server)
             } catch {
+                guard generation == contentGeneration else { return }
                 let retry = makeRetryItem(into: template) { [weak self] in
                     self?.loadPlaylists(into: template)
                 }
                 template.updateSections([CPListSection(items: [retry])])
                 return
             }
+            guard generation == contentGeneration else { return }
             let musicPlaylists = playlists.filter { $0.isMusicPlaylist }
             let items = musicPlaylists.prefix(CPListTemplate.maximumItemCount).map { playlist -> CPListItem in
                 let songCount = playlist.leafCount.map { "\($0) songs" }

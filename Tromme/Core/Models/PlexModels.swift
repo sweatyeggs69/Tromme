@@ -621,29 +621,6 @@ struct PlexServer: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
-struct PlexPin: Decodable, Sendable {
-    let id: Int
-    let code: String
-    let authToken: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, code
-        // Plex v2 JSON uses camelCase "authToken"
-        case authToken
-        // Plex v1 / some endpoints use snake_case "auth_token"
-        case authTokenSnake = "auth_token"
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(Int.self, forKey: .id)
-        code = try container.decode(String.self, forKey: .code)
-        // Try camelCase first, then snake_case
-        authToken = try container.decodeIfPresent(String.self, forKey: .authToken)
-            ?? container.decodeIfPresent(String.self, forKey: .authTokenSnake)
-    }
-}
-
 struct PlexPinResponse: Decodable, Sendable {
     let id: Int
     let code: String

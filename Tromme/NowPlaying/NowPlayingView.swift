@@ -690,7 +690,7 @@ struct NowPlayingView: View {
     @discardableResult
     private func applyInitialLandscapeLyrics(isPadLandscape: Bool) -> Bool {
         if !appliedInitialLandscapeLyrics, startPanel == .none, isPadLandscape {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 showQueue = false
                 showLyrics = true
                 appliedInitialLandscapeLyrics = true
@@ -1120,13 +1120,14 @@ struct NowPlayingBackground: View {
     }
 
     private func loadBackgroundImage(server: PlexServer) async {
-        guard let thumbPath,
-              let url = client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) else {
+        let capturedThumb = thumbPath
+        guard let capturedThumb,
+              let url = client.artworkURL(server: server, path: capturedThumb, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) else {
             backgroundImage = nil
             return
         }
         let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx)
-        guard !Task.isCancelled, thumbPath == player.currentTrack?.parentThumb else { return }
+        guard !Task.isCancelled, capturedThumb == player.currentTrack?.parentThumb else { return }
         backgroundImage = image
     }
 }

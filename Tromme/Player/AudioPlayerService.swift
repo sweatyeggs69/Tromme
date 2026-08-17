@@ -81,6 +81,11 @@ final class AudioPlayerService: @unchecked Sendable {
     /// When a streamed transcode session is started at a seek point, AVPlayer's
     /// timeline begins at 0 but actually represents this many seconds into the track.
     private var streamTimeOffset: TimeInterval = 0
+    /// PMS offset playlists sometimes report an absolute timeline (the media
+    /// sequence already carries the offset). Until the first real time-observer
+    /// tick we don't know which variant we got, so the offset math is verified
+    /// once against the observed player time and dropped if it would double-count.
+    private var pendingStreamOffsetCalibration = false
     private var heldSeekTask: Task<Void, Never>?
     private var heldSeekTargetTime: TimeInterval = 0
     private var lastSavedQueueHash: Int?
@@ -512,9 +517,11 @@ final class AudioPlayerService: @unchecked Sendable {
         isSeeking = true
         currentTime = boundedTime
 
+        // Zero tolerance forces a sample-accurate seek. Local VBR audio (FLAC,
+        // VBR MP3) otherwise lands on a byte-estimated position that can be
+        // audibly far from the requested time while still reporting it.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
-        let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
-        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeeking = false
@@ -740,6 +747,7 @@ final class AudioPlayerService: @unchecked Sendable {
         currentSessionID = nil
         pendingInitialSeekTime = nil
         streamTimeOffset = 0
+        pendingStreamOffsetCalibration = false
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
@@ -802,6 +810,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
         pendingInitialSeekTime = nil
         streamTimeOffset = 0
+        pendingStreamOffsetCalibration = false
         if let resumeAt {
             logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count) resume_at=\(resumeAt)")
         } else {
@@ -851,7 +860,9 @@ final class AudioPlayerService: @unchecked Sendable {
         }
 
         // A preloaded session always starts at 0, so it can't serve a mid-track resume.
+        var preloadedSessionToStop: String?
         if boundedResume != nil {
+            preloadedSessionToStop = preloadedNext?.sessionID
             discardPreloadedNext()
         }
 
@@ -907,6 +918,7 @@ final class AudioPlayerService: @unchecked Sendable {
             offsetSeconds = Int(min(boundedResume, safeUpper))
         }
         streamTimeOffset = TimeInterval(offsetSeconds)
+        pendingStreamOffsetCalibration = streamTimeOffset > 0
         currentTime = streamTimeOffset > 0 ? streamTimeOffset : currentTime
 
         let generation = playbackGeneration
@@ -919,6 +931,12 @@ final class AudioPlayerService: @unchecked Sendable {
 
         playbackLoadTask?.cancel()
         playbackLoadTask = Task {
+            // Ensure the old preloaded transcode session is torn down before
+            // starting a new one to avoid hitting PMS concurrent session limits.
+            if let staleSession = preloadedSessionToStop {
+                await capturedClient.universalTranscodeStop(server: capturedServer, sessionID: staleSession)
+            }
+
             // Step 1: Authorize transcode session and fetch detailed metadata (for gain) in parallel.
             async let decisionResult: Void = capturedClient.universalDecision(
                 server: capturedServer,
@@ -1661,6 +1679,20 @@ final class AudioPlayerService: @unchecked Sendable {
                 guard let self, self.playbackGeneration == generation else { return }
                 guard !self.isSeeking else { return }
                 guard seconds.isFinite && seconds >= 0 else { return }
+
+                // First meaningful tick of an offset stream: if the player is
+                // already reporting a position at or beyond the offset, the
+                // playlist timeline is absolute and adding the offset again
+                // would double-count every subsequent position.
+                if self.pendingStreamOffsetCalibration, self.streamTimeOffset > 0, seconds > 0.5 {
+                    self.pendingStreamOffsetCalibration = false
+                    if seconds >= self.streamTimeOffset * 0.5 {
+                        self.logPlayback("stream_offset_absolute", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
+                        self.streamTimeOffset = 0
+                    } else {
+                        self.logPlayback("stream_offset_relative", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
+                    }
+                }
 
                 if self.streamTimeOffset == 0,
                    let itemDuration = self.player?.currentItem?.duration.seconds,

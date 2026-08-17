@@ -349,6 +349,20 @@ private struct ArtistHeroHeaderView: View {
     @State private var image: UIImage?
 
     var body: some View {
+        Group {
+            if isHidden {
+                Color.clear
+                    .frame(height: 0)
+            } else {
+                heroContent
+            }
+        }
+        .task(id: artist.thumb) {
+            await loadImage()
+        }
+    }
+
+    private var heroContent: some View {
         GeometryReader { geo in
             let minY = geo.frame(in: .global).minY
             let isOverscrolling = minY > 0
@@ -401,11 +415,7 @@ private struct ArtistHeroHeaderView: View {
             }
             .offset(y: stretchOffset)
         }
-        .frame(height: isHidden ? 0 : heroHeight)
-        .clipped()
-        .task(id: artist.thumb) {
-            await loadImage()
-        }
+        .frame(height: heroHeight)
     }
 
     private func loadImage() async {
