@@ -369,6 +369,45 @@ extension PlexAPIClient {
         return interleaveTracksAvoidingAdjacentAlbums(picked, limit: limit)
     }
 
+    // MARK: - Similar Artists
+
+    /// Artists in the library whose album styles overlap with the seed artist's album styles.
+    /// Uses the same cached style index as `recommendedAlbums`.
+    func similarArtists(server: PlexServer, sectionId: String, seedArtistKey: String) async throws -> [PlexMetadata] {
+        let allArtists = try await cachedArtists(server: server, sectionId: sectionId)
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
+        let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
+
+        var stylesByArtist: [String: Set<String>] = [:]
+        for album in allAlbums {
+            guard let artistKey = album.parentRatingKey else { continue }
+            let normalized = (stylesByAlbum[album.ratingKey] ?? []).map(normalizedTag)
+            stylesByArtist[artistKey, default: []].formUnion(normalized)
+        }
+
+        let seedStyles = stylesByArtist[seedArtistKey] ?? []
+        guard !seedStyles.isEmpty else { return [] }
+
+        let artistByKey = Dictionary(uniqueKeysWithValues: allArtists.map { ($0.ratingKey, $0) })
+        var scored: [(artist: PlexMetadata, score: Int)] = []
+        for (artistKey, styles) in stylesByArtist {
+            guard artistKey != seedArtistKey, let artist = artistByKey[artistKey] else { continue }
+            let intersection = seedStyles.intersection(styles)
+            let intersectionCount = intersection.count
+            guard intersectionCount >= 3 else { continue }
+            let jaccard = Double(intersectionCount) / Double(seedStyles.union(styles).count)
+            guard jaccard >= 0.30 else { continue }
+            scored.append((artist: artist, score: intersectionCount))
+        }
+
+        return scored
+            .sorted {
+                if $0.score != $1.score { return $0.score > $1.score }
+                return ($0.artist.titleSort ?? $0.artist.title) < ($1.artist.titleSort ?? $1.artist.title)
+            }
+            .map(\.artist)
+    }
+
     // MARK: - Appears On Albums
 
     /// Albums where the given artist is credited as a featured performer but is not the primary artist.

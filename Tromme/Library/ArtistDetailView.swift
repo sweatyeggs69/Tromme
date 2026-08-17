@@ -15,6 +15,9 @@ struct ArtistDetailView: View {
     @State private var selectedAlbum: PlexMetadata?
     @State private var appearsOnAlbums: [PlexMetadata] = []
     @State private var selectedAppearsOnAlbum: PlexMetadata?
+    @State private var similarArtists: [PlexMetadata] = []
+    @State private var selectedSimilarArtist: PlexMetadata?
+    @State private var showsAllSimilarArtists = false
     @State private var heroMinY: CGFloat = 0
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
@@ -36,6 +39,7 @@ struct ArtistDetailView: View {
         let topTracks: [PlexMetadata]
         let artistAlbums: [PlexMetadata]
         var appearsOnAlbums: [PlexMetadata] = []
+        var similarArtists: [PlexMetadata] = []
     }
 
     init(artist: PlexMetadata, previewData: PreviewData? = nil) {
@@ -46,9 +50,16 @@ struct ArtistDetailView: View {
         _topTracks = State(initialValue: previewData?.topTracks ?? [])
         _artistAlbums = State(initialValue: previewData?.artistAlbums ?? [])
         _appearsOnAlbums = State(initialValue: previewData?.appearsOnAlbums ?? [])
+        _similarArtists = State(initialValue: previewData?.similarArtists ?? [])
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private let similarSectionBackground = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(white: 1.0, alpha: 0.15)
+            : UIColor(white: 0.0, alpha: 0.05)
+    })
 
     private var albumGridColumns: [GridItem] {
         let count = horizontalSizeClass == .regular ? 4 : 2
@@ -129,12 +140,61 @@ struct ArtistDetailView: View {
         .listRowSeparator(.hidden)
     }
 
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.title3.bold())
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
-            .listRowSeparator(.hidden)
+    @ViewBuilder
+    private func sectionHeader(_ title: String, disclosureAction: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.title3.bold())
+
+            if let disclosureAction {
+                Button(action: disclosureAction) {
+                    Image(systemName: "chevron.right")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show all \(title)")
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowSeparator(.hidden)
+    }
+
+    private func similarArtistsRail(_ artists: [PlexMetadata]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(alignment: .top, spacing: 12) {
+                ForEach(artists) { artist in
+                    Button {
+                        selectedSimilarArtist = artist
+                    } label: {
+                        VStack(alignment: .center, spacing: 6) {
+                            ArtworkView(
+                                thumbPath: artist.thumb,
+                                size: 120,
+                                cornerRadius: 60
+                            )
+
+                            Text(artist.title)
+                                .font(AppStyle.Typography.itemTitle)
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                                .frame(width: 120)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .scrollTargetLayout()
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+        }
+        .scrollTargetBehavior(.viewAligned)
+        .padding(.bottom, 24)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listRowSeparator(.hidden)
     }
 
     var body: some View {
@@ -228,6 +288,41 @@ struct ArtistDetailView: View {
                 appearsOnGrid(appearsOnAlbums)
             }
 
+            let hasBio = !(displayArtist.summary ?? "").isEmpty
+            if hasBio || !similarArtists.isEmpty {
+                if let summary = displayArtist.summary, !summary.isEmpty {
+                    sectionHeader("About \(displayArtist.title)")
+                        .listRowBackground(similarSectionBackground)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(summary)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Button("Read More") {
+                            showsBioSheet = true
+                        }
+                        .font(.subheadline.bold())
+                    }
+                    .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(similarSectionBackground)
+                }
+
+                if !similarArtists.isEmpty {
+                    sectionHeader(
+                        "Similar Artists",
+                        disclosureAction: similarArtists.count > 8 ? { showsAllSimilarArtists = true } : nil
+                    )
+                    .listRowBackground(similarSectionBackground)
+
+                    similarArtistsRail(Array(similarArtists.prefix(8)))
+                        .listRowBackground(similarSectionBackground)
+                }
+            }
+
         }
         .coordinateSpace(name: "artistDetailScroll")
         .navigationTitle("")
@@ -238,26 +333,18 @@ struct ArtistDetailView: View {
         .navigationDestination(item: $selectedAppearsOnAlbum) { album in
             AlbumDetailView(album: album, sourceArtistRatingKey: album.parentRatingKey)
         }
+        .navigationDestination(item: $selectedSimilarArtist) { artist in
+            ArtistDetailView(artist: artist)
+        }
+        .navigationDestination(isPresented: $showsAllSimilarArtists) {
+            SimilarArtistsGridView(artists: similarArtists)
+        }
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(displayArtist.title)
                     .font(.headline)
                     .lineLimit(1)
                     .opacity(showsCollapsedTitle ? 1 : 0)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                if displayArtist.summary != nil {
-                    Menu {
-                        Button {
-                            showsBioSheet = true
-                        } label: {
-                            Label("Artist Info", systemImage: "info.circle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .tint(.primary)
-                }
             }
         }
         .listStyle(.plain)
@@ -283,6 +370,7 @@ struct ArtistDetailView: View {
             async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
             async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
             async let appearsOnReq = client.appearsOnAlbums(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
+            async let similarArtistsReq = client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artist.ratingKey)
 
             resolvedArtist = try? await metadataReq
 
@@ -290,6 +378,7 @@ struct ArtistDetailView: View {
             artistTracks = (try? await artistTracksReq) ?? []
             artistAlbums = (try? await releasesReq) ?? []
             appearsOnAlbums = (try? await appearsOnReq) ?? []
+            similarArtists = (try? await similarArtistsReq) ?? []
 
             // Fallback: if Plex returned no top tracks, use local sort by viewCount
             topTracks = fetchedTopTracks.isEmpty
@@ -333,6 +422,53 @@ struct ArtistDetailView: View {
         artistTracks = records.map { $0.asPlexMetadata() }
         topTracks = artistTracks
         appearsOnAlbums = []
+    }
+}
+
+private struct SimilarArtistsGridView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selectedArtist: PlexMetadata?
+
+    let artists: [PlexMetadata]
+
+    private var columns: [GridItem] {
+        let count = horizontalSizeClass == .regular ? 4 : 3
+        return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
+                ForEach(artists) { artist in
+                    Button {
+                        selectedArtist = artist
+                    } label: {
+                        VStack(alignment: .center, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                            GeometryReader { geo in
+                                ArtworkView(
+                                    thumbPath: artist.thumb,
+                                    size: geo.size.width,
+                                    cornerRadius: geo.size.width / 2
+                                )
+                            }
+                            .aspectRatio(1, contentMode: .fit)
+
+                            Text(artist.title)
+                                .appItemTitleStyle()
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+            .padding(.vertical, AppStyle.AlbumLayout.gridVerticalPadding)
+        }
+        .navigationTitle("Similar Artists")
+        .navigationDestination(item: $selectedArtist) { artist in
+            ArtistDetailView(artist: artist)
+        }
     }
 }
 
