@@ -247,20 +247,21 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         Task {
             if let recentlyPlayed = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
                !recentlyPlayed.isEmpty {
-                let limited = Array(recentlyPlayed.prefix(4))
+                let preview = Array(recentlyPlayed.prefix(4))
+                let full = Array(recentlyPlayed.prefix(10))
                 let row = await makeCondensedImageRow(
                     title: "Recently Played",
-                    items: limited,
+                    items: preview,
                     server: server,
                     client: client,
                     elementTitle: { $0.title },
                     elementSubtitle: { $0.artistDisplayName },
                     onElementSelect: { [weak self] index in
-                        self?.player?.play(tracks: limited, startingAt: index)
+                        self?.player?.play(tracks: preview, startingAt: index)
                         self?.pushNowPlaying()
                     },
                     onHeaderSelect: { [weak self] in
-                        self?.showTrackList(title: "Recently Played", tracks: limited)
+                        self?.showTrackList(title: "Recently Played", tracks: full)
                     }
                 )
                 slots[2] = CPListSection(items: [row])
@@ -758,13 +759,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let loadingTemplate = CPListTemplate(title: albumTitle, sections: [])
         interfaceController?.pushTemplate(loadingTemplate, animated: true, completion: nil)
         Task {
-            // Load tracks and artwork in parallel
-            let artworkTask = Task<UIImage?, Never> {
-                guard let path = albumThumb,
-                      let url = client.artworkURL(server: server, path: path, width: 300, height: 300) else { return nil }
-                return await ImageCache.shared.image(for: url, targetPixelSize: 300)
-            }
-
             let children: [PlexMetadata]
             do {
                 children = try await client.cachedChildren(server: server, ratingKey: albumRatingKey)
@@ -775,46 +769,44 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 return
             }
 
-            let artworkImage = await artworkTask.value
             let playableTracks = Array(children.filter { $0.type == "track" })
             guard !playableTracks.isEmpty else { return }
 
-            let artistName = playableTracks.first?.grandparentTitle ?? playableTracks.first?.parentTitle
-            let subtitleParts = [artistName, releaseYear].compactMap { $0 }
-            let subtitle = subtitleParts.isEmpty ? nil : subtitleParts.joined(separator: " · ")
-
-            let thumbnail = CPThumbnailImage(image: artworkImage ?? (UIImage(systemName: "music.note") ?? UIImage()))
-
-            let playBtn = CPButton(image: UIImage(systemName: "play.fill") ?? UIImage()) { [weak self] _ in
-                guard let self, let player = self.player else { return }
-                if player.isShuffled { player.toggleShuffle() }
-                player.play(tracks: playableTracks, startingAt: 0)
-                self.pushNowPlaying()
-            }
-            playBtn.title = "Play"
-
-            let shuffleBtn = CPButton(image: UIImage(systemName: "shuffle") ?? UIImage()) { [weak self] _ in
-                guard let self, let player = self.player else { return }
-                if !player.isShuffled { player.toggleShuffle() }
-                player.play(tracks: playableTracks, startingAt: 0)
-                self.pushNowPlaying()
-            }
-            shuffleBtn.title = "Shuffle"
-
-            let detailsHeader = CPListTemplateDetailsHeader(
-                thumbnail: thumbnail,
-                title: albumTitle,
-                subtitle: subtitle,
-                actionButtons: [playBtn, shuffleBtn]
+            let playElement = CPListImageRowItemCondensedElement(
+                image: (UIImage(systemName: "play.fill") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
+                imageShape: .roundedRectangle,
+                title: "Play",
+                subtitle: nil,
+                accessorySymbolName: nil
             )
+            let shuffleElement = CPListImageRowItemCondensedElement(
+                image: (UIImage(systemName: "shuffle") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
+                imageShape: .roundedRectangle,
+                title: "Shuffle",
+                subtitle: nil,
+                accessorySymbolName: nil
+            )
+            let actionRow = CPListImageRowItem(text: "", condensedElements: [playElement, shuffleElement], allowsMultipleLines: false)
+            actionRow.listImageRowHandler = { [weak self] _, index, completion in
+                guard let self, let player = self.player else { completion(); return }
+                if index == 0 {
+                    if player.isShuffled { player.toggleShuffle() }
+                } else {
+                    if !player.isShuffled { player.toggleShuffle() }
+                }
+                player.play(tracks: playableTracks, startingAt: 0)
+                self.pushNowPlaying()
+                completion()
+            }
 
             let trackItems: [CPListTemplateItem] = playableTracks
-                .prefix(CPListTemplate.maximumItemCount)
+                .prefix(CPListTemplate.maximumItemCount - 1)
                 .enumerated()
                 .map { index, track -> CPListItem in
-                    let star = (track.userRating ?? 0) >= 4 ? "⭑ " : ""
-                    let prefix = track.index.map { "\($0) " } ?? ""
-                    let item = CPListItem(text: "\(star)\(prefix)\(track.title)", detailText: nil)
+                    let isFavorited = (track.userRating ?? 0) >= 4
+                    let numPrefix = track.index.map { "\($0)  " } ?? ""
+                    let starPrefix = isFavorited ? "★ " : ""
+                    let item = CPListItem(text: "\(numPrefix)\(starPrefix)\(track.title)", detailText: nil)
                     let capturedTracks = playableTracks
                     item.handler = { [weak self] _, completion in
                         self?.player?.play(tracks: capturedTracks, startingAt: index)
@@ -829,14 +821,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 for track in playableTracks { player.addToEndOfQueue(track) }
             }
 
-            let template = CPListTemplate(
-                title: nil,
-                listHeader: detailsHeader,
-                sections: [CPListSection(items: trackItems)],
-                assistantCellConfiguration: nil
-            )
+            let template = CPListTemplate(title: albumTitle, sections: [CPListSection(items: [actionRow] + trackItems)])
             template.trailingNavigationBarButtons = [queueBarBtn]
-            // Replace the loading placeholder with the full detail template.
             interfaceController?.popTemplate(animated: false, completion: nil)
             interfaceController?.pushTemplate(template, animated: false, completion: nil)
         }
