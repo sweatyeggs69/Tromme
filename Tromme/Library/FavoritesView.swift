@@ -6,25 +6,19 @@ struct FavoritesView: View {
     @Environment(AudioPlayerService.self) private var player
 
     @State private var tracks: [PlexMetadata] = []
+    @State private var filteredTracks: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var loadError: String?
     @State private var searchText = ""
     @State private var isSearchPresented = false
+    @State private var trackNavigationTarget: PlexMetadata? = nil
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
         self.previewTracks = previewTracks
         _tracks = State(initialValue: previewTracks ?? [])
+        _filteredTracks = State(initialValue: previewTracks ?? [])
         _isLoading = State(initialValue: previewTracks == nil)
-    }
-
-    private var filteredTracks: [PlexMetadata] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return tracks }
-        return tracks.filter { track in
-            track.title.localizedCaseInsensitiveContains(query)
-            || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
-            || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
-        }
     }
 
     var body: some View {
@@ -32,6 +26,17 @@ struct FavoritesView: View {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = loadError {
+                ContentUnavailableView {
+                    Label("Couldn't Load Favorites", systemImage: "exclamationmark.circle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") {
+                        loadError = nil
+                        Task { await loadTracks() }
+                    }
+                }
             } else {
                 if filteredTracks.isEmpty, !searchText.isEmpty {
                     ContentUnavailableView.search(text: searchText)
@@ -51,18 +56,26 @@ struct FavoritesView: View {
                                 showArtwork: true,
                                 showArtist: true,
                                 showTrackNumber: false,
-                                artworkSize: 48,
-                                artworkCornerRadius: 4
+                                artworkSize: AppStyle.TrackList.browseArtworkSize,
+                                artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+                                onNavigate: { trackNavigationTarget = $0 }
                             )
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowInsets(AppStyle.TrackList.rowInsets)
                         }
                     }
                     .listStyle(.plain)
-                    .listRowSpacing(2)
+                    .listRowSpacing(AppStyle.TrackList.rowSpacing)
                 }
             }
         }
         .navigationTitle("Favorites")
+        .navigationDestination(item: $trackNavigationTarget) { target in
+            if target.type == "artist" {
+                ArtistDetailView(artist: target)
+            } else {
+                AlbumDetailView(album: target)
+            }
+        }
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,
@@ -93,10 +106,31 @@ struct FavoritesView: View {
                 await loadTracks()
             }
         }
+        // Re-filter off the main actor whenever tracks or search text changes.
+        .task(id: searchText) {
+            await applyFilter()
+        }
+        .onChange(of: tracks) { _, _ in
+            Task { await applyFilter() }
+        }
         .onDisappear {
             searchText = ""
             isSearchPresented = false
         }
+    }
+
+    private func applyFilter() async {
+        let snapshot = tracks
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = await Task.detached(priority: .userInitiated) {
+            guard !query.isEmpty else { return snapshot }
+            return snapshot.filter { track in
+                track.title.localizedCaseInsensitiveContains(query)
+                || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+                || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+            }
+        }.value
+        filteredTracks = result
     }
 
     private func loadTracks() async {
@@ -111,7 +145,10 @@ struct FavoritesView: View {
                 return ($0.userRating ?? 0) > ($1.userRating ?? 0)
             }
         } catch {
-            // Handle error
+#if DEBUG
+            print("[FavoritesView] Failed to load favorites: \(error)")
+#endif
+            loadError = error.localizedDescription
         }
         isLoading = false
     }

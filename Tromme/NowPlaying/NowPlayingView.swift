@@ -40,25 +40,25 @@ struct NowPlayingView: View {
         _showQueue = State(initialValue: startPanel == .queue)
     }
 
-    // MARK: - Layout Constants
+    // MARK: - Layout Constants (see AppStyle.NowPlaying)
 
-    private let bottomActionsLeadingButtonPadding: CGFloat = 48
-    private let bottomActionsTrailingButtonPadding: CGFloat = 48
-    private let actionIconActiveOpacity: Double = 0.82
-    private let actionIconInactiveOpacity: Double = 0.45
-    private let actionBackgroundOpacity: Double = 0.12
-    private let actionBackgroundActiveOpacity: Double = 0.4
-    private let controlTintOpacity: Double = 0.45
-    private let bottomActionIconSize: CGFloat = 42
-    private let iPadBottomActionsExtraPadding: CGFloat = 12
-    private let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
-    private let portraitArtworkBottomPadding: CGFloat = 10
-    private let portraitTrackInfoBottomPadding: CGFloat = 6
-    private let portraitBottomControlsHeightFraction: CGFloat = 0.42
-    private let landscapeBottomControlsHeightFraction: CGFloat = 0.35
-    private let bottomActionsTopPadding: CGFloat = 10
-    private let bottomScreenPaddingWithSafeArea: CGFloat = 4
-    private let bottomScreenPaddingWithoutSafeArea: CGFloat = 8
+    private var bottomActionsLeadingButtonPadding: CGFloat { AppStyle.NowPlaying.bottomActionsLeadingPadding }
+    private var bottomActionsTrailingButtonPadding: CGFloat { AppStyle.NowPlaying.bottomActionsTrailingPadding }
+    private var actionIconActiveOpacity: Double { AppStyle.NowPlaying.actionIconActiveOpacity }
+    private var actionIconInactiveOpacity: Double { AppStyle.NowPlaying.actionIconInactiveOpacity }
+    private var actionBackgroundOpacity: Double { AppStyle.NowPlaying.actionBackgroundOpacity }
+    private var actionBackgroundActiveOpacity: Double { AppStyle.NowPlaying.actionBackgroundActiveOpacity }
+    private var controlTintOpacity: Double { AppStyle.NowPlaying.controlTintOpacity }
+    private var bottomActionIconSize: CGFloat { AppStyle.NowPlaying.bottomActionIconSize }
+    private var iPadBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadBottomActionsExtraPadding }
+    private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
+    private var portraitArtworkBottomPadding: CGFloat { AppStyle.NowPlaying.portraitArtworkBottomPadding }
+    private var portraitTrackInfoBottomPadding: CGFloat { AppStyle.NowPlaying.portraitTrackInfoBottomPadding }
+    private var portraitBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.portraitBottomControlsHeightFraction }
+    private var landscapeBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.landscapeBottomControlsHeightFraction }
+    private var bottomActionsTopPadding: CGFloat { AppStyle.NowPlaying.bottomActionsTopPadding }
+    private var bottomScreenPaddingWithSafeArea: CGFloat { AppStyle.NowPlaying.bottomScreenPaddingWithSafeArea }
+    private var bottomScreenPaddingWithoutSafeArea: CGFloat { AppStyle.NowPlaying.bottomScreenPaddingWithoutSafeArea }
 
     // MARK: - Computed Properties
 
@@ -139,8 +139,8 @@ struct NowPlayingView: View {
                                     size: landscapeArtworkSize,
                                     cornerRadius: 8
                                 )
-                                .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 10)
-                                .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 3)
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
@@ -199,8 +199,8 @@ struct NowPlayingView: View {
                                 size: artworkSize,
                                 cornerRadius: 6
                             )
-                            .shadow(color: .black.opacity(0.38), radius: 36, x: 0, y: 18)
-                            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+                            .shadow(color: .black.opacity(player.isPlaying ? 0.38 : 0.14), radius: 36, x: 0, y: 18)
+                            .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 8, x: 0, y: 4)
                             .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
@@ -481,22 +481,8 @@ struct NowPlayingView: View {
     @ViewBuilder
     private var trackContextMenuItems: some View {
         if let track = player.currentTrack {
-            if let albumKey = track.parentRatingKey {
+            if let album = PlexMetadata.albumStub(from: track) {
                 Button {
-                    let album = PlexMetadata(
-                        ratingKey: albumKey, key: nil, type: "album", subtype: nil,
-                        title: track.parentTitle ?? "",
-                        titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
-                        index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                        updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
-                        thumb: track.parentThumb ?? track.thumb, art: nil, parentThumb: nil,
-                        grandparentThumb: nil, grandparentArt: nil,
-                        parentTitle: track.grandparentTitle ?? track.artistName,
-                        grandparentTitle: nil, parentRatingKey: nil,
-                        grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                        media: nil, genre: nil, style: nil, country: nil,
-                        subformat: nil, originallyAvailableAt: nil
-                    )
                     onNavigate?(album)
                     dismiss()
                 } label: {
@@ -504,21 +490,8 @@ struct NowPlayingView: View {
                     Text(track.parentTitle ?? "")
                 }
             }
-            if let artistKey = track.grandparentRatingKey {
+            if let artist = PlexMetadata.artistStub(from: track) {
                 Button {
-                    let artist = PlexMetadata(
-                        ratingKey: artistKey, key: nil, type: "artist", subtype: nil,
-                        title: track.grandparentTitle ?? track.artistName,
-                        titleSort: nil, originalTitle: nil, summary: nil, studio: nil, year: nil,
-                        index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                        updatedAt: nil, viewCount: nil, lastViewedAt: nil, userRating: nil,
-                        thumb: track.grandparentThumb, art: nil, parentThumb: nil,
-                        grandparentThumb: nil, grandparentArt: nil, parentTitle: nil,
-                        grandparentTitle: nil, parentRatingKey: nil,
-                        grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                        media: nil, genre: nil, style: nil, country: nil,
-                        subformat: nil, originallyAvailableAt: nil
-                    )
                     onNavigate?(artist)
                     dismiss()
                 } label: {
@@ -603,10 +576,11 @@ struct NowPlayingView: View {
             Spacer()
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 46))
+                    .font(.system(size: player.isPlaying ? 52 : 46))
                     .foregroundStyle(.white)
                     .frame(width: 72, height: 72)
                     .contentTransition(.symbolEffect(.replace))
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: player.isPlaying)
             }
             Spacer()
             Button { player.next() } label: {

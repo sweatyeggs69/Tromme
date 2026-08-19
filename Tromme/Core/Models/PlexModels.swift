@@ -352,6 +352,35 @@ extension PlexMetadata {
         self.subformat = nil; self.originallyAvailableAt = nil
     }
 
+    // MARK: - Navigation Stubs
+    //
+    // These factories build minimal metadata objects for use as NavigationLink values
+    // when navigating from a track row context menu. They avoid repeating 25-argument
+    // initialisers at every call site.
+
+    /// Returns a minimal album metadata object suitable for navigation, built from a track.
+    static func albumStub(from track: PlexMetadata) -> PlexMetadata? {
+        guard let albumKey = track.parentRatingKey else { return nil }
+        return PlexMetadata(
+            ratingKey: albumKey,
+            title: track.parentTitle ?? "",
+            type: "album",
+            parentTitle: track.grandparentTitle ?? track.artistName,
+            thumb: track.parentThumb ?? track.thumb
+        )
+    }
+
+    /// Returns a minimal artist metadata object suitable for navigation, built from a track.
+    static func artistStub(from track: PlexMetadata) -> PlexMetadata? {
+        guard let artistKey = track.grandparentRatingKey else { return nil }
+        return PlexMetadata(
+            ratingKey: artistKey,
+            title: track.grandparentTitle ?? track.artistName,
+            type: "artist",
+            thumb: track.grandparentThumb
+        )
+    }
+
     /// Decode a value that Plex may return as either String or Int.
     private static func decodeFlexibleString(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> String? {
         if let str = try? container.decode(String.self, forKey: key) { return str }

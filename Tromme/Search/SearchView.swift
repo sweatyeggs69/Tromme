@@ -10,6 +10,7 @@ struct SearchView: View {
     @State private var hubs: [Hub] = []
     @State private var matchedPlaylists: [PlexPlaylist] = []
     @State private var searchTask: Task<Void, Never>?
+    @State private var trackNavigationTarget: PlexMetadata? = nil
     @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
 
     private let maxRecentSearches = 12
@@ -114,6 +115,13 @@ struct SearchView: View {
                 : Text("Search")
         )
         .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(item: $trackNavigationTarget) { target in
+            if target.type == "artist" {
+                ArtistDetailView(artist: target)
+            } else {
+                AlbumDetailView(album: target)
+            }
+        }
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
@@ -186,7 +194,8 @@ struct SearchView: View {
                 index: trackIndex,
                 showArtwork: true,
                 showArtist: true,
-                showTrackNumber: false
+                showTrackNumber: false,
+                onNavigate: { trackNavigationTarget = $0 }
             )
         }
     }

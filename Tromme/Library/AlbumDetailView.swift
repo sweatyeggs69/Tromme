@@ -67,6 +67,7 @@ struct AlbumDetailView: View {
         artworkColor.isLightColor ? .black : .white
     }
 
+
     private var moreBySectionBackgroundColor: Color {
         .black.opacity(0.08)
     }
@@ -531,7 +532,7 @@ struct AlbumDetailView: View {
         Text("Disc \(discNumber)")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(tertiaryTextColor)
-            .listRowBackground(Color.clear)
+            .listRowBackground(artworkColor)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 4, trailing: 20))
     }
@@ -549,7 +550,7 @@ struct AlbumDetailView: View {
                 presentAddToPlaylist(for: [track.ratingKey])
             }
         )
-        .listRowBackground(Color.clear)
+        .listRowBackground(artworkColor)
         .listRowSeparatorTint(titleColor.opacity(0.22))
     }
 
@@ -558,7 +559,7 @@ struct AlbumDetailView: View {
             if isLoadingTracks {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(artworkColor)
             } else if hasMultipleDiscs {
                 ForEach(tracksByDisc, id: \.discNumber) { group in
                     discHeaderRow(group.discNumber)
@@ -755,7 +756,7 @@ struct AlbumDetailView: View {
                                     trackListRows
 
                                     albumFooter
-                                        .listRowBackground(Color.clear)
+                                        .listRowBackground(artworkColor)
                                         .listRowSeparator(.hidden)
 
                                     if artistAlbums.count > 1,
@@ -778,6 +779,7 @@ struct AlbumDetailView: View {
                                 }
                             }
                             .scrollContentBackground(.hidden)
+                            .background(moreBySectionBackgroundColor)
                             .listStyle(.plain)
                         }
                         .frame(width: geo.size.width * 0.67)
@@ -791,12 +793,12 @@ struct AlbumDetailView: View {
                                 .listRowSeparator(.visible, edges: .bottom)
                                 .listRowSeparatorTint(titleColor.opacity(0.22))
                                 .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + 20 }
-                                .listRowBackground(Color.clear)
+                                .listRowBackground(artworkColor)
 
                             trackListRows
 
                             albumFooter
-                                .listRowBackground(Color.clear)
+                                .listRowBackground(artworkColor)
                                 .listRowSeparator(.hidden)
 
                             if artistAlbums.count > 1,

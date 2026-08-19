@@ -20,26 +20,19 @@ struct TrackRowView: View {
     var isCompact: Bool = false
     var titleFont: Font? = nil
     var artistFont: Font? = nil
+    var onNavigate: ((PlexMetadata) -> Void)? = nil
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
     @State private var isDeletingTrack = false
     @State private var addToPlaylistTrack: PlexMetadata? = nil
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
-    @State private var navigationTarget: PlexMetadata? = nil
 
     var body: some View {
         trackRow
             .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu })
         .sheet(item: $addToPlaylistTrack) { trackToAdd in
             AddToPlaylistSheet(itemRatingKeys: [trackToAdd.ratingKey])
-        }
-        .navigationDestination(item: $navigationTarget) { target in
-            if target.type == "artist" {
-                ArtistDetailView(artist: target)
-            } else {
-                AlbumDetailView(album: target)
-            }
         }
         .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
             Button("Delete Track", role: .destructive) {
@@ -120,43 +113,18 @@ struct TrackRowView: View {
 
         Divider()
 
-        if let albumKey = track.parentRatingKey {
+        if let album = PlexMetadata.albumStub(from: track) {
             Button {
-                navigationTarget = PlexMetadata(
-                    ratingKey: albumKey, key: nil, type: "album", subtype: nil,
-                    title: track.parentTitle ?? "",
-                    titleSort: nil, originalTitle: nil, summary: nil, year: nil,
-                    index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                    updatedAt: nil, viewCount: nil, lastViewedAt: nil,
-                    thumb: track.parentThumb ?? track.thumb, art: nil, parentThumb: nil,
-                    grandparentThumb: nil, grandparentArt: nil,
-                    parentTitle: track.grandparentTitle ?? track.artistName,
-                    grandparentTitle: nil, parentRatingKey: nil,
-                    grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                    media: nil, genre: nil, style: nil, country: nil,
-                    subformat: nil, originallyAvailableAt: nil
-                )
+                onNavigate?(album)
             } label: {
                 Label("Go to Album", systemImage: "square.stack")
                 Text(track.parentTitle ?? "")
             }
         }
 
-        if let artistKey = track.grandparentRatingKey {
+        if let artist = PlexMetadata.artistStub(from: track) {
             Button {
-                navigationTarget = PlexMetadata(
-                    ratingKey: artistKey, key: nil, type: "artist", subtype: nil,
-                    title: track.grandparentTitle ?? track.artistName,
-                    titleSort: nil, originalTitle: nil, summary: nil, year: nil,
-                    index: nil, parentIndex: nil, duration: nil, addedAt: nil,
-                    updatedAt: nil, viewCount: nil, lastViewedAt: nil,
-                    thumb: track.grandparentThumb, art: nil, parentThumb: nil,
-                    grandparentThumb: nil, grandparentArt: nil, parentTitle: nil,
-                    grandparentTitle: nil, parentRatingKey: nil,
-                    grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
-                    media: nil, genre: nil, style: nil, country: nil,
-                    subformat: nil, originallyAvailableAt: nil
-                )
+                onNavigate?(artist)
             } label: {
                 Label("Go to Artist", systemImage: "music.mic")
                 Text(track.grandparentTitle ?? track.artistName)
@@ -329,6 +297,9 @@ struct TrackRowView: View {
 struct NowPlayingBarsView: View {
     var color: Color = AppStyle.Colors.tint
     @State private var isAnimating = false
+    /// Random heights and durations are computed once on appear and stable across re-renders.
+    @State private var barHeights: [CGFloat] = [0.65, 0.85, 0.45, 0.75]
+    @State private var barDurations: [Double] = [0.45, 0.38, 0.52, 0.41]
 
     var body: some View {
         HStack(spacing: 2) {
@@ -336,16 +307,20 @@ struct NowPlayingBarsView: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(color)
                     .frame(width: 3)
-                    .scaleEffect(y: isAnimating ? CGFloat.random(in: 0.3...1.0) : 0.4, anchor: .bottom)
+                    .scaleEffect(y: isAnimating ? barHeights[index] : 0.4, anchor: .bottom)
                     .animation(
-                        .easeInOut(duration: Double.random(in: 0.3...0.6))
+                        .easeInOut(duration: barDurations[index])
                             .repeatForever(autoreverses: true)
                             .delay(Double(index) * 0.1),
                         value: isAnimating
                     )
             }
         }
-        .onAppear { isAnimating = true }
+        .onAppear {
+            barHeights = (0..<4).map { _ in CGFloat.random(in: 0.3...1.0) }
+            barDurations = (0..<4).map { _ in Double.random(in: 0.3...0.6) }
+            isAnimating = true
+        }
         .onDisappear { isAnimating = false }
     }
 }

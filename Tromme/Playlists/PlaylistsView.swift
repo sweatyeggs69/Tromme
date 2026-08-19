@@ -69,14 +69,14 @@ struct PlaylistsView: View {
                                         }
                                     }
                                 }
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
                         .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
-                .listRowSpacing(2)
+                .listRowSpacing(AppStyle.TrackList.rowSpacing)
                 .listSectionIndexVisibility(.automatic)
                 .tint(.secondary)
             }

@@ -46,6 +46,62 @@ enum AppStyle {
         static let itemTitle: Font = .subheadline.weight(.medium)
         static let itemSubtitle: Font = .caption
     }
+
+    // MARK: - Track list rows (Songs, Favorites, Playlists)
+
+    enum TrackList {
+        /// Default artwork size for album-context rows (e.g. album detail).
+        static let artworkSize: CGFloat = 42
+        /// Artwork size for standalone list views (Songs, Favorites, Playlist detail).
+        static let browseArtworkSize: CGFloat = 48
+        /// Corner radius for artwork in list rows.
+        static let artworkCornerRadius: CGFloat = 4
+        /// Standard list row insets shared across all track list views.
+        static let rowInsets = EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)
+        /// Vertical spacing between rows.
+        static let rowSpacing: CGFloat = 2
+    }
+
+    // MARK: - Mini Player
+
+    enum MiniPlayer {
+        static let artworkSize: CGFloat = 36
+        static let artworkSizeInline: CGFloat = 30
+        static let artworkCornerRadius: CGFloat = 8
+        /// Standard tap-target size for transport controls.
+        static let controlSize: CGFloat = 44
+        /// Larger play/pause tap target on iPad.
+        static let playPauseSizePad: CGFloat = 50
+        /// Smaller tap-target for secondary controls (shuffle, repeat, AirPlay, queue).
+        static let secondaryControlSize: CGFloat = 36
+        static let leadingPadding: CGFloat = 16
+        static let trailingPadding: CGFloat = 12
+        static let verticalPadding: CGFloat = 8
+        static let spacing: CGFloat = 12
+        static let spacingCompact: CGFloat = 8
+    }
+
+    // MARK: - Now Playing full-screen view
+
+    enum NowPlaying {
+        static let bottomActionsLeadingPadding: CGFloat = 48
+        static let bottomActionsTrailingPadding: CGFloat = 48
+        static let actionIconActiveOpacity: Double = 0.82
+        static let actionIconInactiveOpacity: Double = 0.45
+        static let actionBackgroundOpacity: Double = 0.12
+        static let actionBackgroundActiveOpacity: Double = 0.4
+        static let controlTintOpacity: Double = 0.45
+        static let bottomActionIconSize: CGFloat = 42
+        static let iPadBottomActionsExtraPadding: CGFloat = 12
+        static let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
+        static let portraitArtworkBottomPadding: CGFloat = 10
+        static let portraitTrackInfoBottomPadding: CGFloat = 6
+        static let portraitBottomControlsHeightFraction: CGFloat = 0.42
+        static let landscapeBottomControlsHeightFraction: CGFloat = 0.35
+        static let bottomActionsTopPadding: CGFloat = 10
+        static let bottomScreenPaddingWithSafeArea: CGFloat = 4
+        static let bottomScreenPaddingWithoutSafeArea: CGFloat = 8
+    }
 }
 
 extension View {

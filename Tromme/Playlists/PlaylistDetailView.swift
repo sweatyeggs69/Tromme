@@ -11,6 +11,7 @@ struct PlaylistDetailView: View {
 
     @State private var tracks: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var trackNavigationTarget: PlexMetadata? = nil
     @State private var isDeletingPlaylist = false
     @State private var showDeletePlaylistConfirmation = false
     @State private var playlistDeleteErrorMessage: String?
@@ -200,10 +201,11 @@ struct PlaylistDetailView: View {
                         showArtwork: true,
                         showArtist: true,
                         showTrackNumber: false,
-                        artworkSize: 48,
-                        artworkCornerRadius: 4
+                        artworkSize: AppStyle.TrackList.browseArtworkSize,
+                        artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+                        onNavigate: { trackNavigationTarget = $0 }
                     )
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowInsets(AppStyle.TrackList.rowInsets)
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
@@ -242,7 +244,7 @@ struct PlaylistDetailView: View {
                             }
                             .scrollContentBackground(.hidden)
                             .listStyle(.plain)
-                            .listRowSpacing(2)
+                            .listRowSpacing(AppStyle.TrackList.rowSpacing)
                             .frame(width: geo.size.width * 0.6)
                         }
 
@@ -270,12 +272,19 @@ struct PlaylistDetailView: View {
                     }
                     .scrollContentBackground(.hidden)
                     .listStyle(.plain)
-                    .listRowSpacing(2)
+                    .listRowSpacing(AppStyle.TrackList.rowSpacing)
                 }
             }
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $trackNavigationTarget) { target in
+            if target.type == "artist" {
+                ArtistDetailView(artist: target)
+            } else {
+                AlbumDetailView(album: target)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {

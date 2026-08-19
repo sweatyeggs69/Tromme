@@ -18,15 +18,15 @@ struct MiniPlayerView: View {
     var body: some View {
         Group {
             if isPad {
-                HStack(spacing: 12) {
+                HStack(spacing: AppStyle.MiniPlayer.spacing) {
                     Button {
                         openNowPlayingDefault()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: AppStyle.MiniPlayer.spacingCompact) {
                             ArtworkView(
                                 thumbPath: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb,
-                                size: 36,
-                                cornerRadius: 8
+                                size: AppStyle.MiniPlayer.artworkSize,
+                                cornerRadius: AppStyle.MiniPlayer.artworkCornerRadius
                             )
 
                             VStack(alignment: .leading, spacing: 2) {
@@ -65,9 +65,9 @@ struct MiniPlayerView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .padding(.leading, 16)
-                .padding(.trailing, 12)
-                .padding(.vertical, 8)
+                .padding(.leading, AppStyle.MiniPlayer.leadingPadding)
+                .padding(.trailing, AppStyle.MiniPlayer.trailingPadding)
+                .padding(.vertical, AppStyle.MiniPlayer.verticalPadding)
                 .contentShape(Rectangle())
                 .gesture(
                     TapGesture().onEnded {
@@ -76,15 +76,15 @@ struct MiniPlayerView: View {
                     including: .gesture
                 )
             } else {
-                HStack(spacing: isInline ? 12 : 8) {
+                HStack(spacing: isInline ? AppStyle.MiniPlayer.spacing : AppStyle.MiniPlayer.spacingCompact) {
                     Button {
                         openNowPlayingDefault()
                     } label: {
-                        HStack(spacing: isInline ? 12 : 8) {
+                        HStack(spacing: isInline ? AppStyle.MiniPlayer.spacing : AppStyle.MiniPlayer.spacingCompact) {
                             ArtworkView(
                                 thumbPath: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb,
-                                size: isInline ? 30 : 36,
-                                cornerRadius: 8
+                                size: isInline ? AppStyle.MiniPlayer.artworkSizeInline : AppStyle.MiniPlayer.artworkSize,
+                                cornerRadius: AppStyle.MiniPlayer.artworkCornerRadius
                             )
 
                             if isInline {
@@ -114,10 +114,10 @@ struct MiniPlayerView: View {
                     playPauseButton
                     forwardButton
                 }
-                .padding(.horizontal, isInline ? 8 : 0)
-                .padding(.leading, isInline ? 0 : 16)
-                .padding(.trailing, isInline ? 0 : 12)
-                .padding(.vertical, isInline ? 0 : 8)
+                .padding(.horizontal, isInline ? AppStyle.MiniPlayer.spacingCompact : 0)
+                .padding(.leading, isInline ? 0 : AppStyle.MiniPlayer.leadingPadding)
+                .padding(.trailing, isInline ? 0 : AppStyle.MiniPlayer.trailingPadding)
+                .padding(.vertical, isInline ? 0 : AppStyle.MiniPlayer.verticalPadding)
                 .contentShape(Rectangle())
                 .gesture(
                     TapGesture().onEnded {
@@ -138,7 +138,7 @@ struct MiniPlayerView: View {
             Image(systemName: "shuffle")
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.primary.opacity(player.isShuffled ? 1 : 0.45))
-                .frame(width: 36, height: 44)
+                .frame(width: AppStyle.MiniPlayer.secondaryControlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
@@ -150,20 +150,21 @@ struct MiniPlayerView: View {
             Image(systemName: "backward.fill")
                 .font(.title2)
                 .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
+                .frame(width: AppStyle.MiniPlayer.controlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
 
     private var playPauseButton: some View {
-        Button {
+        let size = isPad ? AppStyle.MiniPlayer.playPauseSizePad : AppStyle.MiniPlayer.controlSize
+        return Button {
             player.togglePlayPause()
         } label: {
             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                 .font(isPad ? .title.weight(.semibold) : .title2)
                 .foregroundStyle(.primary)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: isPad ? 50 : 44, height: isPad ? 50 : 44)
+                .frame(width: size, height: size)
         }
         .buttonStyle(.plain)
     }
@@ -175,7 +176,7 @@ struct MiniPlayerView: View {
             Image(systemName: "forward.fill")
                 .font(.title2)
                 .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
+                .frame(width: AppStyle.MiniPlayer.controlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
@@ -188,7 +189,7 @@ struct MiniPlayerView: View {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.primary.opacity(player.repeatMode.isActive ? 1 : 0.45))
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 36, height: 44)
+                .frame(width: AppStyle.MiniPlayer.secondaryControlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
@@ -200,8 +201,8 @@ struct MiniPlayerView: View {
         } label: {
             Image(systemName: "quote.bubble")
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(.primary.opacity(0.82))
-                .frame(width: 36, height: 44)
+                .foregroundStyle(.primary.opacity(AppStyle.NowPlaying.actionIconActiveOpacity))
+                .frame(width: AppStyle.MiniPlayer.secondaryControlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
@@ -213,15 +214,15 @@ struct MiniPlayerView: View {
         } label: {
             Image(systemName: "list.bullet")
                 .font(.callout.weight(.semibold))
-                .foregroundStyle(.primary.opacity(0.82))
-                .frame(width: 36, height: 44)
+                .foregroundStyle(.primary.opacity(AppStyle.NowPlaying.actionIconActiveOpacity))
+                .frame(width: AppStyle.MiniPlayer.secondaryControlSize, height: AppStyle.MiniPlayer.controlSize)
         }
         .buttonStyle(.plain)
     }
 
     private var airPlayButton: some View {
         AirPlayButton(tintOpacity: 0.7, activeTintOpacity: 0.92)
-            .frame(width: 36, height: 44)
+            .frame(width: AppStyle.MiniPlayer.secondaryControlSize, height: AppStyle.MiniPlayer.controlSize)
     }
 
 }

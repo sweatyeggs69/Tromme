@@ -338,7 +338,11 @@ struct AllAlbumsView: View {
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         do {
             albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
-        } catch {}
+        } catch {
+#if DEBUG
+            print("[AllAlbumsView] Failed to load albums: \(error)")
+#endif
+        }
         isLoading = false
     }
 

@@ -125,7 +125,7 @@ struct ContentView: View {
                     NavigationStack {
                         HomeView()
                             .navigationDestinations()
-                            .accountToolbar(signOut: signOut)
+                            .settingsToolbar(alwaysVisible: true, signOut: signOut)
                     }
                 }
             }
@@ -134,7 +134,7 @@ struct ContentView: View {
                 NavigationStack(path: $artistsPath) {
                     ArtistsView()
                         .navigationDestinations()
-                        .offlineSettingsToolbar(signOut: signOut)
+                        .settingsToolbar(signOut: signOut)
                 }
             }
 
@@ -142,7 +142,7 @@ struct ContentView: View {
                 NavigationStack(path: $albumsPath) {
                     AllAlbumsView()
                         .navigationDestinations()
-                        .offlineSettingsToolbar(signOut: signOut)
+                        .settingsToolbar(signOut: signOut)
                 }
             }
 
@@ -150,7 +150,7 @@ struct ContentView: View {
                 NavigationStack {
                     AllSongsView()
                         .navigationDestinations()
-                        .offlineSettingsToolbar(signOut: signOut)
+                        .settingsToolbar(signOut: signOut)
                 }
             }
 
@@ -196,8 +196,9 @@ struct ContentView: View {
             .onChange(of: showNowPlaying) { oldValue, newValue in
                 if oldValue && !newValue, let target = pendingNavigation {
                     pendingNavigation = nil
-                    // Delay to let the fullScreenCover dismiss animation complete
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    // Wait for the fullScreenCover dismiss animation to complete before navigating.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(400))
                         navigateToTarget(target)
                     }
                 }
@@ -244,11 +245,8 @@ struct ContentView: View {
     }
 
     private func navigateToTarget(_ target: PlexMetadata) {
-        // Disable all animations to prevent Liquid Glass morph crash
-        UIView.setAnimationsEnabled(false)
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
+        // Switch tabs and reset path without animation to prevent Liquid Glass morph crash.
+        withAnimation(.none) {
             if target.type == "artist" {
                 artistsPath = NavigationPath()
                 selectedTab = "artists"
@@ -257,9 +255,9 @@ struct ContentView: View {
                 selectedTab = "albums"
             }
         }
-        // Wait for the tab switch to settle, then push the destination
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            UIView.setAnimationsEnabled(true)
+        // Let the tab switch settle before pushing the destination.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
             if target.type == "artist" {
                 artistsPath.append(target)
             } else {
@@ -269,32 +267,29 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Account Toolbar
+// MARK: - Settings Toolbar
+//
+// On the Home tab (always online), the gear appears in the trailing position.
+// On offline-capable tabs, the gear only appears when offline, in the leading position
+// so it doesn't conflict with per-view trailing toolbar items.
 
-private extension View {
-    func accountToolbar(signOut: @escaping () -> Void) -> some View {
-        self.toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    SettingsView(onSignOut: signOut)
-                } label: {
-                    Image(systemName: "gear")
-                }
-                .tint(.primary)
-            }
-        }
-    }
-}
-
-// MARK: - Offline Settings Toolbar
-
-private struct OfflineSettingsToolbarModifier: ViewModifier {
+private struct SettingsToolbarModifier: ViewModifier {
     @Environment(NetworkStatus.self) private var network
+    let alwaysVisible: Bool
     let signOut: () -> Void
 
     func body(content: Content) -> some View {
         content.toolbar {
-            if !network.isConnected {
+            if alwaysVisible {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView(onSignOut: signOut)
+                    } label: {
+                        Image(systemName: "gear")
+                    }
+                    .tint(.primary)
+                }
+            } else if !network.isConnected {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
                         SettingsView(onSignOut: signOut)
@@ -309,8 +304,10 @@ private struct OfflineSettingsToolbarModifier: ViewModifier {
 }
 
 private extension View {
-    func offlineSettingsToolbar(signOut: @escaping () -> Void) -> some View {
-        modifier(OfflineSettingsToolbarModifier(signOut: signOut))
+    /// Adds a gear → Settings link. Pass `alwaysVisible: true` for the Home tab;
+    /// offline-only tabs pass `false` so the gear only appears when disconnected.
+    func settingsToolbar(alwaysVisible: Bool = false, signOut: @escaping () -> Void) -> some View {
+        modifier(SettingsToolbarModifier(alwaysVisible: alwaysVisible, signOut: signOut))
     }
 }
 

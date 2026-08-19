@@ -16,6 +16,7 @@ struct AllSongsView: View {
     @AppStorage("allSongsSortOrder") private var sortOrder: SongSortOrder = .titleAscending
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
+    @State private var trackNavigationTarget: PlexMetadata? = nil
     private let previewTracks: [PlexMetadata]?
 
     init(previewTracks: [PlexMetadata]? = nil) {
@@ -48,22 +49,30 @@ struct AllSongsView: View {
                                     showArtwork: true,
                                     showArtist: true,
                                     showTrackNumber: false,
-                                    artworkSize: 48,
-                                    artworkCornerRadius: 4
+                                    artworkSize: AppStyle.TrackList.browseArtworkSize,
+                                    artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+                                    onNavigate: { trackNavigationTarget = $0 }
                                 )
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
                         .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
-                .listRowSpacing(2)
+                .listRowSpacing(AppStyle.TrackList.rowSpacing)
                 .listSectionIndexVisibility(isDateAddedSortActive ? .hidden : .automatic)
                 .tint(.secondary)
             }
         }
         .navigationTitle("Songs")
+        .navigationDestination(item: $trackNavigationTarget) { target in
+            if target.type == "artist" {
+                ArtistDetailView(artist: target)
+            } else {
+                AlbumDetailView(album: target)
+            }
+        }
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,
@@ -177,7 +186,11 @@ struct AllSongsView: View {
                !downloadManager.userStoppedAutoDownload {
                 downloadManager.downloadBatch(tracks: loadedTracks, server: server, client: client)
             }
-        } catch {}
+        } catch {
+#if DEBUG
+            print("[AllSongsView] Failed to load tracks: \(error)")
+#endif
+        }
         isLoading = false
         await applyDisplayState()
     }

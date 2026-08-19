@@ -5,10 +5,10 @@ import UIKit
 struct TrommeApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var serverConnection = ServerConnectionManager()
-    @State private var plexClient = PlexAPIClient()
-    @State private var audioPlayer = AudioPlayerService()
-    @State private var downloadManager = DownloadManager()
+    @State private var serverConnection = AppContext.shared.serverConnection
+    @State private var plexClient = AppContext.shared.plexClient
+    @State private var audioPlayer = AppContext.shared.audioPlayer
+    @State private var downloadManager = AppContext.shared.downloadManager
     @State private var configuredCatalystSceneIDs: Set<String> = []
     @State private var lastForegroundLibraryCheck: Date = .distantPast
     /// Skip the foreground library check if it ran in the last 5 minutes —
@@ -16,16 +16,6 @@ struct TrommeApp: App {
     private let foregroundLibraryCheckInterval: TimeInterval = 5 * 60
 
     init() {
-        // Populate shared context so CarPlay (and other non-SwiftUI code) can access services
-        let ctx = AppContext.shared
-        ctx.serverConnection = serverConnection
-        ctx.plexClient = plexClient
-        ctx.audioPlayer = audioPlayer
-        ctx.downloadManager = downloadManager
-        if let server = serverConnection.currentServer {
-            audioPlayer.configure(server: server, client: plexClient)
-        }
-
         let accentColor = UIColor(AppStyle.Colors.tint)
         UINavigationBar.appearance().tintColor = .label
 
@@ -66,12 +56,11 @@ struct TrommeApp: App {
                         audioPlayer.resetPlayback()
                     }
                 }
-                .task {
-                    // Warm cache on launch if already signed in
+                .task(priority: .background) {
+                    // Warm cache on launch if already signed in.
+                    // Background priority ensures this runs after the UI is ready.
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
-                    // Let the first frame render before heavy background warming work starts.
-                    try? await Task.sleep(for: .seconds(1.5))
                     serverConnection.warmCache(server: server, sectionId: sectionId, client: plexClient)
                 }
                 .task {
@@ -81,9 +70,7 @@ struct TrommeApp: App {
                     await observeAppTermination()
                 }
                 .task {
-                    await MainActor.run {
-                        configureCatalystWindowGeometryIfNeeded()
-                    }
+                    configureCatalystWindowGeometryIfNeeded()
                 }
         }
         .onChange(of: scenePhase) { _, phase in

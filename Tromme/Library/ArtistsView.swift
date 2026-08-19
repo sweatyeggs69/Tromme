@@ -104,7 +104,7 @@ struct ArtistsView: View {
                                             .font(.body)
                                     }
                                 }
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
                         .sectionIndexLabel(section.title)

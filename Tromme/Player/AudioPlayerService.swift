@@ -683,8 +683,8 @@ final class AudioPlayerService: @unchecked Sendable {
     func syncDynamicQueueDownloads() {
         guard isDynamicQueueDownloadEnabled else { return }
         guard let server, let client,
-              let downloadManager = AppContext.shared.downloadManager,
               queue.indices.contains(currentIndex) else { return }
+        let downloadManager = AppContext.shared.downloadManager
         let limit = Self.validatedDynamicDownloadLimit(
             UserDefaults.standard.integer(forKey: Self.dynamicDownloadLimitKey)
         )
@@ -850,7 +850,7 @@ final class AudioPlayerService: @unchecked Sendable {
         player?.replaceCurrentItem(with: nil)
 
         // Fast path: locally downloaded file — skip network transcode entirely
-        if let localURL = AppContext.shared.downloadManager?.localURL(for: track.ratingKey) {
+        if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
             currentSessionID = nil
@@ -1023,7 +1023,7 @@ final class AudioPlayerService: @unchecked Sendable {
         guard upcomingTracks.count <= 5 else { return }
         guard magicMixRefillTask == nil else { return }
         guard let server, let client else { return }
-        guard let sectionId = AppContext.shared.serverConnection?.currentLibrarySectionId else { return }
+        guard let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId else { return }
         guard let currentTrack, let seedAlbumKey = currentTrack.parentRatingKey else { return }
 
         let seedTrackKey = currentTrack.ratingKey
@@ -1131,7 +1131,7 @@ final class AudioPlayerService: @unchecked Sendable {
         guard needed > 0 else { return }
         guard infiniteRefillTask == nil else { return }
         guard let server, let client else { return }
-        guard let sectionId = AppContext.shared.serverConnection?.currentLibrarySectionId else { return }
+        guard let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId else { return }
 
         logPlayback("infinite_refill_begin", "trigger=\(trigger) needed=\(needed)")
 
@@ -1329,10 +1329,10 @@ final class AudioPlayerService: @unchecked Sendable {
             try? await Task.sleep(for: .milliseconds(300))
             guard !Task.isCancelled, self.playbackGeneration == generation, self.isPlaying else { return }
 
-            await AppContext.shared.serverConnection?.reprobe()
+            await AppContext.shared.serverConnection.reprobe()
             guard !Task.isCancelled, self.playbackGeneration == generation, self.isPlaying else { return }
 
-            if let updatedServer = AppContext.shared.serverConnection?.currentServer {
+            if let updatedServer = AppContext.shared.serverConnection.currentServer {
                 self.server = updatedServer
             }
 

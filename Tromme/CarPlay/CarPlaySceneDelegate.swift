@@ -5,10 +5,10 @@ import UIKit
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var interfaceController: CPInterfaceController?
 
-    private var server: PlexServer? { AppContext.shared.serverConnection?.currentServer }
-    private var sectionId: String? { AppContext.shared.serverConnection?.currentLibrarySectionId }
-    private var client: PlexAPIClient? { AppContext.shared.plexClient }
-    private var player: AudioPlayerService? { AppContext.shared.audioPlayer }
+    private var server: PlexServer? { AppContext.shared.serverConnection.currentServer }
+    private var sectionId: String? { AppContext.shared.serverConnection.currentLibrarySectionId }
+    private var client: PlexAPIClient { AppContext.shared.plexClient }
+    private var player: AudioPlayerService { AppContext.shared.audioPlayer }
 
     private var shuffleNPButton: CPNowPlayingShuffleButton?
     private var repeatNPButton: CPNowPlayingRepeatButton?
@@ -45,7 +45,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         // The persisted server URI may be stale after a period of disconnection
         // (the phone's network changed while the app was suspended). Re-probe so
         // the connection observer can reload tab content against a reachable URI.
-        Task { await AppContext.shared.serverConnection?.reprobe() }
+        Task { await AppContext.shared.serverConnection.reprobe() }
     }
 
     func templateApplicationScene(
@@ -141,10 +141,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         connectionObservationTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                guard let manager = AppContext.shared.serverConnection else {
-                    try? await Task.sleep(for: .seconds(1))
-                    continue
-                }
+                let manager = AppContext.shared.serverConnection
 
                 // Reconcile any state that was set between polling iterations,
                 // before the observer below was installed.
@@ -181,7 +178,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func loadHomeContent(into template: CPListTemplate) {
-        guard let server, let sectionId, let client else { return }
+        guard let server, let sectionId else { return }
         let generation = contentGeneration
 
         // Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played
@@ -257,7 +254,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     elementTitle: { $0.title },
                     elementSubtitle: { $0.artistDisplayName },
                     onElementSelect: { [weak self] index in
-                        self?.player?.play(tracks: preview, startingAt: index)
+                        self?.player.play(tracks: preview, startingAt: index)
                         self?.pushNowPlaying()
                     },
                     onHeaderSelect: { [weak self] in
@@ -279,7 +276,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func loadArtists(into template: CPListTemplate) {
-        guard let server, let sectionId, let client else { return }
+        guard let server, let sectionId else { return }
         let generation = contentGeneration
         Task {
             let artists: [PlexMetadata]
@@ -338,7 +335,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func showArtistAlbums(artistRatingKey: String, artistName: String) {
-        guard let server, let client else { return }
+        guard let server else { return }
         let template = CPListTemplate(title: artistName, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
         loadArtistAlbums(artistRatingKey: artistRatingKey, server: server, client: client, into: template)
@@ -385,12 +382,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                         }
                         return result
                     }
-                    guard !allTracks.isEmpty, let self, let player = self.player else {
+                    guard !allTracks.isEmpty, let self else {
                         completion()
                         return
                     }
-                    if !player.isShuffled { player.toggleShuffle() }
-                    player.play(tracks: allTracks, startingAt: 0)
+                    if !self.player.isShuffled { self.player.toggleShuffle() }
+                    self.player.play(tracks: allTracks, startingAt: 0)
                     self.pushNowPlaying()
                     completion()
                 }
@@ -426,7 +423,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func loadAlbums(into template: CPListTemplate) {
-        guard let server, let sectionId, let client else { return }
+        guard let server, let sectionId else { return }
         let generation = contentGeneration
         Task {
             let albums: [PlexMetadata]
@@ -495,7 +492,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func loadPlaylists(into template: CPListTemplate) {
-        guard let server, let client else { return }
+        guard let server else { return }
         let generation = contentGeneration
         Task {
             let playlists: [PlexPlaylist]
@@ -529,7 +526,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func showPlaylistTracks(playlistKey: String, playlistTitle: String) {
-        guard let server, let client else { return }
+        guard let server else { return }
         let template = CPListTemplate(title: playlistTitle, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
         loadPlaylistTracks(playlistKey: playlistKey, server: server, client: client, into: template)
@@ -551,9 +548,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
             let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(tracks.count) songs", image: UIImage(systemName: "shuffle"))
             shuffleItem.handler = { [weak self] _, completion in
-                guard let self, let player = self.player else { completion(); return }
-                if !player.isShuffled { player.toggleShuffle() }
-                player.play(tracks: tracks, startingAt: 0)
+                guard let self else { completion(); return }
+                if !self.player.isShuffled { self.player.toggleShuffle() }
+                self.player.play(tracks: tracks, startingAt: 0)
                 self.pushNowPlaying()
                 completion()
             }
@@ -562,7 +559,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
                 loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
                 item.handler = { [weak self] _, completion in
-                    self?.player?.play(tracks: tracks, startingAt: index)
+                    self?.player.play(tracks: tracks, startingAt: index)
                     self?.pushNowPlaying()
                     completion()
                 }
@@ -592,20 +589,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(tracks.count) songs", image: UIImage(systemName: "shuffle"))
         let capturedTracks = tracks
         shuffleItem.handler = { [weak self] _, completion in
-            guard let self, let player = self.player else { completion(); return }
-            if !player.isShuffled { player.toggleShuffle() }
-            player.play(tracks: capturedTracks, startingAt: 0)
+            guard let self else { completion(); return }
+            if !self.player.isShuffled { self.player.toggleShuffle() }
+            self.player.play(tracks: capturedTracks, startingAt: 0)
             self.pushNowPlaying()
             completion()
         }
 
         let trackItems: [CPListTemplateItem] = tracks.prefix(CPListTemplate.maximumItemCount - 1).enumerated().map { index, track -> CPListItem in
             let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
-            if let server, let client {
+            if let server {
                 loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
             }
             item.handler = { [weak self] _, completion in
-                self?.player?.play(tracks: capturedTracks, startingAt: index)
+                self?.player.play(tracks: capturedTracks, startingAt: index)
                 self?.pushNowPlaying()
                 completion()
             }
@@ -619,7 +616,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         // If called from an image row tap, auto-play that track
         if let startAt {
-            player?.play(tracks: tracks, startingAt: startAt)
+            player.play(tracks: tracks, startingAt: startAt)
             pushNowPlaying()
         }
     }
@@ -627,7 +624,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     // MARK: - Recently Added List
 
     private func showRecentlyAddedList(_ albums: [PlexMetadata]) {
-        guard let server, let client else { return }
+        guard let server else { return }
         let items = albums.map { album -> CPListItem in
             let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
             item.accessoryType = .disclosureIndicator
@@ -755,7 +752,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     // MARK: - Album Tracks
 
     private func showAlbumTracks(albumRatingKey: String, albumTitle: String, albumThumb: String? = nil, releaseYear: String? = nil) {
-        guard let server, let client else { return }
+        guard let server else { return }
         let loadingTemplate = CPListTemplate(title: albumTitle, sections: [])
         interfaceController?.pushTemplate(loadingTemplate, animated: true, completion: nil)
         Task {
@@ -788,13 +785,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             )
             let actionRow = CPListImageRowItem(text: "", condensedElements: [playElement, shuffleElement], allowsMultipleLines: false)
             actionRow.listImageRowHandler = { [weak self] _, index, completion in
-                guard let self, let player = self.player else { completion(); return }
+                guard let self else { completion(); return }
                 if index == 0 {
-                    if player.isShuffled { player.toggleShuffle() }
+                    if self.player.isShuffled { self.player.toggleShuffle() }
                 } else {
-                    if !player.isShuffled { player.toggleShuffle() }
+                    if !self.player.isShuffled { self.player.toggleShuffle() }
                 }
-                player.play(tracks: playableTracks, startingAt: 0)
+                self.player.play(tracks: playableTracks, startingAt: 0)
                 self.pushNowPlaying()
                 completion()
             }
@@ -809,7 +806,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     let item = CPListItem(text: "\(numPrefix)\(starPrefix)\(track.title)", detailText: nil)
                     let capturedTracks = playableTracks
                     item.handler = { [weak self] _, completion in
-                        self?.player?.play(tracks: capturedTracks, startingAt: index)
+                        self?.player.play(tracks: capturedTracks, startingAt: index)
                         self?.pushNowPlaying()
                         completion()
                     }
@@ -837,12 +834,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         nowPlaying.isAlbumArtistButtonEnabled = true
 
         let shuffleButton = CPNowPlayingShuffleButton { [weak self] _ in
-            self?.player?.toggleShuffle()
+            self?.player.toggleShuffle()
         }
         self.shuffleNPButton = shuffleButton
 
         let repeatButton = CPNowPlayingRepeatButton { [weak self] _ in
-            self?.player?.cycleRepeatMode()
+            self?.player.cycleRepeatMode()
         }
         self.repeatNPButton = repeatButton
 
@@ -887,14 +884,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func syncMixButtons() {
-        guard let player else { return }
         infiniteButton?.isSelected = player.isInfiniteModeActive
         magicMixButton?.isSelected = player.isMagicMixActive
         syncFavoriteButton()
     }
 
     private func syncFavoriteButton() {
-        currentTrackFavorited = (player?.currentTrack?.userRating ?? 0) >= 4
+        currentTrackFavorited = (player.currentTrack?.userRating ?? 0) >= 4
         rebuildNowPlayingButtons()
     }
 
@@ -907,8 +903,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func toggleFavorite() {
-        guard let player, let track = player.currentTrack,
-              let server, let client else { return }
+        guard let track = player.currentTrack,
+              let server else { return }
         currentTrackFavorited.toggle()
         rebuildNowPlayingButtons()
         let newRating = currentTrackFavorited ? 10 : 0
@@ -921,16 +917,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         observationTask?.cancel()
         observationTask = Task { [weak self] in
             while !Task.isCancelled {
-                guard let self, let player = self.player else { return }
+                guard let self else { return }
+                let p = self.player
                 // Read the properties we want to track — withObservationTracking
                 // will call onChange when any of them mutate.
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        _ = player.isShuffled
-                        _ = player.repeatMode
-                        _ = player.isInfiniteModeActive
-                        _ = player.isMagicMixActive
-                        _ = player.currentTrack
+                        _ = p.isShuffled
+                        _ = p.repeatMode
+                        _ = p.isInfiniteModeActive
+                        _ = p.isMagicMixActive
+                        _ = p.currentTrack
                     } onChange: {
                         continuation.resume()
                     }
@@ -944,8 +941,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func pushNowPlaying() {
         syncMixButtons()
         let nowPlaying = CPNowPlayingTemplate.shared
-        if interfaceController?.topTemplate !== nowPlaying {
-            interfaceController?.pushTemplate(nowPlaying, animated: true, completion: nil)
+        guard interfaceController?.topTemplate !== nowPlaying else { return }
+        // Pop to Now Playing if it's already in the stack; otherwise push it fresh.
+        interfaceController?.pop(to: nowPlaying, animated: true) { [weak self] success, _ in
+            if !success {
+                self?.interfaceController?.pushTemplate(nowPlaying, animated: true, completion: nil)
+            }
         }
     }
 
@@ -976,12 +977,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
 extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
     func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
-        guard let player, !player.upcomingTracks.isEmpty else { return }
+        guard !player.upcomingTracks.isEmpty else { return }
         let tracks = player.upcomingTracks
         let items = tracks.prefix(CPListTemplate.maximumItemCount).enumerated().map { index, track -> CPListItem in
             let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
             item.handler = { [weak self] _, completion in
-                self?.player?.skipToUpcoming(at: index)
+                self?.player.skipToUpcoming(at: index)
                 completion()
             }
             return item
@@ -991,7 +992,7 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
     }
 
     func nowPlayingTemplateAlbumArtistButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
-        guard let player, let track = player.currentTrack,
+        guard let track = player.currentTrack,
               let albumRatingKey = track.parentRatingKey else { return }
         showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName, albumThumb: track.parentThumb)
     }
