@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
+    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "codecBitrate"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
@@ -61,6 +62,11 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Picker("Show Codec/Bitrate", selection: $playbackBadgeMode) {
+                    Text("Off").tag("off")
+                    Text("Codec").tag("codec")
+                    Text("Codec + Bitrate").tag("codecBitrate")
+                }
                 Toggle("Sound Check", isOn: $soundCheckEnabled)
                     .tint(.green)
                 if soundCheckEnabled {
@@ -73,46 +79,6 @@ struct SettingsView: View {
                 Text("Playback")
             } footer: {
                 Text(playbackFooterText)
-            }
-
-            Section {
-                if let server = serverConnection.currentServer {
-                    LabeledContent("Name", value: server.name)
-                    LabeledContent("Connection", value: connectionLabel(for: server))
-
-                    Button("Change Server") {
-                        serverConnection.disconnect()
-                    }
-                }
-
-                if sections.count > 1 {
-                    Picker("Library", selection: libraryBinding) {
-                        ForEach(sections) { section in
-                            Text(section.title).tag(section.key)
-                        }
-                    }
-                }
-            } header: {
-                Text("Server")
-            }
-
-            Section {
-                Button {
-                    Task { await refreshLibrary() }
-                } label: {
-                    HStack {
-                        Text("Refresh Library")
-                        Spacer()
-                        if isRefreshing {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(isRefreshing)
-
-                Button("Clear Cache") {
-                    showClearCacheConfirmation = true
-                }
             }
 
             Section {
@@ -167,6 +133,46 @@ struct SettingsView: View {
                 Text("Offline")
             } footer: {
                 Text(offlineFooterText)
+            }
+
+            Section {
+                if let server = serverConnection.currentServer {
+                    LabeledContent("Name", value: server.name)
+                    LabeledContent("Connection", value: connectionLabel(for: server))
+
+                    Button("Change Server") {
+                        serverConnection.disconnect()
+                    }
+                }
+
+                if sections.count > 1 {
+                    Picker("Library", selection: libraryBinding) {
+                        ForEach(sections) { section in
+                            Text(section.title).tag(section.key)
+                        }
+                    }
+                }
+            } header: {
+                Text("Server")
+            }
+
+            Section {
+                Button {
+                    Task { await refreshLibrary() }
+                } label: {
+                    HStack {
+                        Text("Refresh Library")
+                        Spacer()
+                        if isRefreshing {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isRefreshing)
+
+                Button("Clear Cache") {
+                    showClearCacheConfirmation = true
+                }
             }
 
             Section {
@@ -240,9 +246,6 @@ struct SettingsView: View {
             }
         } else {
             text = "Automatically download songs for offline playback."
-        }
-        if let format = DownloadFormat(rawValue: downloadFormat), format != .original {
-            text += " New downloads are converted to \(format.rawValue.uppercased()) on the server to save space; existing downloads keep their original format."
         }
         return text
     }

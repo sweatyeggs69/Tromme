@@ -72,15 +72,7 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
-    private var isLossless: Bool {
-        guard !player.isTranscoding else { return false }
-        let media = player.currentTrack?.media?.first
-        let audioStream = media?.part?
-            .flatMap { $0.stream ?? [] }
-            .first(where: { $0.streamType == 2 })
-        let codec = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
-        return codec == "flac" || codec == "alac"
-    }
+
 
     // MARK: - Body
 
@@ -435,11 +427,7 @@ struct NowPlayingView: View {
         return Group {
             if usesEvenSpacing {
                 VStack(spacing: 0) {
-                    TimelineSlider(
-                        usesOverlayedTimeLabels: true,
-                        showLosslessBadge: isLossless && !player.isPlayingLocalDownload,
-                        showLocalBadge: player.isPlayingLocalDownload
-                    )
+                    TimelineSlider(usesOverlayedTimeLabels: true)
                         .padding(.horizontal, horizontalPadding)
                         .padding(.top, 12)
 
@@ -736,10 +724,12 @@ struct TimelineSlider: View {
     @State private var dragStartValue: TimeInterval = 0
 
     var usesOverlayedTimeLabels = false
-    var showLosslessBadge: Bool = false
-    var showLocalBadge: Bool = false
 
-    private var showsBadge: Bool { showLosslessBadge || showLocalBadge }
+    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "codecBitrate"
+
+    private var showsBadge: Bool {
+        player.isPlayingLocalDownload || (playbackBadgeMode != "off" && player.activeStreamCodec != nil)
+    }
 
     var body: some View {
         let duration = max(player.duration, 1)
@@ -850,12 +840,20 @@ struct TimelineSlider: View {
 
     private var playbackBadge: some View {
         HStack(spacing: 3) {
-            if !showLocalBadge {
-                Image(systemName: "waveform")
-                    .font(.system(size: 10, weight: .medium))
+            if player.isPlayingLocalDownload {
+                Image(systemName: "externaldrive.fill")
+                    .font(.system(size: 9, weight: .medium))
             }
-            Text(showLocalBadge ? "Local" : "Lossless")
-                .font(.caption2.weight(.medium))
+            if playbackBadgeMode == "off" {
+                if player.isPlayingLocalDownload {
+                    Text("Local")
+                        .font(.caption2.weight(.medium))
+                }
+            } else if let codec = player.activeStreamCodec {
+                let bitrateText = (playbackBadgeMode == "codecBitrate" ? player.activeStreamBitrate.map { " · \($0) kbps" } : nil) ?? ""
+                Text(codec + bitrateText)
+                    .font(.caption2.weight(.medium))
+            }
         }
         .foregroundStyle(.white.opacity(0.45))
         .padding(.horizontal, 5)

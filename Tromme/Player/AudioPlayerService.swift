@@ -123,6 +123,35 @@ final class AudioPlayerService: @unchecked Sendable {
     /// True when the current track is playing from a locally downloaded file.
     var isPlayingLocalDownload: Bool { isPlayingLocalFile }
 
+    /// The source file bitrate in kbps, or nil when no track is loaded.
+    var activeStreamBitrate: Int? {
+        guard hasTrack else { return nil }
+        let media = currentTrack?.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        return audioStream?.bitrate ?? media?.bitrate
+    }
+
+    /// The codec currently being delivered to the audio pipeline.
+    /// Returns "AAC" for constrained (cellular) transcodes, "ALAC" for FLAC files
+    /// routed through the lossless HLS transcode, or the uppercased source codec otherwise.
+    /// Returns nil when no track is loaded.
+    var activeStreamCodec: String? {
+        guard hasTrack else { return nil }
+        if isConstrainedPlaybackPath { return "AAC" }
+        let media = currentTrack?.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        let raw = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
+        switch raw {
+        case "flac": return "ALAC"  // FLAC is losslessly transcoded to ALAC via HLS
+        case .some(let c): return c.uppercased()
+        case nil: return nil
+        }
+    }
+
     init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -2059,6 +2088,31 @@ final class AudioPlayerService: @unchecked Sendable {
             self.updateShuffleRepeatState()
             return .success
         }
+        center.likeCommand.isEnabled = true
+        center.likeCommand.addTarget { [weak self] _ in
+            guard let self, let track = self.currentTrack,
+                  let server = self.server, let client = self.client else { return .commandFailed }
+            let wasFavorited = (track.userRating ?? 0) >= 10
+            let newRating: Int = wasFavorited ? -1 : 10
+            self.currentTrack?.userRating = wasFavorited ? 0 : 10
+            MPRemoteCommandCenter.shared().likeCommand.isActive = !wasFavorited
+            Task {
+                do {
+                    try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: newRating)
+                    if let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId {
+                        await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(
+                            serverId: server.machineIdentifier,
+                            sectionId: sectionId
+                        ))
+                    }
+                } catch {
+                    self.currentTrack?.userRating = wasFavorited ? 10 : 0
+                    MPRemoteCommandCenter.shared().likeCommand.isActive = wasFavorited
+                }
+                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
+            }
+            return .success
+        }
         updateShuffleRepeatState()
     }
 
@@ -2120,6 +2174,7 @@ final class AudioPlayerService: @unchecked Sendable {
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPRemoteCommandCenter.shared().likeCommand.isActive = (currentTrack.userRating ?? 0) >= 10
         lastPublishedNowPlayingTrackKey = trackKey
 
         let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
