@@ -851,6 +851,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             } else {
                 player.isMagicMixActive = false
                 player.isInfiniteModeActive = true
+                player.requestInfiniteRefill()
             }
             self?.syncMixButtons()
         }
@@ -863,7 +864,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 player.isMagicMixActive = false
             } else {
                 player.isInfiniteModeActive = false
+                player.clearQueue()
                 player.isMagicMixActive = true
+                player.requestMagicMixRefill(freshMix: true)
             }
             self?.syncMixButtons()
         }
