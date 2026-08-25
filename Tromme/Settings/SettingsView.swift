@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
+    @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
     @AppStorage("downloadFormat") private var downloadFormat = DownloadFormat.defaultFormat.rawValue
@@ -42,6 +43,13 @@ struct SettingsView: View {
             Section {
                 Toggle("Featured Section", isOn: $showFeaturedSection)
                     .tint(.green)
+                if showFeaturedSection {
+                    Picker("Size", selection: $featuredBannerSize) {
+                        Text("Small").tag("small")
+                        Text("Large").tag("large")
+                        Text("Immersive").tag("immersive")
+                    }
+                }
             } header: {
                 Text("Home")
             }

@@ -13,11 +13,16 @@ struct HomeView: View {
     @State private var isLoading: Bool
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
-    @State private var featuredAlbum: PlexMetadata?
+    @State private var featuredAlbums: [PlexMetadata]
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
-    @AppStorage("featuredAlbumRatingKey") private var featuredAlbumRatingKey: String = ""
+    @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
+    @AppStorage("featuredAlbumRatingKeys") private var featuredAlbumRatingKeys: String = ""
     @AppStorage("featuredAlbumLastRefreshedAt") private var featuredAlbumLastRefreshedAt: Double = 0
+
+    private var isImmersiveFeatured: Bool {
+        showFeaturedSection && featuredBannerSize == "immersive" && NetworkStatus.shared.isConnected
+    }
 
     private let previewRecentTracks: [PlexMetadata]?
     private let previewPlaylists: [PlexPlaylist]?
@@ -35,7 +40,7 @@ struct HomeView: View {
         _recentTracks = State(initialValue: previewRecentTracks ?? [])
         _playlists = State(initialValue: previewPlaylists ?? [])
         _recentAlbums = State(initialValue: previewRecentAlbums ?? [])
-        _featuredAlbum = State(initialValue: previewRecentAlbums?.randomElement())
+        _featuredAlbums = State(initialValue: Array((previewRecentAlbums ?? []).shuffled().prefix(3)))
         _isLoading = State(initialValue: previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil)
     }
 
@@ -50,8 +55,10 @@ struct HomeView: View {
                 recentlyPlayedSection
                 playlistsSection
             }
-            .padding(.vertical, 8)
+            .padding(.bottom, 8)
+            .padding(.top, isImmersiveFeatured ? 0 : 8)
         }
+        .ignoresSafeArea(.container, edges: isImmersiveFeatured ? .top : [])
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await withTaskGroup(of: Void.self) { group in
@@ -97,12 +104,8 @@ struct HomeView: View {
 
     @ViewBuilder
     private var featuredSection: some View {
-        if let album = featuredAlbum {
-            NavigationLink(value: album) {
-                FeaturedBannerView(album: album)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+        if !featuredAlbums.isEmpty {
+            FeaturedCarouselView(albums: featuredAlbums)
         }
     }
 
@@ -339,13 +342,22 @@ struct HomeView: View {
         let oneHour: TimeInterval = 60 * 60
         let stale = (Date().timeIntervalSince1970 - featuredAlbumLastRefreshedAt) >= oneHour
 
-        if forced || stale || featuredAlbumRatingKey.isEmpty {
-            guard let picked = albums.randomElement() else { return }
-            featuredAlbum = picked
-            featuredAlbumRatingKey = picked.ratingKey
+        if forced || stale || featuredAlbumRatingKeys.isEmpty {
+            var pool = albums
+            var picked: [PlexMetadata] = []
+            for _ in 0..<min(3, pool.count) {
+                guard let idx = pool.indices.randomElement() else { break }
+                picked.append(pool.remove(at: idx))
+            }
+            featuredAlbums = picked
+            featuredAlbumRatingKeys = picked.map(\.ratingKey).joined(separator: ",")
             featuredAlbumLastRefreshedAt = Date().timeIntervalSince1970
         } else {
-            featuredAlbum = albums.first { $0.ratingKey == featuredAlbumRatingKey } ?? featuredAlbum
+            let keys = featuredAlbumRatingKeys.split(separator: ",").map(String.init)
+            let matched = keys.compactMap { key in albums.first { $0.ratingKey == key } }
+            if !matched.isEmpty {
+                featuredAlbums = matched
+            }
         }
     }
 
