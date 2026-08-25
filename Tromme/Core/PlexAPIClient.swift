@@ -333,17 +333,39 @@ final class PlexAPIClient: Sendable {
     }
 
     func getPlaylistItems(server: PlexServer, playlistKey: String) async throws -> [PlexMetadata] {
-        let normalizedPath: String
+        let basePath: String
         if playlistKey.hasPrefix("/playlists/") {
-            normalizedPath = playlistKey.hasSuffix("/items") ? playlistKey : "\(playlistKey)/items"
+            basePath = playlistKey.hasSuffix("/items") ? playlistKey : "\(playlistKey)/items"
         } else {
-            normalizedPath = "/playlists/\(playlistKey)/items"
+            basePath = "/playlists/\(playlistKey)/items"
         }
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(
-            server: server,
-            path: normalizedPath
-        )
-        return response.mediaContainer.metadata ?? []
+
+        let pageSize = 1000
+        let firstPath = "\(basePath)?X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)"
+        let firstResponse: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: firstPath)
+        var allItems = firstResponse.mediaContainer.metadata ?? []
+        let total = firstResponse.mediaContainer.totalSize ?? allItems.count
+        guard total > allItems.count else { return allItems }
+
+        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
+        for batchOffset in stride(from: 0, to: pageStarts.count, by: 10) {
+            let batch = pageStarts[batchOffset..<min(batchOffset + 10, pageStarts.count)]
+            let batchItems = try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
+                for start in batch {
+                    let path = "\(basePath)?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
+                    group.addTask {
+                        let response: PlexResponse<PlexMetadata> = try await self.serverRequest(server: server, path: path)
+                        return response.mediaContainer.metadata ?? []
+                    }
+                }
+                var results: [PlexMetadata] = []
+                for try await items in group { results.append(contentsOf: items) }
+                return results
+            }
+            allItems.append(contentsOf: batchItems)
+        }
+
+        return allItems
     }
 
     func addItemsToPlaylist(server: PlexServer, playlistId: String, itemRatingKeys: [String]) async throws {

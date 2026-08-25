@@ -13,6 +13,11 @@ struct HomeView: View {
     @State private var isLoading: Bool
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
+    @State private var featuredAlbum: PlexMetadata?
+
+    @AppStorage("showFeaturedSection") private var showFeaturedSection = true
+    @AppStorage("featuredAlbumRatingKey") private var featuredAlbumRatingKey: String = ""
+    @AppStorage("featuredAlbumLastRefreshedAt") private var featuredAlbumLastRefreshedAt: Double = 0
 
     private let previewRecentTracks: [PlexMetadata]?
     private let previewPlaylists: [PlexPlaylist]?
@@ -30,12 +35,16 @@ struct HomeView: View {
         _recentTracks = State(initialValue: previewRecentTracks ?? [])
         _playlists = State(initialValue: previewPlaylists ?? [])
         _recentAlbums = State(initialValue: previewRecentAlbums ?? [])
+        _featuredAlbum = State(initialValue: previewRecentAlbums?.randomElement())
         _isLoading = State(initialValue: previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                if showFeaturedSection && NetworkStatus.shared.isConnected {
+                    featuredSection
+                }
                 favoritesSection
                 recentlyAddedSection
                 recentlyPlayedSection
@@ -45,11 +54,17 @@ struct HomeView: View {
         }
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
-            await loadHomeContent(forceRefresh: true)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await loadHomeContent(forceRefresh: true) }
+                group.addTask { await loadFeaturedAlbum(forced: true) }
+            }
         }
         .task(id: loadTaskID) {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
-            await loadHomeContent(forceRefresh: false)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await loadHomeContent(forceRefresh: false) }
+                group.addTask { await loadFeaturedAlbum(forced: false) }
+            }
         }
         .task {
             guard previewRecentTracks == nil else { return }
@@ -78,6 +93,17 @@ struct HomeView: View {
         let serverURI = serverConnection.currentServer?.uri ?? "none"
         let networkType = NetworkStatus.shared.interfaceType.map { "\($0)" } ?? "none"
         return "\(sectionID)|\(serverURI)|\(networkType)"
+    }
+
+    @ViewBuilder
+    private var featuredSection: some View {
+        if let album = featuredAlbum {
+            NavigationLink(value: album) {
+                FeaturedBannerView(album: album)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+        }
     }
 
     private var favoritesSection: some View {
@@ -300,6 +326,26 @@ struct HomeView: View {
                 }
                 .scrollTargetBehavior(.viewAligned)
             }
+        }
+    }
+
+    private func loadFeaturedAlbum(forced: Bool) async {
+        guard NetworkStatus.shared.isConnected else { return }
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+        guard let albums = try? await client.cachedAlbums(server: server, sectionId: sectionId),
+              !albums.isEmpty else { return }
+
+        let oneHour: TimeInterval = 60 * 60
+        let stale = (Date().timeIntervalSince1970 - featuredAlbumLastRefreshedAt) >= oneHour
+
+        if forced || stale || featuredAlbumRatingKey.isEmpty {
+            guard let picked = albums.randomElement() else { return }
+            featuredAlbum = picked
+            featuredAlbumRatingKey = picked.ratingKey
+            featuredAlbumLastRefreshedAt = Date().timeIntervalSince1970
+        } else {
+            featuredAlbum = albums.first { $0.ratingKey == featuredAlbumRatingKey } ?? featuredAlbum
         }
     }
 

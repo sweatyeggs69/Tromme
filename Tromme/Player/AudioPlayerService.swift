@@ -95,7 +95,11 @@ final class AudioPlayerService: @unchecked Sendable {
     private var playbackLoadTask: Task<Void, Never>?
     private var nowPlayingArtworkTask: Task<Void, Never>?
     private var magicMixRefillTask: Task<Void, Never>?
-    private var magicMixPreviousKeys: Set<String> = []
+    private var magicMixHistoryQueue: [String] = []   // Ordered FIFO, oldest at index 0
+    private var magicMixHistorySet: Set<String> = []  // Mirror of historyQueue for O(1) lookup
+    private var magicMixSeedAlbumKey: String? = nil
+    private var magicMixSeedTrackKey: String? = nil
+    private var magicMixSeedArtistKey: String? = nil
     private var infiniteRefillTask: Task<Void, Never>?
     private var infinitePreviousKeys: Set<String> = []
     private var preloadedNext: PreloadedNextTrack?
@@ -184,6 +188,13 @@ final class AudioPlayerService: @unchecked Sendable {
     func configure(server: PlexServer, client: PlexAPIClient) {
         self.server = server
         self.client = client
+    }
+
+    /// Updates the current track's userRating and syncs the lock screen heart in one call.
+    /// Call this from any UI that can rate the currently playing track.
+    func updateCurrentTrackRating(_ userRating: Double?) {
+        currentTrack?.userRating = userRating
+        MPRemoteCommandCenter.shared().likeCommand.isActive = (userRating ?? 0) >= 10
     }
 
     func updateAlbumThumb(albumRatingKey: String, newThumb: String?) {
@@ -769,7 +780,11 @@ final class AudioPlayerService: @unchecked Sendable {
         duration = 0
         isMagicMixActive = false
         isInfiniteModeActive = false
-        magicMixPreviousKeys.removeAll()
+        magicMixHistoryQueue.removeAll()
+        magicMixHistorySet.removeAll()
+        magicMixSeedAlbumKey = nil
+        magicMixSeedTrackKey = nil
+        magicMixSeedArtistKey = nil
         infinitePreviousKeys.removeAll()
         isReadyToPlay = false
         stopActiveTranscodeSession()
@@ -1049,17 +1064,27 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func maybeRefillMagicMixQueueIfNeeded(trigger: String) {
         guard isMagicMixActive else { return }
-        guard upcomingTracks.count <= 5 else { return }
+        let needed = 5 - upcomingTracks.count
+        guard needed > 0 else { return }
         guard magicMixRefillTask == nil else { return }
         guard let server, let client else { return }
         guard let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId else { return }
-        guard let currentTrack, let seedAlbumKey = currentTrack.parentRatingKey else { return }
+        guard let currentTrack else { return }
 
-        let seedTrackKey = currentTrack.ratingKey
-        let seedArtistKey = currentTrack.grandparentRatingKey
+        // Anchor the seed to the track that started the mix so the matched pool stays consistent
+        // across refills. Drifting the seed to the current track narrows matches over time.
+        if magicMixSeedAlbumKey == nil {
+            magicMixSeedAlbumKey = currentTrack.parentRatingKey
+            magicMixSeedTrackKey = currentTrack.ratingKey
+            magicMixSeedArtistKey = currentTrack.grandparentRatingKey
+        }
+
+        guard let seedAlbumKey = magicMixSeedAlbumKey else { return }
+        let seedTrackKey = magicMixSeedTrackKey
+        let seedArtistKey = magicMixSeedArtistKey
         let styleMatch = max(UserDefaults.standard.integer(forKey: "magicMixStyleMatch"), 1)
 
-        logPlayback("magic_mix_refill_begin", "trigger=\(trigger) upcoming=\(upcomingTracks.count)")
+        logPlayback("magic_mix_refill_begin", "trigger=\(trigger) needed=\(needed)")
 
         magicMixRefillTask = Task { [weak self] in
             defer {
@@ -1069,18 +1094,19 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             guard let self else { return }
-            let allTracks = (try? await client.magicMixTracks(
+            // Fetch the full matched pool so we can manage history across refills.
+            let matchedPool = (try? await client.magicMixTracks(
                 server: server,
                 sectionId: sectionId,
                 seedTrackKey: seedTrackKey,
                 seedAlbumKey: seedAlbumKey,
                 seedArtistKey: seedArtistKey,
-                limit: 100,
+                limit: 1000,
                 minMatchingStyles: styleMatch
             )) ?? []
 
             guard !Task.isCancelled else { return }
-            guard !allTracks.isEmpty else {
+            guard !matchedPool.isEmpty else {
                 await MainActor.run {
                     self.logPlayback("magic_mix_refill_empty", "trigger=\(trigger)")
                 }
@@ -1088,21 +1114,40 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             let selected: [PlexMetadata] = await MainActor.run {
-                let fresh = allTracks.filter { !self.magicMixPreviousKeys.contains($0.ratingKey) }
+                let currentNeeded = 5 - self.upcomingTracks.count
+                guard currentNeeded > 0 else { return [] }
+
+                let fresh = matchedPool.filter { !self.magicMixHistorySet.contains($0.ratingKey) }
+
                 let pool: [PlexMetadata]
-                if fresh.count >= 50 {
-                    pool = Array(fresh.shuffled().prefix(50))
+                if !fresh.isEmpty {
+                    pool = fresh.shuffled()
                 } else {
-                    let repeats = allTracks.filter { self.magicMixPreviousKeys.contains($0.ratingKey) }
-                    pool = Array((fresh + repeats).prefix(50))
+                    // Full cycle done — rotate the LRU queue: pick the oldest-played tracks
+                    // so each song waits for the rest of the pool before coming back.
+                    let count = min(currentNeeded, self.magicMixHistoryQueue.count)
+                    let oldestKeys = Set(self.magicMixHistoryQueue.prefix(count))
+                    self.magicMixHistoryQueue.removeFirst(count)
+                    for key in oldestKeys { self.magicMixHistorySet.remove(key) }
+                    pool = matchedPool.filter { oldestKeys.contains($0.ratingKey) }.shuffled()
                 }
-                return Self.albumDistributedShuffle(pool)
+
+                return Array(pool.prefix(currentNeeded))
             }
 
             guard !selected.isEmpty else { return }
 
             await MainActor.run {
-                self.magicMixPreviousKeys = Set(selected.map(\.ratingKey))
+                // Record plays and enforce a 3-round history window.
+                let maxHistory = max(matchedPool.count * 3, 15)
+                for key in selected.map(\.ratingKey) {
+                    self.magicMixHistoryQueue.append(key)
+                    self.magicMixHistorySet.insert(key)
+                }
+                while self.magicMixHistoryQueue.count > maxHistory {
+                    let evicted = self.magicMixHistoryQueue.removeFirst()
+                    self.magicMixHistorySet.remove(evicted)
+                }
                 for track in selected {
                     self.addToEndOfQueue(track)
                 }
@@ -1111,39 +1156,15 @@ final class AudioPlayerService: @unchecked Sendable {
         }
     }
 
-    /// Shuffles tracks so songs from the same album are spread evenly across the result.
-    /// Groups by album, shuffles within each group, then round-robins one track from each
-    /// group per pass. With N albums of total M tracks, any two tracks from the same album
-    /// are at least N positions apart.
-    nonisolated static func albumDistributedShuffle(_ tracks: [PlexMetadata]) -> [PlexMetadata] {
-        guard tracks.count > 1 else { return tracks }
-        var byAlbum: [String: [PlexMetadata]] = [:]
-        for track in tracks {
-            let key = track.parentRatingKey ?? track.ratingKey
-            byAlbum[key, default: []].append(track)
-        }
-        var groups = byAlbum.values.map { $0.shuffled() }
-        var result: [PlexMetadata] = []
-        result.reserveCapacity(tracks.count)
-        while !groups.isEmpty {
-            groups.shuffle()
-            var nextGroups: [[PlexMetadata]] = []
-            for var group in groups {
-                result.append(group.removeFirst())
-                if !group.isEmpty {
-                    nextGroups.append(group)
-                }
-            }
-            groups = nextGroups
-        }
-        return result
-    }
-
     func requestMagicMixRefill(freshMix: Bool = false) {
         if freshMix {
             magicMixRefillTask?.cancel()
             magicMixRefillTask = nil
-            magicMixPreviousKeys.removeAll()
+            magicMixHistoryQueue.removeAll()
+            magicMixHistorySet.removeAll()
+            magicMixSeedAlbumKey = nil
+            magicMixSeedTrackKey = nil
+            magicMixSeedArtistKey = nil
         }
         maybeRefillMagicMixQueueIfNeeded(trigger: freshMix ? "user_request" : "queue_low")
     }
@@ -2094,8 +2115,7 @@ final class AudioPlayerService: @unchecked Sendable {
                   let server = self.server, let client = self.client else { return .commandFailed }
             let wasFavorited = (track.userRating ?? 0) >= 10
             let newRating: Int = wasFavorited ? -1 : 10
-            self.currentTrack?.userRating = wasFavorited ? 0 : 10
-            MPRemoteCommandCenter.shared().likeCommand.isActive = !wasFavorited
+            self.updateCurrentTrackRating(wasFavorited ? 0 : 10)
             Task {
                 do {
                     try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: newRating)
@@ -2106,8 +2126,7 @@ final class AudioPlayerService: @unchecked Sendable {
                         ))
                     }
                 } catch {
-                    self.currentTrack?.userRating = wasFavorited ? 10 : 0
-                    MPRemoteCommandCenter.shared().likeCommand.isActive = wasFavorited
+                    self.updateCurrentTrackRating(wasFavorited ? 10 : 0)
                 }
                 NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             }

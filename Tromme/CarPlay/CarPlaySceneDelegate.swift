@@ -905,11 +905,26 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private func toggleFavorite() {
         guard let track = player.currentTrack,
               let server else { return }
+        let wasFavorited = currentTrackFavorited
         currentTrackFavorited.toggle()
         rebuildNowPlayingButtons()
-        let newRating = currentTrackFavorited ? 10 : 0
+        let apiRating = currentTrackFavorited ? 10 : -1
+        player.updateCurrentTrackRating(currentTrackFavorited ? 10 : 0)
         Task {
-            try? await client.rateItem(server: server, ratingKey: track.ratingKey, rating: newRating)
+            do {
+                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: apiRating)
+                if let sectionId {
+                    await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(
+                        serverId: server.machineIdentifier,
+                        sectionId: sectionId
+                    ))
+                }
+                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
+            } catch {
+                currentTrackFavorited = wasFavorited
+                rebuildNowPlayingButtons()
+                player.updateCurrentTrackRating(wasFavorited ? 10 : 0)
+            }
         }
     }
 

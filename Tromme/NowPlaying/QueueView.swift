@@ -77,10 +77,10 @@ struct QueueView: View {
                         player.moveInQueue(from: source, to: destination)
                     }
 
-                    if isInfiniteModeActive {
+                    if isInfiniteModeActive || isMagicMixActive {
                         HStack {
                             Spacer()
-                            Image(systemName: "infinity")
+                            Image(systemName: isInfiniteModeActive ? "infinity" : "wand.and.stars")
                                 .font(.title2.weight(.semibold))
                                 .foregroundStyle(.white.opacity(0.4))
                             Spacer()

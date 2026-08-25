@@ -62,6 +62,8 @@ struct TrackRowView: View {
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
         favoriteOverride = removing ? 0 : 10
+        let isCurrentTrack = track.ratingKey == player.currentTrack?.ratingKey
+        if isCurrentTrack { player.updateCurrentTrackRating(removing ? 0 : 10) }
         isRating = true
         Task {
             do {
@@ -73,6 +75,7 @@ struct TrackRowView: View {
                 NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             } catch {
                 favoriteOverride = previous
+                if isCurrentTrack { player.updateCurrentTrackRating(previous) }
             }
             isRating = false
         }

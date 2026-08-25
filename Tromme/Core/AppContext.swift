@@ -15,9 +15,30 @@ final class AppContext {
     let audioPlayer = AudioPlayerService()
     let downloadManager = DownloadManager()
 
+    private var serverObservationTask: Task<Void, Never>?
+
     private init() {
         if let server = serverConnection.currentServer {
             audioPlayer.configure(server: server, client: plexClient)
+        }
+        // Re-configure the player whenever the server connection changes (e.g. after reprobe
+        // finds a better URI). Without this, CarPlay playback fails when the stored server URI
+        // is stale — reprobe updates serverConnection.currentServer but the player keeps the
+        // old URI, and all stream requests fail until the phone app UI fires its own onChange.
+        serverObservationTask = Task {
+            while !Task.isCancelled {
+                await withCheckedContinuation { continuation in
+                    withObservationTracking {
+                        _ = self.serverConnection.currentServer
+                    } onChange: {
+                        continuation.resume()
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                if let server = self.serverConnection.currentServer {
+                    self.audioPlayer.configure(server: server, client: self.plexClient)
+                }
+            }
         }
     }
 }

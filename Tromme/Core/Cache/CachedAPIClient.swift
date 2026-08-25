@@ -188,6 +188,15 @@ extension PlexAPIClient {
         let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
         let allAlbumsByKey = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.ratingKey, $0) })
 
+        // Collect seed genres from the seed album upfront so they can supplement style matching.
+        var seedGenres = Set<String>()
+        if let seedAlbum = allAlbumsByKey[seedAlbumKey] {
+            for tag in (seedAlbum.genre ?? []).compactMap(\.tag) {
+                let normalized = tag.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalized.isEmpty { seedGenres.insert(normalized) }
+            }
+        }
+
         var seedStyles = (seedTrackMetadata?.style ?? [])
             .compactMap(\.tag)
             .filter { !$0.isEmpty }
@@ -225,17 +234,15 @@ extension PlexAPIClient {
             if !seedStyles.isEmpty { seedTagSource = "sibling_albums" }
         }
 
-        // Fallback 3: if still no styles, match by artist genre.
+        // Fallback 3: if still no styles, supplement seed genres from artist metadata if the album had none.
         var useGenreMatching = false
-        var seedGenres = Set<String>()
-        if seedStyles.isEmpty,
-           let artistKey = resolvedSeedArtistKey,
-           let artist = try? await cachedMetadata(server: server, ratingKey: artistKey) {
-            let genres = (artist.genre ?? []).compactMap(\.tag)
-            for genre in genres {
-                let normalized = genre.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                if !normalized.isEmpty {
-                    seedGenres.insert(normalized)
+        if seedStyles.isEmpty {
+            if seedGenres.isEmpty,
+               let artistKey = resolvedSeedArtistKey,
+               let artist = try? await cachedMetadata(server: server, ratingKey: artistKey) {
+                for genre in (artist.genre ?? []).compactMap(\.tag) {
+                    let normalized = genre.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !normalized.isEmpty { seedGenres.insert(normalized) }
                 }
             }
             useGenreMatching = !seedGenres.isEmpty
@@ -263,8 +270,19 @@ extension PlexAPIClient {
                     matchingAlbumKeys.insert(albumKey)
                 }
             }
+            // Also include albums that share genre tags with the seed album.
+            if !seedGenres.isEmpty {
+                for album in allAlbums {
+                    guard album.ratingKey != seedAlbumKey else { continue }
+                    guard !isSameArtistAlbum(album.ratingKey) else { continue }
+                    let albumGenres = Set((album.genre ?? []).compactMap { $0.tag?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) })
+                    if !seedGenres.intersection(albumGenres).isEmpty {
+                        matchingAlbumKeys.insert(album.ratingKey)
+                    }
+                }
+            }
             #if DEBUG
-            debugMixLog("matchMode=style matchedAlbums=\(matchingAlbumKeys.count) requiredMatches=\(effectiveMinMatchingStyles) configuredMin=\(minMatchingStyles)")
+            debugMixLog("matchMode=style+genre matchedAlbums=\(matchingAlbumKeys.count) requiredMatches=\(effectiveMinMatchingStyles) configuredMin=\(minMatchingStyles) genreCount=\(seedGenres.count)")
             #endif
         } else if useGenreMatching {
             // Match albums by genre — fetch full metadata for each album is too expensive,

@@ -548,6 +548,9 @@ struct AlbumDetailView: View {
             titleColor: titleColor,
             onAddToPlaylist: { track in
                 presentAddToPlaylist(for: [track.ratingKey])
+            },
+            onDelete: { deletedTrack in
+                tracks.removeAll { $0.ratingKey == deletedTrack.ratingKey }
             }
         )
         .listRowBackground(artworkColor)
@@ -1024,9 +1027,13 @@ private struct AlbumTrackRow: View {
     let tertiaryTextColor: Color
     let titleColor: Color
     let onAddToPlaylist: (PlexMetadata) -> Void
+    let onDelete: (PlexMetadata) -> Void
 
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
+    @State private var showDeleteTrackConfirmation = false
+    @State private var trackDeleteErrorMessage: String?
+    @State private var isDeletingTrack = false
 
     private var isFavorited: Bool {
         (favoriteOverride ?? track.userRating ?? 0) >= 10
@@ -1127,6 +1134,13 @@ private struct AlbumTrackRow: View {
                 Button("Add to Playlist", systemImage: "text.badge.plus") {
                     onAddToPlaylist(track)
                 }
+
+                Divider()
+
+                Button("Delete Track", systemImage: "trash", role: .destructive) {
+                    showDeleteTrackConfirmation = true
+                }
+                .disabled(isDeletingTrack || serverConnection.currentServer == nil)
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.callout.weight(.semibold))
@@ -1151,6 +1165,47 @@ private struct AlbumTrackRow: View {
             Button("Add to Playlist", systemImage: "text.badge.plus") {
                 onAddToPlaylist(track)
             }
+
+            Divider()
+
+            Button("Delete Track", systemImage: "trash", role: .destructive) {
+                showDeleteTrackConfirmation = true
+            }
+            .disabled(isDeletingTrack || serverConnection.currentServer == nil)
+        }
+        .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
+            Button("Delete Track", role: .destructive) {
+                Task { await deleteTrack() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove \"\(track.title)\".")
+        }
+        .alert("Unable to Delete Track", isPresented: .init(
+            get: { trackDeleteErrorMessage != nil },
+            set: { if !$0 { trackDeleteErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(trackDeleteErrorMessage ?? "")
+        }
+    }
+
+    @MainActor
+    private func deleteTrack() async {
+        guard let server = serverConnection.currentServer else { return }
+        guard !isDeletingTrack else { return }
+
+        isDeletingTrack = true
+        defer { isDeletingTrack = false }
+
+        do {
+            try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
+            await LibraryCache.shared.clearAll()
+            await ImageCache.shared.clearAll()
+            onDelete(track)
+        } catch {
+            trackDeleteErrorMessage = error.localizedDescription
         }
     }
 }

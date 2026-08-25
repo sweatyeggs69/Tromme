@@ -506,7 +506,7 @@ struct NowPlayingView: View {
         let removing = isFavorited
         let apiRating = removing ? -1 : 10
 
-        player.currentTrack?.userRating = removing ? nil : 10
+        player.updateCurrentTrackRating(removing ? nil : 10)
         isRating = true
 
         Task {
@@ -518,7 +518,7 @@ struct NowPlayingView: View {
                 }
                 NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             } catch {
-                player.currentTrack?.userRating = previousRating
+                player.updateCurrentTrackRating(previousRating)
             }
             isRating = false
         }

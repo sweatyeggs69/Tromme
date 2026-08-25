@@ -15,6 +15,7 @@ struct SettingsView: View {
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
+    @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
     @AppStorage("downloadFormat") private var downloadFormat = DownloadFormat.defaultFormat.rawValue
@@ -36,6 +37,13 @@ struct SettingsView: View {
                         showReviewPrompt = true
                     }
                 }
+            }
+
+            Section {
+                Toggle("Featured Section", isOn: $showFeaturedSection)
+                    .tint(.green)
+            } header: {
+                Text("Home")
             }
 
             Section {

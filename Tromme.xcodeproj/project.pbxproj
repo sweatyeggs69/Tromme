@@ -16,6 +16,7 @@
 		0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */; };
 		0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */; };
 		0E4345EB2F8EC60700424676 /* DevelopmentMockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */; };
+		0E54E64D303CEAFD0064C6AA /* FeaturedBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */; };
 		0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */; };
 		0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */; };
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
@@ -74,6 +75,7 @@
 		0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStartPanel.swift; sourceTree = "<group>"; };
 		0E190B402F969C20003CEE15 /* AddToPlaylistSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToPlaylistSheet.swift; sourceTree = "<group>"; };
 		0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DevelopmentMockData.swift; sourceTree = "<group>"; };
+		0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedBannerView.swift; sourceTree = "<group>"; };
 		0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PERFORMANCE_BASELINE.md; sourceTree = "<group>"; };
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
@@ -248,6 +250,7 @@
 				0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */,
 				0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */,
 				0E10DE3B30112F4B0045130C /* DownloadsView.swift */,
+				0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -427,6 +430,7 @@
 				3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */,
 				AE8F9BC18E978DFB09C39BE5 /* ServerConnectionManager.swift in Sources */,
 				608A51EB1C84A6D4D7A7CF03 /* SettingsView.swift in Sources */,
+				0E54E64D303CEAFD0064C6AA /* FeaturedBannerView.swift in Sources */,
 				8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */,
 				A899BD0511C9508A9C09BE45 /* TrommeApp.swift in Sources */,
 			);
