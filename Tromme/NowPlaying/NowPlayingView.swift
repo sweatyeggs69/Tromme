@@ -841,7 +841,7 @@ struct TimelineSlider: View {
     private var playbackBadge: some View {
         HStack(spacing: 3) {
             if player.isPlayingLocalDownload {
-                Image(systemName: "externaldrive.fill")
+                Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 9, weight: .medium))
             }
             if playbackBadgeMode == "off" {

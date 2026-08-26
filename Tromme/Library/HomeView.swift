@@ -40,7 +40,7 @@ struct HomeView: View {
         _recentTracks = State(initialValue: previewRecentTracks ?? [])
         _playlists = State(initialValue: previewPlaylists ?? [])
         _recentAlbums = State(initialValue: previewRecentAlbums ?? [])
-        _featuredAlbums = State(initialValue: Array((previewRecentAlbums ?? []).shuffled().prefix(3)))
+        _featuredAlbums = State(initialValue: Array((previewRecentAlbums ?? []).shuffled().prefix(5)))
         _isLoading = State(initialValue: previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil)
     }
 
@@ -345,7 +345,7 @@ struct HomeView: View {
         if forced || stale || featuredAlbumRatingKeys.isEmpty {
             var pool = albums
             var picked: [PlexMetadata] = []
-            for _ in 0..<min(3, pool.count) {
+            for _ in 0..<min(5, pool.count) {
                 guard let idx = pool.indices.randomElement() else { break }
                 picked.append(pool.remove(at: idx))
             }

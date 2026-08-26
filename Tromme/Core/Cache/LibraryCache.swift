@@ -300,7 +300,7 @@ enum CacheKey {
         "albums_\(serverId)_\(sectionId)"
     }
     static func albumStyles(serverId: String, sectionId: String) -> String {
-        "album_styles_\(serverId)_\(sectionId)"
+        "album_styles_v2_\(serverId)_\(sectionId)"
     }
     static func tracks(serverId: String, sectionId: String) -> String {
         "tracks_\(serverId)_\(sectionId)"

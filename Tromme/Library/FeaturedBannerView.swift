@@ -291,7 +291,7 @@ private struct BannerBackground: View {
 
 #Preview("Carousel") {
     NavigationStack {
-        FeaturedCarouselView(albums: Array(DevelopmentMockData.recentAlbums.prefix(3)))
+        FeaturedCarouselView(albums: Array(DevelopmentMockData.recentAlbums.prefix(5)))
     }
 }
 #endif

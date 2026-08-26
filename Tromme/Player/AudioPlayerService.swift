@@ -561,11 +561,12 @@ final class AudioPlayerService: @unchecked Sendable {
         // VBR MP3) otherwise lands on a byte-estimated position that can be
         // audibly far from the requested time while still reporting it.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
+        let seekGeneration = playbackGeneration
         player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeeking = false
-                guard finished else { return }
+                guard self.playbackGeneration == seekGeneration, finished else { return }
                 self.currentTime = boundedTime
                 self.updateNowPlayingInfo()
                 self.reportTimelineState(self.isPlaying ? "playing" : "paused")
@@ -1572,6 +1573,7 @@ final class AudioPlayerService: @unchecked Sendable {
                         self.pendingInitialSeekTime = nil
                         let safeUpper = self.duration > 1 ? max(self.duration - 1, 0) : self.duration
                         let bounded = safeUpper > 0 ? min(max(0, pendingSeek), safeUpper) : max(0, pendingSeek)
+                        let seekGeneration = self.playbackGeneration
                         self.logPlayback("resume_seek", "to=\(bounded)")
                         self.isSeeking = true
                         let target = CMTime(seconds: bounded, preferredTimescale: 600)
@@ -1581,7 +1583,7 @@ final class AudioPlayerService: @unchecked Sendable {
                             Task { @MainActor [weak self] in
                                 guard let self else { return }
                                 self.isSeeking = false
-                                guard finished else { return }
+                                guard self.playbackGeneration == seekGeneration, finished else { return }
                                 self.currentTime = bounded
                                 self.player?.play()
                                 self.isPlaying = true
@@ -1713,6 +1715,7 @@ final class AudioPlayerService: @unchecked Sendable {
             NotificationCenter.default.removeObserver(itemFailedToEndObserver)
         }
         itemFailedToEndObserver = nil
+        isSeeking = false
     }
 
     // MARK: - Time Tracking
@@ -2202,7 +2205,7 @@ final class AudioPlayerService: @unchecked Sendable {
             cachedArtwork = nil
             nowPlayingArtworkTask?.cancel()
             if let client, let server,
-               let url = client.artworkURL(server: server, path: thumbPath, width: 600, height: 600) {
+               let url = client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) {
                 let generation = playbackGeneration
                 let capturedTrackKey = trackKey
                 nowPlayingArtworkTask = Task {

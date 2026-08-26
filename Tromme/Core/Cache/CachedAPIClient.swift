@@ -97,8 +97,7 @@ extension PlexAPIClient {
         seedStyles = deduplicateTags(seedStyles)
         guard !seedStyles.isEmpty else { return [] }
 
-        let normalizedSeed = Set(seedStyles.map(normalizedTag))
-        let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, normalizedSeed.count))
+        let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, seedStyles.count))
 
         var scoredAlbums: [(album: PlexMetadata, score: Int)] = []
         for (albumKey, styles) in stylesByAlbum {
@@ -107,8 +106,7 @@ extension PlexAPIClient {
                 continue
             }
 
-            let normalizedStyles = Set(styles.map(normalizedTag))
-            let score = normalizedSeed.intersection(normalizedStyles).count
+            let score = styleMatchScore(seed: seedStyles, candidate: styles)
             guard score >= effectiveMinMatchingStyles, let album = allAlbumsByKey[albumKey] else { continue }
             scoredAlbums.append((album: album, score: score))
         }
@@ -160,12 +158,6 @@ extension PlexAPIClient {
             print("[MagicMix] \(message)")
         }
         #endif
-
-        let metadataTags: (PlexMetadata) -> [String] = { metadata in
-            (metadata.style ?? [])
-                .compactMap(\.tag)
-                .filter { !$0.isEmpty }
-        }
 
         let seedTrackMetadata: PlexMetadata? = if let seedTrackKey {
             try? await cachedMetadata(server: server, ratingKey: seedTrackKey)
@@ -261,12 +253,10 @@ extension PlexAPIClient {
         let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, seedStyles.count))
 
         if !seedStyles.isEmpty {
-            let normalizedSeed = Set(seedStyles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
             for (albumKey, styles) in stylesByAlbum {
                 guard albumKey != seedAlbumKey else { continue }
                 guard !isSameArtistAlbum(albumKey) else { continue }
-                let normalized = Set(styles.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
-                if normalizedSeed.intersection(normalized).count >= effectiveMinMatchingStyles {
+                if styleMatchScore(seed: seedStyles, candidate: styles) >= effectiveMinMatchingStyles {
                     matchingAlbumKeys.insert(albumKey)
                 }
             }
@@ -396,11 +386,15 @@ extension PlexAPIClient {
         let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
         let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
 
-        var stylesByArtist: [String: Set<String>] = [:]
+        // Build deduplicated raw-tag arrays per artist so styleMatchScore can apply
+        // both exact and word-level matching (e.g. "Hardcore Rap" ~ "Contemporary Rap").
+        var stylesByArtist: [String: [String]] = [:]
         for album in allAlbums {
             guard let artistKey = album.parentRatingKey else { continue }
-            let normalized = (stylesByAlbum[album.ratingKey] ?? []).map(normalizedTag)
-            stylesByArtist[artistKey, default: []].formUnion(normalized)
+            stylesByArtist[artistKey, default: []] += stylesByAlbum[album.ratingKey] ?? []
+        }
+        for key in stylesByArtist.keys {
+            stylesByArtist[key] = deduplicateTags(stylesByArtist[key] ?? [])
         }
 
         let seedStyles = stylesByArtist[seedArtistKey] ?? []
@@ -410,10 +404,11 @@ extension PlexAPIClient {
         var scored: [(artist: PlexMetadata, score: Int)] = []
         for (artistKey, styles) in stylesByArtist {
             guard artistKey != seedArtistKey, let artist = artistByKey[artistKey] else { continue }
-            let intersection = seedStyles.intersection(styles)
-            let intersectionCount = intersection.count
-            guard intersectionCount >= 3 else { continue }
-            let jaccard = Double(intersectionCount) / Double(seedStyles.union(styles).count)
+            let intersectionCount = styleMatchScore(seed: seedStyles, candidate: styles)
+            guard intersectionCount >= 2 else { continue }
+            // Approximate Jaccard: |A ∪ B| ≈ |A| + |B| - |A ∩ B|
+            let unionCount = seedStyles.count + styles.count - intersectionCount
+            let jaccard = Double(intersectionCount) / Double(max(1, unionCount))
             guard jaccard >= 0.30 else { continue }
             scored.append((artist: artist, score: intersectionCount))
         }
@@ -663,6 +658,39 @@ extension PlexAPIClient {
 
     // MARK: - Private Helpers
 
+    /// Returns the significant words of a multi-word style tag for word-level matching.
+    /// Single-word styles (e.g. "Pop", "Jazz") return an empty set so they can only
+    /// exact-match — this prevents "Pop" from spuriously matching "Pop Punk".
+    private func styleMatchWords(_ tag: String) -> Set<String> {
+        let words = tag
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespaces)
+            .map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) }
+            .filter { $0.count > 2 }
+        guard words.count >= 2 else { return [] }
+        return Set(words)
+    }
+
+    /// Counts how many seed styles have at least one match in the candidate list.
+    /// A match is either an exact (case-insensitive) hit, or a word-level hit where
+    /// both styles are multi-word compounds sharing at least one significant word.
+    private func styleMatchScore(seed: [String], candidate: [String]) -> Int {
+        let normalizedCandidate = Set(candidate.map(normalizedTag))
+        let candidateWords = Set(candidate.flatMap { styleMatchWords($0) })
+        var count = 0
+        for seedStyle in seed {
+            if normalizedCandidate.contains(normalizedTag(seedStyle)) {
+                count += 1
+                continue
+            }
+            let seedWords = styleMatchWords(seedStyle)
+            if !seedWords.isEmpty && !candidateWords.isEmpty && !seedWords.isDisjoint(with: candidateWords) {
+                count += 1
+            }
+        }
+        return count
+    }
+
     private func deduplicateTags(_ tags: [String]) -> [String] {
         var seen = Set<String>()
         return tags.filter { seen.insert($0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)).inserted }
@@ -727,13 +755,6 @@ extension PlexAPIClient {
         return items
     }
 
-    private func tracksByArtist(_ tracks: [PlexMetadata], artist: PlexMetadata) -> [PlexMetadata] {
-        tracks.filter { track in
-            track.grandparentRatingKey == artist.ratingKey
-            || track.grandparentTitle?.localizedCaseInsensitiveCompare(artist.title) == .orderedSame
-        }
-    }
-
     private func metadataTags(_ metadata: PlexMetadata) -> [String] {
         (metadata.style ?? [])
             .compactMap(\.tag)
@@ -759,9 +780,7 @@ extension PlexAPIClient {
 
         var missingStyleKeys: [String] = []
         for album in albums {
-            let tags = (album.style ?? [])
-                .compactMap(\.tag)
-                .filter { !$0.isEmpty }
+            let tags = (album.style ?? []).compactMap(\.tag).filter { !$0.isEmpty }
             if !tags.isEmpty {
                 stylesByAlbum[album.ratingKey] = tags
             } else {
@@ -779,9 +798,7 @@ extension PlexAPIClient {
                             guard let details = try? await self.cachedMetadata(server: server, ratingKey: albumKey) else {
                                 return (albumKey, [])
                             }
-                            let tags = (details.style ?? [])
-                                .compactMap(\.tag)
-                                .filter { !$0.isEmpty }
+                            let tags = (details.style ?? []).compactMap(\.tag).filter { !$0.isEmpty }
                             return (albumKey, tags)
                         }
                     }
