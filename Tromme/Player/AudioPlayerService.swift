@@ -98,7 +98,6 @@ final class AudioPlayerService: @unchecked Sendable {
     private var magicMixHistoryQueue: [String] = []   // Ordered FIFO, oldest at index 0
     private var magicMixHistorySet: Set<String> = []  // Mirror of historyQueue for O(1) lookup
     private var magicMixSeedAlbumKey: String? = nil
-    private var magicMixSeedTrackKey: String? = nil
     private var magicMixSeedArtistKey: String? = nil
     private var infiniteRefillTask: Task<Void, Never>?
     private var infinitePreviousKeys: Set<String> = []
@@ -784,7 +783,6 @@ final class AudioPlayerService: @unchecked Sendable {
         magicMixHistoryQueue.removeAll()
         magicMixHistorySet.removeAll()
         magicMixSeedAlbumKey = nil
-        magicMixSeedTrackKey = nil
         magicMixSeedArtistKey = nil
         infinitePreviousKeys.removeAll()
         isReadyToPlay = false
@@ -1041,12 +1039,22 @@ final class AudioPlayerService: @unchecked Sendable {
     private func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
         let item = makePlayerItem(url: url)
-        item.preferredForwardBufferDuration = preferredFullTrackBufferDuration()
+        // Network streams need a buffer headroom hint and stall-minimization;
+        // local files are already on disk so neither applies.
+        if !isPlayingLocalFile {
+            item.preferredForwardBufferDuration = preferredFullTrackBufferDuration()
+        }
         player = AVPlayer(playerItem: item)
-        player?.automaticallyWaitsToMinimizeStalling = true
+        player?.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile
         player?.volume = soundCheckVolume(for: currentTrack)
-        player?.play()
-        isPlaying = true
+
+        // Local files with a pending seek must not play from position 0 — the
+        // readyToPlay handler will start playback after the seek completes.
+        // Streams always play immediately because the offset is baked into the URL.
+        if pendingInitialSeekTime == nil {
+            player?.play()
+            isPlaying = true
+        }
 
         observeItemStatus(item)
         observePlayerState()
@@ -1059,7 +1067,7 @@ final class AudioPlayerService: @unchecked Sendable {
         maybeRefillMagicMixQueueIfNeeded(trigger: "start_playback")
         maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
         syncDynamicQueueDownloads()
-        reportTimelineState("playing")
+        reportTimelineState(pendingInitialSeekTime == nil ? "playing" : "paused")
         savePlaybackState()
     }
 
@@ -1076,12 +1084,10 @@ final class AudioPlayerService: @unchecked Sendable {
         // across refills. Drifting the seed to the current track narrows matches over time.
         if magicMixSeedAlbumKey == nil {
             magicMixSeedAlbumKey = currentTrack.parentRatingKey
-            magicMixSeedTrackKey = currentTrack.ratingKey
             magicMixSeedArtistKey = currentTrack.grandparentRatingKey
         }
 
         guard let seedAlbumKey = magicMixSeedAlbumKey else { return }
-        let seedTrackKey = magicMixSeedTrackKey
         let seedArtistKey = magicMixSeedArtistKey
         let styleMatch = max(UserDefaults.standard.integer(forKey: "magicMixStyleMatch"), 1)
 
@@ -1095,16 +1101,21 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             guard let self else { return }
-            // Fetch the full matched pool so we can manage history across refills.
-            let matchedPool = (try? await client.magicMixTracks(
-                server: server,
-                sectionId: sectionId,
-                seedTrackKey: seedTrackKey,
-                seedAlbumKey: seedAlbumKey,
-                seedArtistKey: seedArtistKey,
-                limit: 1000,
-                minMatchingStyles: styleMatch
-            )) ?? []
+            // Use the same "You Might Also Like" albums shown on the album detail page as the source pool.
+            let seedAlbum = try? await client.cachedMetadata(server: server, ratingKey: seedAlbumKey)
+            var recommendedAlbums: [PlexMetadata] = []
+            if let seedAlbum {
+                recommendedAlbums = (try? await client.recommendedAlbums(
+                    server: server,
+                    sectionId: sectionId,
+                    seedAlbum: seedAlbum,
+                    seedArtistKey: seedArtistKey,
+                    minMatchingStyles: styleMatch
+                )) ?? []
+            }
+            let recommendedAlbumKeys = Set(recommendedAlbums.map(\.ratingKey))
+            let allTracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
+            let matchedPool = allTracks.filter { recommendedAlbumKeys.contains($0.parentRatingKey ?? "") }
 
             guard !Task.isCancelled else { return }
             guard !matchedPool.isEmpty else {
@@ -1164,7 +1175,6 @@ final class AudioPlayerService: @unchecked Sendable {
             magicMixHistoryQueue.removeAll()
             magicMixHistorySet.removeAll()
             magicMixSeedAlbumKey = nil
-            magicMixSeedTrackKey = nil
             magicMixSeedArtistKey = nil
         }
         maybeRefillMagicMixQueueIfNeeded(trigger: freshMix ? "user_request" : "queue_low")
@@ -1588,6 +1598,7 @@ final class AudioPlayerService: @unchecked Sendable {
                                 self.player?.play()
                                 self.isPlaying = true
                                 self.updateNowPlayingInfo()
+                                self.reportTimelineState("playing")
                             }
                         }
                     }
@@ -1733,28 +1744,35 @@ final class AudioPlayerService: @unchecked Sendable {
                 guard !self.isSeeking else { return }
                 guard seconds.isFinite && seconds >= 0 else { return }
 
-                // First meaningful tick of an offset stream: if the player is
-                // already reporting a position at or beyond the offset, the
-                // playlist timeline is absolute and adding the offset again
-                // would double-count every subsequent position.
-                if self.pendingStreamOffsetCalibration, self.streamTimeOffset > 0, seconds > 0.5 {
-                    self.pendingStreamOffsetCalibration = false
-                    if seconds >= self.streamTimeOffset * 0.5 {
-                        self.logPlayback("stream_offset_absolute", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
-                        self.streamTimeOffset = 0
-                    } else {
-                        self.logPlayback("stream_offset_relative", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
+                if self.isPlayingLocalFile {
+                    // Local files: read duration directly from the asset and map
+                    // player time straight to currentTime — no HLS offset needed.
+                    if let itemDuration = self.player?.currentItem?.duration.seconds,
+                       itemDuration.isFinite && itemDuration > 0 {
+                        self.duration = itemDuration
                     }
+                    self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
+                } else {
+                    // HLS streams: calibrate whether the playlist timeline is
+                    // absolute (offset already embedded) or relative (needs adding).
+                    if self.pendingStreamOffsetCalibration, self.streamTimeOffset > 0, seconds > 0.5 {
+                        self.pendingStreamOffsetCalibration = false
+                        if seconds >= self.streamTimeOffset * 0.5 {
+                            self.logPlayback("stream_offset_absolute", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
+                            self.streamTimeOffset = 0
+                        } else {
+                            self.logPlayback("stream_offset_relative", "player_time=\(seconds) offset=\(self.streamTimeOffset)")
+                        }
+                    }
+                    if self.streamTimeOffset == 0,
+                       let itemDuration = self.player?.currentItem?.duration.seconds,
+                       itemDuration.isFinite && itemDuration > 0 {
+                        self.duration = itemDuration
+                    }
+                    let absoluteSeconds = self.streamTimeOffset + seconds
+                    self.currentTime = self.duration > 0 ? min(absoluteSeconds, self.duration) : absoluteSeconds
                 }
 
-                if self.streamTimeOffset == 0,
-                   let itemDuration = self.player?.currentItem?.duration.seconds,
-                   itemDuration.isFinite && itemDuration > 0 {
-                    self.duration = itemDuration
-                }
-
-                let absoluteSeconds = self.streamTimeOffset + seconds
-                self.currentTime = self.duration > 0 ? min(absoluteSeconds, self.duration) : absoluteSeconds
                 self.maybeReportScrobble()
                 self.maybePreloadNextTrack()
             }
