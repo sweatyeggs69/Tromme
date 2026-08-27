@@ -1045,6 +1045,7 @@ final class AudioPlayerService: @unchecked Sendable {
             item.preferredForwardBufferDuration = preferredFullTrackBufferDuration()
         }
         player = AVPlayer(playerItem: item)
+        // Local files are on disk — stall minimization only applies to network streams.
         player?.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile
         player?.volume = soundCheckVolume(for: currentTrack)
 
@@ -1595,8 +1596,8 @@ final class AudioPlayerService: @unchecked Sendable {
                                 self.isSeeking = false
                                 guard self.playbackGeneration == seekGeneration, finished else { return }
                                 self.currentTime = bounded
-                                self.player?.play()
                                 self.isPlaying = true
+                                self.player?.play()
                                 self.updateNowPlayingInfo()
                                 self.reportTimelineState("playing")
                             }
@@ -1829,6 +1830,10 @@ final class AudioPlayerService: @unchecked Sendable {
     }
 
     private func handleTrackEnd() {
+        // A zero-tolerance seek on a local VBR file can land at the physical end of
+        // the audio data and fire AVPlayerItemDidPlayToEndTime before the seek
+        // completion callback clears isSeeking. Ignore the notification in that case.
+        guard !isSeeking else { return }
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
         maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
