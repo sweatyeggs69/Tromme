@@ -9,8 +9,6 @@ struct AlbumDetailView: View {
     @Environment(NetworkStatus.self) private var network
     @Environment(\.dismiss) private var dismiss
 
-    @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
-
     let album: PlexMetadata
     let sourceArtistRatingKey: String?
     @State private var albumDetails: PlexMetadata
@@ -414,19 +412,11 @@ struct AlbumDetailView: View {
     private func loadRecommendedAlbums() async {
         guard network.isConnected else { return }
         guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-
-        do {
-            recommendedAlbums = try await client.recommendedAlbums(
-                server: server,
-                sectionId: sectionId,
-                seedAlbum: albumDetails,
-                seedArtistKey: albumDetails.parentRatingKey ?? album.parentRatingKey,
-                minMatchingStyles: magicMixStyleMatch
-            )
-        } catch {
-            recommendedAlbums = []
-        }
+              let sectionId = serverConnection.currentLibrarySectionId,
+              let artistKey = albumDetails.parentRatingKey ?? album.parentRatingKey else { return }
+        recommendedAlbums = (try? await client.albumsFromSimilarArtists(
+            server: server, sectionId: sectionId, artistRatingKey: artistKey
+        )) ?? []
     }
 
     @MainActor
@@ -1311,6 +1301,7 @@ private struct AlbumRecommendationGridView: View {
         style: nil,
         country: nil,
         subformat: nil,
+        similar: nil,
         originallyAvailableAt: "2026-05-31"
     )
 
@@ -1350,6 +1341,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: nil
         ),
         PlexMetadata(
@@ -1387,6 +1379,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: nil
         ),
         PlexMetadata(
@@ -1424,6 +1417,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: nil
         ),
         PlexMetadata(
@@ -1461,6 +1455,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: nil
         )
     ]
@@ -1502,6 +1497,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: "2024-09-13"
         ),
         PlexMetadata(
@@ -1539,6 +1535,7 @@ private struct AlbumRecommendationGridView: View {
             style: nil,
             country: nil,
             subformat: nil,
+            similar: nil,
             originallyAvailableAt: "2022-03-18"
         )
     ]

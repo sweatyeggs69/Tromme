@@ -156,7 +156,7 @@ enum DevelopmentMockData {
             genre: [PlexTag(tag: "Alternative")],
             style: [PlexTag(tag: "Art Rock")],
             country: [PlexTag(tag: "United Kingdom")],
-            subformat: nil, originallyAvailableAt: nil
+            subformat: nil, similar: nil, originallyAvailableAt: nil
         )
     }
 
@@ -199,7 +199,7 @@ enum DevelopmentMockData {
             genre: [PlexTag(tag: "Alternative")],
             style: nil,
             country: nil,
-            subformat: nil, originallyAvailableAt: nil
+            subformat: nil, similar: nil, originallyAvailableAt: nil
         )
     }
 
@@ -277,7 +277,7 @@ enum DevelopmentMockData {
             genre: [PlexTag(tag: "Alternative")],
             style: nil,
             country: nil,
-            subformat: nil, originallyAvailableAt: nil
+            subformat: nil, similar: nil, originallyAvailableAt: nil
         )
     }
 }

@@ -219,6 +219,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let style: [PlexTag]?
     let country: [PlexTag]?
     let subformat: [PlexTag]?
+    let similar: [PlexTag]?
     let originallyAvailableAt: String?
 
     var id: String { ratingKey }
@@ -289,6 +290,7 @@ extension PlexMetadata {
         case genre = "Genre"
         case style = "Style"
         case country = "Country"
+        case similar = "Similar"
     }
 
     init(ratingKey: String, title: String, type: String? = nil, thumb: String? = nil) {
@@ -305,7 +307,7 @@ extension PlexMetadata {
         self.grandparentTitle = nil; self.parentRatingKey = nil; self.grandparentRatingKey = nil
         self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
         self.genre = nil; self.style = nil; self.country = nil
-        self.subformat = nil; self.originallyAvailableAt = nil
+        self.subformat = nil; self.similar = nil; self.originallyAvailableAt = nil
     }
 
     /// Convenience init for constructing a minimal album or artist from offline records.
@@ -320,7 +322,7 @@ extension PlexMetadata {
         self.grandparentTitle = nil; self.parentRatingKey = nil; self.grandparentRatingKey = nil
         self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
         self.genre = nil; self.style = nil; self.country = nil
-        self.subformat = nil; self.originallyAvailableAt = nil
+        self.subformat = nil; self.similar = nil; self.originallyAvailableAt = nil
     }
 
     /// Convenience init for recreating a downloaded track from a persisted record.
@@ -349,7 +351,7 @@ extension PlexMetadata {
         self.parentRatingKey = parentRatingKey; self.grandparentRatingKey = nil
         self.leafCount = nil; self.viewedLeafCount = nil; self.media = nil
         self.genre = nil; self.style = nil; self.country = nil
-        self.subformat = nil; self.originallyAvailableAt = nil
+        self.subformat = nil; self.similar = nil; self.originallyAvailableAt = nil
     }
 
     // MARK: - Navigation Stubs
@@ -432,6 +434,7 @@ extension PlexMetadata {
         style = try? c.decodeIfPresent([PlexTag].self, forKey: .style)
         country = try? c.decodeIfPresent([PlexTag].self, forKey: .country)
         subformat = try? c.decodeIfPresent([PlexTag].self, forKey: .subformat)
+        similar = try? c.decodeIfPresent([PlexTag].self, forKey: .similar)
         originallyAvailableAt = try? c.decodeIfPresent(String.self, forKey: .originallyAvailableAt)
     }
 }

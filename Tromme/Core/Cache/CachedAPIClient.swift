@@ -76,49 +76,6 @@ extension PlexAPIClient {
         }
     }
 
-    func recommendedAlbums(
-        server: PlexServer,
-        sectionId: String,
-        seedAlbum: PlexMetadata,
-        seedArtistKey: String?,
-        minMatchingStyles: Int
-    ) async throws -> [PlexMetadata] {
-        guard minMatchingStyles > 0 else { return [] }
-
-        let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
-        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
-        let allAlbumsByKey = Dictionary(uniqueKeysWithValues: allAlbums.map { ($0.ratingKey, $0) })
-
-        var seedStyles = stylesByAlbum[seedAlbum.ratingKey] ?? []
-        if seedStyles.isEmpty {
-            let seedDetails = try await cachedAlbumMetadata(server: server, ratingKey: seedAlbum.ratingKey)
-            seedStyles = metadataTags(seedDetails ?? seedAlbum)
-        }
-        seedStyles = deduplicateTags(seedStyles)
-        guard !seedStyles.isEmpty else { return [] }
-
-        let effectiveMinMatchingStyles = max(1, min(minMatchingStyles, seedStyles.count))
-
-        var scoredAlbums: [(album: PlexMetadata, score: Int)] = []
-        for (albumKey, styles) in stylesByAlbum {
-            guard albumKey != seedAlbum.ratingKey else { continue }
-            if let seedArtistKey, allAlbumsByKey[albumKey]?.parentRatingKey == seedArtistKey {
-                continue
-            }
-
-            let score = styleMatchScore(seed: seedStyles, candidate: styles)
-            guard score >= effectiveMinMatchingStyles, let album = allAlbumsByKey[albumKey] else { continue }
-            scoredAlbums.append((album: album, score: score))
-        }
-
-        return scoredAlbums
-            .sorted {
-                if $0.score != $1.score { return $0.score > $1.score }
-                return releaseSort($0.album, $1.album)
-            }
-            .map(\.album)
-    }
-
     // MARK: - Cached Album Styles
 
     func cachedAlbumStyles(server: PlexServer, sectionId: String) async throws -> [String: [String]] {
@@ -143,46 +100,84 @@ extension PlexAPIClient {
 
     // MARK: - Similar Artists
 
-    /// Artists in the library whose album styles overlap with the seed artist's album styles.
-    /// Uses the same cached style index as `recommendedAlbums`.
+    /// Returns artists in the library similar to the seed artist.
+    /// Tier 1: Artists whose name matches Plex's curated Similar tags on the seed artist's metadata.
+    /// Tier 2: Artists whose album styles overlap with the seed artist's (Jaccard ≥ 0.30, ≥2 matches).
     func similarArtists(server: PlexServer, sectionId: String, seedArtistKey: String) async throws -> [PlexMetadata] {
-        let allArtists = try await cachedArtists(server: server, sectionId: sectionId)
-        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
-        let stylesByAlbum = try await cachedAlbumStyles(server: server, sectionId: sectionId)
+        async let allArtistsTask = cachedArtists(server: server, sectionId: sectionId)
+        async let seedMetadataTask = cachedMetadata(server: server, ratingKey: seedArtistKey)
+        async let allAlbumsTask = cachedAlbums(server: server, sectionId: sectionId)
+        async let stylesByAlbumTask = cachedAlbumStyles(server: server, sectionId: sectionId)
 
-        // Build deduplicated raw-tag arrays per artist so styleMatchScore can apply
-        // both exact and word-level matching (e.g. "Hardcore Rap" ~ "Contemporary Rap").
+        let allArtists = try await allArtistsTask
+        let seedMetadata = try? await seedMetadataTask
+        let allAlbums = try await allAlbumsTask
+        let stylesByAlbum = try await stylesByAlbumTask
+
+        // Tier 1: Plex-curated Similar tags matched against library artists by name.
+        let similarTagNames = Set(
+            (seedMetadata?.similar ?? [])
+                .compactMap(\.tag)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        )
+        let tier1Artists = allArtists.filter { artist in
+            guard artist.ratingKey != seedArtistKey else { return false }
+            return similarTagNames.contains(artist.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        }.sorted { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
+        let tier1Keys = Set(tier1Artists.map(\.ratingKey))
+
+        // Tier 2: Style-based matching for artists not already in tier 1.
         var stylesByArtist: [String: [String]] = [:]
         for album in allAlbums {
             guard let artistKey = album.parentRatingKey else { continue }
             stylesByArtist[artistKey, default: []] += stylesByAlbum[album.ratingKey] ?? []
         }
-        for key in stylesByArtist.keys {
-            stylesByArtist[key] = deduplicateTags(stylesByArtist[key] ?? [])
-        }
+        stylesByArtist = stylesByArtist.mapValues { deduplicateTags($0) }
 
         let seedStyles = stylesByArtist[seedArtistKey] ?? []
-        guard !seedStyles.isEmpty else { return [] }
-
         let artistByKey = Dictionary(uniqueKeysWithValues: allArtists.map { ($0.ratingKey, $0) })
-        var scored: [(artist: PlexMetadata, score: Int)] = []
-        for (artistKey, styles) in stylesByArtist {
-            guard artistKey != seedArtistKey, let artist = artistByKey[artistKey] else { continue }
-            let intersectionCount = styleMatchScore(seed: seedStyles, candidate: styles)
-            guard intersectionCount >= 2 else { continue }
-            // Approximate Jaccard: |A ∪ B| ≈ |A| + |B| - |A ∩ B|
-            let unionCount = seedStyles.count + styles.count - intersectionCount
-            let jaccard = Double(intersectionCount) / Double(max(1, unionCount))
-            guard jaccard >= 0.30 else { continue }
-            scored.append((artist: artist, score: intersectionCount))
+        var tier2: [(artist: PlexMetadata, score: Int)] = []
+        if !seedStyles.isEmpty {
+            for (artistKey, styles) in stylesByArtist {
+                guard artistKey != seedArtistKey,
+                      !tier1Keys.contains(artistKey),
+                      let artist = artistByKey[artistKey] else { continue }
+                let intersectionCount = styleMatchScore(seed: seedStyles, candidate: styles)
+                guard intersectionCount >= 2 else { continue }
+                // Approximate Jaccard: |A ∪ B| ≈ |A| + |B| - |A ∩ B|
+                let unionCount = seedStyles.count + styles.count - intersectionCount
+                let jaccard = Double(intersectionCount) / Double(max(1, unionCount))
+                guard jaccard >= 0.30 else { continue }
+                tier2.append((artist: artist, score: intersectionCount))
+            }
         }
-
-        return scored
+        let tier2Artists = tier2
             .sorted {
                 if $0.score != $1.score { return $0.score > $1.score }
                 return ($0.artist.titleSort ?? $0.artist.title) < ($1.artist.titleSort ?? $1.artist.title)
             }
             .map(\.artist)
+
+        return tier1Artists + tier2Artists
+    }
+
+    /// Albums from artists similar to `artistRatingKey`, ordered by similarity tier then release date.
+    /// Tier 1 (Plex-curated Similar tags) artists' albums come before tier 2 (style-matched) albums.
+    func albumsFromSimilarArtists(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
+        let similar = try await similarArtists(server: server, sectionId: sectionId, seedArtistKey: artistRatingKey)
+        guard !similar.isEmpty else { return [] }
+
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
+        let artistOrder = Dictionary(uniqueKeysWithValues: similar.enumerated().map { ($0.element.ratingKey, $0.offset) })
+
+        return allAlbums
+            .filter { artistOrder[$0.parentRatingKey ?? ""] != nil }
+            .sorted { lhs, rhs in
+                let lOrder = artistOrder[lhs.parentRatingKey ?? ""] ?? Int.max
+                let rOrder = artistOrder[rhs.parentRatingKey ?? ""] ?? Int.max
+                if lOrder != rOrder { return lOrder < rOrder }
+                return releaseSort(lhs, rhs)
+            }
     }
 
     // MARK: - Appears On Albums
@@ -460,51 +455,6 @@ extension PlexAPIClient {
         return tags.filter { seen.insert($0.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)).inserted }
     }
 
-    private func interleaveTracksAvoidingAdjacentAlbums(_ tracks: [PlexMetadata], limit: Int) -> [PlexMetadata] {
-        guard !tracks.isEmpty, limit > 0 else { return [] }
-
-        var byAlbum: [String: [PlexMetadata]] = [:]
-        let fallbackAlbumKey = "__unknown_album__"
-        for track in tracks {
-            let albumKey = track.parentRatingKey ?? fallbackAlbumKey
-            byAlbum[albumKey, default: []].append(track)
-        }
-        for key in byAlbum.keys {
-            byAlbum[key]?.shuffle()
-        }
-
-        var result: [PlexMetadata] = []
-        result.reserveCapacity(min(limit, tracks.count))
-        var lastAlbumKey: String?
-
-        while result.count < limit {
-            var candidateKey: String?
-            var candidateCount = -1
-
-            for (albumKey, albumTracks) in byAlbum where !albumTracks.isEmpty {
-                if albumKey == lastAlbumKey { continue }
-                if albumTracks.count > candidateCount {
-                    candidateKey = albumKey
-                    candidateCount = albumTracks.count
-                }
-            }
-
-            if candidateKey == nil {
-                candidateKey = byAlbum.first(where: { !$0.value.isEmpty })?.key
-            }
-            guard let selectedAlbumKey = candidateKey,
-                  var selectedAlbumTracks = byAlbum[selectedAlbumKey],
-                  !selectedAlbumTracks.isEmpty else { break }
-
-            let next = selectedAlbumTracks.removeFirst()
-            byAlbum[selectedAlbumKey] = selectedAlbumTracks
-            result.append(next)
-            lastAlbumKey = selectedAlbumKey
-        }
-
-        return result
-    }
-
     private func cachedLibraryContents(server: PlexServer, sectionId: String, type: Int, key: String) async throws -> [PlexMetadata] {
         let items: [PlexMetadata] = try await LibraryCache.shared.cachedFetch(
             forKey: key,
@@ -517,12 +467,6 @@ extension PlexAPIClient {
             prefetchArtwork(for: items, server: server, size: 256)
         }
         return items
-    }
-
-    private func metadataTags(_ metadata: PlexMetadata) -> [String] {
-        (metadata.style ?? [])
-            .compactMap(\.tag)
-            .filter { !$0.isEmpty }
     }
 
     private func normalizedTag(_ tag: String) -> String {

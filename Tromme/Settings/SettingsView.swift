@@ -7,7 +7,6 @@ struct SettingsView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(AudioPlayerService.self) private var player
 
-    @AppStorage("magicMixStyleMatch") private var magicMixStyleMatch = 2
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "codecBitrate"
@@ -52,18 +51,6 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Home")
-            }
-
-            Section {
-                Picker("Style Match", selection: $magicMixStyleMatch) {
-                    ForEach(1...5, id: \.self) { value in
-                        Text("\(value)").tag(value)
-                    }
-                }
-            } header: {
-                Text("Magic Mix")
-            } footer: {
-                Text("How many style tags should match for Magic Mix. If a track or album has fewer style tags than this value, Magic Mix automatically uses the available tag count instead.")
             }
 
             Section {

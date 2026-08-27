@@ -104,7 +104,7 @@ struct FeaturedCarouselView: View {
 struct FeaturedBannerView: View {
     let album: PlexMetadata
 
-    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "immersive"
+    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "large"
     private var bannerSize: FeaturedBannerSize { FeaturedBannerSize(rawValue: featuredBannerSizeRaw) ?? .large }
 
     private var bannerHeight: CGFloat {

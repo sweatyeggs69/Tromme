@@ -1090,7 +1090,6 @@ final class AudioPlayerService: @unchecked Sendable {
 
         guard let seedAlbumKey = magicMixSeedAlbumKey else { return }
         let seedArtistKey = magicMixSeedArtistKey
-        let styleMatch = max(UserDefaults.standard.integer(forKey: "magicMixStyleMatch"), 1)
 
         logPlayback("magic_mix_refill_begin", "trigger=\(trigger) needed=\(needed)")
 
@@ -1102,21 +1101,52 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             guard let self else { return }
-            // Use the same "You Might Also Like" albums shown on the album detail page as the source pool.
-            let seedAlbum = try? await client.cachedMetadata(server: server, ratingKey: seedAlbumKey)
-            var recommendedAlbums: [PlexMetadata] = []
-            if let seedAlbum {
-                recommendedAlbums = (try? await client.recommendedAlbums(
-                    server: server,
-                    sectionId: sectionId,
-                    seedAlbum: seedAlbum,
-                    seedArtistKey: seedArtistKey,
-                    minMatchingStyles: styleMatch
+            // Phase 1: Fetch seed album metadata and similar-artist album keys in parallel.
+            async let seedAlbumTask = client.cachedMetadata(server: server, ratingKey: seedAlbumKey)
+            async let similarAlbumKeysTask: Set<String> = {
+                guard let artistKey = seedArtistKey else { return [] }
+                let similar = (try? await client.similarArtists(
+                    server: server, sectionId: sectionId, seedArtistKey: artistKey
                 )) ?? []
-            }
-            let recommendedAlbumKeys = Set(recommendedAlbums.map(\.ratingKey))
+                guard !similar.isEmpty else { return [] }
+                let similarArtistKeySet = Set(similar.map(\.ratingKey))
+                let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
+                return Set(allAlbums.compactMap { album -> String? in
+                    guard let parentKey = album.parentRatingKey,
+                          similarArtistKeySet.contains(parentKey) else { return nil }
+                    return album.ratingKey
+                })
+            }()
+
+            let seedAlbum = try? await seedAlbumTask
+            let poolAlbumKeys = await similarAlbumKeysTask
             let allTracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
-            let matchedPool = allTracks.filter { recommendedAlbumKeys.contains($0.parentRatingKey ?? "") }
+            var matchedPool = allTracks.filter { poolAlbumKeys.contains($0.parentRatingKey ?? "") }
+
+            // Phase 3: Genre-level fallback — fires only when the primary pool is sparse.
+            // Finds any library album sharing a genre with the seed album, ensuring a
+            // playable mix even when the library has very few similar-artist matches.
+            if matchedPool.count < 20 && !Task.isCancelled {
+                let seedGenres = Set(
+                    (seedAlbum?.genre ?? [])
+                        .compactMap { $0.tag?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                        .filter { !$0.isEmpty }
+                )
+                if !seedGenres.isEmpty {
+                    let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
+                    let genreAlbumKeys = Set(allAlbums.compactMap { album -> String? in
+                        guard !poolAlbumKeys.contains(album.ratingKey),
+                              album.parentRatingKey != seedArtistKey else { return nil }
+                        let albumGenres = Set((album.genre ?? [])
+                            .compactMap { $0.tag?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                            .filter { !$0.isEmpty })
+                        return albumGenres.isDisjoint(with: seedGenres) ? nil : album.ratingKey
+                    })
+                    if !genreAlbumKeys.isEmpty {
+                        matchedPool += allTracks.filter { genreAlbumKeys.contains($0.parentRatingKey ?? "") }
+                    }
+                }
+            }
 
             guard !Task.isCancelled else { return }
             guard !matchedPool.isEmpty else {

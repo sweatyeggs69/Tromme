@@ -339,7 +339,7 @@ struct NowPlayingBarsView: View {
         grandparentTitle: "Test Artist", parentRatingKey: nil,
         grandparentRatingKey: nil, leafCount: nil, viewedLeafCount: nil,
         media: nil, genre: nil, style: nil, country: nil,
-        subformat: nil, originallyAvailableAt: nil
+        subformat: nil, similar: nil, originallyAvailableAt: nil
     )
     TrackRowView(track: track, tracks: [track], index: 0)
         .environment(AudioPlayerService())
