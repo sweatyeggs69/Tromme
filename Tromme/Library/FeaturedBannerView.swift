@@ -7,22 +7,11 @@ private enum FeaturedBannerSize: String {
 struct FeaturedCarouselView: View {
     let albums: [PlexMetadata]
 
-    // 3 copies: [buffer | real | buffer] — 9 items for 3 albums.
-    // Seamless looping: when position drifts into a buffer copy, silently
-    // snap to the equivalent position in the middle copy (same content, no visible change).
-    private var loopedAlbums: [PlexMetadata] { albums + albums + albums }
-
     @State private var scrollPosition: Int?
-    @State private var isTimerScrolling = false
     @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "immersive"
 
     private let horizontalPadding = AppStyle.Spacing.pageHorizontal
     private let itemSpacing: CGFloat = 12
-
-    init(albums: [PlexMetadata]) {
-        self.albums = albums
-        _scrollPosition = State(initialValue: albums.count) // start in middle copy
-    }
 
     private var bannerSize: FeaturedBannerSize { FeaturedBannerSize(rawValue: featuredBannerSizeRaw) ?? .large }
 
@@ -53,7 +42,7 @@ struct FeaturedCarouselView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: itemSpacing) {
-                    ForEach(Array(loopedAlbums.enumerated()), id: \.offset) { index, album in
+                    ForEach(Array(albums.enumerated()), id: \.offset) { index, album in
                         NavigationLink(value: album) {
                             FeaturedBannerView(album: album)
                         }
@@ -68,32 +57,16 @@ struct FeaturedCarouselView: View {
             .contentMargins(.horizontal, effectiveHorizontalPadding, for: .scrollContent)
             .scrollTargetBehavior(.viewAligned)
             .scrollDisabled(cols >= count)
-            .onChange(of: scrollPosition) { _, newPos in
-                // User-initiated swipe hit a buffer copy — silently reset to middle copy.
-                // Skip while the timer is mid-animation to avoid interrupting it.
-                guard !isTimerScrolling, let pos = newPos else { return }
-                if pos < count {
-                    scrollPosition = pos + count
-                } else if pos >= count * 2 {
-                    scrollPosition = pos - count
-                }
-            }
             .task(id: cols) {
                 guard count > cols else { return }
                 while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(7))
+                    try? await Task.sleep(for: .seconds(4))
                     guard !Task.isCancelled else { return }
-                    let next = (scrollPosition ?? count) + 1
-                    isTimerScrolling = true
+                    let current = scrollPosition ?? 0
+                    let next = current + 1 >= count ? 0 : current + 1
                     withAnimation(.easeInOut(duration: 0.5)) {
                         scrollPosition = next
                     }
-                    // Wait for animation to finish, then silently reset if we landed in the last buffer copy.
-                    try? await Task.sleep(for: .milliseconds(600))
-                    if let pos = scrollPosition, pos >= count * 2 {
-                        scrollPosition = pos - count
-                    }
-                    isTimerScrolling = false
                 }
             }
         }

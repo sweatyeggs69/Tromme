@@ -28,6 +28,8 @@ struct AlbumDetailView: View {
     @State private var albumDeleteErrorMessage: String?
     @State private var isDeletingAlbum = false
     @State private var showingChangeArtworkSheet = false
+    @AppStorage("showPopularTracks") private var showPopularTracks = false
+    @State private var popularTrackTitles: Set<String> = []
 
     private var thumbPath: String? {
         albumDetails.thumb ?? album.thumb
@@ -480,6 +482,17 @@ struct AlbumDetailView: View {
         }
     }
 
+    @MainActor
+    private func loadLastFMPopularity() async {
+        guard network.isConnected, showPopularTracks else { return }
+        guard let artistName = albumDetails.parentTitle ?? album.parentTitle,
+              !artistName.isEmpty, !tracks.isEmpty else { return }
+        popularTrackTitles = await LastFMService.fetchPopularTracks(
+            artist: artistName,
+            albumTrackTitles: tracks.map(\.title)
+        )
+    }
+
     private func playAlbumNext() {
         guard !tracks.isEmpty else { return }
         for track in tracks.reversed() {
@@ -536,6 +549,7 @@ struct AlbumDetailView: View {
             player: player,
             tertiaryTextColor: tertiaryTextColor,
             titleColor: titleColor,
+            isPopular: popularTrackTitles.contains(track.title),
             onAddToPlaylist: { track in
                 presentAddToPlaylist(for: [track.ratingKey])
             },
@@ -880,7 +894,8 @@ struct AlbumDetailView: View {
             guard !Task.isCancelled else { return }
             async let artistAlbumsTask: Void = loadArtistAlbums()
             async let recommendationsTask: Void = loadRecommendedAlbums()
-            _ = await (artistAlbumsTask, recommendationsTask)
+            async let lastFMTask: Void = loadLastFMPopularity()
+            _ = await (artistAlbumsTask, recommendationsTask, lastFMTask)
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {
@@ -1016,6 +1031,7 @@ private struct AlbumTrackRow: View {
     let player: AudioPlayerService
     let tertiaryTextColor: Color
     let titleColor: Color
+    var isPopular: Bool = false
     let onAddToPlaylist: (PlexMetadata) -> Void
     let onDelete: (PlexMetadata) -> Void
 
@@ -1081,9 +1097,16 @@ private struct AlbumTrackRow: View {
                     .frame(width: 22, alignment: .leading)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(track.title)
-                            .foregroundStyle(titleColor)
-                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            if isPopular {
+                                Image(systemName: "flame.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(tertiaryTextColor)
+                            }
+                            Text(track.title)
+                                .foregroundStyle(titleColor)
+                                .lineLimit(1)
+                        }
 
                         if let alternateArtistText {
                             Text(alternateArtistText)
