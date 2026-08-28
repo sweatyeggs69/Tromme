@@ -1023,6 +1023,7 @@ private extension Color {
 private struct AlbumTrackRow: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(DownloadManager.self) private var downloadManager
 
     let track: PlexMetadata
     let index: Int
@@ -1214,6 +1215,7 @@ private struct AlbumTrackRow: View {
 
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
+            downloadManager.deleteDownload(ratingKey: track.ratingKey)
             await LibraryCache.shared.clearAll()
             await ImageCache.shared.clearAll()
             onDelete(track)

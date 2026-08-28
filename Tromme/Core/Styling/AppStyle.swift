@@ -67,7 +67,7 @@ enum AppStyle {
     enum MiniPlayer {
         static let artworkSize: CGFloat = 36
         static let artworkSizeInline: CGFloat = 30
-        static let artworkCornerRadius: CGFloat = 8
+        static let artworkCornerRadius: CGFloat = 6
         /// Standard tap-target size for transport controls.
         static let controlSize: CGFloat = 44
         /// Larger play/pause tap target on iPad.

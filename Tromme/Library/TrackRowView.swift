@@ -287,6 +287,7 @@ struct TrackRowView: View {
 
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
+            downloadManager.deleteDownload(ratingKey: track.ratingKey)
             await LibraryCache.shared.clearAll()
             await ImageCache.shared.clearAll()
         } catch {

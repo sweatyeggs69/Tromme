@@ -9,6 +9,38 @@ struct MiniPlayerView: View {
     private var isInline: Bool { placement == .inline }
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
+    @State private var swipeOffset: CGFloat = 0
+    @State private var swipeOpacity: Double = 1
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 40, coordinateSpace: .local)
+            .onEnded { value in
+                if value.translation.width < -40 {
+                    handleSwipe(goingNext: true)
+                } else if value.translation.width > 40 {
+                    handleSwipe(goingNext: false)
+                }
+            }
+    }
+
+    private func handleSwipe(goingNext: Bool) {
+        let exitOffset: CGFloat = goingNext ? -120 : 120
+        let entryOffset: CGFloat = goingNext ? 120 : -120
+        withAnimation(.easeIn(duration: 0.12)) {
+            swipeOffset = exitOffset
+            swipeOpacity = 0
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(0.12))
+            if goingNext { player.next() } else { player.previous() }
+            swipeOffset = entryOffset
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                swipeOffset = 0
+                swipeOpacity = 1
+            }
+        }
+    }
+
     private func openNowPlayingDefault() {
         openNowPlaying(.none)
         showNowPlaying = true
@@ -44,6 +76,8 @@ struct MiniPlayerView: View {
                                     .allowsTightening(true)
                             }
                         }
+                        .offset(x: swipeOffset)
+                        .opacity(swipeOpacity)
                         .contentShape(Rectangle())
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -75,6 +109,7 @@ struct MiniPlayerView: View {
                     },
                     including: .gesture
                 )
+                .highPriorityGesture(swipeGesture)
             } else {
                 HStack(spacing: isInline ? AppStyle.MiniPlayer.spacing : AppStyle.MiniPlayer.spacingCompact) {
                     Button {
@@ -107,6 +142,8 @@ struct MiniPlayerView: View {
 
                             Spacer()
                         }
+                        .offset(x: swipeOffset)
+                        .opacity(swipeOpacity)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -125,6 +162,7 @@ struct MiniPlayerView: View {
                     },
                     including: .gesture
                 )
+                .highPriorityGesture(swipeGesture)
             }
         }
     }
