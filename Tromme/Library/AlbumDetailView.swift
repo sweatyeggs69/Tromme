@@ -1084,7 +1084,7 @@ private struct AlbumTrackRow: View {
             Button {
                 player.play(tracks: tracks, startingAt: index)
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: 4) {
                     ZStack {
                         if player.currentTrack?.ratingKey == track.ratingKey && player.isPlaying {
                             NowPlayingBarsView(color: tertiaryTextColor)
