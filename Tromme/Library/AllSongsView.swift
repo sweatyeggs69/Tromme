@@ -10,6 +10,10 @@ struct AllSongsView: View {
     @State private var loadedTracks: [PlexMetadata] = []
     @State private var displayTracks: [PlexMetadata] = []
     @State private var displaySections: [(title: String, items: [(index: Int, track: PlexMetadata)])] = []
+    @State private var sortGeneration: Int = 0
+    @State private var lastSortedCount: Int = -1
+    @State private var lastSortedOrder: SongSortOrder = .titleAscending
+    @State private var lastSortedQuery: String = ""
     @State private var isLoading = true
     @State private var searchText = ""
     @State private var isSearchPresented = false
@@ -196,15 +200,29 @@ struct AllSongsView: View {
     }
 
     // Sorts, filters, and sections all off the main actor to keep UI responsive at 100k tracks.
+    // Skips work if the data and sort parameters haven't changed since the last sort.
+    // A generation counter ensures only the most recent sort request writes to state,
+    // preventing stale results from piled-up tasks when navigating between tabs quickly.
     private func applyDisplayState() async {
         guard !loadedTracks.isEmpty else {
             displayTracks = []
             displaySections = []
             return
         }
-        let snapshot = loadedTracks
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentSort = sortOrder
+
+        // Nothing changed since the last sort — skip the work entirely.
+        if !displaySections.isEmpty,
+           loadedTracks.count == lastSortedCount,
+           currentSort == lastSortedOrder,
+           query == lastSortedQuery {
+            return
+        }
+
+        let snapshot = loadedTracks
+        sortGeneration &+= 1
+        let myGeneration = sortGeneration
 
         let (sorted, sections) = await Task.detached(priority: .userInitiated) {
             let base = query.isEmpty ? snapshot : snapshot.filter { track in
@@ -216,8 +234,12 @@ struct AllSongsView: View {
             return (sorted, Self.buildSections(from: sorted, sortOrder: currentSort))
         }.value
 
+        guard sortGeneration == myGeneration else { return }
         displayTracks = sorted
         displaySections = sections
+        lastSortedCount = loadedTracks.count
+        lastSortedOrder = currentSort
+        lastSortedQuery = query
     }
 
     nonisolated private static func sort(_ tracks: [PlexMetadata], by order: SongSortOrder) -> [PlexMetadata] {
@@ -278,9 +300,8 @@ struct AllSongsView: View {
 
     nonisolated private static func alphabetSectionTitle(for value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.first else { return "#" }
-        let letter = String(first).uppercased()
-        return letter.range(of: "^[A-Z]$", options: .regularExpression) == nil ? "#" : letter
+        guard let first = trimmed.first, first.isASCII, first.isLetter else { return "#" }
+        return String(first).uppercased()
     }
 }
 

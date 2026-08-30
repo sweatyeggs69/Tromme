@@ -253,9 +253,6 @@ enum CachePolicy: Sendable {
     /// Search results — short-lived, mostly just deduplication.
     /// Memory: 10 min, Disk: 4 hours.
     case search
-    /// Album styles — very stable metadata.
-    /// Memory: 4 hours, Disk: 30 days.
-    case styles
     /// Last.fm artist top-tracks — changes very slowly.
     /// Memory: 4 hours, Disk: 7 days.
     case lastFM
@@ -267,7 +264,6 @@ enum CachePolicy: Sendable {
         case .albumInfo:   return 7200      // 2 hours
         case .userContent: return 3600      // 1 hour
         case .search:      return 600       // 10 min
-        case .styles:      return 14400     // 4 hours
         case .lastFM:      return 14400     // 4 hours
         }
     }
@@ -279,7 +275,6 @@ enum CachePolicy: Sendable {
         case .albumInfo:   return 86_400    // 24 hours
         case .userContent: return 259_200   // 3 days
         case .search:      return 14400     // 4 hours
-        case .styles:      return 2_592_000 // 30 days
         case .lastFM:      return 604_800   // 7 days
         }
     }
@@ -303,9 +298,6 @@ enum CacheKey {
     }
     static func albums(serverId: String, sectionId: String) -> String {
         "albums_\(serverId)_\(sectionId)"
-    }
-    static func albumStyles(serverId: String, sectionId: String) -> String {
-        "album_styles_v2_\(serverId)_\(sectionId)"
     }
     static func tracks(serverId: String, sectionId: String) -> String {
         "tracks_\(serverId)_\(sectionId)"

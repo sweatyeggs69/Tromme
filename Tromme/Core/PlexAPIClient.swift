@@ -303,6 +303,20 @@ final class PlexAPIClient: Sendable {
     }
 
 
+    // MARK: - Related Hubs
+
+    /// Returns the "You May Also Like" and other related hubs for a given metadata item.
+    func getRelatedHubs(server: PlexServer, ratingKey: String) async throws -> [Hub] {
+        let data = try await rawServerRequest(
+            server: server,
+            path: "/hubs/metadata/\(ratingKey)/related",
+            method: "GET",
+            queryItems: []
+        )
+        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
+        return response.mediaContainer.hub ?? []
+    }
+
     // MARK: - Search
 
     func search(server: PlexServer, query: String, sectionId: String? = nil, limit: Int = 20) async throws -> [Hub] {

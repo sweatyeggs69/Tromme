@@ -24,6 +24,10 @@ struct MiniPlayerView: View {
     }
 
     private func handleSwipe(goingNext: Bool) {
+        if goingNext {
+            let hasNext = player.currentIndex < player.queue.count - 1 || player.repeatMode != .off
+            guard hasNext else { return }
+        }
         let exitOffset: CGFloat = goingNext ? -120 : 120
         let entryOffset: CGFloat = goingNext ? 120 : -120
         withAnimation(.easeIn(duration: 0.12)) {

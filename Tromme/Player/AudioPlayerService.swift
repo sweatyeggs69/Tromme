@@ -97,7 +97,6 @@ final class AudioPlayerService: @unchecked Sendable {
     private var magicMixRefillTask: Task<Void, Never>?
     private var magicMixHistoryQueue: [String] = []   // Ordered FIFO, oldest at index 0
     private var magicMixHistorySet: Set<String> = []  // Mirror of historyQueue for O(1) lookup
-    private var magicMixSeedAlbumKey: String? = nil
     private var magicMixSeedArtistKey: String? = nil
     private var infiniteRefillTask: Task<Void, Never>?
     private var infinitePreviousKeys: Set<String> = []
@@ -782,7 +781,6 @@ final class AudioPlayerService: @unchecked Sendable {
         isInfiniteModeActive = false
         magicMixHistoryQueue.removeAll()
         magicMixHistorySet.removeAll()
-        magicMixSeedAlbumKey = nil
         magicMixSeedArtistKey = nil
         infinitePreviousKeys.removeAll()
         isReadyToPlay = false
@@ -1083,13 +1081,11 @@ final class AudioPlayerService: @unchecked Sendable {
 
         // Anchor the seed to the track that started the mix so the matched pool stays consistent
         // across refills. Drifting the seed to the current track narrows matches over time.
-        if magicMixSeedAlbumKey == nil {
-            magicMixSeedAlbumKey = currentTrack.parentRatingKey
+        if magicMixSeedArtistKey == nil {
             magicMixSeedArtistKey = currentTrack.grandparentRatingKey
         }
 
-        guard let seedAlbumKey = magicMixSeedAlbumKey else { return }
-        let seedArtistKey = magicMixSeedArtistKey
+        guard let seedArtistKey = magicMixSeedArtistKey else { return }
 
         logPlayback("magic_mix_refill_begin", "trigger=\(trigger) needed=\(needed)")
 
@@ -1101,52 +1097,28 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             guard let self else { return }
-            // Phase 1: Fetch seed album metadata and similar-artist album keys in parallel.
-            async let seedAlbumTask = client.cachedMetadata(server: server, ratingKey: seedAlbumKey)
-            async let similarAlbumKeysTask: Set<String> = {
-                guard let artistKey = seedArtistKey else { return [] }
-                let similar = (try? await client.similarArtists(
-                    server: server, sectionId: sectionId, seedArtistKey: artistKey
-                )) ?? []
-                guard !similar.isEmpty else { return [] }
-                let similarArtistKeySet = Set(similar.map(\.ratingKey))
-                let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
-                return Set(allAlbums.compactMap { album -> String? in
-                    guard let parentKey = album.parentRatingKey,
-                          similarArtistKeySet.contains(parentKey) else { return nil }
-                    return album.ratingKey
-                })
-            }()
 
-            let seedAlbum = try? await seedAlbumTask
-            let poolAlbumKeys = await similarAlbumKeysTask
-            let allTracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
-            var matchedPool = allTracks.filter { poolAlbumKeys.contains($0.parentRatingKey ?? "") }
+            // Get all similar artists to the seed track's artist.
+            let similar = (try? await client.similarArtists(
+                server: server, sectionId: sectionId, seedArtistKey: seedArtistKey
+            )) ?? []
 
-            // Phase 3: Genre-level fallback — fires only when the primary pool is sparse.
-            // Finds any library album sharing a genre with the seed album, ensuring a
-            // playable mix even when the library has very few similar-artist matches.
-            if matchedPool.count < 20 && !Task.isCancelled {
-                let seedGenres = Set(
-                    (seedAlbum?.genre ?? [])
-                        .compactMap { $0.tag?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                        .filter { !$0.isEmpty }
-                )
-                if !seedGenres.isEmpty {
-                    let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
-                    let genreAlbumKeys = Set(allAlbums.compactMap { album -> String? in
-                        guard !poolAlbumKeys.contains(album.ratingKey),
-                              album.parentRatingKey != seedArtistKey else { return nil }
-                        let albumGenres = Set((album.genre ?? [])
-                            .compactMap { $0.tag?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
-                            .filter { !$0.isEmpty })
-                        return albumGenres.isDisjoint(with: seedGenres) ? nil : album.ratingKey
-                    })
-                    if !genreAlbumKeys.isEmpty {
-                        matchedPool += allTracks.filter { genreAlbumKeys.contains($0.parentRatingKey ?? "") }
-                    }
-                }
-            }
+            guard !similar.isEmpty, !Task.isCancelled else { return }
+
+            // Collect all library albums and tracks by those similar artists.
+            async let allAlbumsTask = client.cachedAlbums(server: server, sectionId: sectionId)
+            async let allTracksTask = client.cachedTracks(server: server, sectionId: sectionId)
+            let allAlbums = (try? await allAlbumsTask) ?? []
+            let allTracks = (try? await allTracksTask) ?? []
+
+            let poolArtistKeySet = Set(similar.map(\.ratingKey)).union([seedArtistKey])
+            let poolAlbumKeys = Set(allAlbums.compactMap { album -> String? in
+                guard let parentKey = album.parentRatingKey,
+                      poolArtistKeySet.contains(parentKey) else { return nil }
+                return album.ratingKey
+            })
+
+            let matchedPool = allTracks.filter { poolAlbumKeys.contains($0.parentRatingKey ?? "") }
 
             guard !Task.isCancelled else { return }
             guard !matchedPool.isEmpty else {
@@ -1205,7 +1177,6 @@ final class AudioPlayerService: @unchecked Sendable {
             magicMixRefillTask = nil
             magicMixHistoryQueue.removeAll()
             magicMixHistorySet.removeAll()
-            magicMixSeedAlbumKey = nil
             magicMixSeedArtistKey = nil
         }
         maybeRefillMagicMixQueueIfNeeded(trigger: freshMix ? "user_request" : "queue_low")
@@ -1215,6 +1186,15 @@ final class AudioPlayerService: @unchecked Sendable {
         infiniteRefillTask?.cancel()
         infiniteRefillTask = nil
         maybeRefillInfiniteQueueIfNeeded(trigger: "user_request")
+    }
+
+    /// Returns true if the current track's artist has at least one similar artist present in the library.
+    func magicMixAvailable() async -> Bool {
+        guard let client, let server,
+              let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId,
+              let artistKey = currentTrack?.grandparentRatingKey else { return false }
+        let similar = (try? await client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artistKey)) ?? []
+        return !similar.isEmpty
     }
 
     private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
@@ -1979,6 +1959,7 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func savePlaybackState() {
         let defaults = UserDefaults.standard
+
         if let track = currentTrack,
            let data = try? JSONEncoder().encode(track) {
             defaults.set(data, forKey: Self.trackKey)
@@ -1986,31 +1967,44 @@ final class AudioPlayerService: @unchecked Sendable {
             defaults.removeObject(forKey: Self.trackKey)
         }
 
-        let queueHash = Self.queueIdentityHash(queue)
-        if queueHash != lastSavedQueueHash {
-            if queue.isEmpty {
-                defaults.removeObject(forKey: Self.queueKey)
-                lastSavedQueueHash = queueHash
-            } else if let queueData = try? JSONEncoder().encode(queue) {
-                defaults.set(queueData, forKey: Self.queueKey)
-                lastSavedQueueHash = queueHash
-            }
-        }
-
-        let origHash = Self.queueIdentityHash(originalQueue)
-        if origHash != lastSavedOriginalQueueHash {
-            if originalQueue.isEmpty {
-                defaults.removeObject(forKey: Self.originalQueueKey)
-                lastSavedOriginalQueueHash = origHash
-            } else if let origData = try? JSONEncoder().encode(originalQueue) {
-                defaults.set(origData, forKey: Self.originalQueueKey)
-                lastSavedOriginalQueueHash = origHash
-            }
-        }
-
         defaults.set(currentIndex, forKey: Self.currentIndexKey)
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
+
+        // Queue encoding can be large for full-library shuffles. Capture snapshots
+        // here on the MainActor and encode them on a background thread to avoid
+        // blocking the UI when the queue contains hundreds of tracks.
+        let queueHash = Self.queueIdentityHash(queue)
+        let origHash = Self.queueIdentityHash(originalQueue)
+        guard queueHash != lastSavedQueueHash || origHash != lastSavedOriginalQueueHash else { return }
+
+        let queueSnapshot = queue
+        let origSnapshot = originalQueue
+        let saveQueue = queueHash != lastSavedQueueHash
+        let saveOrig = origHash != lastSavedOriginalQueueHash
+        if saveQueue { lastSavedQueueHash = queueHash }
+        if saveOrig { lastSavedOriginalQueueHash = origHash }
+
+        // Capture keys before leaving the MainActor
+        let queueKey = Self.queueKey
+        let originalQueueKey = Self.originalQueueKey
+
+        Task.detached(priority: .utility) {
+            if saveQueue {
+                if queueSnapshot.isEmpty {
+                    defaults.removeObject(forKey: queueKey)
+                } else if let data = try? JSONEncoder().encode(queueSnapshot) {
+                    defaults.set(data, forKey: queueKey)
+                }
+            }
+            if saveOrig {
+                if origSnapshot.isEmpty {
+                    defaults.removeObject(forKey: originalQueueKey)
+                } else if let data = try? JSONEncoder().encode(origSnapshot) {
+                    defaults.set(data, forKey: originalQueueKey)
+                }
+            }
+        }
     }
 
     func restorePlaybackState() {

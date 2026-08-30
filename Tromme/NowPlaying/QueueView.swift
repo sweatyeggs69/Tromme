@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QueueView: View {
     var player: AudioPlayerService
+    @State private var magicMixAvailable = false
 
     private var isMagicMixActive: Bool {
         get { player.isMagicMixActive }
@@ -95,6 +96,9 @@ struct QueueView: View {
                 .scrollContentBackground(.hidden)
             }
         }
+        .task(id: player.currentTrack?.grandparentRatingKey) {
+            magicMixAvailable = await player.magicMixAvailable()
+        }
     }
 
     private var queueActions: some View {
@@ -133,8 +137,8 @@ struct QueueView: View {
                     player.requestMagicMixRefill(freshMix: true)
                 }
             }
-            .disabled(isInfiniteModeActive)
-            .opacity(isInfiniteModeActive ? 0.45 : 1)
+            .disabled(isInfiniteModeActive || !magicMixAvailable)
+            .opacity((isInfiniteModeActive || !magicMixAvailable) ? 0.45 : 1)
             .frame(maxWidth: .infinity)
         }
         .font(.callout.weight(.semibold))

@@ -211,10 +211,14 @@ struct SearchView: View {
 
         let lowered = query.lowercased()
 
-        let artists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
-        let albums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
-        let tracks = (try? await client.cachedTracks(server: server, sectionId: sectionId)) ?? []
-        let allPlaylists = (try? await client.cachedPlaylists(server: server)) ?? []
+        async let artistsTask = client.cachedArtists(server: server, sectionId: sectionId)
+        async let albumsTask = client.cachedAlbums(server: server, sectionId: sectionId)
+        async let tracksTask = client.cachedTracks(server: server, sectionId: sectionId)
+        async let playlistsTask = client.cachedPlaylists(server: server)
+        let artists = (try? await artistsTask) ?? []
+        let albums = (try? await albumsTask) ?? []
+        let tracks = (try? await tracksTask) ?? []
+        let allPlaylists = (try? await playlistsTask) ?? []
 
         var matchedArtists = artists.filter { $0.title.lowercased().contains(lowered) }
 

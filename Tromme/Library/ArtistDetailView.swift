@@ -21,6 +21,7 @@ struct ArtistDetailView: View {
     @State private var heroMinY: CGFloat = 0
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
+    @State private var contentReady = false
 
     private var displayArtist: PlexMetadata {
         resolvedArtist ?? artist
@@ -289,7 +290,7 @@ struct ArtistDetailView: View {
             }
 
             let hasBio = !(displayArtist.summary ?? "").isEmpty
-            if hasBio || !similarArtists.isEmpty {
+            if contentReady && (hasBio || !similarArtists.isEmpty) {
                 if let summary = displayArtist.summary, !summary.isEmpty {
                     sectionHeader("About \(displayArtist.title)")
                         .listRowBackground(similarSectionBackground)
@@ -372,18 +373,24 @@ struct ArtistDetailView: View {
             async let appearsOnReq = client.appearsOnAlbums(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
             async let similarArtistsReq = client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artist.ratingKey)
 
-            resolvedArtist = try? await metadataReq
-
+            let fetchedMetadata = try? await metadataReq
             let fetchedTopTracks = (try? await topTracksReq) ?? []
-            artistTracks = (try? await artistTracksReq) ?? []
-            artistAlbums = (try? await releasesReq) ?? []
-            appearsOnAlbums = (try? await appearsOnReq) ?? []
-            similarArtists = (try? await similarArtistsReq) ?? []
+            let fetchedArtistTracks = (try? await artistTracksReq) ?? []
+            let fetchedAlbums = (try? await releasesReq) ?? []
+            let fetchedAppearsOn = (try? await appearsOnReq) ?? []
+            let fetchedSimilar = (try? await similarArtistsReq) ?? []
 
-            // Fallback: if Plex returned no top tracks, use local sort by viewCount
-            topTracks = fetchedTopTracks.isEmpty
-                ? artistTracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
-                : fetchedTopTracks
+            withAnimation(.easeIn(duration: 0.25)) {
+                resolvedArtist = fetchedMetadata
+                artistTracks = fetchedArtistTracks
+                artistAlbums = fetchedAlbums
+                appearsOnAlbums = fetchedAppearsOn
+                similarArtists = fetchedSimilar
+                topTracks = fetchedTopTracks.isEmpty
+                    ? fetchedArtistTracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
+                    : fetchedTopTracks
+                contentReady = true
+            }
         }
         .sheet(isPresented: $showsBioSheet) {
             if let summary = displayArtist.summary, !summary.isEmpty {
@@ -422,6 +429,7 @@ struct ArtistDetailView: View {
         artistTracks = records.map { $0.asPlexMetadata() }
         topTracks = artistTracks
         appearsOnAlbums = []
+        contentReady = true
     }
 }
 
