@@ -735,7 +735,9 @@ struct TimelineSlider: View {
         let duration = max(player.duration, 1)
         let isReady = player.isReadyToPlay || player.hasTrack
         let liveValue = min(max(player.currentTime, 0), duration)
-        let anchoredLiveValue: TimeInterval = (!player.isPlaying && liveValue < 1) ? 0 : liveValue
+        // Only snap to zero when the item isn't ready yet — prevents the slider
+        // from jumping to 0 while the player is briefly paused during a resume seek.
+        let anchoredLiveValue: TimeInterval = (!player.isPlaying && !player.isReadyToPlay && liveValue < 1) ? 0 : liveValue
         let displayValue = isDragging ? sliderValue : anchoredLiveValue
 
         Group {
@@ -765,7 +767,7 @@ struct TimelineSlider: View {
         .onChange(of: player.currentTime) { _, newValue in
             if !isDragging {
                 let clamped = min(max(newValue, 0), duration)
-                sliderValue = (!player.isPlaying && clamped < 1) ? 0 : clamped
+                sliderValue = (!player.isPlaying && !player.isReadyToPlay && clamped < 1) ? 0 : clamped
             }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in

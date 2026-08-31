@@ -102,6 +102,9 @@ final class AudioPlayerService: @unchecked Sendable {
     private var infinitePreviousKeys: Set<String> = []
     private var preloadedNext: PreloadedNextTrack?
     private var nextTrackPreloadTask: Task<Void, Never>?
+    /// Timestamp of the most recent seek completion, used to suppress spurious
+    /// AVPlayerItemDidPlayToEndTime notifications that race with seek callbacks.
+    private var lastSeekCompletedAt: Date?
 
     private struct PreloadedNextTrack {
         let ratingKey: String
@@ -555,15 +558,19 @@ final class AudioPlayerService: @unchecked Sendable {
         isSeeking = true
         currentTime = boundedTime
 
-        // Zero tolerance forces a sample-accurate seek. Local VBR audio (FLAC,
-        // VBR MP3) otherwise lands on a byte-estimated position that can be
-        // audibly far from the requested time while still reporting it.
+        // 50ms tolerance: precise enough to be imperceptible, but avoids the
+        // finished=false failures that zero-tolerance seeks produce on VBR files
+        // (when no sample exists at the exact requested time). Zero tolerance
+        // caused the player to not move while currentTime was already updated,
+        // producing visible slider jumps when the time observer fired.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
         let seekGeneration = playbackGeneration
-        player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isSeeking = false
+                self.lastSeekCompletedAt = Date()
                 guard self.playbackGeneration == seekGeneration, finished else { return }
                 self.currentTime = boundedTime
                 self.updateNowPlayingInfo()
@@ -890,7 +897,10 @@ final class AudioPlayerService: @unchecked Sendable {
         player?.pause()
         player?.replaceCurrentItem(with: nil)
 
-        // Fast path: locally downloaded file — skip network transcode entirely
+        // Fast path: locally downloaded file — skip network transcode entirely.
+        // Plex metadata duration is authoritative for local files: downloaded MP3
+        // transcodes can have corrupt Xing/VBR headers that AVFoundation would
+        // read as a wrong duration. duration is already set from track.duration above.
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
@@ -1585,7 +1595,10 @@ final class AudioPlayerService: @unchecked Sendable {
                     self.isReadyToPlay = true
                     // An offset stream's asset duration only covers the remainder
                     // of the track, so keep the metadata duration in that case.
-                    if self.streamTimeOffset == 0, assetDuration.isFinite && assetDuration > 0 {
+                    // Local files keep Plex metadata duration — downloaded MP3
+                    // transcodes can have corrupt Xing/VBR headers.
+                    if !self.isPlayingLocalFile, self.streamTimeOffset == 0,
+                       assetDuration.isFinite && assetDuration > 0 {
                         self.duration = assetDuration
                     }
                     self.logPlayback("item_ready", "duration=\(self.duration) offset=\(self.streamTimeOffset)")
@@ -1598,12 +1611,16 @@ final class AudioPlayerService: @unchecked Sendable {
                         self.logPlayback("resume_seek", "to=\(bounded)")
                         self.isSeeking = true
                         let target = CMTime(seconds: bounded, preferredTimescale: 600)
-                        let tolerance = CMTime(seconds: 0.25, preferredTimescale: 600)
+                        // Local files: 50ms tolerance — imperceptible but avoids
+                        // finished=false on VBR files that have no sample at the exact time.
+                        // HLS streams need more slack for playlist segment boundaries.
+                        let tolerance = self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600) : CMTime(seconds: 0.25, preferredTimescale: 600)
                         self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
                             guard let self else { return }
                             Task { @MainActor [weak self] in
                                 guard let self else { return }
                                 self.isSeeking = false
+                                self.lastSeekCompletedAt = Date()
                                 guard self.playbackGeneration == seekGeneration, finished else { return }
                                 self.currentTime = bounded
                                 self.isPlaying = true
@@ -1756,12 +1773,9 @@ final class AudioPlayerService: @unchecked Sendable {
                 guard seconds.isFinite && seconds >= 0 else { return }
 
                 if self.isPlayingLocalFile {
-                    // Local files: read duration directly from the asset and map
-                    // player time straight to currentTime — no HLS offset needed.
-                    if let itemDuration = self.player?.currentItem?.duration.seconds,
-                       itemDuration.isFinite && itemDuration > 0 {
-                        self.duration = itemDuration
-                    }
+                    // Local files: map player time straight to currentTime — no HLS
+                    // offset needed. Duration stays pinned to Plex metadata; reading
+                    // it from the asset would pick up corrupt Xing/VBR headers.
                     self.currentTime = self.duration > 0 ? min(seconds, self.duration) : seconds
                 } else {
                     // HLS streams: calibrate whether the playlist timeline is
@@ -1804,6 +1818,12 @@ final class AudioPlayerService: @unchecked Sendable {
             let status = observedPlayer.timeControlStatus
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // Discard stale callbacks from a previous player that fired just
+                // before tearDownObservers() could cancel them. Without this guard,
+                // a queued Task from the old player's .paused transition can set
+                // isPlaying = false momentarily after the new player has started,
+                // causing the play/pause button to flicker on track transitions.
+                guard observedPlayer === self.player else { return }
                 let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
                 // Preserve the current "playing intent" while AVPlayer is briefly
                 // buffering so transport controls do not flicker.
@@ -1844,6 +1864,33 @@ final class AudioPlayerService: @unchecked Sendable {
         // the audio data and fire AVPlayerItemDidPlayToEndTime before the seek
         // completion callback clears isSeeking. Ignore the notification in that case.
         guard !isSeeking else { return }
+        // Cover the inverse race: the seek completion callback can clear isSeeking
+        // before this notification is processed. Suppress only when both:
+        //   1. A seek finished very recently (< 1s — rules out natural playback to end)
+        //   2. The player landed close to where we intended (< 1s miss — rules out
+        //      files whose audio is genuinely shorter than their duration metadata)
+        // A short VBR file with a bad Xing header will have seekMiss >> 1s because
+        // the player snaps to the physical end of audio rather than the intent.
+        if let seekTime = lastSeekCompletedAt,
+           Date().timeIntervalSince(seekTime) < 1.0,
+           let playerTime = player?.currentItem?.currentTime().seconds,
+           playerTime.isFinite, duration > 0 {
+            let remaining = duration - playerTime
+            let seekMiss = abs(playerTime - currentTime)
+            if remaining > 3 && seekMiss < 1.0 {
+                logPlayback("track_end_suppressed", "remaining=\(remaining) seek_miss=\(seekMiss)")
+                return
+            }
+        }
+        // If audio ended before the reported duration (e.g. bad VBR header from a
+        // Plex MP3 transcode), snap the timeline to the actual end so the UI doesn't
+        // briefly show false remaining time before advancing to the next track.
+        if let playerTime = player?.currentItem?.currentTime().seconds,
+           playerTime.isFinite, playerTime > 0, duration - playerTime > 1 {
+            logPlayback("track_end_duration_correction", "reported=\(duration) actual=\(playerTime)")
+            duration = playerTime
+            currentTime = playerTime
+        }
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
         maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
