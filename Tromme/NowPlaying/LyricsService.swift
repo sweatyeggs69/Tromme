@@ -28,7 +28,7 @@ final class LyricsService {
 
     /// Discards the cached lyrics for this track and re-fetches from the network.
     func refresh(track: PlexMetadata) async {
-        let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistName)
+        let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistDisplayName)
         await LibraryCache.shared.remove(forKey: cacheKey)
         inFlightTrackKey = nil
         await fetch(track: track)
@@ -49,7 +49,9 @@ final class LyricsService {
         hasSynced = false
         hasLyrics = false
 
-        let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistName)
+        // Use track-level artist (Plex originalTitle) so compilations/soundtracks match by performer, not "Various Artists"
+        let trackArtist = track.artistDisplayName
+        let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
 
         // Check cache first
         if let cached = await LibraryCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
@@ -59,40 +61,44 @@ final class LyricsService {
             return
         }
 
-        // Fetch from lrclib.net
-        var components = URLComponents(string: "https://lrclib.net/api/get")!
-        var queryItems = [
-            URLQueryItem(name: "track_name", value: track.title),
-            URLQueryItem(name: "artist_name", value: track.artistName),
-        ]
-        if let album = track.parentTitle {
-            queryItems.append(URLQueryItem(name: "album_name", value: album))
-        }
-        if let ms = track.duration {
-            queryItems.append(URLQueryItem(name: "duration", value: "\(ms / 1000)"))
-        }
-        components.queryItems = queryItems
-
-        guard let url = components.url else {
+        // Attempt 1: query with track-level artist
+        if let decoded = await fetchFromLRCLib(title: track.title, artist: trackArtist, album: track.parentTitle, duration: track.duration) {
+            await LibraryCache.shared.set(decoded, forKey: cacheKey)
+            guard isCurrentRequest(requestID) else { return }
+            apply(decoded)
             completeIfCurrent(requestID)
             return
         }
 
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                completeIfCurrent(requestID)
-                return
+        // Attempt 2: for soundtracks/compilations where the track artist differs from the album artist,
+        // retry without an artist filter so title + album + duration can still find a match.
+        if trackArtist != track.artistName {
+            if let decoded = await fetchFromLRCLib(title: track.title, artist: nil, album: track.parentTitle, duration: track.duration) {
+                await LibraryCache.shared.set(decoded, forKey: cacheKey)
+                guard isCurrentRequest(requestID) else { return }
+                apply(decoded)
             }
-            let decoded = try JSONDecoder().decode(LRCLIBResponse.self, from: data)
-            await LibraryCache.shared.set(decoded, forKey: cacheKey)
-            guard isCurrentRequest(requestID) else { return }
-            apply(decoded)
-        } catch {
-            // Lyrics not available — leave empty
         }
 
         completeIfCurrent(requestID)
+    }
+
+    private func fetchFromLRCLib(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
+        var components = URLComponents(string: "https://lrclib.net/api/get")!
+        var queryItems = [URLQueryItem(name: "track_name", value: title)]
+        if let artist { queryItems.append(URLQueryItem(name: "artist_name", value: artist)) }
+        if let album { queryItems.append(URLQueryItem(name: "album_name", value: album)) }
+        if let ms = duration { queryItems.append(URLQueryItem(name: "duration", value: "\(ms / 1000)")) }
+        components.queryItems = queryItems
+
+        guard let url = components.url else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(LRCLIBResponse.self, from: data)
+        } catch {
+            return nil
+        }
     }
 
     private func apply(_ response: LRCLIBResponse) {
