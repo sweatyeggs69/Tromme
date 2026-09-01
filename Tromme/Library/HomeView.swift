@@ -388,18 +388,13 @@ struct HomeView: View {
             isLoading = true
         }
 
-        defer {
-            if !Task.isCancelled {
-                isLoading = false
-            }
-        }
-
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else {
             favoriteTracks = []
             recentTracks = []
             playlists = []
             recentAlbums = []
+            isLoading = false
             return
         }
 
@@ -477,44 +472,60 @@ struct HomeView: View {
 
         guard !Task.isCancelled else { return }
 
-        if let favoritesResult {
-            applyFavorites(plexFavorites: favoritesResult)
+        withAnimation(.easeIn(duration: 0.25)) {
+            if let favoritesResult {
+                applyFavorites(plexFavorites: favoritesResult)
+            } else if !hadFavorites {
+                favoriteTracks = []
+            }
+
+            if let recentlyPlayedResult {
+                recentTracks = Array(recentlyPlayedResult.prefix(10))
+            } else if !hadRecentTracks {
+                recentTracks = []
+            }
+
+            if let playlistsResult {
+                playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
+            } else if !hadPlaylists {
+                playlists = []
+            }
+
+            if let recentlyAddedResult {
+                recentAlbums = Array(recentlyAddedResult.prefix(10))
+            } else if !hadRecentAlbums {
+                recentAlbums = []
+            }
+
+            isLoading = false
+        }
+
+        if favoritesResult != nil {
             await LibraryCache.shared.set(
                 favoriteTracks,
                 forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
             )
-        } else if !hadFavorites {
-            favoriteTracks = []
         }
 
-        if let recentlyPlayedResult {
-            recentTracks = Array(recentlyPlayedResult.prefix(10))
+        if recentlyPlayedResult != nil {
             await LibraryCache.shared.set(
                 recentTracks,
                 forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
             )
-        } else if !hadRecentTracks {
-            recentTracks = []
         }
 
-        if let playlistsResult {
-            playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
+        if playlistsResult != nil {
             await LibraryCache.shared.set(
                 playlists,
                 forKey: CacheKey.homePlaylists(serverId: server.machineIdentifier)
             )
-        } else if !hadPlaylists {
-            playlists = []
         }
 
-        if let recentlyAddedResult {
-            recentAlbums = Array(recentlyAddedResult.prefix(10))
+        if recentlyAddedResult != nil {
             await LibraryCache.shared.set(
                 recentAlbums,
                 forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
             )
-        } else if !hadRecentAlbums {
-            recentAlbums = []
         }
 
         let snapshotFavorites = favoriteTracks
@@ -560,20 +571,28 @@ struct HomeView: View {
         let playlistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
 
         if let cachedFavorites = await LibraryCache.shared.get([PlexMetadata].self, forKey: favoritesKey)?.value {
-            favoriteTracks = cachedFavorites
-            isLoading = false
+            withAnimation(.easeIn(duration: 0.25)) {
+                favoriteTracks = cachedFavorites
+                isLoading = false
+            }
         }
         if let cachedRecentTracks = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentTracksKey)?.value {
-            recentTracks = cachedRecentTracks
-            isLoading = false
+            withAnimation(.easeIn(duration: 0.25)) {
+                recentTracks = cachedRecentTracks
+                isLoading = false
+            }
         }
         if let cachedRecentAlbums = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentAlbumsKey)?.value {
-            recentAlbums = cachedRecentAlbums
-            isLoading = false
+            withAnimation(.easeIn(duration: 0.25)) {
+                recentAlbums = cachedRecentAlbums
+                isLoading = false
+            }
         }
         if let cachedPlaylists = await LibraryCache.shared.get([PlexPlaylist].self, forKey: playlistsKey)?.value {
-            playlists = cachedPlaylists
-            isLoading = false
+            withAnimation(.easeIn(duration: 0.25)) {
+                playlists = cachedPlaylists
+                isLoading = false
+            }
         }
     }
 

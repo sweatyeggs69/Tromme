@@ -262,7 +262,7 @@ struct ArtistDetailView: View {
             }
 
             if !topTracks.isEmpty {
-                sectionHeader("Top Songs")
+                sectionHeader("Your Top Songs")
 
                 HorizontalTrackGrid(
                     tracks: Array(topTracks.prefix(10)),

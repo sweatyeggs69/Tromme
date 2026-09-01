@@ -175,8 +175,8 @@ struct AllSongsView: View {
             await loadTracks()
         } else {
             loadedTracks = downloadManager.downloadedTracksSorted.map { $0.asPlexMetadata() }
-            isLoading = false
             await applyDisplayState()
+            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
         }
     }
 
@@ -189,8 +189,8 @@ struct AllSongsView: View {
         let cacheKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
         if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
             loadedTracks = cached
-            isLoading = false
             await applyDisplayState()
+            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
         }
 
         do {
@@ -205,8 +205,8 @@ struct AllSongsView: View {
             print("[AllSongsView] Failed to load tracks: \(error)")
 #endif
         }
-        isLoading = false
         await applyDisplayState()
+        withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
     }
 
     // Sorts, filters, and sections all off the main actor to keep UI responsive at 100k tracks.

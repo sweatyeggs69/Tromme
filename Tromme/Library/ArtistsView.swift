@@ -183,8 +183,10 @@ struct ArtistsView: View {
             ))
         }
         result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
-        artists = result
-        isLoading = false
+        withAnimation(.easeIn(duration: 0.25)) {
+            artists = result
+            isLoading = false
+        }
     }
 
     private func loadArtistsOnline() async {
@@ -205,13 +207,16 @@ struct ArtistsView: View {
         do {
             var result = try await client.cachedArtists(server: server, sectionId: sectionId)
             result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
-            artists = result
+            withAnimation(.easeIn(duration: 0.25)) {
+                artists = result
+                isLoading = false
+            }
         } catch {
             #if DEBUG
             print("[ArtistsView] Failed to load artists: \(error.localizedDescription)")
             #endif
+            isLoading = false
         }
-        isLoading = false
 
         // Phase 2: Discover artists that only appear in track metadata (no standalone entry).
         // Runs after the view is already visible so it never delays the initial display.
@@ -234,7 +239,9 @@ struct ArtistsView: View {
         guard !orphans.isEmpty else { return }
         var merged = artists + orphans
         merged.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
-        artists = merged
+        withAnimation(.easeIn(duration: 0.25)) {
+            artists = merged
+        }
     }
 
     private func prefetchVisibleArtwork() async {

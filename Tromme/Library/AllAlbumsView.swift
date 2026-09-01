@@ -197,9 +197,17 @@ struct AllAlbumsView: View {
             if filteredAlbums.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
-                List {
-                    ForEach(albumSections, id: \.title) { section in
-                        Section(section.title) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(albumSections, id: \.title) { section in
+                            Text(section.title)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                                .padding(.top, 16)
+                                .padding(.bottom, 6)
+
                             LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
                                 ForEach(section.items) { album in
                                     Button {
@@ -226,18 +234,29 @@ struct AllAlbumsView: View {
                                     .buttonStyle(.plain)
                                     .contextMenu {
                                         albumContextMenu(for: album)
+                                    } preview: {
+                                        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                            ArtworkView(
+                                                thumbPath: album.thumb,
+                                                size: 200,
+                                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                            )
+                                            .frame(width: 200, height: 200)
+                                            Text(album.title)
+                                                .appItemTitleStyle()
+                                            Text(album.parentTitle ?? "")
+                                                .appItemSubtitleStyle()
+                                        }
+                                        .frame(width: 200)
+                                        .padding()
                                     }
                                 }
                             }
+                            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
                             .padding(.bottom, 12)
-                            .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
-                            .listRowSeparator(.hidden)
                         }
-                        .sectionIndexLabel(section.title)
                     }
                 }
-                .listStyle(.plain)
-                .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
                 .tint(.secondary)
             }
 
@@ -329,8 +348,10 @@ struct AllAlbumsView: View {
             ))
         }
         result.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
-        albums = result
-        isLoading = false
+        withAnimation(.easeIn(duration: 0.25)) {
+            albums = result
+            isLoading = false
+        }
     }
 
     private func loadAlbumsOnline() async {
@@ -346,13 +367,17 @@ struct AllAlbumsView: View {
         }
 
         do {
-            albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
+            let result = try await client.cachedAlbums(server: server, sectionId: sectionId)
+            withAnimation(.easeIn(duration: 0.25)) {
+                albums = result
+                isLoading = false
+            }
         } catch {
 #if DEBUG
             print("[AllAlbumsView] Failed to load albums: \(error)")
 #endif
+            isLoading = false
         }
-        isLoading = false
     }
 
     private func prefetchVisibleArtwork() async {
