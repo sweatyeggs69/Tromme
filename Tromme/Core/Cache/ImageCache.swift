@@ -251,16 +251,30 @@ actor ImageCache {
         return components.url ?? url
     }
 
-    /// Cache key for disk storage — strips `width` and `height` query params so images
-    /// fetched at any size (e.g., 256px from a track list) can satisfy larger requests
-    /// (e.g., 512px from Now Playing) when the device is offline.
+    /// Cache key for disk storage. Strips `width`/`height` so one file serves every
+    /// display size, and strips the host+port so artwork cached on a local URI is still
+    /// found when the server reprobe switches to a remote URI (or vice versa).
+    /// The thumb identity is preserved via the `url` query param and `X-Plex-Token`.
     private func diskCacheKey(for url: URL) -> String {
-        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let items = components.queryItems,
-              items.contains(where: { $0.name == "width" || $0.name == "height" }) else {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return cacheKey(for: url)
         }
-        components.queryItems = items.filter { $0.name != "width" && $0.name != "height" }
+        var changed = false
+        if let items = components.queryItems,
+           items.contains(where: { $0.name == "width" || $0.name == "height" }) {
+            components.queryItems = items.filter { $0.name != "width" && $0.name != "height" }
+            changed = true
+        }
+        // Drop the scheme/host/port so the key is stable across server URI changes
+        // (e.g. local LAN ↔ remote reprobe). The `url` query param uniquely identifies
+        // the artwork regardless of which server base URL is currently active.
+        if components.host != nil {
+            components.scheme = nil
+            components.host = nil
+            components.port = nil
+            changed = true
+        }
+        guard changed else { return cacheKey(for: url) }
         let normalized = components.url ?? url
         let hash = SHA256.hash(data: Data(normalized.absoluteString.utf8))
         return hash.map { String(format: "%02x", $0) }.joined()

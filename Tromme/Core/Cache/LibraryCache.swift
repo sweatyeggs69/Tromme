@@ -11,7 +11,7 @@ import Foundation
 actor LibraryCache {
     static let shared = LibraryCache()
 
-    private let memoryCache = NSCache<NSString, CacheEntry>()
+    nonisolated(unsafe) private let memoryCache = NSCache<NSString, CacheEntry>()
     private let diskURL: URL
     private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
@@ -31,6 +31,14 @@ actor LibraryCache {
     }
 
     // MARK: - Public API
+
+    /// Synchronously returns a decoded value from the in-memory cache without
+    /// an actor hop. NSCache is thread-safe so this is safe to call from any
+    /// context. Returns nil if the key is absent from memory — disk is not checked.
+    nonisolated func memoryCached<T: Codable & Sendable>(_ type: T.Type, forKey key: String) -> T? {
+        guard let entry = memoryCache.object(forKey: key as NSString) else { return nil }
+        return entry.decode(as: type)
+    }
 
     /// Get cached data if available. Returns nil if no cache exists.
     func get<T: Codable & Sendable>(_ type: T.Type, forKey key: String) -> CachedResult<T>? {

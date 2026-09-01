@@ -362,6 +362,21 @@ struct HomeView: View {
     }
 
     private func loadHomeContent(forceRefresh: Bool) async {
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates spinner flash when the memory cache is warm.
+        if !forceRefresh,
+           let server = serverConnection.currentServer,
+           let sectionId = serverConnection.currentLibrarySectionId {
+            let favKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
+            let recentKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
+            let albumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
+            let playlistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
+            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: favKey) { favoriteTracks = cached }
+            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: recentKey) { recentTracks = cached }
+            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: albumsKey) { recentAlbums = cached }
+            if let cached = LibraryCache.shared.memoryCached([PlexPlaylist].self, forKey: playlistsKey) { playlists = cached }
+        }
+
         let hadFavorites = !favoriteTracks.isEmpty
         let hadRecentTracks = !recentTracks.isEmpty
         let hadPlaylists = !playlists.isEmpty

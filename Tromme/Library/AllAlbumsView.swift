@@ -336,6 +336,15 @@ struct AllAlbumsView: View {
     private func loadAlbumsOnline() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+            albums = cached
+            isLoading = false
+        }
+
         do {
             albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
         } catch {

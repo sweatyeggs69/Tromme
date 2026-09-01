@@ -1076,8 +1076,7 @@ struct NowPlayingBackground: View {
                     .blur(radius: 60)
                     .scaleEffect(1.3)
             }
-            Rectangle()
-                .fill(.thinMaterial)
+            Color.black.opacity(0.4)
         }
         .clipped()
         .ignoresSafeArea()

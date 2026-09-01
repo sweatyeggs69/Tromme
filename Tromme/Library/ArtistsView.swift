@@ -191,6 +191,16 @@ struct ArtistsView: View {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
 
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+            var sorted = cached
+            sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
+            artists = sorted
+            isLoading = false
+        }
+
         // Phase 1: Show the standard artist list immediately from cache.
         do {
             var result = try await client.cachedArtists(server: server, sectionId: sectionId)

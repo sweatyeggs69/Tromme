@@ -183,6 +183,16 @@ struct AllSongsView: View {
     private func loadTracks() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+            loadedTracks = cached
+            isLoading = false
+            await applyDisplayState()
+        }
+
         do {
             loadedTracks = try await client.cachedTracks(server: server, sectionId: sectionId)
             if autoDownloadEnabled,

@@ -74,9 +74,6 @@ struct TrommeApp: App {
                 }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .background {
-                Task { await ImageCache.shared.clearMemory() }
-            }
             if phase == .active {
                 let now = Date()
                 guard now.timeIntervalSince(lastForegroundLibraryCheck) >= foregroundLibraryCheckInterval else { return }
