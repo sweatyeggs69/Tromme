@@ -1982,6 +1982,13 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
     private static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
+    nonisolated private static var queueFileURL: URL {
+        URL.cachesDirectory.appending(path: "playbackQueue.json")
+    }
+    nonisolated private static var originalQueueFileURL: URL {
+        URL.cachesDirectory.appending(path: "playbackOriginalQueue.json")
+    }
+
     private enum SoundCheckGainSource: String {
         case track
         case album
@@ -2032,23 +2039,21 @@ final class AudioPlayerService: @unchecked Sendable {
         if saveQueue { lastSavedQueueHash = queueHash }
         if saveOrig { lastSavedOriginalQueueHash = origHash }
 
-        // Capture keys before leaving the MainActor
-        let queueKey = Self.queueKey
-        let originalQueueKey = Self.originalQueueKey
-
         Task.detached(priority: .utility) {
             if saveQueue {
+                let url = Self.queueFileURL
                 if queueSnapshot.isEmpty {
-                    defaults.removeObject(forKey: queueKey)
+                    try? FileManager.default.removeItem(at: url)
                 } else if let data = try? JSONEncoder().encode(queueSnapshot) {
-                    defaults.set(data, forKey: queueKey)
+                    try? data.write(to: url, options: .atomic)
                 }
             }
             if saveOrig {
+                let url = Self.originalQueueFileURL
                 if origSnapshot.isEmpty {
-                    defaults.removeObject(forKey: originalQueueKey)
+                    try? FileManager.default.removeItem(at: url)
                 } else if let data = try? JSONEncoder().encode(origSnapshot) {
-                    defaults.set(data, forKey: originalQueueKey)
+                    try? data.write(to: url, options: .atomic)
                 }
             }
         }
@@ -2061,13 +2066,21 @@ final class AudioPlayerService: @unchecked Sendable {
            let mode = RepeatMode(rawValue: raw) {
             repeatMode = mode
         }
-        if let queueData = defaults.data(forKey: Self.queueKey),
+        if let queueData = try? Data(contentsOf: Self.queueFileURL),
            let savedQueue = try? JSONDecoder().decode([PlexMetadata].self, from: queueData) {
             queue = savedQueue
+        } else if let queueData = defaults.data(forKey: Self.queueKey),
+                  let savedQueue = try? JSONDecoder().decode([PlexMetadata].self, from: queueData) {
+            queue = savedQueue
+            defaults.removeObject(forKey: Self.queueKey)
         }
-        if let origData = defaults.data(forKey: Self.originalQueueKey),
+        if let origData = try? Data(contentsOf: Self.originalQueueFileURL),
            let savedOriginal = try? JSONDecoder().decode([PlexMetadata].self, from: origData) {
             originalQueue = savedOriginal
+        } else if let origData = defaults.data(forKey: Self.originalQueueKey),
+                  let savedOriginal = try? JSONDecoder().decode([PlexMetadata].self, from: origData) {
+            originalQueue = savedOriginal
+            defaults.removeObject(forKey: Self.originalQueueKey)
         }
         currentIndex = defaults.integer(forKey: Self.currentIndexKey)
         if currentIndex >= queue.count {
