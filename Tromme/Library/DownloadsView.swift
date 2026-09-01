@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum DownloadSortOrder: String, CaseIterable {
+    case dateAdded = "Date Added"
+    case title = "Title"
+    case artist = "Artist"
+    case album = "Album"
+}
+
 struct DownloadsView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(AudioPlayerService.self) private var player
@@ -10,28 +17,36 @@ struct DownloadsView: View {
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @State private var showDeleteAllConfirmation = false
     @State private var isStartingDownloads = false
+    @State private var searchText = ""
+    @State private var sortOrder = DownloadSortOrder.dateAdded
+    @State private var displayTracks: [DownloadedTrackRecord] = []
+    @State private var sortGeneration: Int = 0
+
+    private var allTracks: [DownloadedTrackRecord] {
+        downloadManager.downloadedTracksSorted
+    }
 
     var body: some View {
-        let tracks = downloadManager.downloadedTracksSorted
         List {
-            if !tracks.isEmpty {
+            if !displayTracks.isEmpty {
                 Section {
-                    ForEach(tracks) { record in
-                        trackRow(record, allTracks: tracks)
+                    ForEach(displayTracks) { record in
+                        trackRow(record)
                     }
                     .onDelete { indexSet in
                         for index in indexSet {
-                            downloadManager.deleteDownload(ratingKey: tracks[index].ratingKey)
+                            downloadManager.deleteDownload(ratingKey: displayTracks[index].ratingKey)
                         }
                     }
                 } header: {
-                    Text(storageText(tracks: tracks))
+                    Text(storageText(tracks: allTracks))
                 }
             }
         }
+        .searchable(text: $searchText, prompt: "Search Downloads")
         .navigationTitle("Downloads")
         .overlay {
-            if tracks.isEmpty {
+            if allTracks.isEmpty {
                 if downloadManager.pendingDownloadCount > 0 {
                     ContentUnavailableView(
                         "Downloading",
@@ -45,6 +60,8 @@ struct DownloadsView: View {
                         description: Text("Songs you download will appear here for offline listening.")
                     )
                 }
+            } else if displayTracks.isEmpty {
+                ContentUnavailableView.search(text: searchText)
             }
         }
         .toolbar {
@@ -67,12 +84,23 @@ struct DownloadsView: View {
                         .disabled(isStartingDownloads)
                     }
                 }
-                if !tracks.isEmpty {
+                Menu {
+                    Picker("Sort By", selection: $sortOrder) {
+                        ForEach(DownloadSortOrder.allCases, id: \.self) { order in
+                            Text(order.rawValue).tag(order)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                }
+                .tint(.primary)
+                if !allTracks.isEmpty {
                     Button(role: .destructive) {
                         showDeleteAllConfirmation = true
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .tint(.primary)
                 }
             }
         }
@@ -83,6 +111,48 @@ struct DownloadsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will remove all downloaded songs from your device.")
+        }
+        // Re-run whenever search text or sort order changes.
+        .task(id: "\(searchText)|\(sortOrder.rawValue)") {
+            await applyDisplayState()
+        }
+        // Re-run when downloads are added or removed.
+        .onChange(of: downloadManager.records.count) { _, _ in
+            Task { await applyDisplayState() }
+        }
+    }
+
+    private func applyDisplayState() async {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentSort = sortOrder
+        let snapshot = allTracks
+
+        sortGeneration &+= 1
+        let myGeneration = sortGeneration
+
+        let result = await Task.detached(priority: .userInitiated) {
+            Self.filterAndSort(snapshot, query: query, sortOrder: currentSort)
+        }.value
+
+        guard sortGeneration == myGeneration else { return }
+        displayTracks = result
+    }
+
+    nonisolated private static func filterAndSort(
+        _ tracks: [DownloadedTrackRecord],
+        query: String,
+        sortOrder: DownloadSortOrder
+    ) -> [DownloadedTrackRecord] {
+        let base = query.isEmpty ? tracks : tracks.filter {
+            $0.title.localizedCaseInsensitiveContains(query) ||
+            $0.artistName.localizedCaseInsensitiveContains(query) ||
+            $0.albumName.localizedCaseInsensitiveContains(query)
+        }
+        return switch sortOrder {
+        case .dateAdded: base
+        case .title: base.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist: base.sorted { $0.artistName.localizedStandardCompare($1.artistName) == .orderedAscending }
+        case .album: base.sorted { $0.albumName.localizedStandardCompare($1.albumName) == .orderedAscending }
         }
     }
 
@@ -105,12 +175,12 @@ struct DownloadsView: View {
     }
 
     @ViewBuilder
-    private func trackRow(_ record: DownloadedTrackRecord, allTracks: [DownloadedTrackRecord]) -> some View {
+    private func trackRow(_ record: DownloadedTrackRecord) -> some View {
         let isCurrentTrack = player.currentTrack?.ratingKey == record.ratingKey
         Button {
-            let allTracks = allTracks.map { $0.asPlexMetadata() }
-            let startIndex = allTracks.firstIndex(where: { $0.ratingKey == record.ratingKey }) ?? 0
-            player.play(tracks: allTracks, startingAt: startIndex)
+            let playQueue = displayTracks.map { $0.asPlexMetadata() }
+            let startIndex = playQueue.firstIndex(where: { $0.ratingKey == record.ratingKey }) ?? 0
+            player.play(tracks: playQueue, startingAt: startIndex)
         } label: {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -134,8 +204,9 @@ struct DownloadsView: View {
             Button(role: .destructive) {
                 downloadManager.deleteDownload(ratingKey: record.ratingKey)
             } label: {
-                Label("Remove", systemImage: "trash")
+                Image(systemName: "trash")
             }
+            .tint(.red)
         }
     }
 }

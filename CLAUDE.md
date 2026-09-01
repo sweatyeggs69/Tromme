@@ -40,8 +40,9 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - ViewModels handle all business logic - Views are declarative only
 - Navigation uses NavigationStack with NavigationPath - never NavigationView
 - Dependency injection through the SwiftUI Environment
-- use AppStorage for simple user preferences
+- use AppStorage for simple scalar user preferences
 - use SwiftData for persistent models
+- use disk files (Codable → JSON) for complex persistent state (e.g. playback queue); never NSUserDefaults for structured data
 - Toggles and buttons with different states should always transform unless otherwise stated.
 
 ## Build System

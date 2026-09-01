@@ -19,6 +19,7 @@ struct HomeView: View {
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
     @AppStorage("featuredAlbumRatingKeys") private var featuredAlbumRatingKeys: String = ""
     @AppStorage("featuredAlbumLastRefreshedAt") private var featuredAlbumLastRefreshedAt: Double = 0
+    @AppStorage("hideEmptySections") private var hideEmptySections = false
 
     private var isImmersiveFeatured: Bool {
         showFeaturedSection && featuredBannerSize == "immersive" && NetworkStatus.shared.isConnected
@@ -50,10 +51,14 @@ struct HomeView: View {
                 if showFeaturedSection && NetworkStatus.shared.isConnected {
                     featuredSection
                 }
-                favoritesSection
+                if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
+                    favoritesSection
+                }
                 recentlyAddedSection
                 recentlyPlayedSection
-                playlistsSection
+                if !hideEmptySections || isLoading || !playlists.isEmpty {
+                    playlistsSection
+                }
             }
             .padding(.bottom, 8)
             .padding(.top, isImmersiveFeatured ? 0 : 8)
