@@ -27,6 +27,7 @@ struct SettingsView: View {
                 NavigationLink("Interface") { HomeSettingsView() }
                 NavigationLink("Playback") { PlaybackSettingsView() }
                 NavigationLink("Offline") { OfflineSettingsView() }
+                NavigationLink("App Icon") { AppIconPickerView() }
             }
 
             if let server = serverConnection.currentServer {

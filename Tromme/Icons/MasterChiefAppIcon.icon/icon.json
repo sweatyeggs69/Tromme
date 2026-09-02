@@ -1,0 +1,63 @@
+{
+  "fill-specializations" : [
+    {
+      "value" : {
+        "automatic-gradient" : "display-p3:0.51765,0.57255,0.41569,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : "automatic"
+    }
+  ],
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : {
+            "linear-gradient" : [
+              "display-p3:0.98548,0.80431,0.33655,1.00000",
+              "display-p3:0.51765,0.57255,0.41569,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.49999999999999994,
+                "y" : 0.1981033217817277
+              },
+              "stop" : {
+                "x" : 0.49999999999999994,
+                "y" : 0.8641966736684057
+              }
+            }
+          },
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "trome logo.png",
+          "name" : "trome logo",
+          "position" : {
+            "scale" : 1.04,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

@@ -4,6 +4,7 @@ import UIKit
 @main
 struct TrommeApp: App {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("selectedAppIconId") private var selectedAppIconId: String = "default"
 
     @State private var serverConnection = AppContext.shared.serverConnection
     @State private var plexClient = AppContext.shared.plexClient
@@ -15,8 +16,17 @@ struct TrommeApp: App {
     /// otherwise rapid app-switcher transitions cost a network round-trip each.
     private let foregroundLibraryCheckInterval: TimeInterval = 5 * 60
 
+    private var currentTint: Color {
+        AppIconOption.accentColor(for: selectedAppIconId)
+    }
+
     init() {
-        let accentColor = UIColor(AppStyle.Colors.tint)
+        let storedId = UserDefaults.standard.string(forKey: "selectedAppIconId") ?? "default"
+        let accentColor = UIColor(AppIconOption.accentColor(for: storedId))
+        Self.applyTabBarAppearance(accentColor: accentColor)
+    }
+
+    private static func applyTabBarAppearance(accentColor: UIColor) {
         UINavigationBar.appearance().tintColor = .label
 
         let tabBarAppearance = UITabBarAppearance()
@@ -37,7 +47,11 @@ struct TrommeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .tint(AppStyle.Colors.tint)
+                .tint(currentTint)
+                .environment(\.appAccentColor, currentTint)
+                .onChange(of: selectedAppIconId) { _, newId in
+                    Self.applyTabBarAppearance(accentColor: UIColor(AppIconOption.accentColor(for: newId)))
+                }
                 .environment(\.serverConnection, serverConnection)
                 .environment(\.plexClient, plexClient)
                 .environment(audioPlayer)

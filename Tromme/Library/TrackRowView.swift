@@ -5,6 +5,7 @@ struct TrackRowView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.appAccentColor) private var appAccentColor
 
     let track: PlexMetadata
     let tracks: [PlexMetadata]
@@ -30,7 +31,7 @@ struct TrackRowView: View {
 
     var body: some View {
         trackRow
-            .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu })
+            .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu.tint(appAccentColor) })
         .sheet(item: $addToPlaylistTrack) { trackToAdd in
             AddToPlaylistSheet(itemRatingKeys: [trackToAdd.ratingKey])
         }
@@ -219,7 +220,7 @@ struct TrackRowView: View {
                         Text("\(track.index ?? (index + 1))")
                             .font(.body)
                             .monospacedDigit()
-                            .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .secondary)
+                            .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                     }
                 }
                 .frame(width: 28, alignment: .center)
@@ -229,7 +230,7 @@ struct TrackRowView: View {
                 Text(track.title)
                     .font(titleFont ?? (isCompact ? .caption : .body))
                     .lineLimit(1)
-                    .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .primary)
+                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
 
                 if let subtitle {
                     Text(subtitle)
@@ -266,6 +267,7 @@ struct TrackRowView: View {
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
+                .tint(appAccentColor)
             }
         }
         .appPlainRowItemStyle()
@@ -299,7 +301,7 @@ struct TrackRowView: View {
 // MARK: - Now Playing Bars Animation (Apple Music equalizer indicator)
 
 struct NowPlayingBarsView: View {
-    var color: Color = AppStyle.Colors.tint
+    var color: Color? = nil
     @State private var isAnimating = false
     /// Random heights and durations are computed once on appear and stable across re-renders.
     @State private var barHeights: [CGFloat] = [0.65, 0.85, 0.45, 0.75]
@@ -309,7 +311,7 @@ struct NowPlayingBarsView: View {
         HStack(spacing: 2) {
             ForEach(0..<4, id: \.self) { index in
                 RoundedRectangle(cornerRadius: 1)
-                    .fill(color)
+                    .fill(color.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.tint))
                     .frame(width: 3)
                     .scaleEffect(y: isAnimating ? barHeights[index] : 0.4, anchor: .bottom)
                     .animation(

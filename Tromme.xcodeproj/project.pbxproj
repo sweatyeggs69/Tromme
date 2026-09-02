@@ -21,13 +21,14 @@
 		0E5213343040F41C00583BF3 /* PlaybackSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5213333040F41C00583BF3 /* PlaybackSettingsView.swift */; };
 		0E5213363040F42900583BF3 /* OfflineSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E5213353040F42900583BF3 /* OfflineSettingsView.swift */; };
 		0E54E64D303CEAFD0064C6AA /* FeaturedBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */; };
+		0E723B1F304880390059BF86 /* AppIconPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E723B1E304880390059BF86 /* AppIconPickerView.swift */; };
 		0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */; };
 		0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */; };
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
+		0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07403048CA9B00ACE377 /* IconPackStore.swift */; };
 		25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB6B7139BCB32BF5F17D78 /* LoginView.swift */; };
 		277F53ED9EB6AF4188D15B0A /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */; };
 		3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */; };
-		3D50460BD62807638F37C3B5 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 88E669475DFAD83939BFCA3B /* AppIcon.icon */; };
 		3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BE54BE32E8EC9FD004BAD4F /* AlbumDetailView.swift */; };
 		3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD02991E2EF1D25E465FAA5E /* SearchView.swift */; };
 		430DFB356E617473516BD8A3 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7883CADF67B162FB14F053 /* PlaylistDetailView.swift */; };
@@ -59,16 +60,6 @@
 		FF5AADB44484565C6F2215A7 /* LibraryCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* LibraryCache.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		381EAE42A6A39F745BA48727 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 6B3919C7D3FD808D1BA57291 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = D30EC8376540E6DD4AC70B02;
-			remoteInfo = Tromme;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
 		038C1CCDF9AE80768D9F702E /* LibraryCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryCache.swift; sourceTree = "<group>"; };
 		054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuthService.swift; sourceTree = "<group>"; };
@@ -84,11 +75,14 @@
 		0E5213333040F41C00583BF3 /* PlaybackSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackSettingsView.swift; sourceTree = "<group>"; };
 		0E5213353040F42900583BF3 /* OfflineSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineSettingsView.swift; sourceTree = "<group>"; };
 		0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedBannerView.swift; sourceTree = "<group>"; };
+		0E723B1E304880390059BF86 /* AppIconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconPickerView.swift; sourceTree = "<group>"; };
 		0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PERFORMANCE_BASELINE.md; sourceTree = "<group>"; };
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		0E91C64D2F91AE8800775275 /* Tromme.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tromme.entitlements; sourceTree = "<group>"; };
 		0E91C64E2F91B03000775275 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
+		0EEC07403048CA9B00ACE377 /* IconPackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPackStore.swift; sourceTree = "<group>"; };
+		0EEC07423048CA9E00ACE377 /* Tromme.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Tromme.storekit; sourceTree = "<group>"; };
 		198E310192207773F55E967F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1C2FC699685A8C436EF372D6 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
 		2EB138EDD82605DC91055038 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
@@ -98,7 +92,6 @@
 		3BE54BE32E8EC9FD004BAD4F /* AlbumDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumDetailView.swift; sourceTree = "<group>"; };
 		3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
 		42BB6B7139BCB32BF5F17D78 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		43EE8A2C889BA17E40BD87F9 /* TrommeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TrommeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		44F7B2561599A3C94974B66E /* ArtworkColorCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkColorCache.swift; sourceTree = "<group>"; };
 		5399E5136BEAD2B236509EEB /* PlexAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAPIClient.swift; sourceTree = "<group>"; };
 		570A2B691FCC5F218BF6D09D /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -106,7 +99,6 @@
 		5C81C2D359056960A39D0007 /* ArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkView.swift; sourceTree = "<group>"; };
 		80F60A1414C22BBC00295E2B /* LyricsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsService.swift; sourceTree = "<group>"; };
 		866C87D0462783ACE391CDD2 /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
-		88E669475DFAD83939BFCA3B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		8E4210A0E5C111CFF35981A0 /* LibraryPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPickerView.swift; sourceTree = "<group>"; };
 		8EE6435FB2579A760B517C43 /* LyricsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsView.swift; sourceTree = "<group>"; };
 		9C10F5F41B11002D20F2A7CD /* Tromme.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tromme.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -126,6 +118,14 @@
 		FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexModels.swift; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		0E723B1730487D3B0059BF86 /* Icons */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Icons;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXGroup section */
 		02783B91F27C725E7443599C /* NowPlaying */ = {
@@ -198,7 +198,6 @@
 			isa = PBXGroup;
 			children = (
 				9C10F5F41B11002D20F2A7CD /* Tromme.app */,
-				43EE8A2C889BA17E40BD87F9 /* TrommeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -206,7 +205,7 @@
 		7AD43F2900FE467C850EF1C7 /* Tromme */ = {
 			isa = PBXGroup;
 			children = (
-				88E669475DFAD83939BFCA3B /* AppIcon.icon */,
+				0E723B1730487D3B0059BF86 /* Icons */,
 				09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */,
 				198E310192207773F55E967F /* Info.plist */,
 				C57DE269A00C80AACDA07EDF /* TrommeApp.swift */,
@@ -241,6 +240,7 @@
 				7AD43F2900FE467C850EF1C7 /* Tromme */,
 				5C7D86059CB6E9BBDEA3D94B /* Products */,
 				0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */,
+				0EEC07423048CA9E00ACE377 /* Tromme.storekit */,
 			);
 			sourceTree = "<group>";
 		};
@@ -288,6 +288,8 @@
 				0E5213313040F41400583BF3 /* HomeSettingsView.swift */,
 				0E5213333040F41C00583BF3 /* PlaybackSettingsView.swift */,
 				0E5213353040F42900583BF3 /* OfflineSettingsView.swift */,
+				0E723B1E304880390059BF86 /* AppIconPickerView.swift */,
+				0EEC07403048CA9B00ACE377 /* IconPackStore.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -304,24 +306,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		948DC4C9D6D8FFC7C390C83C /* TrommeTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 52AE9B8E731DB287BDFCE5F5 /* Build configuration list for PBXNativeTarget "TrommeTests" */;
-			buildPhases = (
-				682FE193E72F1A3B1B91EE22 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				1201EFF9F6F0859C725AD4FF /* PBXTargetDependency */,
-			);
-			name = TrommeTests;
-			packageProductDependencies = (
-			);
-			productName = TrommeTests;
-			productReference = 43EE8A2C889BA17E40BD87F9 /* TrommeTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		D30EC8376540E6DD4AC70B02 /* Tromme */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = EC4A285C2CE3C06C23F1EB81 /* Build configuration list for PBXNativeTarget "Tromme" */;
@@ -332,6 +316,9 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				0E723B1730487D3B0059BF86 /* Icons */,
 			);
 			name = Tromme;
 			packageProductDependencies = (
@@ -349,9 +336,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
-					948DC4C9D6D8FFC7C390C83C = {
-						TestTargetID = D30EC8376540E6DD4AC70B02;
-					};
 					D30EC8376540E6DD4AC70B02 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -372,7 +356,6 @@
 			projectRoot = "";
 			targets = (
 				D30EC8376540E6DD4AC70B02 /* Tromme */,
-				948DC4C9D6D8FFC7C390C83C /* TrommeTests */,
 			);
 		};
 /* End PBXProject section */
@@ -382,24 +365,17 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3D50460BD62807638F37C3B5 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		682FE193E72F1A3B1B91EE22 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		7F282480DA2807687E825D44 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,
@@ -429,6 +405,7 @@
 				4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */,
 				0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */,
 				0E91C64F2F91B03000775275 /* AppContext.swift in Sources */,
+				0E723B1F304880390059BF86 /* AppIconPickerView.swift in Sources */,
 				7E1DCA19C4645D2EDFB2A565 /* NowPlayingView.swift in Sources */,
 				0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */,
 				430DFB356E617473516BD8A3 /* PlaylistDetailView.swift in Sources */,
@@ -454,40 +431,7 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		1201EFF9F6F0859C725AD4FF /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = D30EC8376540E6DD4AC70B02 /* Tromme */;
-			targetProxy = 381EAE42A6A39F745BA48727 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
-		152A6F4C65A0ABE236EA887A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				INFOPLIST_FILE = Yes;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.kylemcclain.TrommeTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "driverkit iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tromme.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tromme";
-			};
-			name = Release;
-		};
 		22CA9070203AF0459637214D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -543,14 +487,15 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
 		27A173704B87902B95A32457 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = DefaultAppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Tromme/Tromme.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -572,35 +517,11 @@
 			};
 			name = Release;
 		};
-		68FE0223AE6CB7D120CA6343 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				INFOPLIST_FILE = Yes;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.kylemcclain.TrommeTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "driverkit iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = YES;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Tromme.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tromme";
-			};
-			name = Debug;
-		};
 		758A053130744F1F270E5224 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = DefaultAppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Tromme/Tromme.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
@@ -684,7 +605,7 @@
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -696,15 +617,6 @@
 			buildConfigurations = (
 				C4230B07035E356A1E3691C0 /* Debug */,
 				22CA9070203AF0459637214D /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		52AE9B8E731DB287BDFCE5F5 /* Build configuration list for PBXNativeTarget "TrommeTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				68FE0223AE6CB7D120CA6343 /* Debug */,
-				152A6F4C65A0ABE236EA887A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

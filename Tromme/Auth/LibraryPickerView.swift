@@ -30,7 +30,7 @@ struct LibraryPickerView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "music.note.list")
-                                    .foregroundStyle(AppStyle.Colors.tint)
+                                    .foregroundStyle(.tint)
                                     .font(.title2)
 
                                 VStack(alignment: .leading) {

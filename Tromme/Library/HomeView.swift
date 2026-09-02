@@ -5,6 +5,7 @@ struct HomeView: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
+    @Environment(\.appAccentColor) private var appAccentColor
 
     @State private var favoriteTracks: [PlexMetadata]
     @State private var recentTracks: [PlexMetadata]
@@ -230,15 +231,18 @@ struct HomeView: View {
 
     @ViewBuilder
     private func albumContextMenu(for album: PlexMetadata) -> some View {
-        Button("Play Next", systemImage: "text.insert") {
-            Task { await queueAlbumNext(album) }
+        Group {
+            Button("Play Next", systemImage: "text.insert") {
+                Task { await queueAlbumNext(album) }
+            }
+            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                Task { await queueAlbumLast(album) }
+            }
+            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                Task { await presentAddAlbumToPlaylist(album) }
+            }
         }
-        Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
-            Task { await queueAlbumLast(album) }
-        }
-        Button("Add to Playlist", systemImage: "text.badge.plus") {
-            Task { await presentAddAlbumToPlaylist(album) }
-        }
+        .tint(appAccentColor)
     }
 
     @MainActor

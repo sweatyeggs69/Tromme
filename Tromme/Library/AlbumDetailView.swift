@@ -786,7 +786,7 @@ struct AlbumDetailView: View {
                                 }
                             }
                             .scrollContentBackground(.hidden)
-                            .background(moreBySectionBackgroundColor)
+                            .background(artworkColor)
                             .listStyle(.plain)
                         }
                         .frame(width: geo.size.width * 0.67)
@@ -828,6 +828,7 @@ struct AlbumDetailView: View {
                         }
                     }
                     .scrollContentBackground(.hidden)
+                    .background(artworkColor)
                     .listStyle(.plain)
                 }
             }

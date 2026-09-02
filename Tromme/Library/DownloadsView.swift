@@ -187,7 +187,7 @@ struct DownloadsView: View {
                     Text(record.title)
                         .font(.body)
                         .lineLimit(1)
-                        .foregroundStyle(isCurrentTrack ? AppStyle.Colors.tint : .primary)
+                        .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     Text("\(record.artistName) — \(record.albumName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -196,7 +196,7 @@ struct DownloadsView: View {
                 Spacer()
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.footnote)
-                    .foregroundStyle(AppStyle.Colors.tint.opacity(0.7))
+                    .foregroundStyle(.tint.opacity(0.7))
             }
         }
         .buttonStyle(.plain)

@@ -2,7 +2,7 @@ import SwiftUI
 
 enum AppStyle {
     enum Colors {
-        static let tint = Color(red: 1.0, green: 0.4, blue: 0.0)
+        static let defaultTint = Color(red: 1.0, green: 0.4, blue: 0.0)
     }
 
     enum Spacing {
@@ -101,6 +101,19 @@ enum AppStyle {
         static let bottomActionsTopPadding: CGFloat = 10
         static let bottomScreenPaddingWithSafeArea: CGFloat = 4
         static let bottomScreenPaddingWithoutSafeArea: CGFloat = 8
+    }
+}
+
+// MARK: - Environment: accent color as Color (for explicit tinting of Menu/contextMenu)
+
+private struct AppAccentColorKey: EnvironmentKey {
+    static let defaultValue: Color = AppIconOption.all[0].accentColor
+}
+
+extension EnvironmentValues {
+    var appAccentColor: Color {
+        get { self[AppAccentColorKey.self] }
+        set { self[AppAccentColorKey.self] = newValue }
     }
 }
 

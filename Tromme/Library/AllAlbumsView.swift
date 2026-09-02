@@ -7,6 +7,7 @@ struct AllAlbumsView: View {
     @Environment(AudioPlayerService.self) private var player
     @Environment(NetworkStatus.self) private var network
     @Environment(DownloadManager.self) private var downloadManager
+    @Environment(\.appAccentColor) private var appAccentColor
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
@@ -401,15 +402,18 @@ struct AllAlbumsView: View {
 
     @ViewBuilder
     private func albumContextMenu(for album: PlexMetadata) -> some View {
-        Button("Play Next", systemImage: "text.insert") {
-            Task { await queueAlbumNext(album) }
+        Group {
+            Button("Play Next", systemImage: "text.insert") {
+                Task { await queueAlbumNext(album) }
+            }
+            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                Task { await queueAlbumLast(album) }
+            }
+            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                Task { await presentAddAlbumToPlaylist(album) }
+            }
         }
-        Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
-            Task { await queueAlbumLast(album) }
-        }
-        Button("Add to Playlist", systemImage: "text.badge.plus") {
-            Task { await presentAddAlbumToPlaylist(album) }
-        }
+        .tint(appAccentColor)
     }
 
     @MainActor
