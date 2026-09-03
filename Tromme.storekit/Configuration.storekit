@@ -11,57 +11,12 @@
   },
   "identifier" : "E3A47C91-2B58-4F6D-A0C3-17D8E5B92F4A",
   "nonConsumableIAP" : [
-    {
-      "displayPrice" : "0.99",
-      "familyShareable" : false,
-      "internalID" : "F1B23C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D",
-      "localizations" : [
-        {
-          "description" : "Unlock additional app icons for Tromme.",
-          "displayName" : "Icon Pack",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "com.tromme.iconpack",
-      "referenceName" : "Icon Pack",
-      "type" : "NonConsumable"
-    },
-    {
-      "displayPrice" : "0.99",
-      "familyShareable" : false,
-      "internalID" : "A2C34D5E-6F7A-8B9C-0D1E-2F3A4B5C6D7E",
-      "localizations" : [
-        {
-          "description" : "Unlock 17 pride-themed app icons for Tromme.",
-          "displayName" : "Pride Pack",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "PIP",
-      "referenceName" : "Pride Pack",
-      "type" : "NonConsumable"
-    }
+
   ],
   "nonRenewingSubscriptions" : [
 
   ],
   "products" : [
-    {
-      "displayPrice" : "4.99",
-      "familyShareable" : false,
-      "internalID" : "FEEC60DA",
-      "localizations" : [
-        {
-          "description" : "",
-          "displayName" : "",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "PrideIP",
-      "promotionalImageID" : "47BE1AFC",
-      "referenceName" : "Pride Icon Pack",
-      "type" : "NonConsumable"
-    },
     {
       "displayPrice" : "0.99",
       "familyShareable" : false,

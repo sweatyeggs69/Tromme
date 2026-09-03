@@ -2,7 +2,7 @@
   "fill-specializations" : [
     {
       "value" : {
-        "automatic-gradient" : "display-p3:1.00000,1.00000,1.00000,1.00000"
+        "automatic-gradient" : "extended-gray:0.00000,1.00000"
       }
     },
     {
@@ -15,19 +15,9 @@
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill-specializations" : [
-            {
-              "value" : {
-                "solid" : "extended-gray:0.00000,1.00000"
-              }
-            },
-            {
-              "appearance" : "dark",
-              "value" : {
-                "solid" : "extended-gray:1.00000,1.00000"
-              }
-            }
-          ],
+          "fill" : {
+            "solid" : "extended-gray:0.25000,1.00000"
+          },
           "glass" : true,
           "hidden" : false,
           "image-name" : "trome logo.png",
