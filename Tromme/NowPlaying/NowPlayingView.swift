@@ -343,13 +343,13 @@ struct NowPlayingView: View {
 
     private var trackInfo: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
                     .font(.title3.bold())
                     .foregroundStyle(Color.white)
                     .lineLimit(1)
                 Text(player.currentTrack?.artistDisplayName ?? "")
-                    .font(.body)
+                    .font(.title3)
                     .foregroundStyle(Color.white.opacity(0.6))
                     .lineLimit(1)
             }

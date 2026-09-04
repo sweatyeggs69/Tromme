@@ -981,6 +981,7 @@ struct AlbumDetailView: View {
 
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: album.ratingKey)
+            for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
             await LibraryCache.shared.clearAll()
             await ImageCache.shared.clearAll()
             dismiss()
