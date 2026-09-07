@@ -98,6 +98,16 @@ actor ImageCache {
         return result
     }
 
+    /// Returns any cached image for the URL without attempting a network download.
+    /// Checks memory first, then disk without a minimum-size requirement. Used for
+    /// a fast pre-population step so views show something immediately on slow networks.
+    func anyCachedImage(for url: URL, targetPixelSize: Int?) -> UIImage? {
+        let memKey = memoryCacheKey(for: cacheKey(for: url), targetPixelSize: targetPixelSize)
+        if let mem = memoryCache.object(forKey: memKey as NSString) { return mem }
+        let diskKey = diskCacheKey(for: url)
+        return loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize, minimumPixelSize: nil)
+    }
+
     func prefetch(urls: [URL], targetPixelSize: Int? = nil, maxConcurrent: Int = 6) async {
         // Process in batches to avoid overwhelming the network
         for batch in stride(from: 0, to: urls.count, by: maxConcurrent) {

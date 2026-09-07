@@ -23,7 +23,7 @@ struct HomeView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
 
     private var isImmersiveFeatured: Bool {
-        showFeaturedSection && featuredBannerSize == "immersive" && NetworkStatus.shared.isConnected
+        showFeaturedSection && featuredBannerSize == "immersive" && !featuredAlbums.isEmpty
     }
 
     private let previewRecentTracks: [PlexMetadata]?
@@ -49,7 +49,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                if showFeaturedSection && NetworkStatus.shared.isConnected {
+                if showFeaturedSection {
                     featuredSection
                 }
                 if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
@@ -342,7 +342,6 @@ struct HomeView: View {
     }
 
     private func loadFeaturedAlbum(forced: Bool) async {
-        guard NetworkStatus.shared.isConnected else { return }
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
         guard let albums = try? await client.cachedAlbums(server: server, sectionId: sectionId),
@@ -442,7 +441,7 @@ struct HomeView: View {
             }
             group.addTask {
                 let value = await fetchWithRetryOnFailure {
-                    try await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)
+                    try await client.cachedRecentlyPlayed(server: server, sectionId: sectionId)
                 }
                 return .recentlyPlayed(value)
             }
@@ -454,7 +453,7 @@ struct HomeView: View {
             }
             group.addTask {
                 let value = await fetchWithRetryOnFailure {
-                    try await client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10)
+                    try await client.cachedRecentlyAdded(server: server, sectionId: sectionId)
                 }
                 return .recentlyAdded(value)
             }
@@ -484,25 +483,25 @@ struct HomeView: View {
         withAnimation(.easeIn(duration: 0.25)) {
             if let favoritesResult {
                 applyFavorites(plexFavorites: favoritesResult)
-            } else if !hadFavorites {
+            } else if favoriteTracks.isEmpty {
                 favoriteTracks = []
             }
 
             if let recentlyPlayedResult {
                 recentTracks = Array(recentlyPlayedResult.prefix(10))
-            } else if !hadRecentTracks {
+            } else if recentTracks.isEmpty {
                 recentTracks = []
             }
 
             if let playlistsResult {
                 playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
-            } else if !hadPlaylists {
+            } else if playlists.isEmpty {
                 playlists = []
             }
 
             if let recentlyAddedResult {
                 recentAlbums = Array(recentlyAddedResult.prefix(10))
-            } else if !hadRecentAlbums {
+            } else if recentAlbums.isEmpty {
                 recentAlbums = []
             }
 

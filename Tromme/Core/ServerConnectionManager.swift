@@ -57,7 +57,11 @@ final class ServerConnectionManager {
         currentLibrarySectionId = sectionId
         UserDefaults.standard.set(sectionId, forKey: Self.libraryKey)
         if changed {
-            UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
+            // Clear the stored updatedAt so the next launch treats this section as new
+            if let serverId = currentServer?.machineIdentifier {
+                UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt_\(serverId)_\(sectionId)")
+            }
+            UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt") // legacy key
             Task { await LibraryCache.shared.clearAll() }
         }
         // Warm cache for the selected library

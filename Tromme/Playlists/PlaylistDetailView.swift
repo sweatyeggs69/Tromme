@@ -365,7 +365,7 @@ struct PlaylistDetailView: View {
         do {
             tracks = try await client.cachedPlaylistItems(server: server, playlistKey: playlistItemRequestKey)
         } catch {
-            tracks = []
+            if tracks.isEmpty { tracks = [] }
         }
         isLoading = false
     }

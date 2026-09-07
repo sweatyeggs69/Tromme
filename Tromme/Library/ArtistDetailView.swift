@@ -354,7 +354,7 @@ struct ArtistDetailView: View {
             heroMinY = value
         }
         .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
-        .task(id: network.isConnected) {
+        .task(id: artist.ratingKey) {
             guard previewData == nil else { return }
 
             if !network.isConnected {

@@ -412,7 +412,6 @@ struct AlbumDetailView: View {
 
     @MainActor
     private func loadRecommendedAlbums() async {
-        guard network.isConnected else { return }
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId,
               let artistKey = albumDetails.parentRatingKey ?? album.parentRatingKey else { return }
@@ -773,7 +772,7 @@ struct AlbumDetailView: View {
                                         albumRail(moreByArtistAlbums)
                                     }
 
-                                    if network.isConnected && !recommendedAlbums.isEmpty {
+                                    if !recommendedAlbums.isEmpty {
                                         albumSectionHeader(
                                             "You Might Also Like",
                                             showsDisclosure: true
@@ -815,7 +814,7 @@ struct AlbumDetailView: View {
                                 albumRail(moreByArtistAlbums)
                             }
 
-                            if network.isConnected && !recommendedAlbums.isEmpty {
+                            if !recommendedAlbums.isEmpty {
                                 albumSectionHeader(
                                     "You Might Also Like",
                                     showsDisclosure: true
@@ -886,7 +885,7 @@ struct AlbumDetailView: View {
                 server: server
             )
         }
-        .task(id: network.isConnected) {
+        .task(id: album.ratingKey) {
             guard !isPreviewMode else { return }
             isLoadingTracks = true
             async let detailsTask: Void = loadAlbumDetails()

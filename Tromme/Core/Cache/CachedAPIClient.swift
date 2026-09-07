@@ -157,6 +157,26 @@ extension PlexAPIClient {
             key: CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId))
     }
 
+    // MARK: - Cached Recently Played / Recently Added
+
+    func cachedRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId),
+            policy: .userContent
+        ) {
+            try await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: limit)
+        }
+    }
+
+    func cachedRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
+        try await LibraryCache.shared.cachedFetch(
+            forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId),
+            policy: .userContent
+        ) {
+            try await self.getRecentlyAdded(server: server, sectionId: sectionId, type: type, limit: limit)
+        }
+    }
+
     // MARK: - Cached Top Tracks
 
     func cachedTopTracks(server: PlexServer, sectionId: String, artistRatingKey: String, limit: Int = 10) async throws -> [PlexMetadata] {
@@ -234,6 +254,40 @@ extension PlexAPIClient {
         ) {
             try await self.getMetadata(server: server, ratingKey: ratingKey)
         }
+    }
+
+    // MARK: - Smart Refresh
+
+    /// Checks the server's `updatedAt` timestamp for the section before deciding what to refresh.
+    /// - If nothing changed: warms memory from disk only (no library network traffic).
+    /// - If the library changed: invalidates only the stale list keys (artists, albums, tracks,
+    ///   recently added) so `warmCache` re-fetches them. Images are never cleared.
+    ///
+    /// Use this for cold-launch and foreground-return checks. Use `warmCache` directly only
+    /// when you know a full rebuild is needed (e.g., after changing the selected library).
+    func smartRefresh(server: PlexServer, sectionId: String) async {
+        guard let sections = try? await getLibrarySections(server: server),
+              let section = sections.first(where: { $0.key == sectionId }),
+              let serverUpdatedAt = section.updatedAt else {
+            await warmCache(server: server, sectionId: sectionId)
+            return
+        }
+
+        let udKey = "lastLibraryUpdatedAt_\(server.machineIdentifier)_\(sectionId)"
+        let lastUpdatedAt = UserDefaults.standard.integer(forKey: udKey)
+
+        if serverUpdatedAt != lastUpdatedAt {
+            UserDefaults.standard.set(serverUpdatedAt, forKey: udKey)
+            let sid = server.machineIdentifier
+            await LibraryCache.shared.remove(forKey: CacheKey.artists(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.albums(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.tracks(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyAdded(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyPlayed(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: sid, sectionId: sectionId))
+        }
+
+        await warmCache(server: server, sectionId: sectionId)
     }
 
     // MARK: - Cache Warming

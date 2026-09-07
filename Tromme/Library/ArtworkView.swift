@@ -65,14 +65,26 @@ struct ArtworkView: View {
             image = nil
             return
         }
-        let resolvedImage: UIImage?
+
         if useCache {
-            resolvedImage = await ImageCache.shared.image(for: url, targetPixelSize: transcodePx)
+            // Phase 1: show any disk-cached image immediately so the view never shows
+            // a placeholder while waiting for a slow network download.
+            let hasMemoryImage = ImageCache.shared.memoryCachedImage(for: url, targetPixelSize: transcodePx) != nil
+            if image == nil && !hasMemoryImage {
+                if let quick = await ImageCache.shared.anyCachedImage(for: url, targetPixelSize: transcodePx) {
+                    guard !Task.isCancelled, path == thumbPath else { return }
+                    image = quick
+                }
+            }
+            // Phase 2: fetch the properly-sized image (downloads if needed, upgrades phase 1).
+            let resolvedImage = await ImageCache.shared.image(for: url, targetPixelSize: transcodePx)
+            guard !Task.isCancelled, path == thumbPath else { return }
+            image = resolvedImage ?? image
         } else {
-            resolvedImage = await uncachedImage(for: url)
+            let resolvedImage = await uncachedImage(for: url)
+            guard !Task.isCancelled, path == thumbPath else { return }
+            image = resolvedImage
         }
-        guard !Task.isCancelled, path == thumbPath else { return }
-        image = resolvedImage
     }
 
     private func uncachedImage(for url: URL) async -> UIImage? {

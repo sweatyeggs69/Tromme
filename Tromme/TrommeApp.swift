@@ -71,11 +71,12 @@ struct TrommeApp: App {
                     }
                 }
                 .task(priority: .background) {
-                    // Warm cache on launch if already signed in.
-                    // Background priority ensures this runs after the UI is ready.
+                    // On launch, check if the library changed before refreshing.
+                    // smartRefresh only invalidates list keys when updatedAt advances —
+                    // images and unchanged data are served from disk without any network traffic.
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
-                    serverConnection.warmCache(server: server, sectionId: sectionId, client: plexClient)
+                    await plexClient.smartRefresh(server: server, sectionId: sectionId)
                 }
                 .task {
                     await observeMemoryWarnings()
@@ -95,15 +96,7 @@ struct TrommeApp: App {
                 Task {
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
-                    // Check if library has actually changed before rebuilding cache
-                    guard let sections = try? await plexClient.getLibrarySections(server: server),
-                          let section = sections.first(where: { $0.key == sectionId }),
-                          let serverUpdatedAt = section.updatedAt else { return }
-                    let lastUpdatedAt = UserDefaults.standard.integer(forKey: "lastLibraryUpdatedAt")
-                    guard serverUpdatedAt > lastUpdatedAt else { return }
-                    UserDefaults.standard.set(serverUpdatedAt, forKey: "lastLibraryUpdatedAt")
-                    await LibraryCache.shared.clearAll()
-                    await plexClient.warmCache(server: server, sectionId: sectionId)
+                    await plexClient.smartRefresh(server: server, sectionId: sectionId)
                 }
             }
         }
