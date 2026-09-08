@@ -23,14 +23,17 @@ extension AppIconOption {
     ]
 
     static let premiumIconPack: [AppIconOption] = [
+        AppIconOption(id: "galaxy",         displayName: "Galaxy",         iconName: "GalaxyAppIcon",        previewImageName: "preview-galaxy",         accentColor: Color(red: 0.55, green: 0.08, blue: 0.85)),
         AppIconOption(id: "knocktua-dark",  displayName: "Knocktua Dark",  iconName: "KnocktuaDarkAppIcon",  previewImageName: "preview-knocktua-dark",  accentColor: Color(red: 0.529, green: 0.345, blue: 0.267)),
         AppIconOption(id: "knocktua-light", displayName: "Knocktua Light", iconName: "KnocktuaLightAppIcon", previewImageName: "preview-knocktua-light", accentColor: Color(red: 0.851, green: 0.792, blue: 0.639)),
         AppIconOption(id: "ltt",       displayName: "LT&T",      iconName: "LT&TAppIcon",      previewImageName: "preview-ltt",       accentColor: Color(red: 1.00, green: 0.45, blue: 0.00)),
-        AppIconOption(id: "masterchief",    displayName: "Mister Chief",   iconName: "MasterChiefAppIcon",   previewImageName: "preview-masterchief",    accentColor: Color(red: 0.35, green: 0.55, blue: 0.25)),
+        AppIconOption(id: "masterchief",    displayName: "Master Chief",   iconName: "MasterChiefAppIcon",   previewImageName: "preview-masterchief",    accentColor: Color(red: 0.35, green: 0.55, blue: 0.25)),
         AppIconOption(id: "murderedout",    displayName: "Murdered Out",   iconName: "MurderedOutAppIcon",   previewImageName: "preview-murderedout",    accentColor: Color(.label)),
         AppIconOption(id: "rainbow",   displayName: "Rainbow",   iconName: "RainbowAppIcon",   previewImageName: "preview-rainbow",   accentColor: Color(red: 0.93, green: 0.12, blue: 0.11)),
+        AppIconOption(id: "snowwhite",      displayName: "Snow White",     iconName: "SnowWhiteAppIcon",     previewImageName: "preview-snowwhite",      accentColor: Color(.label)),
         AppIconOption(id: "trommeify",      displayName: "Trommeify",      iconName: "TrommeifyAppIcon",     previewImageName: "preview-trommeify",      accentColor: Color(red: 0.20, green: 0.83, blue: 0.15)),
         AppIconOption(id: "usa",            displayName: "USA",            iconName: "USAAppIcon",           previewImageName: "preview-usa",            accentColor: Color(red: 0.70, green: 0.10, blue: 0.15)),
+        AppIconOption(id: "usfs",           displayName: "US Forest Service",           iconName: "USFSAppIcon",          previewImageName: "preview-usfs",           accentColor: Color(red: 1.00, green: 0.78, blue: 0.00)),
     ]
 
     static func accentColor(for iconId: String) -> Color {
