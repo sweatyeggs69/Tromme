@@ -19,14 +19,13 @@ final class LyricsService {
     private var activeRequestID: UUID?
     private var inFlightTrackKey: String?
 
-    private static let lyricsTTL: TimeInterval = 7 * 24 * 60 * 60 // 7 days
+    private static let lyricsTTL: TimeInterval = 7 * 24 * 60 * 60
 
     var isInstrumental: Bool {
         guard let plainLyrics else { return false }
         return Self.looksInstrumental(plainLyrics)
     }
 
-    /// Discards the cached lyrics for this track and re-fetches from the network.
     func refresh(track: PlexMetadata) async {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistDisplayName)
         await LibraryCache.shared.remove(forKey: cacheKey)
@@ -35,70 +34,99 @@ final class LyricsService {
     }
 
     func fetch(track: PlexMetadata) async {
-        if isLoading, inFlightTrackKey == track.ratingKey {
-            return
-        }
+        if isLoading, inFlightTrackKey == track.ratingKey { return }
 
         let requestID = UUID()
         activeRequestID = requestID
         inFlightTrackKey = track.ratingKey
-
         isLoading = true
         lines = []
         plainLyrics = nil
         hasSynced = false
         hasLyrics = false
 
-        // Use track-level artist (Plex originalTitle) so compilations/soundtracks match by performer, not "Various Artists"
+        // Use track-level artist so compilations match by performer, not "Various Artists"
         let trackArtist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
 
-        // Check cache first
+        let result: LRCLIBResponse?
         if let cached = await LibraryCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
-            guard isCurrentRequest(requestID) else { return }
-            apply(cached.value)
-            completeIfCurrent(requestID)
-            return
+            result = cached.value
+        } else if let fetched = await resolve(track: track, artist: trackArtist) {
+            await LibraryCache.shared.set(fetched, forKey: cacheKey)
+            result = fetched
+        } else {
+            result = nil
         }
 
-        // Attempt 1: query with track-level artist
-        if let decoded = await fetchFromLRCLib(title: track.title, artist: trackArtist, album: track.parentTitle, duration: track.duration) {
-            await LibraryCache.shared.set(decoded, forKey: cacheKey)
-            guard isCurrentRequest(requestID) else { return }
-            apply(decoded)
-            completeIfCurrent(requestID)
-            return
-        }
-
-        // Attempt 2: for soundtracks/compilations where the track artist differs from the album artist,
-        // retry without an artist filter so title + album + duration can still find a match.
-        if trackArtist != track.artistName {
-            if let decoded = await fetchFromLRCLib(title: track.title, artist: nil, album: track.parentTitle, duration: track.duration) {
-                await LibraryCache.shared.set(decoded, forKey: cacheKey)
-                guard isCurrentRequest(requestID) else { return }
-                apply(decoded)
-            }
-        }
-
-        completeIfCurrent(requestID)
+        guard activeRequestID == requestID else { return }
+        if let result { apply(result) }
+        isLoading = false
     }
 
-    private func fetchFromLRCLib(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
-        var components = URLComponents(string: "https://lrclib.net/api/get")!
-        var queryItems = [URLQueryItem(name: "track_name", value: title)]
-        if let artist { queryItems.append(URLQueryItem(name: "artist_name", value: artist)) }
-        if let album { queryItems.append(URLQueryItem(name: "album_name", value: album)) }
-        if let ms = duration { queryItems.append(URLQueryItem(name: "duration", value: "\(ms / 1000)")) }
-        components.queryItems = queryItems
+    // Tries each lookup strategy in order, preferring synced lyrics over plain.
+    // Returns immediately on a synced hit; falls back to the first plain result if none yield synced.
+    private func resolve(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
+        let title = track.title
+        let dur = track.duration
+        var bestPlain: LRCLIBResponse?
 
-        guard let url = components.url else { return nil }
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-            return try JSONDecoder().decode(LRCLIBResponse.self, from: data)
-        } catch {
+        func consider(_ r: LRCLIBResponse?) -> LRCLIBResponse? {
+            guard let r else { return nil }
+            if r.syncedLyrics?.isEmpty == false { return r }
+            if bestPlain == nil { bestPlain = r }
             return nil
         }
+
+        // No album first — avoids false negatives from mismatched release names (e.g. "Song - Single" vs album)
+        if let r = consider(await get(title: title, artist: artist, album: nil, duration: dur)) { return r }
+        // Compilations: drop artist, keep album
+        if artist != track.artistName,
+           let r = consider(await get(title: title, artist: nil, album: track.parentTitle, duration: dur)) { return r }
+        // Album as last-resort disambiguator for /api/get
+        if let r = consider(await get(title: title, artist: artist, album: track.parentTitle, duration: dur)) { return r }
+        // Fuzzy search — handles artist name variations and metadata that exact matching rejects
+        if let r = consider(await search(title: title, artist: artist, duration: dur)) { return r }
+
+        return bestPlain
+    }
+
+    private func get(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
+        var components = URLComponents(string: "https://lrclib.net/api/get")!
+        var items = [URLQueryItem(name: "track_name", value: title)]
+        if let artist { items.append(.init(name: "artist_name", value: artist)) }
+        if let album  { items.append(.init(name: "album_name",  value: album))  }
+        if let ms = duration { items.append(.init(name: "duration", value: "\(ms / 1000)")) }
+        components.queryItems = items
+        guard let url = components.url, let data = await lrclibFetch(url) else { return nil }
+        return try? JSONDecoder().decode(LRCLIBResponse.self, from: data)
+    }
+
+    private func search(title: String, artist: String, duration: Int?) async -> LRCLIBResponse? {
+        var components = URLComponents(string: "https://lrclib.net/api/search")!
+        components.queryItems = [
+            .init(name: "track_name", value: title),
+            .init(name: "artist_name", value: artist)
+        ]
+        guard let url = components.url, let data = await lrclibFetch(url) else { return nil }
+        let results = (try? JSONDecoder().decode([LRCLIBResponse].self, from: data)) ?? []
+        guard !results.isEmpty else { return nil }
+
+        let trackSeconds = duration.map { Double($0) / 1000 }
+        let withSynced = results.filter { $0.syncedLyrics?.isEmpty == false }
+        let pool = withSynced.isEmpty ? results : withSynced
+
+        guard let trackSeconds else { return pool.first }
+        return pool.min(by: {
+            abs(($0.duration ?? trackSeconds) - trackSeconds) <
+            abs(($1.duration ?? trackSeconds) - trackSeconds)
+        })
+    }
+
+    private func lrclibFetch(_ url: URL) async -> Data? {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return data
     }
 
     private func apply(_ response: LRCLIBResponse) {
@@ -113,56 +141,35 @@ final class LyricsService {
     }
 
     func currentLineIndex(at time: TimeInterval) -> Int {
-        var result = 0
-        for (i, line) in lines.enumerated() {
-            if line.time <= time { result = i } else { break }
-        }
-        return result
+        lines.lastIndex(where: { $0.time <= time }) ?? 0
     }
 
     // MARK: - LRC Parsing
 
     private func parseLRC(_ lrc: String) -> [LyricsLine] {
         var result: [LyricsLine] = []
-
         for rawLine in lrc.components(separatedBy: "\n") {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard line.hasPrefix("["),
                   let closeBracket = line.firstIndex(of: "]") else { continue }
-
             let timestamp = String(line[line.index(after: line.startIndex)..<closeBracket])
             let text = String(line[line.index(after: closeBracket)...]).trimmingCharacters(in: .whitespaces)
             guard !text.isEmpty else { continue }
-
-            // Parse MM:SS.xx
             let parts = timestamp.components(separatedBy: ":")
             guard parts.count == 2,
                   let minutes = Double(parts[0]),
                   let seconds = Double(parts[1]) else { continue }
-
             result.append(LyricsLine(time: minutes * 60 + seconds, text: text))
         }
-
         return result.sorted { $0.time < $1.time }
     }
 
-    private func isCurrentRequest(_ requestID: UUID) -> Bool {
-        activeRequestID == requestID
-    }
-
-    private func completeIfCurrent(_ requestID: UUID) {
-        guard isCurrentRequest(requestID) else { return }
-        isLoading = false
-    }
-
     private static func looksInstrumental(_ text: String) -> Bool {
-        let normalized = text
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .replacingOccurrences(of: "[^a-z\\s]", with: "", options: .regularExpression)
             .split(whereSeparator: \.isWhitespace)
-            .joined(separator: " ")
-        return normalized == "instrumental"
+            .joined(separator: " ") == "instrumental"
     }
 }
 
@@ -171,4 +178,5 @@ final class LyricsService {
 struct LRCLIBResponse: Codable, Sendable {
     let syncedLyrics: String?
     let plainLyrics: String?
+    let duration: Double?
 }
