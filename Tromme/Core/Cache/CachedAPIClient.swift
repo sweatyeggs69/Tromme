@@ -329,7 +329,7 @@ extension PlexAPIClient {
 
         // Phase 2: Prefetch artwork for artists and albums in the background.
         // No-op on expensive/low-power — guard is inside prefetchArtwork.
-        prefetchArtwork(for: artists + albums, server: server, size: 256)
+        prefetchArtwork(for: artists + albums, server: server, size: 1000)
 
         // Phases 3 and 4 are opportunistic prefetch that would flood a constrained connection.
         // On metered or low-power, let the cache warm organically as the user navigates.
@@ -389,14 +389,13 @@ extension PlexAPIClient {
     /// Build artwork URLs for metadata items and prefetch them into the image cache.
     /// Fires in the background so it doesn't block the caller.
     func prefetchArtwork(for items: [PlexMetadata], server: PlexServer, size: Int = 256) {
-        guard !NetworkStatus.shared.isExpensive,
+        guard NetworkStatus.shared.isConnected,
+              !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
-        let maxPrefetchItems = 100
         var seen = Set<String>()
         let thumbPaths = items
             .compactMap(\.thumb)
             .filter { seen.insert($0).inserted }
-            .prefix(maxPrefetchItems)
         guard !thumbPaths.isEmpty else { return }
 
         let urls = thumbPaths.compactMap { path in
@@ -419,7 +418,7 @@ extension PlexAPIClient {
         }
         // Prefetch artwork for newly fetched items (artists/albums have thumb, tracks less important)
         if type == 8 || type == 9 {
-            prefetchArtwork(for: items, server: server, size: 256)
+            prefetchArtwork(for: items, server: server, size: 1000)
         }
         return items
     }

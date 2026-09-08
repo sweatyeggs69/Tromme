@@ -78,19 +78,7 @@ struct QueueView: View {
                         player.moveInQueue(from: source, to: destination)
                     }
 
-                    if isInfiniteModeActive || isMagicMixActive {
-                        HStack {
-                            Spacer()
-                            Image(systemName: isInfiniteModeActive ? "infinity" : "wand.and.stars")
-                                .font(.title2.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.4))
-                            Spacer()
-                        }
-                        .padding(.vertical, 12)
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
-                    }
+
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -122,8 +110,6 @@ struct QueueView: View {
                     player.requestInfiniteRefill()
                 }
             }
-            .disabled(isMagicMixActive)
-            .opacity(isMagicMixActive ? 0.45 : 1)
             .frame(maxWidth: .infinity)
 
             QueueActionPill(systemImage: "wand.and.stars", isActive: isMagicMixActive) {
@@ -131,14 +117,13 @@ struct QueueView: View {
                     isMagicMixActive = false
                     player.clearQueue()
                 } else {
-                    isInfiniteModeActive = false
                     player.clearQueue()
                     isMagicMixActive = true
                     player.requestMagicMixRefill(freshMix: true)
                 }
             }
-            .disabled(isInfiniteModeActive || !magicMixAvailable)
-            .opacity((isInfiniteModeActive || !magicMixAvailable) ? 0.45 : 1)
+            .disabled(!magicMixAvailable)
+            .opacity(!magicMixAvailable ? 0.45 : 1)
             .frame(maxWidth: .infinity)
         }
         .font(.callout.weight(.semibold))

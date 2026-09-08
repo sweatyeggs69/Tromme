@@ -330,11 +330,27 @@ struct AllAlbumsView: View {
         if network.isConnected {
             await loadAlbumsOnline()
         } else {
-            loadAlbumsOffline()
+            await loadAlbumsOffline()
         }
     }
 
-    private func loadAlbumsOffline() {
+    private func loadAlbumsOffline() async {
+        // Prefer full disk-cached library (complete list, correct artwork).
+        if let server = serverConnection.currentServer,
+           let sectionId = serverConnection.currentLibrarySectionId {
+            let key = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
+            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: key)?.value,
+               !cached.isEmpty {
+                var sorted = cached
+                sorted.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
+                withAnimation(.easeIn(duration: 0.25)) {
+                    albums = sorted
+                    isLoading = false
+                }
+                return
+            }
+        }
+        // Fall back to albums inferred from downloaded tracks.
         var seen = Set<String>()
         var result: [PlexMetadata] = []
         for record in downloadManager.downloadedTracksSorted {

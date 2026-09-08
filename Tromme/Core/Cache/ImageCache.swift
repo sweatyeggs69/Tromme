@@ -12,6 +12,14 @@ actor ImageCache {
     private let diskURL: URL
     private let maxDiskBytes: Int = 500 * 1024 * 1024 // 500 MB
     private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
+    // Short timeout so unreachable servers don't block artwork for tens of seconds.
+    private static let downloadSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 8
+        config.timeoutIntervalForResource = 15
+        return URLSession(configuration: config)
+    }()
     /// Incremented on clearAll to invalidate in-progress downloads.
     private var generation: Int = 0
 #if DEBUG
@@ -62,7 +70,16 @@ actor ImageCache {
         debugStats.misses += 1
 #endif
 
-        // 3. Coalesce in-flight requests for the same URL
+        // 3. Fast offline path: no network available, serve any cached disk copy immediately.
+        if !NetworkStatus.shared.isConnected {
+            if let fallback = loadFromDisk(key: diskKey, targetPixelSize: targetPixelSize) {
+                memoryCache.setObject(fallback, forKey: memoryKey as NSString, cost: fallback.decodedCost)
+                return fallback
+            }
+            return nil
+        }
+
+        // 4. Coalesce in-flight requests for the same URL
         let requestKey = "\(diskKey)|\(targetPixelSize ?? 0)"
         if let existing = inFlightRequests[requestKey] {
 #if DEBUG
@@ -161,9 +178,9 @@ actor ImageCache {
         // Fetch at least 512px so small row requests still store a reasonably sharp shared
         // copy. Larger surfaces re-fetch at their own size when the stored file is too small.
         // Memory is still decoded at the originally requested size.
-        let fetchURL = upgradedDownloadURL(from: url, minimumSize: 512)
+        let fetchURL = upgradedDownloadURL(from: url, minimumSize: 1000)
         do {
-            let (data, response) = try await URLSession.shared.data(from: fetchURL)
+            let (data, response) = try await Self.downloadSession.data(from: fetchURL)
             // If cache was cleared during download, don't save stale data
             guard generation == startGeneration else { return nil }
             guard let http = response as? HTTPURLResponse,

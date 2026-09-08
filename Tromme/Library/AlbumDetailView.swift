@@ -30,6 +30,11 @@ struct AlbumDetailView: View {
     @State private var showingChangeArtworkSheet = false
     @AppStorage("showPopularTracks") private var showPopularTracks = false
     @State private var popularTrackTitles: Set<String> = []
+    @State private var scrollOffset: CGFloat = 0
+
+    private var showsCollapsedTitle: Bool {
+        scrollOffset > 310
+    }
 
     private var thumbPath: String? {
         albumDetails.thumb ?? album.thumb
@@ -423,6 +428,14 @@ struct AlbumDetailView: View {
     @MainActor
     private func loadTracks() async {
         guard network.isConnected else {
+            // Prefer disk-cached track list so non-downloaded albums still show tracks.
+            let childrenKey = CacheKey.children(ratingKey: album.ratingKey)
+            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
+               !cached.isEmpty {
+                tracks = cached
+                isLoadingTracks = false
+                return
+            }
             let albumKey = album.ratingKey
             let albumTitle = album.title
             let downloaded = downloadManager.downloadedTracksSorted.filter { record in
@@ -455,6 +468,13 @@ struct AlbumDetailView: View {
         guard let artist = artistNavigationTarget else { return }
 
         guard network.isConnected else {
+            // Prefer disk-cached artist releases so all albums show, not just downloaded ones.
+            let childrenKey = CacheKey.children(ratingKey: artist.ratingKey)
+            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
+               !cached.isEmpty {
+                artistAlbums = cached
+                return
+            }
             var seenAlbums = Set<String>()
             artistAlbums = downloadManager.downloadedTracksSorted
                 .filter { $0.artistRatingKey == artist.ratingKey || $0.artistName == artist.title }
@@ -829,6 +849,11 @@ struct AlbumDetailView: View {
                     .scrollContentBackground(.hidden)
                     .background(artworkColor)
                     .listStyle(.plain)
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y
+                    } action: { _, offset in
+                        scrollOffset = offset
+                    }
                 }
             }
         }
@@ -849,6 +874,13 @@ struct AlbumDetailView: View {
             )
         }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(album.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(showsCollapsedTitle ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {

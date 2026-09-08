@@ -863,7 +863,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             if player.isMagicMixActive {
                 player.isMagicMixActive = false
             } else {
-                player.isInfiniteModeActive = false
                 player.clearQueue()
                 player.isMagicMixActive = true
                 player.requestMagicMixRefill(freshMix: true)

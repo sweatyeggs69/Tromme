@@ -28,7 +28,7 @@ struct ArtistDetailView: View {
     }
 
     private var showsCollapsedTitle: Bool {
-        heroMinY < -80 || heroIsHidden
+        heroMinY < -(heroHeight - 80) || heroIsHidden
     }
 
     private let heroHeight: CGFloat = 400
@@ -210,15 +210,6 @@ struct ArtistDetailView: View {
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear
-                            .preference(
-                                key: ArtistHeroMinYPreferenceKey.self,
-                                value: proxy.frame(in: .named("artistDetailScroll")).minY
-                            )
-                    }
-                )
 
             if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
                 sectionHeader("Latest")
@@ -325,7 +316,11 @@ struct ArtistDetailView: View {
             }
 
         }
-        .coordinateSpace(name: "artistDetailScroll")
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y
+        } action: { _, offset in
+            heroMinY = -offset
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedAlbum) { album in
@@ -346,19 +341,18 @@ struct ArtistDetailView: View {
                     .font(.headline)
                     .lineLimit(1)
                     .opacity(showsCollapsedTitle ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
             }
         }
         .listStyle(.plain)
         .ignoresSafeArea(edges: .top)
-        .onPreferenceChange(ArtistHeroMinYPreferenceKey.self) { value in
-            heroMinY = value
-        }
-        .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
         .task(id: artist.ratingKey) {
             guard previewData == nil else { return }
 
             if !network.isConnected {
-                loadOfflineContent()
+                // Prefer disk-cached data so non-downloaded albums and all tracks appear.
+                let didLoadFromCache = await loadFromDiskCache(artist: artist)
+                if !didLoadFromCache { loadOfflineContent() }
                 return
             }
 
@@ -406,6 +400,35 @@ struct ArtistDetailView: View {
                 }
             }
         }
+    }
+
+    /// Reads artist data from disk cache without any network calls.
+    /// Returns true if enough data was found to populate the view.
+    private func loadFromDiskCache(artist: PlexMetadata) async -> Bool {
+        let metadataKey = CacheKey.metadata(ratingKey: artist.ratingKey)
+        let childrenKey = CacheKey.children(ratingKey: artist.ratingKey)
+        let tracksKey = CacheKey.artistTracks(artistRatingKey: artist.ratingKey)
+        let topTracksKey = CacheKey.topTracks(artistRatingKey: artist.ratingKey)
+
+        async let cachedMetadata = LibraryCache.shared.get(PlexMetadata.self, forKey: metadataKey)?.value
+        async let cachedAlbums = LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value
+        async let cachedTracks = LibraryCache.shared.get([PlexMetadata].self, forKey: tracksKey)?.value
+        async let cachedTopTracks = LibraryCache.shared.get([PlexMetadata].self, forKey: topTracksKey)?.value
+
+        let (metadata, albums, tracks, top) = await (cachedMetadata, cachedAlbums, cachedTracks, cachedTopTracks)
+
+        guard let tracks, !tracks.isEmpty else { return false }
+
+        withAnimation(.easeIn(duration: 0.25)) {
+            resolvedArtist = metadata
+            artistTracks = tracks
+            artistAlbums = albums ?? []
+            topTracks = top?.isEmpty == false ? top! : tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
+            appearsOnAlbums = []
+            similarArtists = []
+            contentReady = true
+        }
+        return true
     }
 
     private func loadOfflineContent() {
@@ -596,13 +619,6 @@ private extension UIImage {
     }
 }
 
-private struct ArtistHeroMinYPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
 
 #if DEBUG
 #Preview {

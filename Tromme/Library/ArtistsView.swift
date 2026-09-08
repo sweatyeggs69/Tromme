@@ -164,11 +164,27 @@ struct ArtistsView: View {
         if network.isConnected {
             await loadArtistsOnline()
         } else {
-            loadArtistsOffline()
+            await loadArtistsOffline()
         }
     }
 
-    private func loadArtistsOffline() {
+    private func loadArtistsOffline() async {
+        // Prefer full disk-cached library (correct artist photos, complete list).
+        if let server = serverConnection.currentServer,
+           let sectionId = serverConnection.currentLibrarySectionId {
+            let key = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
+            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: key)?.value,
+               !cached.isEmpty {
+                var sorted = cached
+                sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
+                withAnimation(.easeIn(duration: 0.25)) {
+                    artists = sorted
+                    isLoading = false
+                }
+                return
+            }
+        }
+        // Fall back to artists inferred from downloaded tracks.
         var seen = Set<String>()
         var result: [PlexMetadata] = []
         for record in downloadManager.downloadedTracksSorted {

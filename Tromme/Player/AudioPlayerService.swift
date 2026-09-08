@@ -13,8 +13,38 @@ final class AudioPlayerService: @unchecked Sendable {
     var duration: TimeInterval = 0
     var isShuffled = false
     var repeatMode: RepeatMode = .off
-    var isMagicMixActive = false
-    var isInfiniteModeActive = false
+    var isMagicMixActive = false {
+        didSet {
+            if isMagicMixActive {
+                // Save infinite mode state so we can restore it when magic mix turns off.
+                infiniteModeBeforeMagicMix = isInfiniteModeActive
+                if isInfiniteModeActive { isInfiniteModeActive = false }
+            } else {
+                // Restore infinite mode to whatever it was before magic mix was enabled.
+                // Defer the refill into a Task so any synchronous clearQueue() at the
+                // call site completes first — otherwise the queue still has magic mix
+                // tracks and the refill guard exits early.
+                if infiniteModeBeforeMagicMix {
+                    isInfiniteModeActive = true
+                    Task { @MainActor [weak self] in
+                        self?.maybeRefillInfiniteQueueIfNeeded(trigger: "magic_mix_disabled")
+                    }
+                }
+                infiniteModeBeforeMagicMix = false
+            }
+        }
+    }
+    var isInfiniteModeActive = false {
+        didSet {
+            UserDefaults.standard.set(isInfiniteModeActive, forKey: Self.infiniteModeKey)
+            if isInfiniteModeActive, isMagicMixActive {
+                // Explicit user activation of infinite while magic mix is on — clear
+                // the saved state so magic mix turning off doesn't re-disable infinite.
+                infiniteModeBeforeMagicMix = false
+                isMagicMixActive = false
+            }
+        }
+    }
     /// True once the current item's status is .readyToPlay.
     var isReadyToPlay = false
     /// True when the active audio output route is AirPlay.
@@ -94,9 +124,8 @@ final class AudioPlayerService: @unchecked Sendable {
     private var gainPrefetchTask: Task<Void, Never>?
     private var playbackLoadTask: Task<Void, Never>?
     private var nowPlayingArtworkTask: Task<Void, Never>?
-    private var magicMixRefillTask: Task<Void, Never>?
-    private var magicMixHistoryQueue: [String] = []   // Ordered FIFO, oldest at index 0
-    private var magicMixHistorySet: Set<String> = []  // Mirror of historyQueue for O(1) lookup
+    private var infiniteModeBeforeMagicMix = false
+    private var magicMixBuildTask: Task<Void, Never>?
     private var magicMixSeedArtistKey: String? = nil
     private var infiniteRefillTask: Task<Void, Never>?
     private var infinitePreviousKeys: Set<String> = []
@@ -189,6 +218,9 @@ final class AudioPlayerService: @unchecked Sendable {
     func configure(server: PlexServer, client: PlexAPIClient) {
         self.server = server
         self.client = client
+        if isInfiniteModeActive {
+            maybeRefillInfiniteQueueIfNeeded(trigger: "configure")
+        }
     }
 
     /// Updates the current track's userRating and syncs the lock screen heart in one call.
@@ -497,6 +529,22 @@ final class AudioPlayerService: @unchecked Sendable {
         } else if repeatMode == .all {
             currentIndex = 0
             logPlayback("next_wrap", "to_index=0")
+        } else if isInfiniteModeActive {
+            // Queue ran dry before refill completed — kick off a refill and
+            // advance once tracks arrive (this is a rare race; refill normally
+            // completes long before the current track finishes).
+            requestInfiniteRefill()
+            let expectedGeneration = playbackGeneration
+            logPlayback("next_infinite_wait_for_refill")
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, self.playbackGeneration == expectedGeneration,
+                      self.isInfiniteModeActive,
+                      self.currentIndex < self.queue.count - 1 else { return }
+                self.currentIndex += 1
+                self.loadAndPlay(self.queue[self.currentIndex])
+            }
+            return
         } else {
             player?.pause()
             isPlaying = false
@@ -784,10 +832,9 @@ final class AudioPlayerService: @unchecked Sendable {
         lastPublishedNowPlayingTrackKey = nil
         currentTime = 0
         duration = 0
+        infiniteModeBeforeMagicMix = false
         isMagicMixActive = false
         isInfiniteModeActive = false
-        magicMixHistoryQueue.removeAll()
-        magicMixHistorySet.removeAll()
         magicMixSeedArtistKey = nil
         infinitePreviousKeys.removeAll()
         isReadyToPlay = false
@@ -814,7 +861,7 @@ final class AudioPlayerService: @unchecked Sendable {
         playbackLoadTask?.cancel()
         nowPlayingArtworkTask?.cancel()
         gainPrefetchTask?.cancel()
-        magicMixRefillTask?.cancel()
+        magicMixBuildTask?.cancel()
         infiniteRefillTask?.cancel()
         networkRecoveryTask?.cancel()
         nextTrackPreloadTask?.cancel()
@@ -822,7 +869,7 @@ final class AudioPlayerService: @unchecked Sendable {
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
         gainPrefetchTask = nil
-        magicMixRefillTask = nil
+        magicMixBuildTask = nil
         infiniteRefillTask = nil
         networkRecoveryTask = nil
         nextTrackPreloadTask = nil
@@ -1073,49 +1120,44 @@ final class AudioPlayerService: @unchecked Sendable {
         updateNowPlayingInfo()
         prefetchGainMetadata()
         prefetchUpcomingArtwork()
-        maybeRefillMagicMixQueueIfNeeded(trigger: "start_playback")
         maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
         syncDynamicQueueDownloads()
         reportTimelineState(pendingInitialSeekTime == nil ? "playing" : "paused")
         savePlaybackState()
     }
 
-    private func maybeRefillMagicMixQueueIfNeeded(trigger: String) {
-        guard isMagicMixActive else { return }
-        let needed = 5 - upcomingTracks.count
-        guard needed > 0 else { return }
-        guard magicMixRefillTask == nil else { return }
+    func requestMagicMixRefill(freshMix: Bool = false) {
+        if freshMix {
+            magicMixBuildTask?.cancel()
+            magicMixBuildTask = nil
+            magicMixSeedArtistKey = nil
+        }
+        guard magicMixBuildTask == nil else { return }
         guard let server, let client else { return }
         guard let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId else { return }
         guard let currentTrack else { return }
 
-        // Anchor the seed to the track that started the mix so the matched pool stays consistent
-        // across refills. Drifting the seed to the current track narrows matches over time.
         if magicMixSeedArtistKey == nil {
             magicMixSeedArtistKey = currentTrack.grandparentRatingKey
         }
-
         guard let seedArtistKey = magicMixSeedArtistKey else { return }
 
-        logPlayback("magic_mix_refill_begin", "trigger=\(trigger) needed=\(needed)")
+        logPlayback("magic_mix_build_begin", "seed=\(seedArtistKey)")
 
-        magicMixRefillTask = Task { [weak self] in
+        magicMixBuildTask = Task { [weak self] in
             defer {
                 Task { @MainActor [weak self] in
-                    self?.magicMixRefillTask = nil
+                    self?.magicMixBuildTask = nil
                 }
             }
-
             guard let self else { return }
 
-            // Get all similar artists to the seed track's artist.
             let similar = (try? await client.similarArtists(
                 server: server, sectionId: sectionId, seedArtistKey: seedArtistKey
             )) ?? []
 
-            guard !similar.isEmpty, !Task.isCancelled else { return }
+            guard !Task.isCancelled else { return }
 
-            // Collect all library albums and tracks by those similar artists.
             async let allAlbumsTask = client.cachedAlbums(server: server, sectionId: sectionId)
             async let allTracksTask = client.cachedTracks(server: server, sectionId: sectionId)
             let allAlbums = (try? await allAlbumsTask) ?? []
@@ -1130,66 +1172,61 @@ final class AudioPlayerService: @unchecked Sendable {
 
             let matchedPool = allTracks.filter { poolAlbumKeys.contains($0.parentRatingKey ?? "") }
 
-            guard !Task.isCancelled else { return }
-            guard !matchedPool.isEmpty else {
-                await MainActor.run {
-                    self.logPlayback("magic_mix_refill_empty", "trigger=\(trigger)")
-                }
+            guard !Task.isCancelled, !matchedPool.isEmpty else {
+                await MainActor.run { self.logPlayback("magic_mix_build_empty", "") }
                 return
             }
 
-            let selected: [PlexMetadata] = await MainActor.run {
-                let currentNeeded = 5 - self.upcomingTracks.count
-                guard currentNeeded > 0 else { return [] }
-
-                let fresh = matchedPool.filter { !self.magicMixHistorySet.contains($0.ratingKey) }
-
-                let pool: [PlexMetadata]
-                if !fresh.isEmpty {
-                    pool = fresh.shuffled()
-                } else {
-                    // Full cycle done — rotate the LRU queue: pick the oldest-played tracks
-                    // so each song waits for the rest of the pool before coming back.
-                    let count = min(currentNeeded, self.magicMixHistoryQueue.count)
-                    let oldestKeys = Set(self.magicMixHistoryQueue.prefix(count))
-                    self.magicMixHistoryQueue.removeFirst(count)
-                    for key in oldestKeys { self.magicMixHistorySet.remove(key) }
-                    pool = matchedPool.filter { oldestKeys.contains($0.ratingKey) }.shuffled()
-                }
-
-                return Array(pool.prefix(currentNeeded))
-            }
-
-            guard !selected.isEmpty else { return }
+            let dispersed = Self.evenlyDispersedShuffle(matchedPool)
 
             await MainActor.run {
-                // Record plays and enforce a 3-round history window.
-                let maxHistory = max(matchedPool.count * 3, 15)
-                for key in selected.map(\.ratingKey) {
-                    self.magicMixHistoryQueue.append(key)
-                    self.magicMixHistorySet.insert(key)
-                }
-                while self.magicMixHistoryQueue.count > maxHistory {
-                    let evicted = self.magicMixHistoryQueue.removeFirst()
-                    self.magicMixHistorySet.remove(evicted)
-                }
-                for track in selected {
+                for track in dispersed {
                     self.addToEndOfQueue(track)
                 }
-                self.logPlayback("magic_mix_refill_complete", "added=\(selected.count) upcoming=\(self.upcomingTracks.count)")
+                self.logPlayback("magic_mix_build_complete", "added=\(dispersed.count)")
             }
         }
     }
 
-    func requestMagicMixRefill(freshMix: Bool = false) {
-        if freshMix {
-            magicMixRefillTask?.cancel()
-            magicMixRefillTask = nil
-            magicMixHistoryQueue.removeAll()
-            magicMixHistorySet.removeAll()
-            magicMixSeedArtistKey = nil
+    // Spreads tracks evenly by artist across the entire queue using weighted fair queuing.
+    // Each artist accumulates budget at a rate proportional to their share of the pool —
+    // the artist with the most accumulated budget is always picked next. This guarantees
+    // artists with fewer tracks are still spread throughout rather than front-loaded.
+    private static func evenlyDispersedShuffle(_ tracks: [PlexMetadata]) -> [PlexMetadata] {
+        var byArtist: [String: [PlexMetadata]] = [:]
+        for track in tracks {
+            let key = track.grandparentRatingKey ?? track.parentRatingKey ?? track.ratingKey
+            byArtist[key, default: []].append(track)
         }
-        maybeRefillMagicMixQueueIfNeeded(trigger: freshMix ? "user_request" : "queue_low")
+
+        let total = tracks.count
+        guard total > 0 else { return [] }
+
+        struct ArtistQueue {
+            var tracks: [PlexMetadata]
+            var budget: Double
+            let rate: Double
+        }
+
+        var queues = byArtist.values.map { group -> ArtistQueue in
+            let shuffled = group.shuffled()
+            let rate = Double(shuffled.count) / Double(total)
+            // Random phase offset so priority order varies between mixes
+            return ArtistQueue(tracks: shuffled, budget: rate * Double.random(in: 0..<1), rate: rate)
+        }
+
+        var result: [PlexMetadata] = []
+        result.reserveCapacity(total)
+
+        while !queues.isEmpty {
+            for i in queues.indices { queues[i].budget += queues[i].rate }
+            let idx = queues.indices.max(by: { queues[$0].budget < queues[$1].budget })!
+            result.append(queues[idx].tracks.removeFirst())
+            queues[idx].budget -= 1.0
+            if queues[idx].tracks.isEmpty { queues.remove(at: idx) }
+        }
+
+        return result
     }
 
     func requestInfiniteRefill() {
@@ -1198,18 +1235,19 @@ final class AudioPlayerService: @unchecked Sendable {
         maybeRefillInfiniteQueueIfNeeded(trigger: "user_request")
     }
 
-    /// Returns true if the current track's artist has at least one similar artist present in the library.
+    /// Returns true if the current track's artist has at least one other album in the library.
     func magicMixAvailable() async -> Bool {
         guard let client, let server,
               let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId,
-              let artistKey = currentTrack?.grandparentRatingKey else { return false }
-        let similar = (try? await client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artistKey)) ?? []
-        return !similar.isEmpty
+              let artistKey = currentTrack?.grandparentRatingKey,
+              let currentAlbumKey = currentTrack?.parentRatingKey else { return false }
+        let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
+        return allAlbums.contains { $0.parentRatingKey == artistKey && $0.ratingKey != currentAlbumKey }
     }
 
     private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
         guard isInfiniteModeActive else { return }
-        let needed = 5 - upcomingTracks.count
+        let needed = 1 - upcomingTracks.count
         guard needed > 0 else { return }
         guard infiniteRefillTask == nil else { return }
         guard let server, let client else { return }
@@ -1236,7 +1274,7 @@ final class AudioPlayerService: @unchecked Sendable {
             }
 
             let selected: [PlexMetadata] = await MainActor.run {
-                let currentNeeded = 5 - self.upcomingTracks.count
+                let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
                 let fresh = allTracks.filter { !self.infinitePreviousKeys.contains($0.ratingKey) }
                 let pool = fresh.isEmpty ? allTracks : fresh
@@ -1891,7 +1929,7 @@ final class AudioPlayerService: @unchecked Sendable {
             duration = playerTime
             currentTime = playerTime
         }
-        let hasNext = currentIndex < queue.count - 1 || repeatMode != .off
+        let hasNext = currentIndex < queue.count - 1 || repeatMode != .off || isInfiniteModeActive
         maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
         reportTimelineState("stopped", continuing: hasNext)
@@ -1975,6 +2013,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
     private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
+    private static let infiniteModeKey = "infiniteModeActive"
     private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
     private static let autoDownloadEnabledKey = "autoDownloadEnabled"
     private static let autoDownloadModeKey = "autoDownloadMode"
@@ -2066,6 +2105,7 @@ final class AudioPlayerService: @unchecked Sendable {
            let mode = RepeatMode(rawValue: raw) {
             repeatMode = mode
         }
+        isInfiniteModeActive = defaults.bool(forKey: Self.infiniteModeKey)
         if let queueData = try? Data(contentsOf: Self.queueFileURL),
            let savedQueue = try? JSONDecoder().decode([PlexMetadata].self, from: queueData) {
             queue = savedQueue

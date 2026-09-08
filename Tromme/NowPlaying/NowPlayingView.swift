@@ -846,12 +846,7 @@ struct TimelineSlider: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.system(size: 9, weight: .medium))
             }
-            if playbackBadgeMode == "off" {
-                if player.isPlayingLocalDownload {
-                    Text("Local")
-                        .font(.caption2.weight(.medium))
-                }
-            } else if let codec = player.activeStreamCodec {
+            if playbackBadgeMode != "off", let codec = player.activeStreamCodec {
                 let bitrateText = (playbackBadgeMode == "codecBitrate" ? player.activeStreamBitrate.map { " · \($0) kbps" } : nil) ?? ""
                 Text(codec + bitrateText)
                     .font(.caption2.weight(.medium))
