@@ -5,6 +5,7 @@ struct HomeSettingsView: View {
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
     @AppStorage("showPopularTracks") private var showPopularTracks = false
     @AppStorage("hideEmptySections") private var hideEmptySections = false
+    @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
 
     var body: some View {
         Form {
@@ -24,6 +25,11 @@ struct HomeSettingsView: View {
 
             Section("Albums") {
                 Toggle("Popular Track Indicator", isOn: $showPopularTracks)
+                    .tint(.green)
+            }
+
+            Section("Lyrics") {
+                Toggle("Left Align Lyrics", isOn: $leftAlignLyrics)
                     .tint(.green)
             }
         }

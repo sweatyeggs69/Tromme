@@ -4,6 +4,8 @@ struct LyricsScrollView: View {
     @Environment(AudioPlayerService.self) private var player
     let lyricsService: LyricsService
 
+    @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
+
     @State private var containerHeight: CGFloat = 400
     @State private var isUserScrolling = false
     @State private var scrollResumeTask: Task<Void, Never>?
@@ -61,7 +63,7 @@ struct LyricsScrollView: View {
 
                             Color.clear.frame(height: bufferHeight)
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, leftAlignLyrics ? 0 : 20)
                         .coordinateSpace(.named("lyricsContent"))
                     }
                     .onGeometryChange(for: CGFloat.self) { proxy in
@@ -85,9 +87,10 @@ struct LyricsScrollView: View {
                             }
                             .onEnded { _ in
                                 scrollResumeTask = Task {
-                                    try? await Task.sleep(for: .seconds(3))
+                                    try? await Task.sleep(for: .seconds(1.5))
                                     guard !Task.isCancelled else { return }
                                     isUserScrolling = false
+                                    slinkyOffsets.removeAll()
                                     if currentIndex < lyricsService.lines.count {
                                         withAnimation(.spring(duration: 0.7, bounce: 0.15)) {
                                             proxy.scrollTo(lyricsService.lines[currentIndex].id, anchor: .center)
@@ -104,8 +107,8 @@ struct LyricsScrollView: View {
                     Text(plainLyrics)
                         .font(isPad ? .title.weight(.semibold) : .title3.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.85))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
+                        .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
                         .padding(.horizontal, 32)
                         .padding(.vertical, 40)
                 }
@@ -178,10 +181,10 @@ struct LyricsScrollView: View {
             .font(.system(size: lineFontSize, weight: .bold))
             .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
+            .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
             .contentShape(Rectangle())
-            .scaleEffect(isActive ? 1.08 : 0.90)
+            .scaleEffect(isActive ? (leftAlignLyrics ? 1.0 : 1.08) : 0.90, anchor: leftAlignLyrics ? .leading : .center)
             .animation(.spring(duration: 0.7, bounce: 0.2), value: isActive)
     }
 

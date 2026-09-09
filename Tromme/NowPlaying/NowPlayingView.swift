@@ -320,9 +320,6 @@ struct NowPlayingView: View {
                 }
                 .animation(.easeInOut(duration: 0.25), value: lyricsService.isLoading)
                 .animation(.easeInOut(duration: 0.25), value: lyricsService.hasLyrics)
-                .overlay(alignment: .bottomLeading) {
-                    lyricsRefreshButton
-                }
             } else if showQueue {
                 QueueView(player: player)
                     .mask(
@@ -492,6 +489,15 @@ struct NowPlayingView: View {
                 showingAddToPlaylistSheet = true
             } label: {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
+            }
+            if showLyrics {
+                Divider()
+                Button {
+                    Task { await lyricsService.refresh(track: track) }
+                } label: {
+                    Label("Refresh Lyrics", systemImage: "arrow.clockwise")
+                }
+                .disabled(lyricsService.isLoading)
             }
         }
     }
