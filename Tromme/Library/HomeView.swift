@@ -69,7 +69,7 @@ struct HomeView: View {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await loadHomeContent(forceRefresh: true) }
-                group.addTask { await loadFeaturedAlbum(forced: true) }
+                group.addTask { await loadFeaturedAlbum(forced: false) }
             }
         }
         .task(id: loadTaskID) {
