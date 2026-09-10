@@ -23,9 +23,10 @@ extension AppIconOption {
     ]
 
     static let premiumIconPack: [AppIconOption] = [
+        AppIconOption(id: "applemusic",     displayName: "Apple Music",    iconName: "AppleMusicAppIcon",    previewImageName: "preview-applemusic",     accentColor: Color(red: 1.0, green: 0.306, blue: 0.420)),
         AppIconOption(id: "galaxy",         displayName: "Galaxy",         iconName: "GalaxyAppIcon",        previewImageName: "preview-galaxy",         accentColor: Color(red: 0.55, green: 0.08, blue: 0.85)),
-        AppIconOption(id: "knocktua-dark",  displayName: "Knocktua Dark",  iconName: "KnocktuaDarkAppIcon",  previewImageName: "preview-knocktua-dark",  accentColor: Color(red: 0.529, green: 0.345, blue: 0.267)),
-        AppIconOption(id: "knocktua-light", displayName: "Knocktua Light", iconName: "KnocktuaLightAppIcon", previewImageName: "preview-knocktua-light", accentColor: Color(red: 0.851, green: 0.792, blue: 0.639)),
+        AppIconOption(id: "knocktua-dark",  displayName: "Noctua Dark",  iconName: "KnocktuaDarkAppIcon",  previewImageName: "preview-knocktua-dark",  accentColor: Color(red: 0.529, green: 0.345, blue: 0.267)),
+        AppIconOption(id: "knocktua-light", displayName: "Noctua Light", iconName: "KnocktuaLightAppIcon", previewImageName: "preview-knocktua-light", accentColor: Color(red: 0.851, green: 0.792, blue: 0.639)),
         AppIconOption(id: "ltt",       displayName: "LT&T",      iconName: "LT&TAppIcon",      previewImageName: "preview-ltt",       accentColor: Color(red: 1.00, green: 0.45, blue: 0.00)),
         AppIconOption(id: "masterchief",    displayName: "Master Chief",   iconName: "MasterChiefAppIcon",   previewImageName: "preview-masterchief",    accentColor: Color(red: 0.35, green: 0.55, blue: 0.25)),
         AppIconOption(id: "murderedout",    displayName: "Murdered Out",   iconName: "MurderedOutAppIcon",   previewImageName: "preview-murderedout",    accentColor: Color(.label)),

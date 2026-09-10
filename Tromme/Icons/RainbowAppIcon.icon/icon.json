@@ -14,7 +14,9 @@
       "layers" : [
         {
           "blend-mode" : "normal",
-          "fill" : "automatic",
+          "fill" : {
+            "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+          },
           "glass" : true,
           "hidden" : false,
           "image-name" : "trome logo.png",
