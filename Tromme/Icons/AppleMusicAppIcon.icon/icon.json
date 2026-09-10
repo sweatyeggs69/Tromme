@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:1.00000,0.30588,0.41961,1.00000",
-      "display-p3:1.00000,0.01569,0.21176,1.00000"
+      "display-p3:1.00000,0.39133,0.44706,1.00000",
+      "display-p3:0.91812,0.24271,0.23922,1.00000"
     ],
     "orientation" : {
       "start" : {
@@ -17,6 +17,7 @@
   },
   "groups" : [
     {
+      "hidden" : false,
       "layers" : [
         {
           "fill" : {
@@ -35,10 +36,12 @@
           }
         }
       ],
+      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
       },
+      "specular" : true,
       "translucency" : {
         "enabled" : true,
         "value" : 0.5
