@@ -52,6 +52,9 @@ struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
     let downloadedAt: Date
     let fileSize: Int64
     let durationMs: Int?
+    /// The Plex `updatedAt` Unix timestamp at the time of download. Used to detect
+    /// when the source file is replaced so the download can be refreshed automatically.
+    let sourceUpdatedAt: Int?
 
     var id: String { ratingKey }
 
@@ -195,6 +198,27 @@ final class DownloadManager: @unchecked Sendable {
 
     func resumeAutoDownload(tracks: [PlexMetadata], server: PlexServer, client: PlexAPIClient) {
         userStoppedAutoDownload = false
+        downloadBatch(tracks: tracks, server: server, client: client)
+    }
+
+    /// Called after a smart-refresh to pick up any tracks added or updated in the library.
+    /// Evicts stale downloads when the server's updatedAt is newer than the stored value,
+    /// then queues any missing tracks. No-ops if the user stopped auto-download or mode isn't .library.
+    func syncLibraryDownloadsIfNeeded(server: PlexServer, sectionId: String, client: PlexAPIClient) async {
+        guard !userStoppedAutoDownload else { return }
+        let enabled = UserDefaults.standard.bool(forKey: "autoDownloadEnabled")
+        let modeRaw = UserDefaults.standard.string(forKey: "autoDownloadMode") ?? AutoDownloadMode.defaultMode.rawValue
+        guard enabled, AutoDownloadMode(rawValue: modeRaw) == .library else { return }
+        guard let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) else { return }
+
+        for track in tracks {
+            guard let record = records[track.ratingKey],
+                  let serverUpdatedAt = track.updatedAt,
+                  let storedUpdatedAt = record.sourceUpdatedAt,
+                  serverUpdatedAt > storedUpdatedAt else { continue }
+            deleteDownload(ratingKey: track.ratingKey)
+        }
+
         downloadBatch(tracks: tracks, server: server, client: client)
     }
 
@@ -397,7 +421,8 @@ final class DownloadManager: @unchecked Sendable {
             relativeFilePath: filename,
             downloadedAt: Date(),
             fileSize: fileSize,
-            durationMs: track.duration
+            durationMs: track.duration,
+            sourceUpdatedAt: track.updatedAt
         )
         records[ratingKey] = record
         transientStates.removeValue(forKey: ratingKey)

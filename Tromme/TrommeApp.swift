@@ -77,6 +77,7 @@ struct TrommeApp: App {
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
                     await plexClient.smartRefresh(server: server, sectionId: sectionId)
+                    await downloadManager.syncLibraryDownloadsIfNeeded(server: server, sectionId: sectionId, client: plexClient)
                 }
                 .task {
                     await observeMemoryWarnings()
@@ -97,6 +98,7 @@ struct TrommeApp: App {
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
                     await plexClient.smartRefresh(server: server, sectionId: sectionId)
+                    await downloadManager.syncLibraryDownloadsIfNeeded(server: server, sectionId: sectionId, client: plexClient)
                 }
             }
         }
