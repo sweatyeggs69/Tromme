@@ -362,6 +362,15 @@ struct PlaylistDetailView: View {
 
     private func loadTracks() async {
         guard let server = serverConnection.currentServer else { return }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.playlistItems(playlistKey: playlistItemRequestKey)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+            tracks = cached
+            isLoading = false
+        }
+
         do {
             tracks = try await client.cachedPlaylistItems(server: server, playlistKey: playlistItemRequestKey)
         } catch {

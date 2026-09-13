@@ -1995,8 +1995,11 @@ final class AudioPlayerService: @unchecked Sendable {
         guard shouldScrobble else { return }
         scrobbledTrackRatingKey = currentTrack.ratingKey
         logPlayback("scrobble", "time=\(Int(currentTime)) duration=\(Int(duration))")
+        let capturedServer = server
+        let capturedRatingKey = currentTrack.ratingKey
         Task {
-            try? await client.reportScrobble(server: server, ratingKey: currentTrack.ratingKey)
+            try? await client.reportScrobble(server: capturedServer, ratingKey: capturedRatingKey)
+            NotificationCenter.default.post(name: .recentlyPlayedDidChange, object: nil)
         }
     }
 

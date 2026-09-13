@@ -94,6 +94,28 @@ struct HomeView: View {
                 }
             }
         }
+        .task {
+            guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
+            for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
+                guard !Task.isCancelled else { break }
+                await loadHomeContent(forceRefresh: false)
+            }
+        }
+        .task {
+            guard previewRecentTracks == nil else { return }
+            for await _ in NotificationCenter.default.notifications(named: .recentlyPlayedDidChange) {
+                guard !Task.isCancelled,
+                      let server = serverConnection.currentServer,
+                      let sectionId = serverConnection.currentLibrarySectionId else { continue }
+                // Fetch directly from network — if offline, this throws and we leave
+                // the existing cache and UI state untouched.
+                guard let fresh = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId) else { continue }
+                await LibraryCache.shared.set(fresh, forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId))
+                withAnimation(.easeIn(duration: 0.25)) {
+                    recentTracks = Array(fresh.prefix(10))
+                }
+            }
+        }
         .navigationTitle(serverConnection.currentServer?.name ?? "Home")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingAddToPlaylistSheet) {
@@ -104,8 +126,7 @@ struct HomeView: View {
     private var loadTaskID: String {
         let sectionID = serverConnection.currentLibrarySectionId ?? "none"
         let serverURI = serverConnection.currentServer?.uri ?? "none"
-        let networkType = NetworkStatus.shared.interfaceType.map { "\($0)" } ?? "none"
-        return "\(sectionID)|\(serverURI)|\(networkType)"
+        return "\(sectionID)|\(serverURI)"
     }
 
     @ViewBuilder

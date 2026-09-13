@@ -258,6 +258,9 @@ enum CachePolicy: Sendable {
     /// Playlists, favorites — user-editable, changes more often.
     /// Memory: 1 hour, Disk: 3 days.
     case userContent
+    /// Home-screen dynamic lists (recently played, recently added) — always stale on cold launch.
+    /// Memory: 30 min, Disk: 30 min.
+    case homeContent
     /// Search results — short-lived, mostly just deduplication.
     /// Memory: 10 min, Disk: 4 hours.
     case search
@@ -271,6 +274,7 @@ enum CachePolicy: Sendable {
         case .detail:      return 7200      // 2 hours
         case .albumInfo:   return 7200      // 2 hours
         case .userContent: return 3600      // 1 hour
+        case .homeContent: return 1800      // 30 min
         case .search:      return 600       // 10 min
         case .lastFM:      return 14400     // 4 hours
         }
@@ -278,12 +282,13 @@ enum CachePolicy: Sendable {
 
     var diskTTL: TimeInterval {
         switch self {
-        case .library:     return 2_592_000 // 30 days
-        case .detail:      return 604_800   // 7 days
-        case .albumInfo:   return 86_400    // 24 hours
-        case .userContent: return 259_200   // 3 days
-        case .search:      return 14400     // 4 hours
-        case .lastFM:      return 604_800   // 7 days
+        case .library:      return 2_592_000 // 30 days
+        case .detail:       return 604_800   // 7 days
+        case .albumInfo:    return 86_400    // 24 hours
+        case .userContent:  return 259_200   // 3 days
+        case .homeContent:  return 1800      // 30 min — always stale on cold launch
+        case .search:       return 14400     // 4 hours
+        case .lastFM:       return 604_800   // 7 days
         }
     }
 }
@@ -358,6 +363,11 @@ enum CacheKey {
 
 extension Notification.Name {
     static let favoritesDidChange = Notification.Name("TrommeFavoritesDidChange")
+    /// Posted by smartRefresh when it detects that the server library has changed.
+    /// Listeners (e.g. HomeView) should reload their content when this fires.
+    static let libraryContentDidChange = Notification.Name("TrommeLibraryContentDidChange")
+    /// Posted after a track scrobble completes so the home screen refreshes recently played.
+    static let recentlyPlayedDidChange = Notification.Name("TrommeRecentlyPlayedDidChange")
 }
 
 // MARK: - String SHA256

@@ -102,11 +102,20 @@ struct PlaylistsView: View {
             isLoading = false
             return
         }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.playlists(serverId: server.machineIdentifier)
+        if let cached = LibraryCache.shared.memoryCached([PlexPlaylist].self, forKey: cacheKey), !cached.isEmpty {
+            playlists = cached.filter(\.isMusicPlaylist)
+            isLoading = false
+        }
+
         do {
             let all = try await client.cachedPlaylists(server: server)
             playlists = all.filter(\.isMusicPlaylist)
         } catch {
-            playlists = []
+            if playlists.isEmpty { playlists = [] }
         }
         isLoading = false
     }

@@ -135,7 +135,7 @@ struct AllSongsView: View {
                 .disabled(displayTracks.isEmpty)
             }
         }
-        .task(id: previewTracks != nil ? "preview" : "\(network.isConnected)") {
+        .task(id: previewTracks != nil ? "preview" : loadTaskID) {
             if let preview = previewTracks {
                 loadedTracks = preview
                 isLoading = false
@@ -156,6 +156,12 @@ struct AllSongsView: View {
             searchText = ""
             isSearchPresented = false
         }
+    }
+
+    private var loadTaskID: String {
+        let serverID = serverConnection.currentServer?.machineIdentifier ?? "none"
+        let sectionID = serverConnection.currentLibrarySectionId ?? "none"
+        return "\(serverID)|\(sectionID)|\(network.isConnected)"
     }
 
     private var isTitleSortActive: Bool {
@@ -182,7 +188,10 @@ struct AllSongsView: View {
 
     private func loadTracks() async {
         guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
+              let sectionId = serverConnection.currentLibrarySectionId else {
+            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
+            return
+        }
 
         // Pre-populate from memory cache synchronously (no actor hop needed).
         // Eliminates the spinner flash when the memory cache is warm.

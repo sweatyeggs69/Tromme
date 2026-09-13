@@ -162,7 +162,7 @@ extension PlexAPIClient {
     func cachedRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
         try await LibraryCache.shared.cachedFetch(
             forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId),
-            policy: .userContent
+            policy: .homeContent
         ) {
             try await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: limit)
         }
@@ -171,7 +171,7 @@ extension PlexAPIClient {
     func cachedRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
         try await LibraryCache.shared.cachedFetch(
             forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId),
-            policy: .userContent
+            policy: .homeContent
         ) {
             try await self.getRecentlyAdded(server: server, sectionId: sectionId, type: type, limit: limit)
         }
@@ -285,6 +285,9 @@ extension PlexAPIClient {
             await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyAdded(serverId: sid, sectionId: sectionId))
             await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyPlayed(serverId: sid, sectionId: sectionId))
             await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: sid, sectionId: sectionId))
+            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: sid))
+            NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
         }
 
         await warmCache(server: server, sectionId: sectionId)
@@ -309,11 +312,22 @@ extension PlexAPIClient {
                 _ = try? await self.cachedPlaylists(server: server)
                 return ("playlists", [])
             }
-            group.addTask { ("recent", (try? await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 30)) ?? []) }
             group.addTask { ("favorites", (try? await self.cachedFavoriteTracks(server: server, sectionId: sectionId)) ?? []) }
             group.addTask {
                 _ = try? await self.cachedTracks(server: server, sectionId: sectionId)
                 return ("tracks", [])
+            }
+            // Always fetch dynamic home content directly so the home screen reflects
+            // the current server state, not whatever happened to be in the disk cache.
+            group.addTask {
+                let recent = (try? await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)) ?? []
+                await LibraryCache.shared.set(recent, forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId))
+                return ("recent", recent)
+            }
+            group.addTask {
+                let added = (try? await self.getRecentlyAdded(server: server, sectionId: sectionId)) ?? []
+                await LibraryCache.shared.set(added, forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId))
+                return ("recentlyAdded", [])
             }
 
             for await (key, items) in group {
@@ -326,6 +340,9 @@ extension PlexAPIClient {
                 }
             }
         }
+
+        // Notify the home screen that fresh data is ready in the memory cache.
+        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
 
         // Phase 2: Prefetch artwork for artists and albums in the background.
         // No-op on expensive/low-power — guard is inside prefetchArtwork.

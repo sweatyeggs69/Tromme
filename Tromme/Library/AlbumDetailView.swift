@@ -449,6 +449,15 @@ struct AlbumDetailView: View {
             isLoadingTracks = false
             return
         }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let childrenKey = CacheKey.children(ratingKey: album.ratingKey)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: childrenKey), !cached.isEmpty {
+            tracks = cached
+            isLoadingTracks = false
+        }
+
         do {
             tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey)
             if let firstTrack = tracks.first {
@@ -457,8 +466,10 @@ struct AlbumDetailView: View {
                 firstTrackDetails = nil
             }
         } catch {
-            tracks = []
-            firstTrackDetails = nil
+            if tracks.isEmpty {
+                tracks = []
+                firstTrackDetails = nil
+            }
         }
         isLoadingTracks = false
     }

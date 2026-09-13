@@ -77,7 +77,7 @@ struct ArtistsView: View {
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }
-        .task(id: network.isConnected) { await loadArtists() }
+        .task(id: loadTaskID) { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
         .onDisappear {
             searchText = ""
@@ -156,6 +156,12 @@ struct ArtistsView: View {
         }
     }
 
+    private var loadTaskID: String {
+        let serverID = serverConnection.currentServer?.machineIdentifier ?? "none"
+        let sectionID = serverConnection.currentLibrarySectionId ?? "none"
+        return "\(serverID)|\(sectionID)|\(network.isConnected)"
+    }
+
     private var artworkPrefetchKey: String {
         "\(viewMode.rawValue)|\(filteredArtists.count)|\(searchText)"
     }
@@ -207,16 +213,31 @@ struct ArtistsView: View {
 
     private func loadArtistsOnline() async {
         guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
+              let sectionId = serverConnection.currentLibrarySectionId else {
+            isLoading = false
+            return
+        }
 
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates the spinner flash when the memory cache is warm.
         let cacheKey = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
+
+        // Memory cache (sync, no actor hop).
         if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
             var sorted = cached
             sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
             artists = sorted
             isLoading = false
+        }
+
+        // Disk cache — avoids spinner on cold launch when memory cache is empty.
+        if artists.isEmpty,
+           let diskCached = await LibraryCache.shared.get([PlexMetadata].self, forKey: cacheKey)?.value,
+           !diskCached.isEmpty {
+            var sorted = diskCached
+            sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
+            withAnimation(.easeIn(duration: 0.25)) {
+                artists = sorted
+                isLoading = false
+            }
         }
 
         // Phase 1: Show the standard artist list immediately from cache.

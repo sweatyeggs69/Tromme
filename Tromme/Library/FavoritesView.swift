@@ -133,17 +133,30 @@ struct FavoritesView: View {
         filteredTracks = result
     }
 
+    private func sortedFavorites(_ favorites: [PlexMetadata]) -> [PlexMetadata] {
+        favorites.sorted {
+            if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
+                return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
+            }
+            return ($0.userRating ?? 0) > ($1.userRating ?? 0)
+        }
+    }
+
     private func loadTracks() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
+
+        // Pre-populate from memory cache synchronously (no actor hop needed).
+        // Eliminates the spinner flash when the memory cache is warm.
+        let cacheKey = CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+            tracks = sortedFavorites(cached)
+            isLoading = false
+        }
+
         do {
             let favorites = try await client.cachedFavoriteTracks(server: server, sectionId: sectionId)
-            tracks = favorites.sorted {
-                if ($0.userRating ?? 0) == ($1.userRating ?? 0) {
-                    return ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title)
-                }
-                return ($0.userRating ?? 0) > ($1.userRating ?? 0)
-            }
+            tracks = sortedFavorites(favorites)
         } catch {
 #if DEBUG
             print("[FavoritesView] Failed to load favorites: \(error)")
