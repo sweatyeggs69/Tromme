@@ -120,13 +120,11 @@ struct ContentView: View {
 
     private var mainTabView: some View {
         let tabs = TabView(selection: $selectedTab) {
-            if network.isConnected {
-                Tab("Home", systemImage: "house.fill", value: "home") {
-                    NavigationStack {
-                        HomeView()
-                            .navigationDestinations()
-                            .settingsToolbar(alwaysVisible: true, signOut: signOut)
-                    }
+            Tab("Home", systemImage: "house.fill", value: "home") {
+                NavigationStack {
+                    HomeView()
+                        .navigationDestinations()
+                        .settingsToolbar(alwaysVisible: true, signOut: signOut)
                 }
             }
 

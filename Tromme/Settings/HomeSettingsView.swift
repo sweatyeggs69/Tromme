@@ -23,9 +23,11 @@ struct HomeSettingsView: View {
                     .tint(.green)
             }
 
-            Section("Albums") {
+            Section {
                 Toggle("Popular Track Indicator", isOn: $showPopularTracks)
                     .tint(.green)
+            } header: {
+                Text("Albums")
             } footer: {
                 Text("Track popularity data is sourced from Last.fm.")
             }
