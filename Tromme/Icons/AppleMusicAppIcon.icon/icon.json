@@ -36,11 +36,11 @@
                 "orientation" : {
                   "start" : {
                     "x" : 0.49999999999999994,
-                    "y" : 0.17811471540584808
+                    "y" : 0
                   },
                   "stop" : {
                     "x" : 0.49999999999999994,
-                    "y" : 0.860997548759403
+                    "y" : 1
                   }
                 }
               }
@@ -65,10 +65,21 @@
         "opacity" : 0.5
       },
       "specular" : true,
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
+      "translucency-specializations" : [
+        {
+          "value" : {
+            "enabled" : true,
+            "value" : 0.5
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "enabled" : false,
+            "value" : 0.5
+          }
+        }
+      ]
     }
   ],
   "supported-platforms" : {

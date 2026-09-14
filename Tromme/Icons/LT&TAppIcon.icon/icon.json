@@ -1,15 +1,7 @@
 {
-  "fill-specializations" : [
-    {
-      "value" : {
-        "automatic-gradient" : "display-p3:0.00000,0.00000,0.00000,1.00000"
-      }
-    },
-    {
-      "appearance" : "dark",
-      "value" : "automatic"
-    }
-  ],
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.00000,0.00000,0.00000,1.00000"
+  },
   "groups" : [
     {
       "layers" : [
@@ -50,7 +42,7 @@
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }

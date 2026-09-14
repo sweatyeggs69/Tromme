@@ -33,7 +33,20 @@
             {
               "appearance" : "dark",
               "value" : {
-                "automatic-gradient" : "display-p3:0.94410,0.52848,0.66166,1.00000"
+                "linear-gradient" : [
+                  "display-p3:1.00534,0.65622,0.76809,1.00000",
+                  "display-p3:0.94410,0.52848,0.66166,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.49999999999999994,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.49999999999999994,
+                    "y" : 1
+                  }
+                }
               }
             }
           ],
@@ -54,10 +67,21 @@
         "kind" : "neutral",
         "opacity" : 0.5
       },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.5
-      }
+      "translucency-specializations" : [
+        {
+          "value" : {
+            "enabled" : true,
+            "value" : 0.5
+          }
+        },
+        {
+          "appearance" : "dark",
+          "value" : {
+            "enabled" : false,
+            "value" : 0.5
+          }
+        }
+      ]
     }
   ],
   "supported-platforms" : {

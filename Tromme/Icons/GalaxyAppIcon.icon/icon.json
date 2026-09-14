@@ -1,17 +1,10 @@
 {
-  "fill-specializations" : [
-    {
-      "value" : {
-        "solid" : "display-p3:0.43945,0.23868,0.50487,1.00000"
-      }
-    },
-    {
-      "appearance" : "dark",
-      "value" : "automatic"
-    }
-  ],
+  "fill" : {
+    "solid" : "display-p3:0.43945,0.23868,0.50487,1.00000"
+  },
   "groups" : [
     {
+      "blur-material" : null,
       "layers" : [
         {
           "fill" : {
