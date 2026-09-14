@@ -731,7 +731,7 @@ struct TimelineSlider: View {
 
     var usesOverlayedTimeLabels = false
 
-    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "codecBitrate"
+    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
 
     private var showsBadge: Bool {
         player.isPlayingLocalDownload || (playbackBadgeMode != "off" && player.activeStreamCodec != nil)

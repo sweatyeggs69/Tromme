@@ -28,7 +28,7 @@ struct AlbumDetailView: View {
     @State private var albumDeleteErrorMessage: String?
     @State private var isDeletingAlbum = false
     @State private var showingChangeArtworkSheet = false
-    @AppStorage("showPopularTracks") private var showPopularTracks = false
+    @AppStorage("showPopularTracks") private var showPopularTracks = true
     @State private var popularTrackTitles: Set<String> = []
     @State private var scrollOffset: CGFloat = 0
 

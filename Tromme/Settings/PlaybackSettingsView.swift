@@ -3,7 +3,7 @@ import SwiftUI
 struct PlaybackSettingsView: View {
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
-    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "codecBitrate"
+    @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
 

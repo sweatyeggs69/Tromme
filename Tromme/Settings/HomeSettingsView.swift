@@ -3,7 +3,7 @@ import SwiftUI
 struct HomeSettingsView: View {
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
-    @AppStorage("showPopularTracks") private var showPopularTracks = false
+    @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
 
@@ -26,6 +26,8 @@ struct HomeSettingsView: View {
             Section("Albums") {
                 Toggle("Popular Track Indicator", isOn: $showPopularTracks)
                     .tint(.green)
+            } footer: {
+                Text("Track popularity data is sourced from Last.fm.")
             }
 
             Section("Lyrics") {
