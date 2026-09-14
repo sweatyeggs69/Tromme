@@ -101,6 +101,14 @@ struct HomeView: View {
                 await loadHomeContent(forceRefresh: false)
             }
         }
+        .onChange(of: player.currentTrack) { _, newTrack in
+            guard let newTrack, previewRecentTracks == nil else { return }
+            var updated = recentTracks.filter { $0.ratingKey != newTrack.ratingKey }
+            updated.insert(newTrack, at: 0)
+            withAnimation(.easeIn(duration: 0.25)) {
+                recentTracks = Array(updated.prefix(10))
+            }
+        }
         .task {
             guard previewRecentTracks == nil else { return }
             for await _ in NotificationCenter.default.notifications(named: .recentlyPlayedDidChange) {
