@@ -210,21 +210,21 @@ struct AlbumDetailView: View {
     }
 
     @ViewBuilder
-    private func albumBioPreview(centered: Bool = true) -> some View {
+    private var albumBioPreview: some View {
         if let bioText {
             Button {
                 showsAlbumInfoSheet = true
             } label: {
                 InlineMoreText(
                     bioText,
-                    textStyle: .footnote,
+                    textStyle: .subheadline,
                     textColor: bioTextColor,
                     moreWeight: .semibold,
                     moreColor: titleColor,
                     lineLimit: 2,
-                    alignment: centered ? .center : .leading
+                    alignment: .leading
                 )
-                .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
         }
@@ -294,10 +294,7 @@ struct AlbumDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func albumHeader(
-        includesTitleAndArtist: Bool = true,
-        includesInfoLine: Bool = true
-    ) -> some View {
+    private var albumHeader: some View {
         VStack {
             ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
                 .overlay(
@@ -307,53 +304,50 @@ struct AlbumDetailView: View {
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
-            if includesTitleAndArtist {
-                Text(album.title)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(titleColor)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 12)
-                    .padding(.horizontal, 20)
-
-                if let artistTarget = artistNavigationTarget {
-                    if shouldPopToSourceArtist {
-                        Button {
-                            dismiss()
-                        } label: {
-                            centeredArtistHeaderText(artistTarget.title)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    } else {
-                        Button {
-                            selectedArtist = artistTarget
-                        } label: {
-                            centeredArtistHeaderText(artistTarget.title)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                } else if let artist = album.parentTitle, !artist.isEmpty {
-                    centeredArtistHeaderText(artist)
-                }
-            }
-
-            if includesInfoLine {
-                albumInfoLineView(centered: true)
-                    .padding(.top, 0.5)
-                    .padding(.horizontal, 20)
-            }
-
-            albumBioPreview(centered: true)
-                .padding(.top, 8)
+            Text(album.title)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(titleColor)
+                .multilineTextAlignment(.center)
+                .padding(.top, 12)
                 .padding(.horizontal, 20)
 
-            albumActionButtons
+            if let artistTarget = artistNavigationTarget {
+                if shouldPopToSourceArtist {
+                    Button {
+                        dismiss()
+                    } label: {
+                        centeredArtistHeaderText(artistTarget.title)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    Button {
+                        selectedArtist = artistTarget
+                    } label: {
+                        centeredArtistHeaderText(artistTarget.title)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            } else if let artist = album.parentTitle, !artist.isEmpty {
+                centeredArtistHeaderText(artist)
+            }
+
+            albumInfoLineView(centered: true)
+                .padding(.top, 0.5)
+                .padding(.horizontal, 20)
+
+            albumActionButtons(bottomPadding: bioText != nil ? 4 : 20)
+
+            albumBioPreview
+                .padding(.top, 4)
+                .padding(.bottom, 20)
+                .padding(.horizontal, 20)
         }
         .frame(maxWidth: .infinity)
     }
 
-    private var albumActionButtons: some View {
+    private func albumActionButtons(bottomPadding: CGFloat = 20) -> some View {
         HStack(spacing: 14) {
             Button {
                 guard !controlsDisabled else { return }
@@ -414,7 +408,7 @@ struct AlbumDetailView: View {
             .opacity(controlsDisabled ? 0.45 : 1.0)
         }
         .padding(.top, 6)
-        .padding(.bottom, 20)
+        .padding(.bottom, bottomPadding)
     }
 
     private let isPreviewMode: Bool
@@ -687,7 +681,7 @@ struct AlbumDetailView: View {
             albumInfoLineView(centered: false)
                 .padding(.top, 4)
 
-            albumBioPreview(centered: false)
+            albumBioPreview
                 .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -709,7 +703,7 @@ struct AlbumDetailView: View {
 
                 landscapeAlbumTitleAndArtist
 
-                albumActionButtons
+                albumActionButtons()
                     .padding(.top, 12)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -865,7 +859,7 @@ struct AlbumDetailView: View {
                 } else {
                     List {
                         Section {
-                            albumHeader()
+                            albumHeader
                                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                                 .listRowSeparator(.hidden, edges: .top)
                                 .listRowSeparator(.visible, edges: .bottom)

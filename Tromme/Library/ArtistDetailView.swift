@@ -27,7 +27,6 @@ struct ArtistDetailView: View {
         resolvedArtist ?? artist
     }
 
-
     private var showsCollapsedTitle: Bool {
         heroMinY < -(heroHeight - 80) || heroIsHidden
     }
@@ -285,7 +284,7 @@ struct ArtistDetailView: View {
                     } label: {
                         InlineMoreText(
                             summary,
-                            textStyle: .body,
+                            textStyle: .callout,
                             textColor: .secondary,
                             moreTextStyle: .subheadline,
                             moreWeight: .bold,
