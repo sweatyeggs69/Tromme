@@ -117,6 +117,48 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - Color contrast
+
+extension Color {
+    /// Whether this color is light enough that black foreground content reads better than white.
+    /// - Parameter colorScheme: When the color is dynamic (e.g. `Color(.label)`), pass the current
+    ///   color scheme to resolve it to concrete RGB before sampling. Pass `nil` for fixed colors
+    ///   (e.g. artwork-sampled colors) that don't vary with appearance.
+    func isLightColor(in colorScheme: ColorScheme? = nil) -> Bool {
+        var uiColor = UIColor(self)
+        if let colorScheme {
+            let trait = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+            uiColor = uiColor.resolvedColor(with: trait)
+        }
+
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
+
+        // WCAG relative luminance for contrast-based black/white foreground choice.
+        func linearized(_ component: CGFloat) -> CGFloat {
+            component <= 0.03928 ? (component / 12.92) : pow((component + 0.055) / 1.055, 2.4)
+        }
+
+        let luminance =
+            (0.2126 * linearized(red)) +
+            (0.7152 * linearized(green)) +
+            (0.0722 * linearized(blue))
+
+        let blackContrast = (luminance + 0.05) / 0.05
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        let contrastDelta = abs(blackContrast - whiteContrast)
+
+        // Dead-band: when both options are close, bias to a slightly lighter threshold.
+        if contrastDelta < 0.35 {
+            return luminance > 0.45
+        }
+        return blackContrast >= whiteContrast
+    }
+}
+
 extension View {
     func appSectionTitleStyle() -> some View {
         self

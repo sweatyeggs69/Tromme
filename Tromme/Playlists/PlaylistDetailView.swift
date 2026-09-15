@@ -34,7 +34,7 @@ struct PlaylistDetailView: View {
     }
 
     private var titleColor: Color {
-        artworkColor.isLightColor ? .black : .white
+        artworkColor.isLightColor() ? .black : .white
     }
 
     private var tertiaryTextColor: Color {
@@ -42,11 +42,11 @@ struct PlaylistDetailView: View {
     }
 
     private var iconForegroundColor: Color {
-        artworkColor.isLightColor ? .black : .white
+        artworkColor.isLightColor() ? .black : .white
     }
 
     private var controlShadowColor: Color {
-        artworkColor.isLightColor ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
+        artworkColor.isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
     }
 
     private var controlsDisabled: Bool {
@@ -135,7 +135,7 @@ struct PlaylistDetailView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(iconForegroundColor)
                         .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                        .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
                         .shadow(color: controlShadowColor, radius: 6, y: -2)
                 }
                 .buttonStyle(.plain)
@@ -155,7 +155,7 @@ struct PlaylistDetailView: View {
                     .padding(.horizontal, 56)
                     .padding(.vertical, 14)
                     .background(
-                        Capsule().fill(artworkColor.isLightColor ? Color.black : Color.white)
+                        Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
                     )
                 }
                 .buttonStyle(.plain)
@@ -174,7 +174,7 @@ struct PlaylistDetailView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(iconForegroundColor)
                         .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                        .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
                         .shadow(color: controlShadowColor, radius: 6, y: -2)
                 }
                 .disabled(controlsDisabled)
@@ -412,37 +412,6 @@ struct PlaylistDetailView: View {
         } catch {
             playlistDeleteErrorMessage = error.localizedDescription
         }
-    }
-}
-
-private extension Color {
-    var isLightColor: Bool {
-        let uiColor = UIColor(self)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
-
-        // WCAG relative luminance for contrast-based black/white foreground choice.
-        func linearized(_ component: CGFloat) -> CGFloat {
-            component <= 0.03928 ? (component / 12.92) : pow((component + 0.055) / 1.055, 2.4)
-        }
-
-        let luminance =
-            (0.2126 * linearized(red)) +
-            (0.7152 * linearized(green)) +
-            (0.0722 * linearized(blue))
-
-        let blackContrast = (luminance + 0.05) / 0.05
-        let whiteContrast = 1.05 / (luminance + 0.05)
-        let contrastDelta = abs(blackContrast - whiteContrast)
-
-        // Dead-band: when both options are close, bias to a slightly lighter threshold.
-        if contrastDelta < 0.35 {
-            return luminance > 0.45
-        }
-        return blackContrast >= whiteContrast
     }
 }
 

@@ -2,16 +2,15 @@
 
 ## Overview
 
-- iOS 26 SwiftUI app targeting iPhone and iPad
-- Minimum deployment: iOS 26
-- Swift 6 with strict concurrency
-- Uses SwiftUI throughout - no UIKit unless absolutely necessary
-- All UI must follow iOS 26 design language and Liquid Glass styling
+- iOS 27 SwiftUI app targeting iPhone and iPad
+- Minimum deployment: iOS 27
+- SwiftUI is preferred, use UIKit as fallback
+- All UI must follow iOS 27 design language and Liquid Glass styling
 
 ## STRICT RULE: Always Use Stock Apple First
 
 Before implementing ANY feature, control, layout, or behavior:
-1. Check if Apple provides a stock/default/built-in way to do it in iOS 26
+1. Check if Apple provides a stock/default/built-in way to do it in iOS 27
 2. If Apple provides it, use it — no custom implementations
 3. Only build custom when Apple has NO equivalent
 
@@ -65,13 +64,13 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - use structured concurrency (TaskGroup) over manual task management
 - Error handling: use typed throws where supported
 
-## iOS 26 / Liquid Glass Requirements
+## iOS 27 / Liquid Glass Requirements
 - Tab bars, toolbars, and navigation bars get Liquid Glass automatically — do not manually apply .glassEffect to them
 - Use Tab(role: .search) for search — never a custom search button or separate tab
-- Navigation must use the iOS 26 tab bar style (floating Liquid Glass pill)
+- Navigation must use the iOS 27 tab bar style (floating Liquid Glass pill)
 - Sheets, popovers, and alerts should use system presentation styles
 - Prefer .contentTransition(.symbolEffect) for animated icon changes
-- All designs should look and feel like a stock iOS 26 app
+- All designs should look and feel like a stock iOS 27 app
 - Only use .glassEffect on custom views that need glass treatment and aren't already system-managed
 
 ## Popups & Confirmation UX
@@ -96,6 +95,12 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - File organization: one type per file
 - Naming: PascalCase for types, camelCase for properties
 - Group files by feature, not by type (Weather/, Profile/, Settings/)
+
+## Color Contrast (black/white foreground on a colored background)
+- Use the shared `Color.isLightColor(in:)` helper in `Core/Styling/AppStyle.swift` — never re-implement luminance/contrast math per-view.
+- It returns `true` when the background is light enough that black content reads better; pick `.black` when `true`, `.white` when `false`.
+- Pass `colorScheme` (from `@Environment(\.colorScheme)`) when the background color is dynamic (e.g. `Color(.label)`, or anything from an environment/icon-pack accent color) so it resolves to concrete RGB first. Pass `nil` for fixed colors that don't vary with appearance (e.g. artwork-sampled colors from `ArtworkColorCache`).
+- Used today by `AlbumDetailView`, `PlaylistDetailView` (artwork-driven controls), and `ArtistDetailView` (accent-color-driven shuffle button).
 
 ## Logging & Diagnostics
 - All verbose diagnostics and development logs must be gated to debug builds only (`#if DEBUG`).

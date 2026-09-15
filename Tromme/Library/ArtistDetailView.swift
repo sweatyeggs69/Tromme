@@ -56,12 +56,6 @@ struct ArtistDetailView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let similarSectionBackground = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(white: 1.0, alpha: 0.15)
-            : UIColor(white: 0.0, alpha: 0.05)
-    })
-
     private var albumGridColumns: [GridItem] {
         let count = horizontalSizeClass == .regular ? 4 : 2
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
@@ -284,7 +278,6 @@ struct ArtistDetailView: View {
             if contentReady && (hasBio || !similarArtists.isEmpty) {
                 if let summary = displayArtist.summary, !summary.isEmpty {
                     sectionHeader("About \(displayArtist.title)")
-                        .listRowBackground(similarSectionBackground)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text(summary)
@@ -300,7 +293,6 @@ struct ArtistDetailView: View {
                     }
                     .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))
                     .listRowSeparator(.hidden)
-                    .listRowBackground(similarSectionBackground)
                 }
 
                 if !similarArtists.isEmpty {
@@ -308,10 +300,8 @@ struct ArtistDetailView: View {
                         "Similar Artists",
                         disclosureAction: similarArtists.count > 8 ? { showsAllSimilarArtists = true } : nil
                     )
-                    .listRowBackground(similarSectionBackground)
 
                     similarArtistsRail(Array(similarArtists.prefix(8)))
-                        .listRowBackground(similarSectionBackground)
                 }
             }
 
@@ -345,6 +335,7 @@ struct ArtistDetailView: View {
             }
         }
         .listStyle(.plain)
+        .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
         .task(id: artist.ratingKey) {
             guard previewData == nil else { return }
@@ -507,6 +498,8 @@ private struct ArtistHeroHeaderView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(NetworkStatus.self) private var network
+    @Environment(\.appAccentColor) private var appAccentColor
+    @Environment(\.colorScheme) private var colorScheme
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
@@ -570,9 +563,9 @@ private struct ArtistHeroHeaderView: View {
                         } label: {
                             Image(systemName: "shuffle")
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(.black)
+                                .foregroundStyle(appAccentColor.isLightColor(in: colorScheme) ? .black : .white)
                                 .frame(width: 40, height: 40)
-                                .background(.white.opacity(0.85), in: Circle())
+                                .background(appAccentColor, in: Circle())
                         }
                         .buttonStyle(.plain)
                     }

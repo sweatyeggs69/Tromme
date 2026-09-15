@@ -78,7 +78,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var playbackIntent: Bool = false
     private var lastPublishedNowPlayingTrackKey: String?
     private let maxRecoveryAttemptsPerTrack = 2
-    private let scrobbleThreshold: Double = 0.9
+    private let scrobbleThreshold: Double = 0.75
     private var recoveryTrackRatingKey: String?
     private var recoveryAttemptsForTrack = 0
     private var server: PlexServer?
@@ -97,6 +97,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var soundCheckObserver: NSObjectProtocol?
     private var routeChangeObserver: NSObjectProtocol?
     private var audioInterruptionObserver: NSObjectProtocol?
+    private var audioResumptionObserver: NSObjectProtocol?
     private var wasInterruptedWhilePlaying = false
     private var networkChangeObserver: NSObjectProtocol?
     private var networkRecoveryTask: Task<Void, Never>?
@@ -107,6 +108,7 @@ final class AudioPlayerService: @unchecked Sendable {
     private var lastLoggedTimeControlStatus: AVPlayer.TimeControlStatus?
     #endif
     private var isPlayingLocalFile = false
+    private var localFileCodec: String?
     private var pendingInitialSeekTime: TimeInterval?
     /// When a streamed transcode session is started at a seek point, AVPlayer's
     /// timeline begins at 0 but actually represents this many seconds into the track.
@@ -173,6 +175,7 @@ final class AudioPlayerService: @unchecked Sendable {
     /// Returns nil when no track is loaded.
     var activeStreamCodec: String? {
         guard hasTrack else { return nil }
+        if isPlayingLocalFile { return localFileCodec }
         if isConstrainedPlaybackPath { return "AAC" }
         let media = currentTrack?.media?.first
         let audioStream = media?.part?
@@ -207,6 +210,9 @@ final class AudioPlayerService: @unchecked Sendable {
         }
         if let audioInterruptionObserver {
             NotificationCenter.default.removeObserver(audioInterruptionObserver)
+        }
+        if let audioResumptionObserver {
+            NotificationCenter.default.removeObserver(audioResumptionObserver)
         }
         if let networkChangeObserver {
             NotificationCenter.default.removeObserver(networkChangeObserver)
@@ -851,6 +857,7 @@ final class AudioPlayerService: @unchecked Sendable {
         cachedArtworkThumbPath = nil
         isConstrainedPlaybackPath = false
         isPlayingLocalFile = false
+        localFileCodec = nil
         savePlaybackState()
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
@@ -937,6 +944,7 @@ final class AudioPlayerService: @unchecked Sendable {
         currentSessionID = UUID().uuidString
         isConstrainedPlaybackPath = false
         isPlayingLocalFile = false
+        localFileCodec = nil
 
         guard let server, let client else { return }
 
@@ -951,6 +959,8 @@ final class AudioPlayerService: @unchecked Sendable {
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
+            let ext = localURL.pathExtension
+            localFileCodec = ext.isEmpty ? nil : ext.uppercased()
             currentSessionID = nil
             pendingInitialSeekTime = boundedResume
             startPlayback(url: localURL)
@@ -1342,54 +1352,56 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func observeAudioInterruptions() {
         audioInterruptionObserver = NotificationCenter.default.addObserver(
-            forName: AVAudioSession.interruptionNotification,
+            forName: AVAudioSession.didBecomeInactiveNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleAudioSessionDidBecomeInactive()
+            }
+        }
+        audioResumptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.resumptionRecommendationNotification,
             object: AVAudioSession.sharedInstance(),
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            guard let userInfo = notification.userInfo,
-                  let raw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
-                  let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
-            let options: AVAudioSession.InterruptionOptions = {
-                guard let raw = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else { return [] }
-                return AVAudioSession.InterruptionOptions(rawValue: raw)
-            }()
+            let context = notification.userInfo?[AVAudioSession.resumptionContextKey] as? AVAudioSession.ResumptionContext
+            let recommendsResume = context?.recommendation == .shouldResume
             Task { @MainActor in
-                self.handleAudioInterruption(type: type, options: options)
+                await self.handleAudioResumptionRecommendation(recommendsResume: recommendsResume)
             }
         }
     }
 
-    private func handleAudioInterruption(type: AVAudioSession.InterruptionType, options: AVAudioSession.InterruptionOptions) {
-        switch type {
-        case .began:
-            wasInterruptedWhilePlaying = isPlaying
-            if isPlaying {
-                isPlaying = false
-                updateNowPlayingInfo()
-            }
-            logPlayback("audio_interruption_began", "was_playing=\(wasInterruptedWhilePlaying)")
-        case .ended:
-            let shouldResume = options.contains(.shouldResume) && wasInterruptedWhilePlaying
-            logPlayback("audio_interruption_ended", "should_resume=\(shouldResume)")
-            wasInterruptedWhilePlaying = false
-            guard shouldResume else { return }
-            do {
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {
-                logPlayback("audio_session_reactivate_failed", "error=\(error.localizedDescription)")
-                return
-            }
-            if let player, let item = player.currentItem, item.status != .failed {
-                player.play()
-                isPlaying = true
-                updateNowPlayingInfo()
-                reportTimelineState("playing")
-            } else {
-                recoverAndPlayCurrentTrackIfPossible(resumeAt: preferredResumeTimeForRecovery())
-            }
-        @unknown default:
-            break
+    private func handleAudioSessionDidBecomeInactive() {
+        wasInterruptedWhilePlaying = isPlaying
+        if isPlaying {
+            isPlaying = false
+            updateNowPlayingInfo()
+        }
+        logPlayback("audio_session_became_inactive", "was_playing=\(wasInterruptedWhilePlaying)")
+    }
+
+    private func handleAudioResumptionRecommendation(recommendsResume: Bool) async {
+        let shouldResume = recommendsResume && wasInterruptedWhilePlaying
+        logPlayback("audio_resumption_recommendation", "should_resume=\(shouldResume)")
+        wasInterruptedWhilePlaying = false
+        guard shouldResume else { return }
+        do {
+            try await activateAudioSession()
+        } catch {
+            logPlayback("audio_session_reactivate_failed", "error=\(error.localizedDescription)")
+            return
+        }
+        if let player, let item = player.currentItem, item.status != .failed {
+            player.play()
+            isPlaying = true
+            updateNowPlayingInfo()
+            reportTimelineState("playing")
+        } else {
+            recoverAndPlayCurrentTrackIfPossible(resumeAt: preferredResumeTimeForRecovery())
         }
     }
 
@@ -1495,6 +1507,10 @@ final class AudioPlayerService: @unchecked Sendable {
             nextTrack = nil
         }
         guard let track = nextTrack else { return }
+        // Locally downloaded tracks skip the network transcode path entirely
+        // (see loadAndPlay's local-file fast path), so preloading a streaming
+        // session for them would just open an unused PMS session.
+        guard AppContext.shared.downloadManager.localURL(for: track.ratingKey) == nil else { return }
 
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
@@ -1697,7 +1713,7 @@ final class AudioPlayerService: @unchecked Sendable {
         let observedGeneration = playbackGeneration
 
         playbackStalledObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemPlaybackStalled,
+            forName: AVPlayerItem.playbackStalledNotification,
             object: item,
             queue: .main
         ) { [weak self] _ in
@@ -1757,7 +1773,7 @@ final class AudioPlayerService: @unchecked Sendable {
         }
 
         itemFailedToEndObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemFailedToPlayToEndTime,
+            forName: AVPlayerItem.failedToPlayToEndTimeNotification,
             object: item,
             queue: .main
         ) { [weak self] _ in
@@ -1886,7 +1902,7 @@ final class AudioPlayerService: @unchecked Sendable {
         }
         if let item = player?.currentItem {
             trackEndObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
+                forName: AVPlayerItem.didPlayToEndTimeNotification,
                 object: item,
                 queue: .main
             ) { [weak self] _ in
@@ -1942,6 +1958,7 @@ final class AudioPlayerService: @unchecked Sendable {
     /// iOS may not deliver this on force-quit, but when it does we report stopped.
     func reportStoppedForAppTermination() {
         guard currentTrack != nil else { return }
+        maybeReportScrobble()
         reportTimelineState("stopped", continuing: false)
         stopActiveTranscodeSession()
     }
@@ -2133,6 +2150,21 @@ final class AudioPlayerService: @unchecked Sendable {
            let track = try? JSONDecoder().decode(PlexMetadata.self, from: data) {
             currentTrack = track
             duration = Double(track.duration ?? 0) / 1000.0
+            // loadAndPlay() normally sets these when the track is actually loaded, but
+            // restore happens before that — without this, Now Playing shows the resumed
+            // track with no downloaded/codec badge until playback is (re)started.
+            // Deferred to a Task: restorePlaybackState() runs inside AudioPlayerService's
+            // own init, which AppContext.shared constructs — touching AppContext.shared
+            // here directly would re-enter the singleton's initializer.
+            let ratingKey = track.ratingKey
+            Task { @MainActor [weak self] in
+                guard let self, self.currentTrack?.ratingKey == ratingKey else { return }
+                if let localURL = AppContext.shared.downloadManager.localURL(for: ratingKey) {
+                    self.isPlayingLocalFile = true
+                    let ext = localURL.pathExtension
+                    self.localFileCodec = ext.isEmpty ? nil : ext.uppercased()
+                }
+            }
         }
         // The track is recalled but always from the start; clear any position
         // persisted by older builds.
@@ -2150,9 +2182,30 @@ final class AudioPlayerService: @unchecked Sendable {
     private func setupAudioSession() {
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
-            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             logPlayback("audio_session_setup_failed", "error=\(error.localizedDescription)")
+            return
+        }
+        Task { @MainActor [weak self] in
+            do {
+                try await self?.activateAudioSession()
+            } catch {
+                self?.logPlayback("audio_session_setup_failed", "error=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Activates the audio session using the async system API so the main
+    /// thread is never blocked waiting on the activation to complete.
+    private func activateAudioSession() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            AVAudioSession.sharedInstance().activate { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
         }
     }
 

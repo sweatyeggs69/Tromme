@@ -65,6 +65,7 @@ struct HomeView: View {
             .padding(.top, isImmersiveFeatured ? 0 : 8)
         }
         .ignoresSafeArea(.container, edges: isImmersiveFeatured ? .top : [])
+        .scrollEdgeEffectHidden(isImmersiveFeatured, for: .top)
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await withTaskGroup(of: Void.self) { group in
@@ -99,14 +100,6 @@ struct HomeView: View {
             for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
                 guard !Task.isCancelled else { break }
                 await loadHomeContent(forceRefresh: false)
-            }
-        }
-        .onChange(of: player.currentTrack) { _, newTrack in
-            guard let newTrack, previewRecentTracks == nil else { return }
-            var updated = recentTracks.filter { $0.ratingKey != newTrack.ratingKey }
-            updated.insert(newTrack, at: 0)
-            withAnimation(.easeIn(duration: 0.25)) {
-                recentTracks = Array(updated.prefix(10))
             }
         }
         .task {

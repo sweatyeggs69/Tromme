@@ -45,7 +45,7 @@ struct AlbumDetailView: View {
     }
 
     private var titleColor: Color {
-        artworkColor.isLightColor ? .black : .white
+        artworkColor.isLightColor() ? .black : .white
     }
 
     private var secondaryTextColor: Color {
@@ -57,25 +57,21 @@ struct AlbumDetailView: View {
     }
 
     private var controlForegroundColor: Color {
-        artworkColor.isLightColor ? .white : .black
+        artworkColor.isLightColor() ? .white : .black
     }
 
     private var controlBackgroundColor: Color {
-        artworkColor.isLightColor ? Color.black.opacity(0.75) : Color.white.opacity(0.82)
+        artworkColor.isLightColor() ? Color.black.opacity(0.75) : Color.white.opacity(0.82)
     }
 
     private var controlShadowColor: Color {
-        artworkColor.isLightColor ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
+        artworkColor.isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
     }
 
     private var iconForegroundColor: Color {
-        artworkColor.isLightColor ? .black : .white
+        artworkColor.isLightColor() ? .black : .white
     }
 
-
-    private var moreBySectionBackgroundColor: Color {
-        .black.opacity(0.08)
-    }
 
     private var controlsDisabled: Bool {
         tracks.isEmpty
@@ -334,7 +330,7 @@ struct AlbumDetailView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(iconForegroundColor)
                     .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
                     .shadow(color: controlShadowColor, radius: 6, y: -2)
             }
             .buttonStyle(.plain)
@@ -354,7 +350,7 @@ struct AlbumDetailView: View {
                 .padding(.horizontal, 56)
                 .padding(.vertical, 14)
                 .background(
-                    Capsule().fill(artworkColor.isLightColor ? Color.black : Color.white)
+                    Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
                 )
             }
             .buttonStyle(.plain)
@@ -376,7 +372,7 @@ struct AlbumDetailView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(iconForegroundColor)
                     .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
                     .shadow(color: controlShadowColor, radius: 6, y: -2)
             }
             .disabled(controlsDisabled)
@@ -705,7 +701,7 @@ struct AlbumDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
             .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
-            .listRowBackground(moreBySectionBackgroundColor)
+            .listRowBackground(artworkColor)
             .listRowSeparator(.hidden)
     }
 
@@ -750,7 +746,7 @@ struct AlbumDetailView: View {
         .scrollTargetBehavior(.viewAligned)
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        .listRowBackground(moreBySectionBackgroundColor)
+        .listRowBackground(artworkColor)
         .listRowSeparator(.hidden)
     }
 
@@ -818,6 +814,7 @@ struct AlbumDetailView: View {
                             .scrollContentBackground(.hidden)
                             .background(artworkColor)
                             .listStyle(.plain)
+                            .scrollEdgeEffectHidden(true, for: .top)
                         }
                         .frame(width: geo.size.width * 0.67)
                     }
@@ -860,6 +857,7 @@ struct AlbumDetailView: View {
                     .scrollContentBackground(.hidden)
                     .background(artworkColor)
                     .listStyle(.plain)
+                    .scrollEdgeEffectHidden(true, for: .top)
                     .onScrollGeometryChange(for: CGFloat.self) { geometry in
                         geometry.contentOffset.y
                     } action: { _, offset in
@@ -1033,37 +1031,6 @@ struct AlbumDetailView: View {
     }
 }
 
-private extension Color {
-    var isLightColor: Bool {
-        let uiColor = UIColor(self)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
-
-        // WCAG relative luminance for contrast-based black/white foreground choice.
-        func linearized(_ component: CGFloat) -> CGFloat {
-            component <= 0.03928 ? (component / 12.92) : pow((component + 0.055) / 1.055, 2.4)
-        }
-
-        let luminance =
-            (0.2126 * linearized(red)) +
-            (0.7152 * linearized(green)) +
-            (0.0722 * linearized(blue))
-
-        let blackContrast = (luminance + 0.05) / 0.05
-        let whiteContrast = 1.05 / (luminance + 0.05)
-        let contrastDelta = abs(blackContrast - whiteContrast)
-
-        // Dead-band: when both options are close, bias to a slightly lighter threshold.
-        if contrastDelta < 0.35 {
-            return luminance > 0.45
-        }
-        return blackContrast >= whiteContrast
-    }
-}
-
 private struct AlbumTrackRow: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -1085,6 +1052,23 @@ private struct AlbumTrackRow: View {
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
     @State private var isDeletingTrack = false
+
+    @ViewBuilder
+    private var trackDownloadButton: some View {
+        let isDownloaded = downloadManager.isDownloaded(track.ratingKey)
+        let isActive = downloadManager.transientStates[track.ratingKey] != nil
+        if isDownloaded {
+            Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                downloadManager.deleteDownload(ratingKey: track.ratingKey)
+            }
+        } else {
+            Button(isActive ? "Downloading…" : "Download", systemImage: "arrow.down.circle") {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.download(track: track, server: server, client: client)
+            }
+            .disabled(isActive)
+        }
+    }
 
     private var isFavorited: Bool {
         (favoriteOverride ?? track.userRating ?? 0) >= 10
@@ -1194,6 +1178,9 @@ private struct AlbumTrackRow: View {
                 }
 
                 Divider()
+                trackDownloadButton
+
+                Divider()
 
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
@@ -1223,6 +1210,7 @@ private struct AlbumTrackRow: View {
             Button("Add to Playlist", systemImage: "text.badge.plus") {
                 onAddToPlaylist(track)
             }
+            trackDownloadButton
 
             Divider()
 
@@ -1318,305 +1306,3 @@ private struct AlbumRecommendationGridView: View {
         }
     }
 }
-
-#if DEBUG
-#Preview("Recommendation Grid") {
-    NavigationStack {
-        AlbumRecommendationGridView(
-            title: "You Might Also Like",
-            albums: DevelopmentMockData.recommendationAlbums
-        )
-    }
-    .environment(AudioPlayerService())
-}
-
-#Preview {
-    let previewAlbum = PlexMetadata(
-        ratingKey: "preview-album",
-        key: nil,
-        type: "album",
-        subtype: nil,
-        title: "Midnight Signals",
-        titleSort: nil,
-        originalTitle: nil,
-        summary: "A preview album with release metadata for Canvas.",
-        studio: "Tromme Records",
-        year: 2026,
-        index: nil,
-        parentIndex: nil,
-        duration: nil,
-        addedAt: nil,
-        updatedAt: nil,
-        viewCount: nil,
-        lastViewedAt: nil,
-        userRating: nil,
-        thumb: nil,
-        art: nil,
-        parentThumb: nil,
-        grandparentThumb: nil,
-        grandparentArt: nil,
-        parentTitle: "The Canvas Band",
-        grandparentTitle: nil,
-        parentRatingKey: "preview-artist",
-        grandparentRatingKey: nil,
-        leafCount: 4,
-        viewedLeafCount: nil,
-        media: [
-            PlexMedia(audioCodec: "flac", container: "flac")
-        ],
-        genre: [
-            PlexTag(tag: "Alternative")
-        ],
-        style: nil,
-        country: nil,
-        subformat: nil,
-        similar: nil,
-        originallyAvailableAt: "2026-05-31"
-    )
-
-    let previewTracks = [
-        PlexMetadata(
-            ratingKey: "preview-track-1",
-            key: nil,
-            type: "track",
-            subtype: nil,
-            title: "Signal One",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: nil,
-            year: nil,
-            index: 1,
-            parentIndex: 1,
-            duration: 214_000,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "Midnight Signals",
-            grandparentTitle: "The Canvas Band",
-            parentRatingKey: "preview-album",
-            grandparentRatingKey: "preview-artist",
-            leafCount: nil,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: nil
-        ),
-        PlexMetadata(
-            ratingKey: "preview-track-2",
-            key: nil,
-            type: "track",
-            subtype: nil,
-            title: "Late Drive",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: nil,
-            year: nil,
-            index: 2,
-            parentIndex: 1,
-            duration: 188_000,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "Midnight Signals",
-            grandparentTitle: "The Canvas Band",
-            parentRatingKey: "preview-album",
-            grandparentRatingKey: "preview-artist",
-            leafCount: nil,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: nil
-        ),
-        PlexMetadata(
-            ratingKey: "preview-track-3",
-            key: nil,
-            type: "track",
-            subtype: nil,
-            title: "Soft Static",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: nil,
-            year: nil,
-            index: 1,
-            parentIndex: 2,
-            duration: 246_000,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "Midnight Signals",
-            grandparentTitle: "The Canvas Band",
-            parentRatingKey: "preview-album",
-            grandparentRatingKey: "preview-artist",
-            leafCount: nil,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: nil
-        ),
-        PlexMetadata(
-            ratingKey: "preview-track-4",
-            key: nil,
-            type: "track",
-            subtype: nil,
-            title: "Afterimage",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: nil,
-            year: nil,
-            index: 2,
-            parentIndex: 2,
-            duration: 201_000,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "Midnight Signals",
-            grandparentTitle: "The Canvas Band",
-            parentRatingKey: "preview-album",
-            grandparentRatingKey: "preview-artist",
-            leafCount: nil,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: nil
-        )
-    ]
-
-    let previewArtistAlbums = [
-        previewAlbum,
-        PlexMetadata(
-            ratingKey: "preview-album-2",
-            key: nil,
-            type: "album",
-            subtype: nil,
-            title: "Glass Roads",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: "Tromme Records",
-            year: 2024,
-            index: nil,
-            parentIndex: nil,
-            duration: nil,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "The Canvas Band",
-            grandparentTitle: nil,
-            parentRatingKey: "preview-artist",
-            grandparentRatingKey: nil,
-            leafCount: 10,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: "2024-09-13"
-        ),
-        PlexMetadata(
-            ratingKey: "preview-album-3",
-            key: nil,
-            type: "album",
-            subtype: nil,
-            title: "North Terminal",
-            titleSort: nil,
-            originalTitle: nil,
-            summary: nil,
-            studio: "Tromme Records",
-            year: 2022,
-            index: nil,
-            parentIndex: nil,
-            duration: nil,
-            addedAt: nil,
-            updatedAt: nil,
-            viewCount: nil,
-            lastViewedAt: nil,
-            userRating: nil,
-            thumb: nil,
-            art: nil,
-            parentThumb: nil,
-            grandparentThumb: nil,
-            grandparentArt: nil,
-            parentTitle: "The Canvas Band",
-            grandparentTitle: nil,
-            parentRatingKey: "preview-artist",
-            grandparentRatingKey: nil,
-            leafCount: 8,
-            viewedLeafCount: nil,
-            media: nil,
-            genre: nil,
-            style: nil,
-            country: nil,
-            subformat: nil,
-            similar: nil,
-            originallyAvailableAt: "2022-03-18"
-        )
-    ]
-
-    NavigationStack {
-        AlbumDetailView(
-            album: previewAlbum,
-            previewTracks: previewTracks,
-            previewArtistAlbums: previewArtistAlbums,
-            previewRecommendedAlbums: DevelopmentMockData.recommendationAlbums
-        )
-    }
-    .environment(AudioPlayerService())
-}
-#endif
