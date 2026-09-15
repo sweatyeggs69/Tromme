@@ -23,7 +23,7 @@ extension AppIconOption {
     ]
 
     static let premiumIconPack: [AppIconOption] = [
-        AppIconOption(id: "applemusic",     displayName: "Apple Music",    iconName: "AppleMusicAppIcon",    previewImageName: "preview-applemusic",     accentColor: Color(red: 1.0, green: 0.306, blue: 0.420)),
+        AppIconOption(id: "applemusic",     displayName: "Apple Music",    iconName: "AppleMusicAppIcon",    previewImageName: "preview-applemusic",     accentColor: Color(red: 1.0, green: 0.337, blue: 0.416)),
         AppIconOption(id: "galaxy",         displayName: "Galaxy",         iconName: "GalaxyAppIcon",        previewImageName: "preview-galaxy",         accentColor: Color(red: 0.55, green: 0.08, blue: 0.85)),
         AppIconOption(id: "knocktua-dark",  displayName: "Noctua Dark",  iconName: "KnocktuaDarkAppIcon",  previewImageName: "preview-knocktua-dark",  accentColor: Color(red: 0.529, green: 0.345, blue: 0.267)),
         AppIconOption(id: "knocktua-light", displayName: "Noctua Light", iconName: "KnocktuaLightAppIcon", previewImageName: "preview-knocktua-light", accentColor: Color(red: 0.851, green: 0.792, blue: 0.639)),

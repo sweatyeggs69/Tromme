@@ -347,7 +347,7 @@ struct AlbumDetailView: View {
                 }
                 .font(.body.weight(.semibold))
                 .foregroundStyle(artworkColor)
-                .padding(.horizontal, 56)
+                .padding(.horizontal, 50)
                 .padding(.vertical, 14)
                 .background(
                     Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
