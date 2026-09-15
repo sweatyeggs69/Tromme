@@ -38,7 +38,7 @@ struct PlaylistDetailView: View {
     }
 
     private var tertiaryTextColor: Color {
-        titleColor.opacity(0.65)
+        titleColor.opacity(0.75)
     }
 
     private var iconForegroundColor: Color {

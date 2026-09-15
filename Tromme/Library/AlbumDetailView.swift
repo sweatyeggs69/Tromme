@@ -49,11 +49,15 @@ struct AlbumDetailView: View {
     }
 
     private var secondaryTextColor: Color {
-        titleColor.opacity(0.78)
+        titleColor.opacity(0.85)
     }
 
     private var tertiaryTextColor: Color {
-        titleColor.opacity(0.65)
+        titleColor.opacity(0.75)
+    }
+
+    private var bioTextColor: Color {
+        titleColor.opacity(0.9)
     }
 
     private var controlForegroundColor: Color {
@@ -199,6 +203,33 @@ struct AlbumDetailView: View {
         return "No album info available for this release."
     }
 
+    private var bioText: String? {
+        let summary = (albumDetails.summary ?? album.summary ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return summary.isEmpty ? nil : summary
+    }
+
+    @ViewBuilder
+    private func albumBioPreview(centered: Bool = true) -> some View {
+        if let bioText {
+            Button {
+                showsAlbumInfoSheet = true
+            } label: {
+                InlineMoreText(
+                    bioText,
+                    textStyle: .footnote,
+                    textColor: bioTextColor,
+                    moreWeight: .semibold,
+                    moreColor: titleColor,
+                    lineLimit: 2,
+                    alignment: centered ? .center : .leading
+                )
+                .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var artistNavigationTarget: PlexMetadata? {
         let artistTitle = albumDetails.parentTitle ?? album.parentTitle
         let artistRatingKey = albumDetails.parentRatingKey ?? album.parentRatingKey
@@ -312,6 +343,10 @@ struct AlbumDetailView: View {
                     .padding(.top, 0.5)
                     .padding(.horizontal, 20)
             }
+
+            albumBioPreview(centered: true)
+                .padding(.top, 8)
+                .padding(.horizontal, 20)
 
             albumActionButtons
         }
@@ -566,7 +601,7 @@ struct AlbumDetailView: View {
             .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 4, trailing: 20))
     }
 
-    private func trackRow(track: PlexMetadata, globalIndex: Int) -> some View {
+    private func trackRow(track: PlexMetadata, globalIndex: Int, isLandscape: Bool = false) -> some View {
         AlbumTrackRow(
             track: track,
             index: globalIndex,
@@ -576,6 +611,7 @@ struct AlbumDetailView: View {
             tertiaryTextColor: tertiaryTextColor,
             titleColor: titleColor,
             isPopular: popularTrackTitles.contains(track.title),
+            isLandscape: isLandscape,
             onAddToPlaylist: { track in
                 presentAddToPlaylist(for: [track.ratingKey])
             },
@@ -587,7 +623,7 @@ struct AlbumDetailView: View {
         .listRowSeparatorTint(titleColor.opacity(0.22))
     }
 
-    private var trackListRows: some View {
+    private func trackListRows(isLandscape: Bool = false) -> some View {
         Group {
             if isLoadingTracks {
                 ProgressView()
@@ -597,12 +633,12 @@ struct AlbumDetailView: View {
                 ForEach(tracksByDisc, id: \.discNumber) { group in
                     discHeaderRow(group.discNumber)
                     ForEach(group.tracks, id: \.globalIndex) { item in
-                        trackRow(track: item.track, globalIndex: item.globalIndex)
+                        trackRow(track: item.track, globalIndex: item.globalIndex, isLandscape: isLandscape)
                     }
                 }
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
-                    trackRow(track: track, globalIndex: index)
+                    trackRow(track: track, globalIndex: index, isLandscape: isLandscape)
                 }
             }
         }
@@ -647,8 +683,40 @@ struct AlbumDetailView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
+
+            albumInfoLineView(centered: false)
+                .padding(.top, 4)
+
+            albumBioPreview(centered: false)
+                .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var landscapeHeader: some View {
+        HStack(alignment: .bottom, spacing: 20) {
+            ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                .frame(width: 300)
+                .padding(.bottom, 20)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
+
+                landscapeAlbumTitleAndArtist
+
+                albumActionButtons
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 20)
+        }
+        .padding(.top, 96)
+        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
     }
 
     private var albumFooter: some View {
@@ -752,72 +820,48 @@ struct AlbumDetailView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geo.size.width > geo.size.height
+            let usesSideBySideHeader = UIDevice.current.userInterfaceIdiom == .pad
 
             ZStack {
                 artworkColor
                     .ignoresSafeArea()
 
-                if isPadLandscape {
-                    HStack(alignment: .top, spacing: 0) {
-                        VStack(spacing: 0) {
-                            ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                                )
-                                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                                .padding(.top, 12)
+                if usesSideBySideHeader {
+                    List {
+                        landscapeHeader
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(artworkColor)
 
-                            albumActionButtons
-                                .padding(.top, 16)
+                        trackListRows(isLandscape: true)
 
-                            albumInfoLineView(centered: true)
-                                .padding(.horizontal, 20)
+                        albumFooter
+                            .listRowBackground(artworkColor)
+                            .listRowSeparator(.hidden)
+
+                        if artistAlbums.count > 1,
+                           !moreByArtistAlbums.isEmpty,
+                           let artistName = artistNavigationTarget?.title {
+                            albumSectionHeader("More By \(artistName)")
+                            albumRail(moreByArtistAlbums)
                         }
-                        .padding(.bottom, 20)
-                        .frame(width: geo.size.width * 0.33)
 
-                        VStack(alignment: .leading, spacing: 0) {
-                            landscapeAlbumTitleAndArtist
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                                .padding(.bottom, 18)
-
-                            List {
-                                Section {
-                                    trackListRows
-
-                                    albumFooter
-                                        .listRowBackground(artworkColor)
-                                        .listRowSeparator(.hidden)
-
-                                    if artistAlbums.count > 1,
-                                       !moreByArtistAlbums.isEmpty,
-                                       let artistName = artistNavigationTarget?.title {
-                                        albumSectionHeader("More By \(artistName)")
-                                        albumRail(moreByArtistAlbums)
-                                    }
-
-                                    if !recommendedAlbums.isEmpty {
-                                        albumSectionHeader(
-                                            "You Might Also Like",
-                                            showsDisclosure: true
-                                        ) {
-                                            showsAllRecommendedAlbums = true
-                                        }
-                                        albumRail(Array(recommendedAlbums.prefix(8)))
-                                    }
-
-                                }
+                        if !recommendedAlbums.isEmpty {
+                            albumSectionHeader(
+                                "You Might Also Like",
+                                showsDisclosure: true
+                            ) {
+                                showsAllRecommendedAlbums = true
                             }
-                            .scrollContentBackground(.hidden)
-                            .background(artworkColor)
-                            .listStyle(.plain)
-                            .scrollEdgeEffectHidden(true, for: .top)
+                            albumRail(Array(recommendedAlbums.prefix(8)))
                         }
-                        .frame(width: geo.size.width * 0.67)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(artworkColor)
+                    .listStyle(.plain)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    .ignoresSafeArea(edges: .top)
                 } else {
                     List {
                         Section {
@@ -829,7 +873,7 @@ struct AlbumDetailView: View {
                                 .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + 20 }
                                 .listRowBackground(artworkColor)
 
-                            trackListRows
+                            trackListRows()
 
                             albumFooter
                                 .listRowBackground(artworkColor)
@@ -892,11 +936,6 @@ struct AlbumDetailView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button {
-                        showsAlbumInfoSheet = true
-                    } label: {
-                        Label("Album Info", systemImage: "info.circle")
-                    }
                     if !isPreviewMode {
                         Button {
                             showingChangeArtworkSheet = true
@@ -1044,6 +1083,7 @@ private struct AlbumTrackRow: View {
     let tertiaryTextColor: Color
     let titleColor: Color
     var isPopular: Bool = false
+    var isLandscape: Bool = false
     let onAddToPlaylist: (PlexMetadata) -> Void
     let onDelete: (PlexMetadata) -> Void
 
@@ -1157,6 +1197,12 @@ private struct AlbumTrackRow: View {
                     .font(.caption)
                     .foregroundStyle(tertiaryTextColor)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+
+            if !track.durationFormatted.isEmpty {
+                Text(track.durationFormatted)
+                    .font(isLandscape ? .footnote : AppStyle.Typography.itemSubtitle)
+                    .foregroundStyle(tertiaryTextColor)
             }
 
             Menu {
@@ -1306,3 +1352,35 @@ private struct AlbumRecommendationGridView: View {
         }
     }
 }
+
+#if DEBUG
+#Preview("iPad Landscape", traits: .landscapeLeft) {
+    let album = DevelopmentMockData.artistAlbums[0]
+    NavigationStack {
+        AlbumDetailView(
+            album: album,
+            previewTracks: DevelopmentMockData.artistAllTracks.filter { $0.parentRatingKey == album.ratingKey },
+            previewArtistAlbums: DevelopmentMockData.artistAlbums,
+            previewRecommendedAlbums: DevelopmentMockData.recommendationAlbums
+        )
+    }
+    .environment(AudioPlayerService())
+    .environment(DownloadManager())
+    .environment(NetworkStatus.shared)
+}
+
+#Preview("iPad Portrait", traits: .portrait) {
+    let album = DevelopmentMockData.artistAlbums[0]
+    NavigationStack {
+        AlbumDetailView(
+            album: album,
+            previewTracks: DevelopmentMockData.artistAllTracks.filter { $0.parentRatingKey == album.ratingKey },
+            previewArtistAlbums: DevelopmentMockData.artistAlbums,
+            previewRecommendedAlbums: DevelopmentMockData.recommendationAlbums
+        )
+    }
+    .environment(AudioPlayerService())
+    .environment(DownloadManager())
+    .environment(NetworkStatus.shared)
+}
+#endif

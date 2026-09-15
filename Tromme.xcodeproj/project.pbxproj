@@ -25,6 +25,7 @@
 		0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */; };
 		0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */; };
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
+		0ECF063B3059F62F00650724 /* InlineMoreText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECF063A3059F62F00650724 /* InlineMoreText.swift */; };
 		0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07403048CA9B00ACE377 /* IconPackStore.swift */; };
 		25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB6B7139BCB32BF5F17D78 /* LoginView.swift */; };
 		277F53ED9EB6AF4188D15B0A /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */; };
@@ -81,6 +82,7 @@
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		0E91C64D2F91AE8800775275 /* Tromme.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tromme.entitlements; sourceTree = "<group>"; };
 		0E91C64E2F91B03000775275 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
+		0ECF063A3059F62F00650724 /* InlineMoreText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineMoreText.swift; sourceTree = "<group>"; };
 		0EEC07403048CA9B00ACE377 /* IconPackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPackStore.swift; sourceTree = "<group>"; };
 		0EEC07423048CA9E00ACE377 /* Tromme.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Tromme.storekit; sourceTree = "<group>"; };
 		198E310192207773F55E967F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -277,6 +279,7 @@
 			isa = PBXGroup;
 			children = (
 				5B11DF0208D38E2301F64EAC /* AppStyle.swift */,
+				0ECF063A3059F62F00650724 /* InlineMoreText.swift */,
 			);
 			path = Styling;
 			sourceTree = "<group>";
@@ -397,6 +400,7 @@
 				F1A2B3C4D5E6071829304152 /* HorizontalTrackGrid.swift in Sources */,
 				0603E2752890285A43E43246 /* ImageCache.swift in Sources */,
 				FF5AADB44484565C6F2215A7 /* LibraryCache.swift in Sources */,
+				0ECF063B3059F62F00650724 /* InlineMoreText.swift in Sources */,
 				C90D173C32BA9EE2C894AA9E /* LibraryPickerView.swift in Sources */,
 				0E5213323040F41400583BF3 /* HomeSettingsView.swift in Sources */,
 				25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */,

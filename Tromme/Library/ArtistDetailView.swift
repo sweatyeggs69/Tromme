@@ -27,6 +27,7 @@ struct ArtistDetailView: View {
         resolvedArtist ?? artist
     }
 
+
     private var showsCollapsedTitle: Bool {
         heroMinY < -(heroHeight - 80) || heroIsHidden
     }
@@ -279,18 +280,21 @@ struct ArtistDetailView: View {
                 if let summary = displayArtist.summary, !summary.isEmpty {
                     sectionHeader("About \(displayArtist.title)")
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(summary)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Button("Read More") {
-                            showsBioSheet = true
-                        }
-                        .font(.subheadline.bold())
+                    Button {
+                        showsBioSheet = true
+                    } label: {
+                        InlineMoreText(
+                            summary,
+                            textStyle: .body,
+                            textColor: .secondary,
+                            moreTextStyle: .subheadline,
+                            moreWeight: .bold,
+                            moreColor: .primary,
+                            lineLimit: 3
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))
                     .listRowSeparator(.hidden)
                 }
