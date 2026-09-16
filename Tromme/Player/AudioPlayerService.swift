@@ -189,6 +189,16 @@ final class AudioPlayerService: @unchecked Sendable {
         }
     }
 
+    /// The source file's raw audio codec (lowercased), used to pick a transcode
+    /// profile that preserves already-compatible codecs instead of forcing ALAC.
+    private func sourceAudioCodec(for track: PlexMetadata) -> String? {
+        let media = track.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        return (audioStream?.codec ?? media?.audioCodec)?.lowercased()
+    }
+
     init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -1014,7 +1024,8 @@ final class AudioPlayerService: @unchecked Sendable {
             server: server,
             sessionID: sessionID,
             preferAACTranscode: preferAACTranscode,
-            avoidAudioTranscode: avoidAudioTranscode
+            avoidAudioTranscode: avoidAudioTranscode,
+            sourceCodec: sourceAudioCodec(for: track)
         )
         isConstrainedPlaybackPath = shouldConstrainForNetwork
 
@@ -1551,7 +1562,8 @@ final class AudioPlayerService: @unchecked Sendable {
             server: server,
             sessionID: sessionID,
             preferAACTranscode: shouldConstrain,
-            avoidAudioTranscode: !shouldConstrain
+            avoidAudioTranscode: !shouldConstrain,
+            sourceCodec: sourceAudioCodec(for: track)
         )
 
         do {

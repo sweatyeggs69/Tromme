@@ -86,19 +86,14 @@ struct LyricsScrollView: View {
                                 scrollResumeTask?.cancel()
                             }
                             .onEnded { _ in
-                                scrollResumeTask = Task {
-                                    try? await Task.sleep(for: .seconds(1.5))
-                                    guard !Task.isCancelled else { return }
-                                    isUserScrolling = false
-                                    slinkyOffsets.removeAll()
-                                    if currentIndex < lyricsService.lines.count {
-                                        withAnimation(.spring(duration: 0.7, bounce: 0.15)) {
-                                            proxy.scrollTo(lyricsService.lines[currentIndex].id, anchor: .center)
-                                        }
-                                    }
-                                }
+                                guard player.isPlaying else { return }
+                                scheduleScrollResume(proxy: proxy)
                             }
                     )
+                    .onChange(of: player.isPlaying) { _, isPlaying in
+                        guard isPlaying, isUserScrolling else { return }
+                        scheduleScrollResume(proxy: proxy)
+                    }
                 }
             } else if lyricsService.isInstrumental {
                 lyricsNotice("Instrumental")
@@ -114,6 +109,24 @@ struct LyricsScrollView: View {
                 }
             } else {
                 lyricsNotice("No Lyrics Available")
+            }
+        }
+    }
+
+    /// Only auto-scrolls back to the focused lyric while playback is active;
+    /// if paused, the user's manual scroll position is left alone until
+    /// playback resumes (see the `player.isPlaying` onChange above).
+    private func scheduleScrollResume(proxy: ScrollViewProxy) {
+        scrollResumeTask?.cancel()
+        scrollResumeTask = Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            isUserScrolling = false
+            slinkyOffsets.removeAll()
+            if currentIndex < lyricsService.lines.count {
+                withAnimation(.spring(duration: 0.7, bounce: 0.15)) {
+                    proxy.scrollTo(lyricsService.lines[currentIndex].id, anchor: .center)
+                }
             }
         }
     }

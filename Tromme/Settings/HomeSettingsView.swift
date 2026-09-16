@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeSettingsView: View {
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
-    @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
+    @AppStorage("featuredBannerSize") private var featuredBannerSize = "large"
     @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
@@ -16,7 +16,6 @@ struct HomeSettingsView: View {
                     Picker("Size", selection: $featuredBannerSize) {
                         Text("Small").tag("small")
                         Text("Large").tag("large")
-                        Text("Immersive").tag("immersive")
                     }
                 }
                 Toggle("Hide Empty Sections", isOn: $hideEmptySections)

@@ -805,7 +805,10 @@ final class PlexAPIClient: Sendable {
         return headers
     }
 
-    /// ALAC profile for LAN — lossless, no quality loss.
+    /// ALAC profile for LAN — lossless, no quality loss. Only appropriate when
+    /// the source is FLAC; using it for already-compatible codecs (e.g. AAC)
+    /// would make PMS re-encode lossy audio into a bloated lossless container
+    /// for no quality gain.
     static let profileExtraLAN: String =
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=alac)"
 
@@ -813,15 +816,27 @@ final class PlexAPIClient: Sendable {
     static let profileExtraCellular: String =
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=aac)"
 
+    /// Targets the source's own audio codec so PMS remuxes into HLS instead
+    /// of re-encoding audio that's already compatible (e.g. AAC, MP3).
+    static func profileExtraPassthrough(codec: String) -> String {
+        "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=\(codec))"
+    }
+
     func playbackHeaders(
         server: PlexServer,
         sessionID: String?,
         preferAACTranscode: Bool = false,
-        avoidAudioTranscode: Bool = false
+        avoidAudioTranscode: Bool = false,
+        sourceCodec: String? = nil
     ) -> [String: String] {
         let profileExtra: String
         if avoidAudioTranscode {
-            profileExtra = Self.profileExtraLAN
+            switch sourceCodec?.lowercased() {
+            case "flac", nil:
+                profileExtra = Self.profileExtraLAN
+            case .some(let codec):
+                profileExtra = Self.profileExtraPassthrough(codec: codec)
+            }
         } else if preferAACTranscode {
             profileExtra = Self.profileExtraCellular
         } else {

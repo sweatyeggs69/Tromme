@@ -12,6 +12,7 @@ struct SearchView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var trackNavigationTarget: PlexMetadata? = nil
     @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
+    @FocusState private var isSearchFieldFocused: Bool
 
     private let maxRecentSearches = 12
 
@@ -127,6 +128,7 @@ struct SearchView: View {
             placement: .navigationBarDrawer(displayMode: .always),
             prompt: "Artists, Songs, Albums & More"
         )
+        .searchFocused($isSearchFieldFocused)
         .onSubmit(of: .search) {
             rememberSearch(searchText)
         }
@@ -136,6 +138,13 @@ struct SearchView: View {
                 try? await Task.sleep(for: .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 await performSearch(query: newValue)
+            }
+        }
+        .onAppear {
+            // iPhone's Tab(role: .search) already focuses the field natively when selected;
+            // iPad's plain tab shows an always-visible field that needs focus set explicitly.
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                isSearchFieldFocused = true
             }
         }
     }

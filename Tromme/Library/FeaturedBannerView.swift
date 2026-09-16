@@ -1,14 +1,14 @@
 import SwiftUI
 
 private enum FeaturedBannerSize: String {
-    case large, small, immersive
+    case large, small
 }
 
 struct FeaturedCarouselView: View {
     let albums: [PlexMetadata]
 
     @State private var scrollPosition: Int?
-    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "immersive"
+    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "large"
 
     private let horizontalPadding = AppStyle.Spacing.pageHorizontal
     private let itemSpacing: CGFloat = 12
@@ -19,14 +19,12 @@ struct FeaturedCarouselView: View {
         switch bannerSize {
         case .large: return 180
         case .small: return 90
-        case .immersive: return 300
         }
     }
 
-    private var effectiveHorizontalPadding: CGFloat { bannerSize == .immersive ? 0 : horizontalPadding }
+    private var effectiveHorizontalPadding: CGFloat { horizontalPadding }
 
     private func columnCount(for width: CGFloat) -> Int {
-        guard bannerSize != .immersive else { return 1 }
         if width >= 1000 { return 3 }
         if width >= 600 { return 2 }
         return 1
@@ -84,7 +82,6 @@ struct FeaturedBannerView: View {
         switch bannerSize {
         case .large: return 180
         case .small: return 90
-        case .immersive: return 300
         }
     }
 
@@ -92,7 +89,6 @@ struct FeaturedBannerView: View {
         switch bannerSize {
         case .large: return 130
         case .small: return 65
-        case .immersive: return 150
         }
     }
 
@@ -100,7 +96,6 @@ struct FeaturedBannerView: View {
         switch bannerSize {
         case .large: return 12
         case .small: return 8
-        case .immersive: return 20
         }
     }
 
@@ -108,7 +103,6 @@ struct FeaturedBannerView: View {
         switch bannerSize {
         case .large: return .title3.bold()
         case .small: return .subheadline.bold()
-        case .immersive: return .title2.bold()
         }
     }
 
@@ -116,41 +110,24 @@ struct FeaturedBannerView: View {
         switch bannerSize {
         case .large: return .subheadline
         case .small: return .caption
-        case .immersive: return .headline
         }
-    }
-
-    private var contentAlignment: Alignment {
-        bannerSize == .immersive ? .bottomLeading : .leading
     }
 
     private var gradient: LinearGradient {
-        if bannerSize == .immersive {
-            return LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.8), location: 0),
-                    .init(color: .black.opacity(0.4), location: 0.4),
-                    .init(color: .clear, location: 0.7),
-                ],
-                startPoint: .bottom,
-                endPoint: .top
-            )
-        } else {
-            return LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.75), location: 0),
-                    .init(color: .black.opacity(0.35), location: 0.5),
-                    .init(color: .clear, location: 0.78),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.75), location: 0),
+                .init(color: .black.opacity(0.35), location: 0.5),
+                .init(color: .clear, location: 0.78),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: contentAlignment) {
+            ZStack(alignment: .leading) {
                 BannerBackground(
                     thumbPath: album.art ?? album.parentThumb ?? album.thumb,
                     size: CGSize(width: geo.size.width, height: bannerHeight)
@@ -195,16 +172,7 @@ struct FeaturedBannerView: View {
             }
         }
         .frame(height: bannerHeight)
-        .clipShape(
-            bannerSize == .immersive
-                ? AnyShape(UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: AppStyle.Radius.card,
-                    bottomTrailingRadius: AppStyle.Radius.card,
-                    topTrailingRadius: 0
-                ))
-                : AnyShape(RoundedRectangle(cornerRadius: AppStyle.Radius.card))
-        )
+        .clipShape(RoundedRectangle(cornerRadius: AppStyle.Radius.card))
     }
 }
 
@@ -212,7 +180,7 @@ private struct BannerBackground: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.displayScale) private var displayScale
-    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "immersive"
+    @AppStorage("featuredBannerSize") private var featuredBannerSizeRaw = "large"
 
     let thumbPath: String?
     let size: CGSize

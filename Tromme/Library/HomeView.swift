@@ -17,14 +17,9 @@ struct HomeView: View {
     @State private var featuredAlbums: [PlexMetadata]
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
-    @AppStorage("featuredBannerSize") private var featuredBannerSize = "immersive"
     @AppStorage("featuredAlbumRatingKeys") private var featuredAlbumRatingKeys: String = ""
     @AppStorage("featuredAlbumLastRefreshedAt") private var featuredAlbumLastRefreshedAt: Double = 0
     @AppStorage("hideEmptySections") private var hideEmptySections = false
-
-    private var isImmersiveFeatured: Bool {
-        showFeaturedSection && featuredBannerSize == "immersive" && !featuredAlbums.isEmpty
-    }
 
     private let previewRecentTracks: [PlexMetadata]?
     private let previewPlaylists: [PlexPlaylist]?
@@ -62,10 +57,8 @@ struct HomeView: View {
                 }
             }
             .padding(.bottom, 8)
-            .padding(.top, isImmersiveFeatured ? 0 : 8)
+            .padding(.top, 8)
         }
-        .ignoresSafeArea(.container, edges: isImmersiveFeatured ? .top : [])
-        .scrollEdgeEffectHidden(isImmersiveFeatured, for: .top)
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await withTaskGroup(of: Void.self) { group in
