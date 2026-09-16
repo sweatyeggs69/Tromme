@@ -932,6 +932,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let nowPlaying = CPNowPlayingTemplate.shared
         nowPlaying.add(self)
         nowPlaying.isUpNextButtonEnabled = true
+        nowPlaying.upNextTitle = "Queue"
         nowPlaying.isAlbumArtistButtonEnabled = true
 
         let shuffleButton = CPNowPlayingShuffleButton { [weak self] _ in
