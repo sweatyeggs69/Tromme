@@ -18,6 +18,9 @@ struct HomeSettingsView: View {
                         Text("Large").tag("large")
                     }
                 }
+            }
+
+            Section {
                 Toggle("Hide Empty Sections", isOn: $hideEmptySections)
                     .tint(.green)
             }

@@ -54,8 +54,6 @@ struct AppIconPickerView: View {
                 ForEach(AppIconOption.all) { option in
                     iconRow(option)
                 }
-            } header: {
-                Text("Change the app icon and accent color")
             } footer: {
                 Text("Accent color takes effect after restarting the app.")
             }

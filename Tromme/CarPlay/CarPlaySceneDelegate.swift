@@ -12,7 +12,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private var shuffleNPButton: CPNowPlayingShuffleButton?
     private var repeatNPButton: CPNowPlayingRepeatButton?
-    private var infiniteButton: CPNowPlayingImageButton?
     private var magicMixButton: CPNowPlayingImageButton?
     private var favFilledButton: CPNowPlayingImageButton?
     private var favOutlineButton: CPNowPlayingImageButton?
@@ -947,30 +946,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
         self.repeatNPButton = repeatButton
 
-        let infiniteImage = UIImage(systemName: "infinity") ?? UIImage()
-        let infBtn = CPNowPlayingImageButton(image: infiniteImage) { [weak self] _ in
-            guard let player = self?.player else { return }
-            if player.isInfiniteModeActive {
-                player.isInfiniteModeActive = false
-            } else {
-                player.isMagicMixActive = false
-                player.isInfiniteModeActive = true
-                player.requestInfiniteRefill()
-            }
-            self?.syncMixButtons()
-        }
-        self.infiniteButton = infBtn
-
         let magicMixImage = UIImage(systemName: "wand.and.stars") ?? UIImage()
         let mixBtn = CPNowPlayingImageButton(image: magicMixImage) { [weak self] _ in
-            guard let player = self?.player else { return }
-            if player.isMagicMixActive {
-                player.isMagicMixActive = false
-            } else {
-                player.clearQueue()
-                player.isMagicMixActive = true
-                player.requestMagicMixRefill(freshMix: true)
-            }
+            self?.player.requestMagicMixRefill(freshMix: true)
             self?.syncMixButtons()
         }
         self.magicMixButton = mixBtn
@@ -985,12 +963,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
         self.favOutlineButton = outline
 
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, infBtn, mixBtn])
+        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, mixBtn])
         syncMixButtons()
     }
 
     private func syncMixButtons() {
-        infiniteButton?.isSelected = player.isInfiniteModeActive
         magicMixButton?.isSelected = player.isMagicMixActive
         syncFavoriteButton()
     }
@@ -1002,10 +979,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     private func rebuildNowPlayingButtons() {
         guard let s = shuffleNPButton, let r = repeatNPButton,
-              let inf = infiniteButton, let mix = magicMixButton,
+              let mix = magicMixButton,
               let filled = favFilledButton, let outline = favOutlineButton else { return }
         let fav = currentTrackFavorited ? filled : outline
-        CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, inf, mix])
+        CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, mix])
     }
 
     private func toggleFavorite() {
@@ -1046,7 +1023,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     withObservationTracking {
                         _ = p.isShuffled
                         _ = p.repeatMode
-                        _ = p.isInfiniteModeActive
                         _ = p.isMagicMixActive
                         _ = p.currentTrack
                     } onChange: {

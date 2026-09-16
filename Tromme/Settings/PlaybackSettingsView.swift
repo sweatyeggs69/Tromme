@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct PlaybackSettingsView: View {
+    @Environment(AudioPlayerService.self) private var player
+
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
@@ -12,7 +14,14 @@ struct PlaybackSettingsView: View {
     var body: some View {
         Form {
             Section {
-                if supportsCellularSettings {
+                Toggle("Infinite Mode", isOn: infiniteModeBinding)
+                    .tint(.green)
+            } footer: {
+                Text("Keeps music playing continuously when the queue is empty.")
+            }
+
+            if supportsCellularSettings {
+                Section {
                     Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
                         .tint(.green)
                     if cellularTranscodingBinding.wrappedValue {
@@ -22,12 +31,20 @@ struct PlaybackSettingsView: View {
                             }
                         }
                     }
+                } footer: {
+                    Text("Transcode high-bitrate files to use less data on mobile networks.")
                 }
+            }
+
+            Section {
                 Picker("Show Codec/Bitrate", selection: $playbackBadgeMode) {
                     Text("Off").tag("off")
                     Text("Codec").tag("codec")
                     Text("Codec + Bitrate").tag("codecBitrate")
                 }
+            }
+
+            Section {
                 Toggle("Sound Check", isOn: $soundCheckEnabled)
                     .tint(.green)
                 if soundCheckEnabled {
@@ -37,10 +54,17 @@ struct PlaybackSettingsView: View {
                     }
                 }
             } footer: {
-                Text(footerText)
+                Text("Sound Check keeps song volume more consistent using track or album gain.")
             }
         }
         .navigationTitle("Playback")
+    }
+
+    private var infiniteModeBinding: Binding<Bool> {
+        Binding(
+            get: { player.isInfiniteModeActive },
+            set: { player.isInfiniteModeActive = $0 }
+        )
     }
 
     private var cellularTranscodingBinding: Binding<Bool> {
@@ -56,17 +80,11 @@ struct PlaybackSettingsView: View {
         }
         return NetworkStatus.shared.isCellular || NetworkStatus.shared.interfaceType == .cellular
     }
-
-    private var footerText: String {
-        if supportsCellularSettings {
-            return "Enable transcoding to use less data on mobile networks. Sound Check can use track or album gain to keep volume consistent."
-        }
-        return "Sound Check keeps song volume more consistent using track or album gain."
-    }
 }
 
 #Preview {
     NavigationStack {
         PlaybackSettingsView()
+            .environment(AudioPlayerService())
     }
 }

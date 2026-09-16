@@ -4,45 +4,28 @@ import Network
 import Observation
 
 @Observable @MainActor
-final class AudioPlayerService: @unchecked Sendable {
+final class AudioPlayerService: Sendable {
     var currentTrack: PlexMetadata?
-    var queue: [PlexMetadata] = []
-    var currentIndex: Int = 0
+    var queue: [PlexMetadata] = [] {
+        didSet { maybeRefillInfiniteQueueIfNeeded(trigger: "queue_changed") }
+    }
+    var currentIndex: Int = 0 {
+        didSet { maybeRefillInfiniteQueueIfNeeded(trigger: "index_changed") }
+    }
     var isPlaying = false
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     var isShuffled = false
     var repeatMode: RepeatMode = .off
-    var isMagicMixActive = false {
-        didSet {
-            if isMagicMixActive {
-                // Save infinite mode state so we can restore it when magic mix turns off.
-                infiniteModeBeforeMagicMix = isInfiniteModeActive
-                if isInfiniteModeActive { isInfiniteModeActive = false }
-            } else {
-                // Restore infinite mode to whatever it was before magic mix was enabled.
-                // Defer the refill into a Task so any synchronous clearQueue() at the
-                // call site completes first — otherwise the queue still has magic mix
-                // tracks and the refill guard exits early.
-                if infiniteModeBeforeMagicMix {
-                    isInfiniteModeActive = true
-                    Task { @MainActor [weak self] in
-                        self?.maybeRefillInfiniteQueueIfNeeded(trigger: "magic_mix_disabled")
-                    }
-                }
-                infiniteModeBeforeMagicMix = false
-            }
-        }
-    }
+    /// Magic Mix isn't a toggle — it's a one-shot action you can press repeatedly to
+    /// regenerate the mix. True only while a mix is actively being built.
+    var isMagicMixActive: Bool { magicMixBuildTask != nil }
+    /// Agnostic fallback: whenever the queue runs empty, top it off with a random
+    /// track. Independent of Magic Mix — neither mode forces the other off.
     var isInfiniteModeActive = false {
         didSet {
             UserDefaults.standard.set(isInfiniteModeActive, forKey: Self.infiniteModeKey)
-            if isInfiniteModeActive, isMagicMixActive {
-                // Explicit user activation of infinite while magic mix is on — clear
-                // the saved state so magic mix turning off doesn't re-disable infinite.
-                infiniteModeBeforeMagicMix = false
-                isMagicMixActive = false
-            }
+            maybeRefillInfiniteQueueIfNeeded(trigger: "infinite_mode_toggled")
         }
     }
     /// True once the current item's status is .readyToPlay.
@@ -126,11 +109,9 @@ final class AudioPlayerService: @unchecked Sendable {
     private var gainPrefetchTask: Task<Void, Never>?
     private var playbackLoadTask: Task<Void, Never>?
     private var nowPlayingArtworkTask: Task<Void, Never>?
-    private var infiniteModeBeforeMagicMix = false
     private var magicMixBuildTask: Task<Void, Never>?
     private var magicMixSeedArtistKey: String? = nil
     private var infiniteRefillTask: Task<Void, Never>?
-    private var infinitePreviousKeys: Set<String> = []
     private var preloadedNext: PreloadedNextTrack?
     private var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
@@ -839,6 +820,10 @@ final class AudioPlayerService: @unchecked Sendable {
         player?.replaceCurrentItem(with: nil)
         player = nil
         tearDownObservers()
+        // Turn off infinite mode before clearing the queue below — otherwise its
+        // didSet-driven refill would fire on the now-empty queue mid-reset.
+        // (cancelAllBackgroundTasks() above already cleared magicMixBuildTask.)
+        isInfiniteModeActive = false
         queue = []
         originalQueue = []
         currentIndex = 0
@@ -848,11 +833,7 @@ final class AudioPlayerService: @unchecked Sendable {
         lastPublishedNowPlayingTrackKey = nil
         currentTime = 0
         duration = 0
-        infiniteModeBeforeMagicMix = false
-        isMagicMixActive = false
-        isInfiniteModeActive = false
         magicMixSeedArtistKey = nil
-        infinitePreviousKeys.removeAll()
         isReadyToPlay = false
         stopActiveTranscodeSession()
         currentSessionID = nil
@@ -1220,6 +1201,13 @@ final class AudioPlayerService: @unchecked Sendable {
                 self.logPlayback("magic_mix_build_complete", "added=\(dispersed.count)")
             }
         }
+
+        // Clear the queue down to the current track now that magicMixBuildTask is
+        // already non-nil — this closes the window where Infinite Mode's queue
+        // didSet could otherwise race in a random track before the mix lands.
+        if freshMix {
+            clearQueue()
+        }
     }
 
     // Spreads tracks evenly by artist across the entire queue using weighted fair queuing.
@@ -1263,7 +1251,7 @@ final class AudioPlayerService: @unchecked Sendable {
         return result
     }
 
-    func requestInfiniteRefill() {
+    private func requestInfiniteRefill() {
         infiniteRefillTask?.cancel()
         infiniteRefillTask = nil
         maybeRefillInfiniteQueueIfNeeded(trigger: "user_request")
@@ -1281,6 +1269,9 @@ final class AudioPlayerService: @unchecked Sendable {
 
     private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
         guard isInfiniteModeActive else { return }
+        // Defer to Magic Mix while it's active so a random infinite-mode track
+        // can't sneak into the queue ahead of the mix it's about to build.
+        guard !isMagicMixActive else { return }
         let needed = 1 - upcomingTracks.count
         guard needed > 0 else { return }
         guard infiniteRefillTask == nil else { return }
@@ -1310,20 +1301,12 @@ final class AudioPlayerService: @unchecked Sendable {
             let selected: [PlexMetadata] = await MainActor.run {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
-                let fresh = allTracks.filter { !self.infinitePreviousKeys.contains($0.ratingKey) }
-                let pool = fresh.isEmpty ? allTracks : fresh
-                return Array(pool.shuffled().prefix(currentNeeded))
+                return Array(allTracks.shuffled().prefix(currentNeeded))
             }
 
             guard !selected.isEmpty else { return }
 
             await MainActor.run {
-                for key in selected.map(\.ratingKey) {
-                    self.infinitePreviousKeys.insert(key)
-                }
-                if self.infinitePreviousKeys.count > allTracks.count / 2 {
-                    self.infinitePreviousKeys.removeAll()
-                }
                 for track in selected {
                     self.addToEndOfQueue(track)
                 }
@@ -1636,7 +1619,11 @@ final class AudioPlayerService: @unchecked Sendable {
 
     /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
     /// ReplayGain `gain` is the dB adjustment needed to reach −18 LUFS.
-    /// We add +7 dB to target −11 LUFS instead, then clamp to AVPlayer's range.
+    /// We add +2 dB to target −16 LUFS instead (Apple's own Sound Check reference),
+    /// then clamp to AVPlayer's range. A smaller offset than −11 LUFS means loud
+    /// tracks get attenuated less aggressively — larger attenuation exaggerates the
+    /// equal-loudness (Fletcher-Munson) effect where bass sounds thinner at lower
+    /// playback levels, even though the underlying signal's spectrum is unchanged.
     /// Uses detailed track metadata (fetched before playback) for stream-level gain values.
     private func soundCheckVolume(for track: PlexMetadata?) -> Float {
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey) else { return 1.0 }
@@ -1653,7 +1640,7 @@ final class AudioPlayerService: @unchecked Sendable {
         case .album:
             gainDB = stream.albumGain ?? stream.gain ?? 0.0
         }
-        let adjustedDB = gainDB + 7.0
+        let adjustedDB = gainDB + 2.0
         let linear = Float(pow(10.0, adjustedDB / 20.0))
         return min(max(linear, 0.0), 1.0)
     }

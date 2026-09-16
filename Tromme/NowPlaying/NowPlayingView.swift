@@ -996,7 +996,8 @@ private struct MPVolumeSliderView: UIViewRepresentable {
         // returns 1.0 on macOS Catalyst so we can't trust it for initialization.
         if !context.coordinator.didSyncInitialVolume {
             context.coordinator.didSyncInitialVolume = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.05))
                 if let slider = uiView.subviews.compactMap({ $0 as? UISlider }).first {
                     volume = slider.value
                 }

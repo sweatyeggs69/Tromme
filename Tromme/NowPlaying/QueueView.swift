@@ -4,16 +4,6 @@ struct QueueView: View {
     var player: AudioPlayerService
     @State private var magicMixAvailable = false
 
-    private var isMagicMixActive: Bool {
-        get { player.isMagicMixActive }
-        nonmutating set { player.isMagicMixActive = newValue }
-    }
-
-    private var isInfiniteModeActive: Bool {
-        get { player.isInfiniteModeActive }
-        nonmutating set { player.isInfiniteModeActive = newValue }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             queueActions
@@ -26,13 +16,8 @@ struct QueueView: View {
                     Text("Playing Next")
                         .font(.subheadline.bold())
                     Spacer()
-                    Button(isMagicMixActive ? "New Mix" : "Clear") {
+                    Button("Clear") {
                         player.clearQueue()
-                        if isMagicMixActive {
-                            player.requestMagicMixRefill(freshMix: true)
-                        } else if isInfiniteModeActive {
-                            player.requestInfiniteRefill()
-                        }
                     }
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.6))
@@ -101,26 +86,8 @@ struct QueueView: View {
             }
             .frame(maxWidth: .infinity)
 
-            QueueActionPill(systemImage: "infinity", isActive: isInfiniteModeActive) {
-                if isInfiniteModeActive {
-                    isInfiniteModeActive = false
-                } else {
-                    isMagicMixActive = false
-                    isInfiniteModeActive = true
-                    player.requestInfiniteRefill()
-                }
-            }
-            .frame(maxWidth: .infinity)
-
-            QueueActionPill(systemImage: "wand.and.stars", isActive: isMagicMixActive) {
-                if isMagicMixActive {
-                    isMagicMixActive = false
-                    player.clearQueue()
-                } else {
-                    player.clearQueue()
-                    isMagicMixActive = true
-                    player.requestMagicMixRefill(freshMix: true)
-                }
+            QueueActionPill(systemImage: "wand.and.stars", isActive: player.isMagicMixActive) {
+                player.requestMagicMixRefill(freshMix: true)
             }
             .disabled(!magicMixAvailable)
             .opacity(!magicMixAvailable ? 0.45 : 1)
