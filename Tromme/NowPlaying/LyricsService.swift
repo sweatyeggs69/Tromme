@@ -52,7 +52,7 @@ final class LyricsService {
         let result: LRCLIBResponse?
         if let cached = await LibraryCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
             result = cached.value
-        } else if let fetched = await resolve(track: track, artist: trackArtist) {
+        } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
             await LibraryCache.shared.set(fetched, forKey: cacheKey)
             result = fetched
         } else {
@@ -64,34 +64,47 @@ final class LyricsService {
         isLoading = false
     }
 
-    // Tries each lookup strategy in order, preferring synced lyrics over plain.
-    // Returns immediately on a synced hit; falls back to the first plain result if none yield synced.
-    private func resolve(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
+    // Candidate lookups, most-trustworthy first. Each tries to resolve the same track under a
+    // different name/album guess — needed because /api/get requires an exact metadata match,
+    // and compilations/soundtracks often have mismatched artist or album names in Plex vs LRCLIB.
+    private nonisolated static func lookups(track: PlexMetadata, artist: String) -> [@Sendable () async -> LRCLIBResponse?] {
         let title = track.title
         let dur = track.duration
-        var bestPlain: LRCLIBResponse?
-
-        func consider(_ r: LRCLIBResponse?) -> LRCLIBResponse? {
-            guard let r else { return nil }
-            if r.syncedLyrics?.isEmpty == false { return r }
-            if bestPlain == nil { bestPlain = r }
-            return nil
+        var lookups: [@Sendable () async -> LRCLIBResponse?] = [
+            // No album — avoids false negatives from mismatched release names (e.g. "Song - Single" vs album)
+            { await get(title: title, artist: artist, album: nil, duration: dur) }
+        ]
+        if let album = track.parentTitle {
+            if artist != track.artistName {
+                // Compilations: drop artist, keep album
+                lookups.append { await get(title: title, artist: nil, album: album, duration: dur) }
+            }
+            // Album as last-resort disambiguator for /api/get
+            lookups.append { await get(title: title, artist: artist, album: album, duration: dur) }
         }
-
-        // No album first — avoids false negatives from mismatched release names (e.g. "Song - Single" vs album)
-        if let r = consider(await get(title: title, artist: artist, album: nil, duration: dur)) { return r }
-        // Compilations: drop artist, keep album
-        if artist != track.artistName,
-           let r = consider(await get(title: title, artist: nil, album: track.parentTitle, duration: dur)) { return r }
-        // Album as last-resort disambiguator for /api/get
-        if let r = consider(await get(title: title, artist: artist, album: track.parentTitle, duration: dur)) { return r }
         // Fuzzy search — handles artist name variations and metadata that exact matching rejects
-        if let r = consider(await search(title: title, artist: artist, duration: dur)) { return r }
-
-        return bestPlain
+        lookups.append { await search(title: title, artist: artist, duration: dur) }
+        return lookups
     }
 
-    private func get(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
+    // Runs all candidate lookups concurrently, then picks the highest-priority synced hit,
+    // falling back to the highest-priority plain hit if none are synced.
+    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
+        let lookups = lookups(track: track, artist: artist)
+        let results = await withTaskGroup(of: (Int, LRCLIBResponse?).self) { group in
+            for (index, lookup) in lookups.enumerated() {
+                group.addTask { (index, await lookup()) }
+            }
+            var ordered = [LRCLIBResponse?](repeating: nil, count: lookups.count)
+            for await (index, result) in group { ordered[index] = result }
+            return ordered.compactMap { $0 }
+        }
+
+        if let synced = results.first(where: { $0.syncedLyrics?.isEmpty == false }) { return synced }
+        return results.first
+    }
+
+    private nonisolated static func get(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
         var components = URLComponents(string: "https://lrclib.net/api/get")!
         var items = [URLQueryItem(name: "track_name", value: title)]
         if let artist { items.append(.init(name: "artist_name", value: artist)) }
@@ -102,7 +115,7 @@ final class LyricsService {
         return try? JSONDecoder().decode(LRCLIBResponse.self, from: data)
     }
 
-    private func search(title: String, artist: String, duration: Int?) async -> LRCLIBResponse? {
+    private nonisolated static func search(title: String, artist: String, duration: Int?) async -> LRCLIBResponse? {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = [
             .init(name: "track_name", value: title),
@@ -123,10 +136,21 @@ final class LyricsService {
         })
     }
 
-    private func lrclibFetch(_ url: URL) async -> Data? {
-        guard let (data, response) = try? await URLSession.shared.data(from: url),
-              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return data
+    // Retries transient failures (timeouts, dropped connections, 429/5xx) so a momentary
+    // network hiccup doesn't get treated the same as a confirmed "no lyrics" 404 and cause
+    // resolve() to settle prematurely on a worse (e.g. plain-only) fallback result.
+    private nonisolated static func lrclibFetch(_ url: URL, retries: Int = 2) async -> Data? {
+        for attempt in 0...retries {
+            if let (data, response) = try? await URLSession.shared.data(from: url),
+               let http = response as? HTTPURLResponse {
+                if http.statusCode == 200 { return data }
+                if http.statusCode == 404 { return nil }
+            }
+            if attempt < retries {
+                try? await Task.sleep(for: .milliseconds(300 * (attempt + 1)))
+            }
+        }
+        return nil
     }
 
     private func apply(_ response: LRCLIBResponse) {
