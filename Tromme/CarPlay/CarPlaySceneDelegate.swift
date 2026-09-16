@@ -385,10 +385,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard totalItems < maxItems else { break }
                 let item = CPListItem(text: artist.title, detailText: nil)
                 item.accessoryType = .disclosureIndicator
-                let ratingKey = artist.ratingKey
-                let name = artist.title
                 item.handler = { [weak self] _, completion in
-                    self?.showArtistAlbums(artistRatingKey: ratingKey, artistName: name)
+                    self?.showArtistAlbums(artist: artist)
                     completion()
                 }
                 items.append(item)
@@ -402,26 +400,30 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         template.updateSections(sections)
     }
 
-    private func showArtistAlbums(artistRatingKey: String, artistName: String) {
-        guard let server else { return }
-        let template = CPListTemplate(title: artistName, sections: [])
+    private func showArtistAlbums(artist: PlexMetadata) {
+        guard let server, let sectionId else { return }
+        let template = CPListTemplate(title: artist.title, sections: [])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
-        loadArtistAlbums(artistRatingKey: artistRatingKey, artistName: artistName, server: server, client: client, into: template)
+        loadArtistAlbums(artist: artist, server: server, sectionId: sectionId, client: client, into: template)
     }
 
-    private func loadArtistAlbums(artistRatingKey: String, artistName: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
+    private func loadArtistAlbums(artist: PlexMetadata, server: PlexServer, sectionId: String, client: PlexAPIClient, into template: CPListTemplate) {
+        let artistName = artist.title
         Task {
-            let children: [PlexMetadata]
+            // Uses the same release-reconciliation as ArtistDetailView/AlbumDetailView:
+            // the artist's plain children listing can omit releases (e.g. singles)
+            // whose tracks still point back at the artist via parentRatingKey.
+            let releases: [PlexMetadata]
             do {
-                children = try await client.cachedChildren(server: server, ratingKey: artistRatingKey)
+                releases = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
             } catch {
                 let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadArtistAlbums(artistRatingKey: artistRatingKey, artistName: artistName, server: server, client: client, into: template)
+                    self?.loadArtistAlbums(artist: artist, server: server, sectionId: sectionId, client: client, into: template)
                 }
                 template.updateSections([CPListSection(items: [retry])])
                 return
             }
-            let albums = children.filter { $0.type == "album" }
+            let albums = releases.filter { $0.type == "album" }
             guard !albums.isEmpty else {
                 template.updateSections([])
                 return
