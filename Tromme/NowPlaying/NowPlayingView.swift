@@ -286,7 +286,7 @@ struct NowPlayingView: View {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .tint(.white.opacity(0.82))
-                            Text("Loading Lyrics…")
+                            Text("Fetching Lyrics…")
                                 .font(.callout)
                                 .foregroundStyle(.white.opacity(0.7))
                         }
