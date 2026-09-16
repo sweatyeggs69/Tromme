@@ -8,7 +8,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "EBFFB86A-F874-49C4-B94E-89F02AC9AE04"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "Tromme/CarPlay/CarPlaySceneDelegate.swift"
@@ -16,66 +16,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "211"
             endingLineNumber = "211"
-            landmarkName = "loadHomeContent(into:)"
-            landmarkType = "7">
-            <Locations>
-               <Location
-                  uuid = "EBFFB86A-F874-49C4-B94E-89F02AC9AE04 - 1bc1e3c90f6b34aa"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(1) suspend resume partial function for closure #1 () async -&gt; () in Tromme.CarPlaySceneDelegate.loadHomeContent(into: __C.CPListTemplate) -&gt; ()"
-                  moduleName = "Tromme.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/kylemcclain/Tromme/Tromme/CarPlay/CarPlaySceneDelegate.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "211"
-                  endingLineNumber = "211">
-               </Location>
-               <Location
-                  uuid = "EBFFB86A-F874-49C4-B94E-89F02AC9AE04 - 4e78df609494a510"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(2) await resume partial function for closure #1 () async -&gt; () in Tromme.CarPlaySceneDelegate.loadHomeContent(into: __C.CPListTemplate) -&gt; ()"
-                  moduleName = "Tromme.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/kylemcclain/Tromme/Tromme/CarPlay/CarPlaySceneDelegate.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "211"
-                  endingLineNumber = "211">
-               </Location>
-               <Location
-                  uuid = "EBFFB86A-F874-49C4-B94E-89F02AC9AE04 - c73d89b3754078a4"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(3) suspend resume partial function for closure #1 () async -&gt; () in Tromme.CarPlaySceneDelegate.loadHomeContent(into: __C.CPListTemplate) -&gt; ()"
-                  moduleName = "Tromme.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/kylemcclain/Tromme/Tromme/CarPlay/CarPlaySceneDelegate.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "211"
-                  endingLineNumber = "211">
-               </Location>
-               <Location
-                  uuid = "EBFFB86A-F874-49C4-B94E-89F02AC9AE04 - 51647d586e55daa5"
-                  shouldBeEnabled = "Yes"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "(4) suspend resume partial function for closure #1 () async -&gt; () in Tromme.CarPlaySceneDelegate.loadHomeContent(into: __C.CPListTemplate) -&gt; ()"
-                  moduleName = "Tromme.debug.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/kylemcclain/Tromme/Tromme/CarPlay/CarPlaySceneDelegate.swift"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "211"
-                  endingLineNumber = "211">
-               </Location>
-            </Locations>
+            landmarkName = "rebuildSections()"
+            landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

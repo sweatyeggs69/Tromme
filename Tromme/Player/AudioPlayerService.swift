@@ -1151,6 +1151,7 @@ final class AudioPlayerService: @unchecked Sendable {
             magicMixSeedArtistKey = currentTrack.grandparentRatingKey
         }
         guard let seedArtistKey = magicMixSeedArtistKey else { return }
+        let seedTrackKey = currentTrack.ratingKey
 
         logPlayback("magic_mix_build_begin", "seed=\(seedArtistKey)")
 
@@ -1180,14 +1181,26 @@ final class AudioPlayerService: @unchecked Sendable {
                 return album.ratingKey
             })
 
-            let matchedPool = allTracks.filter { poolAlbumKeys.contains($0.parentRatingKey ?? "") }
+            let matchedPool = allTracks.filter {
+                poolAlbumKeys.contains($0.parentRatingKey ?? "") && $0.ratingKey != seedTrackKey
+            }
 
             guard !Task.isCancelled, !matchedPool.isEmpty else {
                 await MainActor.run { self.logPlayback("magic_mix_build_empty", "") }
                 return
             }
 
-            let dispersed = Self.evenlyDispersedShuffle(matchedPool)
+            var dispersed = Self.evenlyDispersedShuffle(matchedPool)
+
+            // The seed artist is part of the pool for dispersion purposes, but the mix
+            // should open with a different artist than the one already playing.
+            if let first = dispersed.first,
+               (first.grandparentRatingKey ?? first.parentRatingKey ?? first.ratingKey) == seedArtistKey,
+               let swapIndex = dispersed.firstIndex(where: {
+                   ($0.grandparentRatingKey ?? $0.parentRatingKey ?? $0.ratingKey) != seedArtistKey
+               }) {
+                dispersed.swapAt(0, swapIndex)
+            }
 
             await MainActor.run {
                 for track in dispersed {
