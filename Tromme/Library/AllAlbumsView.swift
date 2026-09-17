@@ -100,6 +100,8 @@ struct AllAlbumsView: View {
             }
         }
         .navigationTitle("Albums")
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,

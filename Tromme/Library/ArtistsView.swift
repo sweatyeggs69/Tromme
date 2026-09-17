@@ -60,6 +60,8 @@ struct ArtistsView: View {
             }
         }
         .navigationTitle("Artists")
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .searchable(
             text: $searchText,
             isPresented: $isSearchPresented,

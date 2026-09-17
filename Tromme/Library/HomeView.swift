@@ -112,6 +112,8 @@ struct HomeView: View {
         }
         .navigationTitle(serverConnection.currentServer?.name ?? "Home")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
         }

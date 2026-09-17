@@ -70,6 +70,8 @@ struct AllSongsView: View {
             }
         }
         .navigationTitle("Songs")
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .navigationDestination(item: $trackNavigationTarget) { target in
             if target.type == "artist" {
                 ArtistDetailView(artist: target)

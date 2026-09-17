@@ -206,6 +206,7 @@ struct ContentView: View {
                     offlineBanner
                 }
             }
+            .tabBarMinimizeBehavior(.onScrollDown)
     }
 
     private var offlineBanner: some View {
