@@ -85,6 +85,7 @@ struct SettingsView: View {
                 onSignOut()
             }
             Button("Cancel", role: .cancel) {}
+                .tint(.primary)
         } message: {
             Text("You'll need to sign in again to access your music.")
         }

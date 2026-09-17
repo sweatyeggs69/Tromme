@@ -14,6 +14,8 @@ struct HomeView: View {
     @State private var isLoading: Bool
     @State private var addToPlaylistItemKeys: [String] = []
     @State private var showingAddToPlaylistSheet = false
+    @State private var showingLibrarySwitcher = false
+    @State private var showingSignOutConfirmation = false
     @State private var featuredAlbums: [PlexMetadata]
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
@@ -24,15 +26,18 @@ struct HomeView: View {
     private let previewRecentTracks: [PlexMetadata]?
     private let previewPlaylists: [PlexPlaylist]?
     private let previewRecentAlbums: [PlexMetadata]?
+    private let onSignOut: () -> Void
 
     init(
         previewRecentTracks: [PlexMetadata]? = nil,
         previewPlaylists: [PlexPlaylist]? = nil,
-        previewRecentAlbums: [PlexMetadata]? = nil
+        previewRecentAlbums: [PlexMetadata]? = nil,
+        onSignOut: @escaping () -> Void = {}
     ) {
         self.previewRecentTracks = previewRecentTracks
         self.previewPlaylists = previewPlaylists
         self.previewRecentAlbums = previewRecentAlbums
+        self.onSignOut = onSignOut
         _favoriteTracks = State(initialValue: Array((previewRecentTracks ?? []).prefix(10)))
         _recentTracks = State(initialValue: previewRecentTracks ?? [])
         _playlists = State(initialValue: previewPlaylists ?? [])
@@ -110,12 +115,38 @@ struct HomeView: View {
                 }
             }
         }
-        .navigationTitle(serverConnection.currentServer?.name ?? "Home")
+        .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .scrollEdgeEffectStyle(.soft, for: .top)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Menu {
+                    Button("Change Library", systemImage: "books.vertical") {
+                        showingLibrarySwitcher = true
+                    }
+                    Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                        showingSignOutConfirmation = true
+                    }
+                } label: {
+                    Text(serverConnection.currentServer?.name ?? "Home")
+                        .font(.headline)
+                }
+                .tint(.primary)
+            }
+        }
         .sheet(isPresented: $showingAddToPlaylistSheet) {
             AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        }
+        .sheet(isPresented: $showingLibrarySwitcher) {
+            LibrarySwitcherSheet()
+        }
+        .alert("Sign Out", isPresented: $showingSignOutConfirmation) {
+            Button("Sign Out", role: .destructive) { onSignOut() }
+            Button("Cancel", role: .cancel) {}
+                .tint(.primary)
+        } message: {
+            Text("You'll need to sign in again to access your music.")
         }
     }
 

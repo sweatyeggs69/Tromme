@@ -122,7 +122,7 @@ struct ContentView: View {
         let tabs = TabView(selection: $selectedTab) {
             Tab("Home", systemImage: "house.fill", value: "home") {
                 NavigationStack {
-                    HomeView()
+                    HomeView(onSignOut: signOut)
                         .navigationDestinations()
                         .settingsToolbar(alwaysVisible: true, signOut: signOut)
                 }

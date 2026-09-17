@@ -66,6 +66,7 @@
           }
         }
       ],
+      "name" : "Group",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.5
@@ -74,7 +75,7 @@
         {
           "value" : {
             "enabled" : true,
-            "value" : 0.25
+            "value" : 0.35
           }
         },
         {
