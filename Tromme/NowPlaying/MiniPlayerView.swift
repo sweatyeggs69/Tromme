@@ -153,7 +153,9 @@ struct MiniPlayerView: View {
                     .buttonStyle(.plain)
 
                     playPauseButton
-                    forwardButton
+                    if !isInline {
+                        forwardButton
+                    }
                 }
                 .padding(.horizontal, isInline ? AppStyle.MiniPlayer.spacingCompact : 0)
                 .padding(.leading, isInline ? 0 : AppStyle.MiniPlayer.leadingPadding)
