@@ -18,17 +18,12 @@ struct ArtistDetailView: View {
     @State private var similarArtists: [PlexMetadata] = []
     @State private var selectedSimilarArtist: PlexMetadata?
     @State private var showsAllSimilarArtists = false
-    @State private var heroMinY: CGFloat = 0
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
     @State private var contentReady = false
 
     private var displayArtist: PlexMetadata {
         resolvedArtist ?? artist
-    }
-
-    private var showsCollapsedTitle: Bool {
-        heroMinY < -(heroHeight - 80) || heroIsHidden
     }
 
     private let heroHeight: CGFloat = 400
@@ -309,11 +304,6 @@ struct ArtistDetailView: View {
             }
 
         }
-        .onScrollGeometryChange(for: CGFloat.self) { geometry in
-            geometry.contentOffset.y
-        } action: { _, offset in
-            heroMinY = -offset
-        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedAlbum) { album in
@@ -327,15 +317,6 @@ struct ArtistDetailView: View {
         }
         .navigationDestination(isPresented: $showsAllSimilarArtists) {
             SimilarArtistsGridView(artists: similarArtists)
-        }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(displayArtist.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .opacity(showsCollapsedTitle ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
-            }
         }
         .listStyle(.plain)
         .scrollEdgeEffectHidden(true, for: .top)
