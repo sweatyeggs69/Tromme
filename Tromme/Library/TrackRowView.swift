@@ -14,6 +14,7 @@ struct TrackRowView: View {
     var showArtist: Bool = false
     var subtitle: String? = nil
     var showTrackNumber: Bool = true
+    var showDuration: Bool = false
     var artworkSize: CGFloat = 42
     var artworkCornerRadius: CGFloat = 8
     var showsMenu: Bool = true
@@ -253,6 +254,13 @@ struct TrackRowView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 16)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+
+            if showDuration, !track.durationFormatted.isEmpty {
+                Text(track.durationFormatted)
+                    .font(isCompact ? .caption2 : .caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
 
             downloadStateIndicator

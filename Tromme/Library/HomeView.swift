@@ -12,8 +12,7 @@ struct HomeView: View {
     @State private var playlists: [PlexPlaylist]
     @State private var recentAlbums: [PlexMetadata]
     @State private var isLoading: Bool
-    @State private var addToPlaylistItemKeys: [String] = []
-    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var showingLibrarySwitcher = false
     @State private var showingSignOutConfirmation = false
     @State private var featuredAlbums: [PlexMetadata]
@@ -135,8 +134,8 @@ struct HomeView: View {
                 .tint(.primary)
             }
         }
-        .sheet(isPresented: $showingAddToPlaylistSheet) {
-            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        .sheet(item: $addToPlaylistRequest) { request in
+            AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
         .sheet(isPresented: $showingLibrarySwitcher) {
             LibrarySwitcherSheet()
@@ -315,8 +314,7 @@ struct HomeView: View {
     private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
         guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
-        addToPlaylistItemKeys = tracks.map(\.ratingKey)
-        showingAddToPlaylistSheet = true
+        addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
     }
 
     private var playlistsSection: some View {

@@ -9,6 +9,8 @@ struct SearchView: View {
     @State private var searchText = ""
     @State private var hubs: [Hub] = []
     @State private var matchedPlaylists: [PlexPlaylist] = []
+    @State private var exactMatches: [PlexMetadata] = []
+    @State private var exactPlaylistMatches: [PlexPlaylist] = []
     @State private var searchTask: Task<Void, Never>?
     @State private var trackNavigationTarget: PlexMetadata? = nil
     @AppStorage("recent_search_queries") private var recentSearchesStorage = "[]"
@@ -79,10 +81,20 @@ struct SearchView: View {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 List {
+                    if !exactMatches.isEmpty || !exactPlaylistMatches.isEmpty {
+                        Section("Exact Matches") {
+                            ForEach(Array(exactMatches.enumerated()), id: \.element.id) { index, item in
+                                searchResultRow(item: item, allItems: exactMatches, index: index)
+                            }
+                            ForEach(exactPlaylistMatches) { playlist in
+                                playlistRow(playlist)
+                            }
+                        }
+                    }
                     ForEach(hubs) { hub in
                         if let items = hub.metadata, !items.isEmpty {
                             Section(hub.title ?? "Results") {
-                                ForEach(Array(items.prefix(5).enumerated()), id: \.element.id) { index, item in
+                                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                                     searchResultRow(item: item, allItems: items, index: index)
                                 }
                             }
@@ -91,19 +103,7 @@ struct SearchView: View {
                     if !matchedPlaylists.isEmpty {
                         Section("Playlists") {
                             ForEach(matchedPlaylists.prefix(5)) { playlist in
-                                NavigationLink {
-                                    PlaylistDetailView(playlist: playlist)
-                                } label: {
-                                    HStack(spacing: 12) {
-                                        ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 44, cornerRadius: 8)
-                                        VStack(alignment: .leading) {
-                                            Text(playlist.title).lineLimit(1)
-                                            if let count = playlist.leafCount {
-                                                Text("\(count) songs").font(.caption).foregroundStyle(.secondary)
-                                            }
-                                        }
-                                    }
-                                }
+                                playlistRow(playlist)
                             }
                         }
                     }
@@ -141,12 +141,20 @@ struct SearchView: View {
             }
         }
         .onAppear {
-            // iPhone's Tab(role: .search) already focuses the field natively when selected;
-            // iPad's plain tab shows an always-visible field that needs focus set explicitly.
+            // iPhone's Tab(role: .search) auto-focuses via .tabViewSearchActivation(.searchTabSelection)
+            // on the TabView; iPad's plain tab shows an always-visible field that needs focus set explicitly.
             if UIDevice.current.userInterfaceIdiom == .pad {
                 isSearchFieldFocused = true
             }
         }
+    }
+
+    /// Lowercases and strips punctuation so queries like "back then" match titles like "BACK, THEN".
+    private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
     }
 
     private func rememberSearch(_ query: String) {
@@ -209,16 +217,35 @@ struct SearchView: View {
         }
     }
 
+    @ViewBuilder
+    private func playlistRow(_ playlist: PlexPlaylist) -> some View {
+        NavigationLink {
+            PlaylistDetailView(playlist: playlist)
+        } label: {
+            HStack(spacing: 12) {
+                ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 44, cornerRadius: 8)
+                VStack(alignment: .leading) {
+                    Text(playlist.title).lineLimit(1)
+                    if let count = playlist.leafCount {
+                        Text("\(count) songs").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
     private func performSearch(query: String) async {
         guard !query.isEmpty else {
             hubs = []
             matchedPlaylists = []
+            exactMatches = []
+            exactPlaylistMatches = []
             return
         }
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
 
-        let lowered = query.lowercased()
+        let lowered = Self.normalizeForSearch(query)
 
         async let artistsTask = client.cachedArtists(server: server, sectionId: sectionId)
         async let albumsTask = client.cachedAlbums(server: server, sectionId: sectionId)
@@ -229,14 +256,14 @@ struct SearchView: View {
         let tracks = (try? await tracksTask) ?? []
         let allPlaylists = (try? await playlistsTask) ?? []
 
-        var matchedArtists = artists.filter { $0.title.lowercased().contains(lowered) }
+        var matchedArtists = artists.filter { Self.normalizeForSearch($0.title).contains(lowered) }
 
         // Include artists found via tracks that aren't in the artists list
-        let matchedArtistNames = Set(matchedArtists.map { $0.title.lowercased() })
+        let matchedArtistNames = Set(matchedArtists.map { Self.normalizeForSearch($0.title) })
         let trackArtistKeys = Set(tracks.compactMap { track -> String? in
             guard let artistName = track.grandparentTitle,
-                  artistName.lowercased().contains(lowered),
-                  !matchedArtistNames.contains(artistName.lowercased()),
+                  Self.normalizeForSearch(artistName).contains(lowered),
+                  !matchedArtistNames.contains(Self.normalizeForSearch(artistName)),
                   let key = track.grandparentRatingKey else { return nil }
             return key
         })
@@ -251,15 +278,18 @@ struct SearchView: View {
                 ))
             }
         }
-        let matchedAlbums = albums.filter { $0.title.lowercased().contains(lowered) || ($0.parentTitle?.lowercased().contains(lowered) ?? false) }
+        let matchedAlbums = albums.filter {
+            Self.normalizeForSearch($0.title).contains(lowered)
+            || ($0.parentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
+        }
         let matchedTracks = tracks.filter {
-            $0.title.lowercased().contains(lowered)
-            || ($0.grandparentTitle?.lowercased().contains(lowered) ?? false)
-            || ($0.parentTitle?.lowercased().contains(lowered) ?? false)
+            Self.normalizeForSearch($0.title).contains(lowered)
+            || ($0.grandparentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
+            || ($0.parentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
         }
 
         let playlists = allPlaylists.filter {
-            $0.isMusicPlaylist && $0.title.lowercased().contains(lowered)
+            $0.isMusicPlaylist && Self.normalizeForSearch($0.title).contains(lowered)
         }
 
         var results: [Hub] = []
@@ -274,6 +304,15 @@ struct SearchView: View {
         }
         hubs = results
         matchedPlaylists = playlists
+
+        // Exact matches compare the raw title (punctuation included), unlike the
+        // punctuation-insensitive `contains` filtering used above for general results.
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        exactMatches = matchedArtists.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
+            + matchedAlbums.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
+            + matchedTracks.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
+        exactPlaylistMatches = playlists.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
+
         await prefetchArtwork(for: results, server: server)
     }
 

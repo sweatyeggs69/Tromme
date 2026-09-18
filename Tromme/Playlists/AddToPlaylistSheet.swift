@@ -1,5 +1,10 @@
 import SwiftUI
 
+struct AddToPlaylistRequest: Identifiable {
+    let id = UUID()
+    let itemRatingKeys: [String]
+}
+
 struct AddToPlaylistSheet: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -60,7 +65,7 @@ struct AddToPlaylistSheet: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("Create Playlist")
-                    .disabled(isSubmitting || isCreating || isLoading || itemRatingKeys.isEmpty)
+                    .disabled(isSubmitting || isCreating || itemRatingKeys.isEmpty)
                     .alert("Create Playlist", isPresented: $showingCreateAlert) {
                         TextField("Playlist name", text: $newPlaylistTitle)
                         Button("Cancel", role: .cancel) {
@@ -74,11 +79,13 @@ struct AddToPlaylistSheet: View {
                         Text("Enter a name for the new playlist.")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(addButtonTitle) {
-                        Task { await addToSelectedPlaylists() }
+                if !selectedPlaylistIDs.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(addButtonTitle) {
+                            Task { await addToSelectedPlaylists() }
+                        }
+                        .disabled(isSubmitting || isCreating || itemRatingKeys.isEmpty)
                     }
-                    .disabled(selectedPlaylistIDs.isEmpty || isSubmitting || isCreating || itemRatingKeys.isEmpty)
                 }
             }
         }

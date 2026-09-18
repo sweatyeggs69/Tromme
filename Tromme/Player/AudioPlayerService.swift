@@ -92,6 +92,10 @@ final class AudioPlayerService: Sendable {
     #endif
     private var isPlayingLocalFile = false
     private var localFileCodec: String?
+    /// True when the current item is a direct stream (no PMS transcode/remux).
+    /// On failure, this lets handlePlaybackFailure fall back to the HLS
+    /// transcode path once instead of retrying the same direct URL twice more.
+    private var isDirectStreamAttempt = false
     private var pendingInitialSeekTime: TimeInterval?
     /// When a streamed transcode session is started at a seek point, AVPlayer's
     /// timeline begins at 0 but actually represents this many seconds into the track.
@@ -178,6 +182,17 @@ final class AudioPlayerService: Sendable {
             .flatMap { $0.stream ?? [] }
             .first(where: { $0.streamType == 2 })
         return (audioStream?.codec ?? media?.audioCodec)?.lowercased()
+    }
+
+    /// The source file's bitrate in kbps, used to decide whether cellular
+    /// transcoding is actually needed — no point re-encoding a file that's
+    /// already at or under the cellular target bitrate.
+    private func sourceBitrate(for track: PlexMetadata) -> Int? {
+        let media = track.media?.first
+        let audioStream = media?.part?
+            .flatMap { $0.stream ?? [] }
+            .first(where: { $0.streamType == 2 })
+        return audioStream?.bitrate ?? media?.bitrate
     }
 
     init() {
@@ -481,6 +496,16 @@ final class AudioPlayerService: Sendable {
 
         let resumeTime = preferredResumeTimeForRecovery()
 
+        // Direct stream failed — fall back to PMS's HLS transcode path once,
+        // rather than retrying the same direct URL twice more. Doesn't consume
+        // the normal retry budget below, so HLS gets its own fresh attempts.
+        if isDirectStreamAttempt {
+            logPlayback("recovery_fallback_to_hls", "reason=\(reason)")
+            isDirectStreamAttempt = false
+            loadAndPlay(track, resumeAt: resumeTime, forceHLS: true)
+            return
+        }
+
         if recoveryAttemptsForTrack < maxRecoveryAttemptsPerTrack {
             recoveryAttemptsForTrack += 1
             if let resumeTime {
@@ -577,8 +602,10 @@ final class AudioPlayerService: Sendable {
         // Plex's live HLS transcode can't handle in-stream seeks — AVPlayer stalls
         // waiting for segments the transcoder hasn't produced yet. Restart the
         // transcode session with an offset so PMS begins transcoding at the seek
-        // point. Locally downloaded files seek in place.
-        if !isPlayingLocalFile, server != nil, player != nil,
+        // point. Locally downloaded files and direct streams (plain byte-range-
+        // served files, no live transcode) seek in place instead — restarting
+        // those tears down and rebuilds the whole AVPlayer on every drag tick.
+        if !isPlayingLocalFile, !isDirectStreamAttempt, server != nil, player != nil,
            queue.indices.contains(currentIndex) {
             logPlayback("seek_restart_stream", "target=\(boundedTime)")
             recoveryAttemptsForTrack = 0
@@ -895,7 +922,7 @@ final class AudioPlayerService: Sendable {
 
     }
 
-    private func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil) {
+    private func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil, forceHLS: Bool = false) {
         guard server != nil, client != nil else {
             logPlayback("load_failed", "reason=server_or_client_not_configured requested=\(track.ratingKey)")
             return
@@ -958,6 +985,43 @@ final class AudioPlayerService: Sendable {
             return
         }
 
+        let sourceCodec = sourceAudioCodec(for: track)
+        let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
+        let cellularTranscodeBitrate = Self.cellularTranscodeBitrateKbps
+        let playbackPath = resolvedPlaybackPath(for: server)
+        let isConstrainedNetworkPath: Bool
+        switch playbackPath {
+        case .cellular, .wan, .relay:
+            isConstrainedNetworkPath = !disableCellularTranscoding
+        case .lan:
+            isConstrainedNetworkPath = false
+        }
+        // Only actually transcode down when the source exceeds the target
+        // bitrate — unknown bitrate is treated as "might exceed it" so we
+        // stay conservative rather than risk uncapped cellular usage.
+        let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularTranscodeBitrate } ?? true
+        let shouldConstrainForNetwork = isConstrainedNetworkPath && sourceExceedsTarget
+
+        // Direct stream for non-FLAC content — bypasses PMS's HLS transcode/remux
+        // entirely. That remux path is fragile against source files with
+        // malformed VBR/Xing headers (this library has some), which produces
+        // outright playback failures rather than just an imprecise duration.
+        // FLAC (needs lossless ALAC) and cellular-bitrate-constrained playback
+        // still require PMS's transcode, so they fall through to HLS below.
+        if !forceHLS, !shouldConstrainForNetwork, sourceCodec != "flac",
+           let partKey = track.media?.first?.part?.first?.key,
+           let directURL = client.directStreamURL(server: server, partKey: partKey) {
+            discardPreloadedNext()
+            isDirectStreamAttempt = true
+            isConstrainedPlaybackPath = false
+            currentSessionID = nil
+            pendingInitialSeekTime = boundedResume
+            logPlayback("load_direct_stream", "codec=\(sourceCodec ?? "?")")
+            startPlayback(url: directURL)
+            return
+        }
+        isDirectStreamAttempt = false
+
         // A preloaded session always starts at 0, so it can't serve a mid-track resume.
         var preloadedSessionToStop: String?
         if boundedResume != nil {
@@ -978,22 +1042,10 @@ final class AudioPlayerService: Sendable {
             return
         }
 
-        let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
-        let cellularTranscodeBitrate = Self.validatedCellularTranscodeBitrate(
-            UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
-        )
-        let playbackPath = resolvedPlaybackPath(for: server)
-        let shouldConstrainForNetwork: Bool
-        switch playbackPath {
-        case .cellular, .wan, .relay:
-            shouldConstrainForNetwork = !disableCellularTranscoding
-        case .lan:
-            shouldConstrainForNetwork = false
-        }
         let preferAACTranscode = shouldConstrainForNetwork
         let avoidAudioTranscode = !preferAACTranscode
 
-        // Always route audio through Plex universal HLS for stable seek/duration behavior.
+        // FLAC or cellular-constrained: route through Plex universal HLS.
         guard let sessionID = currentSessionID else {
             logPlayback("load_rejected", "reason=missing_session_id")
             return
@@ -1078,18 +1130,22 @@ final class AudioPlayerService: Sendable {
                 offsetSeconds: capturedOffsetSeconds
             )
 
-            guard let streamURL = candidates.first else {
+            guard let masterURL = candidates.first else {
                 self.logPlayback("universal_url_unavailable")
                 self.isPlaying = false
                 return
             }
+            let resolvedURL = await capturedClient.resolveUniversalVariantURL(masterURL: masterURL) ?? masterURL
             guard !Task.isCancelled else { return }
             guard self.playbackGeneration == generation else { return }
+            if resolvedURL == masterURL {
+                self.logPlayback("variant_resolve_failed", "using master playlist")
+            }
             self.universalCandidatesForCurrentItem = candidates
             self.universalCandidateIndexForCurrentItem = 0
-            self.universalStreamURL = streamURL
+            self.universalStreamURL = resolvedURL
             self.logPlayback("load_ready")
-            self.startPlayback(url: streamURL)
+            self.startPlayback(url: resolvedURL)
         }
     }
 
@@ -1109,9 +1165,13 @@ final class AudioPlayerService: Sendable {
         // Local files with a pending seek must not play from position 0 — the
         // readyToPlay handler will start playback after the seek completes.
         // Streams always play immediately because the offset is baked into the URL.
-        if pendingInitialSeekTime == nil {
+        // Either way, a reload triggered by seeking while paused (e.g. an HLS
+        // seek-restart) must not resume playback the user didn't ask for.
+        if pendingInitialSeekTime == nil, playbackIntent {
             player?.play()
             isPlaying = true
+        } else if pendingInitialSeekTime == nil {
+            isPlaying = false
         }
 
         observeItemStatus(item)
@@ -1124,7 +1184,7 @@ final class AudioPlayerService: Sendable {
         prefetchUpcomingArtwork()
         maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
         syncDynamicQueueDownloads()
-        reportTimelineState(pendingInitialSeekTime == nil ? "playing" : "paused")
+        reportTimelineState(isPlaying ? "playing" : "paused")
         savePlaybackState()
     }
 
@@ -1530,13 +1590,18 @@ final class AudioPlayerService: Sendable {
 
         let playbackPath = resolvedPlaybackPath(for: server)
         let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
-        let cellularBitrate = Self.validatedCellularTranscodeBitrate(
-            UserDefaults.standard.integer(forKey: Self.cellularTranscodeBitrateKbpsKey)
-        )
-        let shouldConstrain: Bool = switch playbackPath {
+        let cellularBitrate = Self.cellularTranscodeBitrateKbps
+        let isConstrainedNetworkPath: Bool = switch playbackPath {
         case .cellular, .wan, .relay: !disableCellularTranscoding
         case .lan: false
         }
+        let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularBitrate } ?? true
+        let shouldConstrain = isConstrainedNetworkPath && sourceExceedsTarget
+
+        // Direct-stream-eligible tracks don't need a pre-negotiated transcode
+        // session — loadAndPlay resolves their URL instantly from local
+        // metadata, so preloading one here would just waste a PMS session.
+        guard shouldConstrain || sourceAudioCodec(for: track) == "flac" else { return }
 
         let sessionID = UUID().uuidString
         let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
@@ -1573,14 +1638,16 @@ final class AudioPlayerService: Sendable {
             constrainAudioBitrate: shouldConstrain,
             cellularTranscodeBitrate: cellularBitrate
         )
-        guard let streamURL = candidates.first else {
+        guard let masterURL = candidates.first else {
             logPlayback("preload_no_url")
             return
         }
+        let resolvedURL = await client.resolveUniversalVariantURL(masterURL: masterURL) ?? masterURL
+        guard !Task.isCancelled else { return }
 
         preloadedNext = PreloadedNextTrack(
             ratingKey: track.ratingKey,
-            streamURL: streamURL,
+            streamURL: resolvedURL,
             candidates: candidates,
             sessionID: sessionID,
             shouldConstrain: shouldConstrain
@@ -1689,10 +1756,14 @@ final class AudioPlayerService: Sendable {
                                 self.lastSeekCompletedAt = Date()
                                 guard self.playbackGeneration == seekGeneration, finished else { return }
                                 self.currentTime = bounded
-                                self.isPlaying = true
-                                self.player?.play()
+                                if self.playbackIntent {
+                                    self.isPlaying = true
+                                    self.player?.play()
+                                } else {
+                                    self.isPlaying = false
+                                }
                                 self.updateNowPlayingInfo()
-                                self.reportTimelineState("playing")
+                                self.reportTimelineState(self.isPlaying ? "playing" : "paused")
                             }
                         }
                     }
@@ -2044,13 +2115,16 @@ final class AudioPlayerService: Sendable {
     private static let shuffleKey = "playbackShuffle"
     private static let repeatKey = "playbackRepeatMode"
     private static let disableCellularTranscodingKey = "disableCellularTranscoding"
-    private static let cellularTranscodeBitrateKbpsKey = "cellularTranscodeBitrateKbps"
+    /// Cellular transcode target is fixed — no longer a user-configurable
+    /// setting. Transcoding only kicks in when the source exceeds this anyway
+    /// (see sourceBitrate(for:) callers), so there's no lower-bitrate option
+    /// to pick from in the first place.
+    private static let cellularTranscodeBitrateKbps = 320
     private static let infiniteModeKey = "infiniteModeActive"
     private static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
     private static let autoDownloadEnabledKey = "autoDownloadEnabled"
     private static let autoDownloadModeKey = "autoDownloadMode"
     private static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
-    private static let supportedCellularTranscodeBitrates: Set<Int> = [192, 256, 320]
     private static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
     nonisolated private static var queueFileURL: URL {
@@ -2063,10 +2137,6 @@ final class AudioPlayerService: Sendable {
     private enum SoundCheckGainSource: String {
         case track
         case album
-    }
-
-    private static func validatedCellularTranscodeBitrate(_ bitrate: Int) -> Int {
-        supportedCellularTranscodeBitrates.contains(bitrate) ? bitrate : 320
     }
 
     static func validatedDynamicDownloadLimit(_ limit: Int) -> Int {

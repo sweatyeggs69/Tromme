@@ -221,6 +221,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let subformat: [PlexTag]?
     let similar: [PlexTag]?
     let originallyAvailableAt: String?
+    var playlistItemID: Int? = nil
 
     var id: String { ratingKey }
 
@@ -284,7 +285,7 @@ extension PlexMetadata {
         case viewCount, lastViewedAt, userRating
         case thumb, art, parentThumb, grandparentThumb, grandparentArt
         case parentTitle, grandparentTitle, parentRatingKey, grandparentRatingKey
-        case leafCount, viewedLeafCount, originallyAvailableAt
+        case leafCount, viewedLeafCount, originallyAvailableAt, playlistItemID
         case media = "Media"
         case subformat = "Subformat"
         case genre = "Genre"
@@ -436,6 +437,7 @@ extension PlexMetadata {
         subformat = try? c.decodeIfPresent([PlexTag].self, forKey: .subformat)
         similar = try? c.decodeIfPresent([PlexTag].self, forKey: .similar)
         originallyAvailableAt = try? c.decodeIfPresent(String.self, forKey: .originallyAvailableAt)
+        playlistItemID = try? c.decodeIfPresent(Int.self, forKey: .playlistItemID)
     }
 }
 

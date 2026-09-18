@@ -20,8 +20,7 @@ struct AlbumDetailView: View {
     @State private var artistAlbums: [PlexMetadata]
     @State private var recommendedAlbums: [PlexMetadata]
     @State private var showsAllRecommendedAlbums = false
-    @State private var addToPlaylistItemKeys: [String] = []
-    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var addToPlaylistResultMessage: String?
     @State private var showsAlbumInfoSheet = false
     @State private var showDeleteAlbumConfirmation = false
@@ -983,9 +982,9 @@ struct AlbumDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
-        .sheet(isPresented: $showingAddToPlaylistSheet) {
-            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys) { playlistCount in
-                let itemCount = addToPlaylistItemKeys.count
+        .sheet(item: $addToPlaylistRequest) { request in
+            AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys) { playlistCount in
+                let itemCount = request.itemRatingKeys.count
                 let itemLabel = itemCount == 1 ? "item" : "items"
                 let playlistLabel = playlistCount == 1 ? "playlist" : "playlists"
                 addToPlaylistResultMessage = "Added \(itemCount) \(itemLabel) to \(playlistCount) \(playlistLabel)."
@@ -1028,8 +1027,7 @@ struct AlbumDetailView: View {
     private func presentAddToPlaylist(for itemKeys: [String]) {
         let normalizedKeys = orderedUnique(keys: itemKeys)
         guard !normalizedKeys.isEmpty else { return }
-        addToPlaylistItemKeys = normalizedKeys
-        showingAddToPlaylistSheet = true
+        addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: normalizedKeys)
     }
 
     private func orderedUnique(keys: [String]) -> [String] {

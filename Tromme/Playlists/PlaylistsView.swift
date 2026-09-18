@@ -12,7 +12,22 @@ struct PlaylistsView: View {
     private var filteredPlaylists: [PlexPlaylist] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return playlists }
-        return playlists.filter { $0.title.localizedCaseInsensitiveContains(query) }
+        let normalizedQuery = Self.normalizeForSearch(query)
+        return playlists.filter { Self.normalizeForSearch($0.title).contains(normalizedQuery) }
+    }
+
+    private var exactMatches: [PlexPlaylist] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return filteredPlaylists.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
     }
 
     private var playlistSections: [(title: String, items: [PlexPlaylist])] {
@@ -23,7 +38,11 @@ struct PlaylistsView: View {
             if sectionItems[title] == nil { sectionOrder.append(title) }
             sectionItems[title, default: []].append(playlist)
         }
-        return sectionOrder.map { ($0, sectionItems[$0]!) }
+        var sections = sectionOrder.map { ($0, sectionItems[$0]!) }
+        if !exactMatches.isEmpty {
+            sections.insert((title: "Exact Matches", items: exactMatches), at: 0)
+        }
+        return sections
     }
 
     private func alphabetSectionTitle(for value: String) -> String {
@@ -72,7 +91,7 @@ struct PlaylistsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title)
+                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
                     }
                 }
                 .listStyle(.plain)

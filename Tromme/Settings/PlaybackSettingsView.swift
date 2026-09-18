@@ -4,12 +4,9 @@ struct PlaybackSettingsView: View {
     @Environment(AudioPlayerService.self) private var player
 
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
-    @AppStorage("cellularTranscodeBitrateKbps") private var cellularTranscodeBitrateKbps = 320
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
-
-    private static let cellularTranscodeBitrateOptions: [Int] = [192, 256, 320]
 
     var body: some View {
         Form {
@@ -24,15 +21,8 @@ struct PlaybackSettingsView: View {
                 Section {
                     Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
                         .tint(.green)
-                    if cellularTranscodingBinding.wrappedValue {
-                        Picker("Bitrate", selection: $cellularTranscodeBitrateKbps) {
-                            ForEach(Self.cellularTranscodeBitrateOptions, id: \.self) { bitrate in
-                                Text("\(bitrate) kbps").tag(bitrate)
-                            }
-                        }
-                    }
                 } footer: {
-                    Text("Transcode high-bitrate files to use less data on mobile networks.")
+                    Text("Transcode files over 320 kbps to use less data on mobile networks.")
                 }
             }
 

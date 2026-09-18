@@ -325,7 +325,10 @@ enum CacheKey {
         "playlists_\(serverId)"
     }
     static func playlistItems(playlistKey: String) -> String {
-        "playlist_items_\(playlistKey)"
+        // v2: bumped so stale entries cached before `PlexMetadata.playlistItemID`
+        // existed (which decode with that field as nil, silently breaking reorder
+        // persistence) are orphaned and refetched instead of served from disk.
+        "playlist_items_v2_\(playlistKey)"
     }
     static func search(query: String, sectionId: String?) -> String {
         "search_\(query)_\(sectionId ?? "all")"

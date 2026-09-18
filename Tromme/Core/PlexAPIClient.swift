@@ -354,29 +354,19 @@ final class PlexAPIClient: Sendable {
             basePath = "/playlists/\(playlistKey)/items"
         }
 
+        // The playlist items endpoint doesn't reliably return totalSize, so page
+        // sequentially until a page comes back shorter than requested instead of
+        // trusting the container's reported total.
         let pageSize = 1000
-        let firstPath = "\(basePath)?X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)"
-        let firstResponse: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: firstPath)
-        var allItems = firstResponse.mediaContainer.metadata ?? []
-        let total = firstResponse.mediaContainer.totalSize ?? allItems.count
-        guard total > allItems.count else { return allItems }
-
-        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
-        for batchOffset in stride(from: 0, to: pageStarts.count, by: 10) {
-            let batch = pageStarts[batchOffset..<min(batchOffset + 10, pageStarts.count)]
-            let batchItems = try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
-                for start in batch {
-                    let path = "\(basePath)?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
-                    group.addTask {
-                        let response: PlexResponse<PlexMetadata> = try await self.serverRequest(server: server, path: path)
-                        return response.mediaContainer.metadata ?? []
-                    }
-                }
-                var results: [PlexMetadata] = []
-                for try await items in group { results.append(contentsOf: items) }
-                return results
-            }
-            allItems.append(contentsOf: batchItems)
+        var allItems: [PlexMetadata] = []
+        var start = 0
+        while true {
+            let path = "\(basePath)?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
+            let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
+            let items = response.mediaContainer.metadata ?? []
+            allItems.append(contentsOf: items)
+            guard items.count == pageSize else { break }
+            start += pageSize
         }
 
         return allItems
@@ -454,6 +444,26 @@ final class PlexAPIClient: Sendable {
             method: "PUT",
             queryItems: [URLQueryItem(name: "title", value: trimmed)]
         )
+    }
+
+    /// Repositions a playlist item after another item, or to the front when `afterPlaylistItemID` is nil.
+    func movePlaylistItem(
+        server: PlexServer,
+        playlistId: String,
+        playlistItemID: Int,
+        afterPlaylistItemID: Int?
+    ) async throws {
+        let path = "/playlists/\(playlistId)/items/\(playlistItemID)/move"
+        if let afterPlaylistItemID {
+            _ = try await rawServerRequest(
+                server: server,
+                path: path,
+                method: "PUT",
+                queryItems: [URLQueryItem(name: "after", value: String(afterPlaylistItemID))]
+            )
+        } else {
+            _ = try await rawServerRequest(server: server, path: path, method: "PUT")
+        }
     }
 
     func deleteLibraryItem(server: PlexServer, ratingKey: String) async throws {
@@ -756,6 +766,54 @@ final class PlexAPIClient: Sendable {
 
         guard let url = components.url else { return [] }
         return [url]
+    }
+
+    /// Builds a direct-stream URL from a media part's key, serving the raw file
+    /// with byte-range support and no PMS transcode/remux involved. Used for
+    /// non-FLAC content so playback doesn't depend on PMS's HLS remuxer, which
+    /// can fail outright on source files with malformed VBR/Xing headers.
+    func directStreamURL(server: PlexServer, partKey: String) -> URL? {
+        let normalizedPath = partKey.hasPrefix("/") ? partKey : "/\(partKey)"
+        guard var partComponents = URLComponents(string: normalizedPath),
+              let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
+
+        var queryItems = partComponents.queryItems ?? []
+        queryItems.append(URLQueryItem(name: "X-Plex-Token", value: server.accessToken))
+        queryItems.append(URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier))
+        partComponents.queryItems = queryItems
+
+        components.path = partComponents.path
+        components.queryItems = partComponents.queryItems
+        return components.url
+    }
+
+    /// Fetches the universal transcode master playlist and resolves the actual
+    /// variant playlist URL. PMS's master playlist can declare a BANDWIDTH that
+    /// doesn't match the variant it serves, which confuses AVPlayer's ABR
+    /// selection and produces sporadic CoreMediaErrorDomain failures (-16170).
+    /// Playing the resolved variant directly sidesteps AVPlayer's bandwidth-based
+    /// variant selection entirely. Returns nil if the playlist can't be fetched
+    /// or parsed, so the caller can fall back to the master URL.
+    func resolveUniversalVariantURL(masterURL: URL) async -> URL? {
+        guard let (data, response) = try? await session.data(from: masterURL),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let text = String(data: data, encoding: .utf8) else { return nil }
+
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
+        for (index, line) in lines.enumerated() {
+            guard line.hasPrefix("#EXT-X-STREAM-INF"), index + 1 < lines.count else { continue }
+            let uri = lines[index + 1].trimmingCharacters(in: .whitespaces)
+            if !uri.isEmpty, !uri.hasPrefix("#") {
+                return URL(string: uri, relativeTo: masterURL)?.absoluteURL
+            }
+        }
+        // Fallback: first non-comment, non-empty line, in case the playlist
+        // omits EXT-X-STREAM-INF but still points straight at a variant.
+        for line in lines where !line.hasPrefix("#") {
+            return URL(string: line, relativeTo: masterURL)?.absoluteURL
+        }
+        return nil
     }
 
     /// Progressive (non-HLS) transcode URL for offline downloads. PMS converts

@@ -26,8 +26,29 @@ struct DownloadsView: View {
         downloadManager.downloadedTracksSorted
     }
 
+    private var exactMatches: [DownloadedTrackRecord] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return displayTracks.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    nonisolated private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
     var body: some View {
         List {
+            if !exactMatches.isEmpty {
+                Section("Exact Matches") {
+                    ForEach(exactMatches) { record in
+                        trackRow(record)
+                    }
+                }
+            }
             if !displayTracks.isEmpty {
                 Section {
                     ForEach(displayTracks) { record in
@@ -143,10 +164,11 @@ struct DownloadsView: View {
         query: String,
         sortOrder: DownloadSortOrder
     ) -> [DownloadedTrackRecord] {
+        let normalizedQuery = normalizeForSearch(query)
         let base = query.isEmpty ? tracks : tracks.filter {
-            $0.title.localizedCaseInsensitiveContains(query) ||
-            $0.artistName.localizedCaseInsensitiveContains(query) ||
-            $0.albumName.localizedCaseInsensitiveContains(query)
+            normalizeForSearch($0.title).contains(normalizedQuery) ||
+            normalizeForSearch($0.artistName).contains(normalizedQuery) ||
+            normalizeForSearch($0.albumName).contains(normalizedQuery)
         }
         return switch sortOrder {
         case .dateAdded: base

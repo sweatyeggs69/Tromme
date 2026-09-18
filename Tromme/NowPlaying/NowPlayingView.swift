@@ -21,8 +21,7 @@ struct NowPlayingView: View {
     @State private var lyricsService = LyricsService()
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
-    @State private var showingAddToPlaylistSheet = false
-    @State private var addToPlaylistItemKeys: [String] = []
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var isRating = false
     // Caches the last valid geometry to recover from the transient invalid
     // dimensions GeometryReader reports during CarPlay + app-switch transitions.
@@ -272,8 +271,8 @@ struct NowPlayingView: View {
                 await lyricsService.fetch(track: track)
             }
         }
-        .sheet(isPresented: $showingAddToPlaylistSheet) {
-            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        .sheet(item: $addToPlaylistRequest) { request in
+            AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
     }
 
@@ -485,8 +484,7 @@ struct NowPlayingView: View {
                 }
             }
             Button {
-                addToPlaylistItemKeys = [track.ratingKey]
-                showingAddToPlaylistSheet = true
+                addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: [track.ratingKey])
             } label: {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }

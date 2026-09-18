@@ -48,19 +48,15 @@ struct FavoritesView: View {
                     )
                 } else {
                     List {
+                        if !exactMatches.isEmpty {
+                            Section("Exact Matches") {
+                                ForEach(exactMatches) { track in
+                                    trackRow(track, index: filteredTracks.firstIndex(where: { $0.id == track.id }) ?? 0)
+                                }
+                            }
+                        }
                         ForEach(Array(filteredTracks.enumerated()), id: \.element.id) { index, track in
-                            TrackRowView(
-                                track: track,
-                                tracks: filteredTracks,
-                                index: index,
-                                showArtwork: true,
-                                showArtist: true,
-                                showTrackNumber: false,
-                                artworkSize: AppStyle.TrackList.browseArtworkSize,
-                                artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
-                                onNavigate: { trackNavigationTarget = $0 }
-                            )
-                            .listRowInsets(AppStyle.TrackList.rowInsets)
+                            trackRow(track, index: index)
                         }
                     }
                     .listStyle(.plain)
@@ -119,15 +115,46 @@ struct FavoritesView: View {
         }
     }
 
+    private var exactMatches: [PlexMetadata] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return filteredTracks.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    nonisolated private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
+    @ViewBuilder
+    private func trackRow(_ track: PlexMetadata, index: Int) -> some View {
+        TrackRowView(
+            track: track,
+            tracks: filteredTracks,
+            index: index,
+            showArtwork: true,
+            showArtist: true,
+            showTrackNumber: false,
+            artworkSize: AppStyle.TrackList.browseArtworkSize,
+            artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+            onNavigate: { trackNavigationTarget = $0 }
+        )
+        .listRowInsets(AppStyle.TrackList.rowInsets)
+    }
+
     private func applyFilter() async {
         let snapshot = tracks
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let result = await Task.detached(priority: .userInitiated) {
             guard !query.isEmpty else { return snapshot }
+            let normalizedQuery = Self.normalizeForSearch(query)
             return snapshot.filter { track in
-                track.title.localizedCaseInsensitiveContains(query)
-                || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
-                || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+                Self.normalizeForSearch(track.title).contains(normalizedQuery)
+                || (track.grandparentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
+                || (track.parentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
             }
         }.value
         filteredTracks = result

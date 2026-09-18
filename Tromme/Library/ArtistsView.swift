@@ -39,15 +39,34 @@ struct ArtistsView: View {
     private var filteredArtists: [PlexMetadata] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return artists }
+        let normalizedQuery = Self.normalizeForSearch(query)
         return artists.filter { artist in
-            artist.title.localizedCaseInsensitiveContains(query)
+            Self.normalizeForSearch(artist.title).contains(normalizedQuery)
         }
     }
 
+    private var exactMatches: [PlexMetadata] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return filteredArtists.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
     private var artistSections: [(title: String, items: [PlexMetadata])] {
-        alphabetSections(for: filteredArtists) { artist in
+        var sections = alphabetSections(for: filteredArtists) { artist in
             artistSortKey(for: artist.title)
         }
+        if !exactMatches.isEmpty {
+            sections.insert((title: "Exact Matches", items: exactMatches), at: 0)
+        }
+        return sections
     }
 
     var body: some View {
@@ -109,7 +128,7 @@ struct ArtistsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title)
+                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
                     }
                 }
                 .listStyle(.plain)

@@ -20,6 +20,11 @@ struct PlaylistDetailView: View {
     @State private var displayTitle: String
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
+    @State private var scrollOffset: CGFloat = 0
+
+    private var showsCollapsedTitle: Bool {
+        scrollOffset > 310
+    }
 
     private var artworkPath: String? {
         playlist.thumb ?? playlist.composite
@@ -106,9 +111,74 @@ struct PlaylistDetailView: View {
         _displayTitle = State(initialValue: playlist.title)
     }
 
+    private func playlistActionButtons(bottomPadding: CGFloat = 20) -> some View {
+        HStack(spacing: 14) {
+            Button {
+                guard !controlsDisabled else { return }
+                var shuffled = tracks
+                shuffled.shuffle()
+                player.play(tracks: shuffled)
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(iconForegroundColor)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+            }
+            .buttonStyle(.plain)
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+            Button {
+                guard !controlsDisabled else { return }
+                player.play(tracks: tracks)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                    Text("Play")
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(artworkColor)
+                .padding(.horizontal, 50)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+
+            Menu {
+                Button("Play Next", systemImage: "text.insert") {
+                    playPlaylistNext()
+                }
+                Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                    addPlaylistToQueueEnd()
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(iconForegroundColor)
+                    .frame(width: 52, height: 52)
+                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
+                    .shadow(color: controlShadowColor, radius: 6, y: -2)
+            }
+            .disabled(controlsDisabled)
+            .opacity(controlsDisabled ? 0.45 : 1.0)
+        }
+        .padding(.top, 6)
+        .padding(.bottom, bottomPadding)
+    }
+
     private var playlistHeader: some View {
-        VStack(spacing: 12) {
+        VStack {
             ArtworkView(thumbPath: artworkPath, size: 300, cornerRadius: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                )
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
@@ -116,74 +186,47 @@ struct PlaylistDetailView: View {
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(titleColor)
                 .multilineTextAlignment(.center)
+                .padding(.top, 12)
                 .padding(.horizontal, 20)
 
-            if let count = playlist.leafCount {
-                Text("\(count) songs")
-                    .font(.caption)
-                    .foregroundStyle(tertiaryTextColor)
-            }
-
-            HStack(spacing: 14) {
-                Button {
-                    guard !controlsDisabled else { return }
-                    var shuffled = tracks
-                    shuffled.shuffle()
-                    player.play(tracks: shuffled)
-                } label: {
-                    Image(systemName: "shuffle")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(iconForegroundColor)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                        .shadow(color: controlShadowColor, radius: 6, y: -2)
-                }
-                .buttonStyle(.plain)
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-
-                Button {
-                    guard !controlsDisabled else { return }
-                    player.play(tracks: tracks)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "play.fill")
-                        Text("Play")
-                    }
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(artworkColor)
-                    .padding(.horizontal, 56)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-
-                Menu {
-                    Button("Play Next", systemImage: "text.insert") {
-                        playPlaylistNext()
-                    }
-                    Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
-                        addPlaylistToQueueEnd()
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(iconForegroundColor)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                        .shadow(color: controlShadowColor, radius: 6, y: -2)
-                }
-                .disabled(controlsDisabled)
-                .opacity(controlsDisabled ? 0.45 : 1.0)
-            }
-            .padding(.top, 6)
-            .padding(.bottom, 20)
+            playlistActionButtons()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var landscapePlaylistHeader: some View {
+        HStack(alignment: .bottom, spacing: 20) {
+            ArtworkView(thumbPath: artworkPath, size: 300, cornerRadius: 8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                .frame(width: 300)
+                .padding(.bottom, 20)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 0)
+
+                Text(displayTitle)
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(titleColor)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                playlistActionButtons()
+                    .padding(.top, 12)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 20)
+        }
+        .padding(.top, 96)
+        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+    }
+
+    /// Smart playlists are rule-generated by Plex and don't support manual ordering.
+    private var canReorderPlaylist: Bool {
+        !isPreviewMode && !(playlist.smart ?? false)
     }
 
     private var trackListRows: some View {
@@ -191,7 +234,7 @@ struct PlaylistDetailView: View {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(artworkColor)
             } else {
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     TrackRowView(
@@ -201,57 +244,60 @@ struct PlaylistDetailView: View {
                         showArtwork: true,
                         showArtist: true,
                         showTrackNumber: false,
+                        showDuration: true,
                         artworkSize: AppStyle.TrackList.browseArtworkSize,
                         artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
                         onNavigate: { trackNavigationTarget = $0 }
                     )
                     .listRowInsets(AppStyle.TrackList.rowInsets)
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(artworkColor)
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
+                .onMove(perform: moveTracks)
+                .moveDisabled(!canReorderPlaylist)
             }
         }
     }
 
     private var playlistFooter: some View {
-        HStack {
-            Spacer()
-            Text(playlistFooterRight)
+        VStack(alignment: .leading, spacing: 3) {
+            if !playlistFooterRight.isEmpty {
+                Text(playlistFooterRight)
+            }
         }
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(tertiaryTextColor)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var body: some View {
         GeometryReader { geo in
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && geo.size.width > geo.size.height
+            let usesSideBySideHeader = UIDevice.current.userInterfaceIdiom == .pad
 
             ZStack {
                 artworkColor
                     .ignoresSafeArea()
 
-                if isPadLandscape {
-                    VStack(spacing: 0) {
-                        HStack(alignment: .top, spacing: 0) {
-                            playlistHeader
-                                .padding(.bottom, 20)
-                                .frame(width: geo.size.width * 0.4)
+                if usesSideBySideHeader {
+                    List {
+                        landscapePlaylistHeader
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(artworkColor)
 
-                            List {
-                                Section {
-                                    trackListRows
-                                }
-                            }
-                            .scrollContentBackground(.hidden)
-                            .listStyle(.plain)
-                            .listRowSpacing(AppStyle.TrackList.rowSpacing)
-                            .frame(width: geo.size.width * 0.6)
-                        }
+                        trackListRows
 
                         playlistFooter
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
+                            .listRowBackground(artworkColor)
+                            .listRowSeparator(.hidden)
                     }
+                    .scrollContentBackground(.hidden)
+                    .background(artworkColor)
+                    .listStyle(.plain)
+                    .listRowSpacing(AppStyle.TrackList.rowSpacing)
+                    .contentMargins(.top, 0, for: .scrollContent)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    .ignoresSafeArea(edges: .top)
                 } else {
                     List {
                         Section {
@@ -261,22 +307,28 @@ struct PlaylistDetailView: View {
                                 .listRowSeparator(.visible, edges: .bottom)
                                 .listRowSeparatorTint(titleColor.opacity(0.22))
                                 .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + 20 }
-                                .listRowBackground(Color.clear)
+                                .listRowBackground(artworkColor)
 
                             trackListRows
 
                             playlistFooter
-                                .listRowBackground(Color.clear)
+                                .listRowBackground(artworkColor)
                                 .listRowSeparator(.hidden)
                         }
                     }
                     .scrollContentBackground(.hidden)
+                    .background(artworkColor)
                     .listStyle(.plain)
                     .listRowSpacing(AppStyle.TrackList.rowSpacing)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                        geometry.contentOffset.y
+                    } action: { _, offset in
+                        scrollOffset = offset
+                    }
                 }
             }
         }
-        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $trackNavigationTarget) { target in
             if target.type == "artist" {
@@ -286,6 +338,13 @@ struct PlaylistDetailView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(displayTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(showsCollapsedTitle ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     playlistDownloadButton
@@ -301,8 +360,6 @@ struct PlaylistDetailView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .symbolRenderingMode(.monochrome)
-                        .foregroundStyle(.primary)
                 }
                 .tint(.primary)
                 .disabled(isDeletingPlaylist)
@@ -379,6 +436,37 @@ struct PlaylistDetailView: View {
         isLoading = false
     }
 
+    private func moveTracks(from source: IndexSet, to destination: Int) {
+        let previousTracks = tracks
+        let movedIDs = Set(source.map { tracks[$0].id })
+        tracks.move(fromOffsets: source, toOffset: destination)
+        let movedInNewOrder = tracks.enumerated().filter { movedIDs.contains($0.element.id) }
+        Task { await persistReorder(movedInNewOrder: movedInNewOrder, previousTracks: previousTracks) }
+    }
+
+    @MainActor
+    private func persistReorder(
+        movedInNewOrder: [(offset: Int, element: PlexMetadata)],
+        previousTracks: [PlexMetadata]
+    ) async {
+        guard let server = serverConnection.currentServer else { return }
+        do {
+            for (offset, track) in movedInNewOrder {
+                guard let itemID = track.playlistItemID else { continue }
+                let afterTrack = offset > 0 ? tracks[offset - 1] : nil
+                try await client.movePlaylistItem(
+                    server: server,
+                    playlistId: playlist.ratingKey,
+                    playlistItemID: itemID,
+                    afterPlaylistItemID: afterTrack?.playlistItemID
+                )
+            }
+            await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: playlistItemRequestKey))
+        } catch {
+            tracks = previousTracks
+        }
+    }
+
     @MainActor
     private func performRename() async {
         guard let server = serverConnection.currentServer else { return }
@@ -424,5 +512,6 @@ struct PlaylistDetailView: View {
         )
     }
     .environment(AudioPlayerService())
+    .environment(DownloadManager())
 }
 #endif

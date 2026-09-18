@@ -15,8 +15,7 @@ struct AllAlbumsView: View {
     @State private var isSearchPresented = false
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
     @AppStorage("allAlbumsSortOrder") private var sortOrder: AlbumSortOrder = .titleAscending
-    @State private var addToPlaylistItemKeys: [String] = []
-    @State private var showingAddToPlaylistSheet = false
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var selectedAlbum: PlexMetadata?
 
     private let previewAlbums: [PlexMetadata]?
@@ -30,9 +29,10 @@ struct AllAlbumsView: View {
 
     private var filteredAlbums: [PlexMetadata] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedQuery = Self.normalizeForSearch(query)
         var result = query.isEmpty ? albums : albums.filter { album in
-            album.title.localizedCaseInsensitiveContains(query)
-            || (album.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+            Self.normalizeForSearch(album.title).contains(normalizedQuery)
+            || (album.parentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
         }
         switch sortOrder {
         case .titleAscending:
@@ -71,17 +71,36 @@ struct AllAlbumsView: View {
         return result
     }
 
+    private var exactMatches: [PlexMetadata] {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return filteredAlbums.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
     private var albumSections: [(title: String, items: [PlexMetadata])] {
+        var sections: [(title: String, items: [PlexMetadata])]
         switch sortOrder {
         case .artistAscending, .artistDescending:
-            return alphabetSections(for: filteredAlbums) { $0.parentTitle ?? "" }
+            sections = alphabetSections(for: filteredAlbums) { $0.parentTitle ?? "" }
         case .yearOldest, .yearNewest:
-            return decadeSections(for: filteredAlbums)
+            sections = decadeSections(for: filteredAlbums)
         case .dateAddedNewest, .dateAddedOldest:
-            return addedYearSections(for: filteredAlbums)
+            sections = addedYearSections(for: filteredAlbums)
         default:
-            return alphabetSections(for: filteredAlbums) { $0.titleSort ?? $0.title }
+            sections = alphabetSections(for: filteredAlbums) { $0.titleSort ?? $0.title }
         }
+        if !exactMatches.isEmpty {
+            sections.insert((title: "Exact Matches", items: exactMatches), at: 0)
+        }
+        return sections
     }
 
     init(previewAlbums: [PlexMetadata]? = nil) {
@@ -185,8 +204,8 @@ struct AllAlbumsView: View {
             searchText = ""
             isSearchPresented = false
         }
-        .sheet(isPresented: $showingAddToPlaylistSheet) {
-            AddToPlaylistSheet(itemRatingKeys: addToPlaylistItemKeys)
+        .sheet(item: $addToPlaylistRequest) { request in
+            AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
         .navigationDestination(item: $selectedAlbum) { album in
             AlbumDetailView(album: album)
@@ -298,7 +317,7 @@ struct AllAlbumsView: View {
                                 .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title)
+                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
                     }
                 }
                 .listStyle(.plain)
@@ -476,8 +495,7 @@ struct AllAlbumsView: View {
     private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
         guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
-        addToPlaylistItemKeys = tracks.map(\.ratingKey)
-        showingAddToPlaylistSheet = true
+        addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
     }
 
     private func alphabetSections(

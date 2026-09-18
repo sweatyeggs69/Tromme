@@ -60,7 +60,7 @@ struct AllSongsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title)
+                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
                     }
                 }
                 .listStyle(.plain)
@@ -246,13 +246,19 @@ struct AllSongsView: View {
         let myGeneration = sortGeneration
 
         let (sorted, sections) = await Task.detached(priority: .userInitiated) {
+            // Album title is intentionally excluded — this view filters on song title (and artist), not album.
+            let normalizedQuery = Self.normalizeForSearch(query)
             let base = query.isEmpty ? snapshot : snapshot.filter { track in
-                track.title.localizedCaseInsensitiveContains(query)
-                || (track.grandparentTitle?.localizedCaseInsensitiveContains(query) ?? false)
-                || (track.parentTitle?.localizedCaseInsensitiveContains(query) ?? false)
+                Self.normalizeForSearch(track.title).contains(normalizedQuery)
+                || (track.grandparentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
             }
             let sorted = Self.sort(base, by: currentSort)
-            return (sorted, Self.buildSections(from: sorted, sortOrder: currentSort))
+            var sections = Self.buildSections(from: sorted, sortOrder: currentSort)
+            let exact = Self.exactMatches(in: sorted, query: query)
+            if !exact.isEmpty {
+                sections.insert((title: "Exact Matches", items: exact), at: 0)
+            }
+            return (sorted, sections)
         }.value
 
         guard sortGeneration == myGeneration else { return }
@@ -317,6 +323,25 @@ struct AllSongsView: View {
             sectionItems[title, default: []].append((index: offset, track: track))
         }
         return sectionOrder.map { ($0, sectionItems[$0]!) }
+    }
+
+    nonisolated private static func exactMatches(
+        in tracks: [PlexMetadata],
+        query: String
+    ) -> [(index: Int, track: PlexMetadata)] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return tracks.enumerated()
+            .filter { $0.element.title.caseInsensitiveCompare(trimmed) == .orderedSame }
+            .map { (index: $0.offset, track: $0.element) }
+    }
+
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    nonisolated private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
     }
 
     nonisolated private static func alphabetSectionTitle(for value: String) -> String {
