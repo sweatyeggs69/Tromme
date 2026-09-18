@@ -277,16 +277,11 @@ struct ArtistDetailView: View {
                     Button {
                         showsBioSheet = true
                     } label: {
-                        InlineMoreText(
-                            summary,
-                            textStyle: .callout,
-                            textColor: .secondary,
-                            moreTextStyle: .subheadline,
-                            moreWeight: .bold,
-                            moreColor: .primary,
-                            lineLimit: 3
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(summary)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))

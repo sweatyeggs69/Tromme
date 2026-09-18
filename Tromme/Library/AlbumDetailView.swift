@@ -209,16 +209,11 @@ struct AlbumDetailView: View {
             Button {
                 showsAlbumInfoSheet = true
             } label: {
-                InlineMoreText(
-                    bioText,
-                    textStyle: .subheadline,
-                    textColor: bioTextColor,
-                    moreWeight: .semibold,
-                    moreColor: titleColor,
-                    lineLimit: 2,
-                    alignment: .leading
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(bioText)
+                    .font(.subheadline)
+                    .foregroundStyle(bioTextColor)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
         }
