@@ -20,11 +20,6 @@ struct PlaylistDetailView: View {
     @State private var displayTitle: String
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
-    @State private var scrollOffset: CGFloat = 0
-
-    private var showsCollapsedTitle: Bool {
-        scrollOffset > 310
-    }
 
     private var artworkPath: String? {
         playlist.thumb ?? playlist.composite
@@ -321,11 +316,6 @@ struct PlaylistDetailView: View {
                     .listStyle(.plain)
                     .listRowSpacing(AppStyle.TrackList.rowSpacing)
                     .scrollEdgeEffectHidden(true, for: .top)
-                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                        geometry.contentOffset.y
-                    } action: { _, offset in
-                        scrollOffset = offset
-                    }
                 }
             }
         }
@@ -338,13 +328,6 @@ struct PlaylistDetailView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(displayTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .opacity(showsCollapsedTitle ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.2), value: showsCollapsedTitle)
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     playlistDownloadButton
