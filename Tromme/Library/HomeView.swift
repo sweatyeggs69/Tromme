@@ -15,6 +15,8 @@ struct HomeView: View {
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var showingLibrarySwitcher = false
     @State private var showingSignOutConfirmation = false
+    @State private var showingRefreshLibraryConfirmation = false
+    @State private var isRefreshingLibrary = false
     @State private var featuredAlbums: [PlexMetadata]
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
@@ -124,6 +126,10 @@ struct HomeView: View {
                     Button("Change Library", systemImage: "books.vertical") {
                         showingLibrarySwitcher = true
                     }
+                    Button("Refresh Library", systemImage: "arrow.clockwise") {
+                        showingRefreshLibraryConfirmation = true
+                    }
+                    .disabled(isRefreshingLibrary)
                     Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                         showingSignOutConfirmation = true
                     }
@@ -147,6 +153,25 @@ struct HomeView: View {
         } message: {
             Text("You'll need to sign in again to access your music.")
         }
+        .alert("Refresh Library", isPresented: $showingRefreshLibraryConfirmation) {
+            Button("Refresh", role: .destructive) {
+                Task { await refreshLibrary() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear all cached data, including artwork, and re-download it from the server.")
+        }
+    }
+
+    private func refreshLibrary() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+        isRefreshingLibrary = true
+        await LibraryCache.shared.clearAll()
+        await ImageCache.shared.clearAll()
+        await client.warmCache(server: server, sectionId: sectionId)
+        await loadHomeContent(forceRefresh: false)
+        isRefreshingLibrary = false
     }
 
     private var loadTaskID: String {

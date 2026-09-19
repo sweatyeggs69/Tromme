@@ -212,7 +212,7 @@ struct AlbumDetailView: View {
                 Text(bioText)
                     .font(.subheadline)
                     .foregroundStyle(bioTextColor)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)

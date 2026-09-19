@@ -124,7 +124,7 @@ struct ContentView: View {
                 NavigationStack {
                     HomeView(onSignOut: signOut)
                         .navigationDestinations()
-                        .settingsToolbar(alwaysVisible: true, signOut: signOut)
+                        .settingsToolbar(alwaysVisible: true)
                 }
             }
 
@@ -132,7 +132,7 @@ struct ContentView: View {
                 NavigationStack(path: $artistsPath) {
                     ArtistsView()
                         .navigationDestinations()
-                        .settingsToolbar(signOut: signOut)
+                        .settingsToolbar()
                 }
             }
 
@@ -140,7 +140,7 @@ struct ContentView: View {
                 NavigationStack(path: $albumsPath) {
                     AllAlbumsView()
                         .navigationDestinations()
-                        .settingsToolbar(signOut: signOut)
+                        .settingsToolbar()
                 }
             }
 
@@ -148,7 +148,7 @@ struct ContentView: View {
                 NavigationStack {
                     AllSongsView()
                         .navigationDestinations()
-                        .settingsToolbar(signOut: signOut)
+                        .settingsToolbar()
                 }
             }
 
@@ -276,14 +276,13 @@ struct ContentView: View {
 private struct SettingsToolbarModifier: ViewModifier {
     @Environment(NetworkStatus.self) private var network
     let alwaysVisible: Bool
-    let signOut: () -> Void
 
     func body(content: Content) -> some View {
         content.toolbar {
             if alwaysVisible {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        SettingsView(onSignOut: signOut)
+                        SettingsView()
                     } label: {
                         Image(systemName: "gear")
                     }
@@ -292,7 +291,7 @@ private struct SettingsToolbarModifier: ViewModifier {
             } else if !network.isConnected {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
-                        SettingsView(onSignOut: signOut)
+                        SettingsView()
                     } label: {
                         Image(systemName: "gear")
                     }
@@ -306,8 +305,8 @@ private struct SettingsToolbarModifier: ViewModifier {
 private extension View {
     /// Adds a gear → Settings link. Pass `alwaysVisible: true` for the Home tab;
     /// offline-only tabs pass `false` so the gear only appears when disconnected.
-    func settingsToolbar(alwaysVisible: Bool = false, signOut: @escaping () -> Void) -> some View {
-        modifier(SettingsToolbarModifier(alwaysVisible: alwaysVisible, signOut: signOut))
+    func settingsToolbar(alwaysVisible: Bool = false) -> some View {
+        modifier(SettingsToolbarModifier(alwaysVisible: alwaysVisible))
     }
 }
 

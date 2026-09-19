@@ -80,7 +80,6 @@
 		0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturedBannerView.swift; sourceTree = "<group>"; };
 		0E723B1E304880390059BF86 /* AppIconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconPickerView.swift; sourceTree = "<group>"; };
 		0E7B80FE2FF2275F0071F0F3 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
-		0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = PERFORMANCE_BASELINE.md; sourceTree = "<group>"; };
 		0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		0E91C64D2F91AE8800775275 /* Tromme.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tromme.entitlements; sourceTree = "<group>"; };
 		0E91C64E2F91B03000775275 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
@@ -243,7 +242,6 @@
 			children = (
 				7AD43F2900FE467C850EF1C7 /* Tromme */,
 				5C7D86059CB6E9BBDEA3D94B /* Products */,
-				0E80036A2F917C30009002FD /* PERFORMANCE_BASELINE.md */,
 				0EEC07423048CA9E00ACE377 /* Tromme.storekit */,
 			);
 			sourceTree = "<group>";

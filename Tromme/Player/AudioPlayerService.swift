@@ -10,7 +10,10 @@ final class AudioPlayerService: Sendable {
         didSet { maybeRefillInfiniteQueueIfNeeded(trigger: "queue_changed") }
     }
     var currentIndex: Int = 0 {
-        didSet { maybeRefillInfiniteQueueIfNeeded(trigger: "index_changed") }
+        didSet {
+            maybeRefillInfiniteQueueIfNeeded(trigger: "index_changed")
+            trimPlayedHistoryIfNeeded()
+        }
     }
     var isPlaying = false
     var currentTime: TimeInterval = 0
@@ -1325,6 +1328,20 @@ final class AudioPlayerService: Sendable {
               let currentAlbumKey = currentTrack?.parentRatingKey else { return false }
         let allAlbums = (try? await client.cachedAlbums(server: server, sectionId: sectionId)) ?? []
         return allAlbums.contains { $0.parentRatingKey == artistKey && $0.ratingKey != currentAlbumKey }
+    }
+
+    /// Infinite Mode continuously appends fresh tracks but nothing ever removed the
+    /// played ones, so a long listening session grew `queue` without bound. Keep a
+    /// bounded history behind the current track (enough for `previous()` to still work)
+    /// and drop anything older.
+    private let infiniteModeHistoryLimit = 40
+
+    private func trimPlayedHistoryIfNeeded() {
+        guard isInfiniteModeActive else { return }
+        let dropCount = currentIndex - infiniteModeHistoryLimit
+        guard dropCount > 0, dropCount < queue.count else { return }
+        queue.removeFirst(dropCount)
+        currentIndex -= dropCount
     }
 
     private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {

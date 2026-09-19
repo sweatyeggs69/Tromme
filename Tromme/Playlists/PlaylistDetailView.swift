@@ -242,6 +242,8 @@ struct PlaylistDetailView: View {
                         showDuration: true,
                         artworkSize: AppStyle.TrackList.browseArtworkSize,
                         artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+                        titleColorOverride: titleColor,
+                        secondaryColorOverride: tertiaryTextColor,
                         onNavigate: { trackNavigationTarget = $0 }
                     )
                     .listRowInsets(AppStyle.TrackList.rowInsets)

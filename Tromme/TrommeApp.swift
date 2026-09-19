@@ -100,6 +100,10 @@ struct TrommeApp: App {
                     await plexClient.smartRefresh(server: server, sectionId: sectionId)
                     await downloadManager.syncLibraryDownloadsIfNeeded(server: server, sectionId: sectionId, client: plexClient)
                 }
+            } else if phase == .background {
+                // A suspended app can be killed without willTerminate firing — flush
+                // any debounced download-record write before we lose foreground time.
+                downloadManager.flushPendingPersist()
             }
         }
 #if targetEnvironment(macCatalyst)
@@ -128,6 +132,7 @@ struct TrommeApp: App {
         ) {
             await MainActor.run {
                 audioPlayer.reportStoppedForAppTermination()
+                downloadManager.flushPendingPersist()
             }
         }
     }

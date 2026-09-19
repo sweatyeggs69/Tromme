@@ -22,12 +22,28 @@ actor LibraryCache {
     private var inFlightFetches: [String: Any] = [:]
     /// Incremented on clearAll to invalidate in-progress fetches.
     private var generation: Int = 0
+    // Tracked incrementally so routine saves don't need a full directory scan;
+    // only refreshed by an authoritative re-scan when evictIfNeeded() runs.
+    private var currentDiskBytes: Int = 0
 
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         diskURL = caches.appendingPathComponent("TrommeLibraryCache", isDirectory: true)
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
         memoryCache.countLimit = 100
+        // Entries hold serialized library payloads (artist/album/track lists), which can
+        // be several MB each for large libraries — cap total bytes, not just entry count.
+        memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
+        currentDiskBytes = Self.scanDiskBytes(at: diskURL)
+    }
+
+    private static func scanDiskBytes(at url: URL) -> Int {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return files.reduce(0) { total, file in
+            total + ((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        }
     }
 
     // MARK: - Public API
@@ -57,7 +73,7 @@ actor LibraryCache {
         // 2. Disk cache
         if let entry = loadFromDisk(key: key),
            let value = entry.decode(as: T.self) {
-            memoryCache.setObject(entry, forKey: key as NSString)
+            memoryCache.setObject(entry, forKey: key as NSString, cost: entry.data.count)
             let stale = Date().timeIntervalSince(entry.timestamp) > diskTTL
             return CachedResult(value: value, isStale: stale)
         }
@@ -69,7 +85,7 @@ actor LibraryCache {
     func set<T: Codable & Sendable>(_ value: T, forKey key: String) {
         guard let data = try? JSONEncoder().encode(value) else { return }
         let entry = CacheEntry(data: data, timestamp: Date())
-        memoryCache.setObject(entry, forKey: key as NSString)
+        memoryCache.setObject(entry, forKey: key as NSString, cost: data.count)
         saveToDisk(entry: entry, key: key)
     }
 
@@ -77,7 +93,9 @@ actor LibraryCache {
     func remove(forKey key: String) {
         memoryCache.removeObject(forKey: key as NSString)
         let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
+        let removedSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? nil
         try? FileManager.default.removeItem(at: fileURL)
+        currentDiskBytes -= removedSize ?? 0
     }
 
     /// Clear all cached data.
@@ -87,6 +105,7 @@ actor LibraryCache {
         inFlightFetches.removeAll()
         try? FileManager.default.removeItem(at: diskURL)
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        currentDiskBytes = 0
     }
 
     /// Clear only memory cache (keeps disk).
@@ -175,7 +194,7 @@ actor LibraryCache {
         // 2. Disk cache
         if let entry = loadFromDisk(key: key),
            let value = entry.decode(as: T.self) {
-            memoryCache.setObject(entry, forKey: key as NSString)
+            memoryCache.setObject(entry, forKey: key as NSString, cost: entry.data.count)
             let stale = Date().timeIntervalSince(entry.timestamp) > policy.diskTTL
             return CachedResult(value: value, isStale: stale)
         }
@@ -194,12 +213,18 @@ actor LibraryCache {
     private func saveToDisk(entry: CacheEntry, key: String) {
         let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
         guard let data = try? JSONEncoder().encode(entry) else { return }
+        let previousSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? nil
         try? data.write(to: fileURL, options: .atomic)
+        currentDiskBytes += data.count - (previousSize ?? 0)
         evictIfNeeded()
     }
 
-    /// Remove oldest files if disk cache exceeds size limit.
+    /// Remove oldest files if disk cache exceeds size limit. Cheap check against the
+    /// incrementally-tracked byte total; only falls back to a full directory scan (needed
+    /// to find the oldest files) once actually over the cap, instead of scanning every
+    /// file on every single save — `set()` is called after every network fetch.
     private func evictIfNeeded() {
+        guard currentDiskBytes > maxDiskSize else { return }
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(at: diskURL, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
 
@@ -213,15 +238,14 @@ actor LibraryCache {
             fileInfos.append((file, size, date))
         }
 
-        guard totalSize > maxDiskSize else { return }
-
         // Evict oldest files first
         fileInfos.sort { $0.date < $1.date }
         for info in fileInfos {
+            guard totalSize > maxDiskSize else { break }
             try? fm.removeItem(at: info.url)
             totalSize -= info.size
-            if totalSize <= maxDiskSize { break }
         }
+        currentDiskBytes = totalSize
     }
 }
 

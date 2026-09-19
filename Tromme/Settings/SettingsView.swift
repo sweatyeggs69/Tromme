@@ -7,11 +7,7 @@ struct SettingsView: View {
 
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @State private var showReviewPrompt = false
-    @State private var showSignOutConfirmation = false
-    @State private var showClearCacheConfirmation = false
-    @State private var isRefreshing = false
     @State private var sections: [LibrarySection] = []
-    var onSignOut: () -> Void
 
     var body: some View {
         Form {
@@ -50,56 +46,9 @@ struct SettingsView: View {
                     Text("Server")
                 }
             }
-
-            Section {
-                Button {
-                    Task { await refreshLibrary() }
-                } label: {
-                    HStack {
-                        Text("Refresh Library")
-                        Spacer()
-                        if isRefreshing {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(isRefreshing)
-
-                Button("Clear Cache") {
-                    showClearCacheConfirmation = true
-                }
-            } header: {
-                Text("Library")
-            }
-
-            Section {
-                Button("Sign Out", role: .destructive) {
-                    showSignOutConfirmation = true
-                }
-            }
         }
         .navigationTitle("Settings")
         .task { await loadSections() }
-        .alert("Sign Out", isPresented: $showSignOutConfirmation) {
-            Button("Sign Out", role: .destructive) {
-                onSignOut()
-            }
-            Button("Cancel", role: .cancel) {}
-                .tint(.primary)
-        } message: {
-            Text("You'll need to sign in again to access your music.")
-        }
-        .alert("Clear Cache", isPresented: $showClearCacheConfirmation) {
-            Button("Clear Cache", role: .destructive) {
-                Task {
-                    await LibraryCache.shared.clearAll()
-                    await ImageCache.shared.clearAll()
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will remove all cached data. It will be re-downloaded automatically.")
-        }
         .alert("Leave a Review?", isPresented: $showReviewPrompt) {
             Button("No Thanks", role: .cancel) {
                 hasRequestedAppReview = true
@@ -139,15 +88,6 @@ struct SettingsView: View {
         }
     }
 
-    private func refreshLibrary() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-        isRefreshing = true
-        await LibraryCache.shared.clearAll()
-        await client.warmCache(server: server, sectionId: sectionId)
-        isRefreshing = false
-    }
-
     private func requestAppReviewIfNeeded() {
         guard !hasRequestedAppReview else { return }
         guard let scene = UIApplication.shared.connectedScenes
@@ -162,7 +102,7 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView { }
+        SettingsView()
             .environment(DownloadManager())
             .environment(AudioPlayerService())
     }

@@ -1048,13 +1048,21 @@ struct NowPlayingBackground: View {
 
     @State private var backgroundImage: UIImage?
 
+    /// Blurred at a large radius, so a small thumbnail supplies plenty of quality —
+    /// decoding/blurring the full 1000px artwork wastes CPU/GPU on every track change.
+    /// The disk cache key ignores width/height, so this still shares the same
+    /// on-disk file the crisp foreground artwork downloads.
+    private static let blurredBackgroundPixelSize = 128
+
     private var thumbPath: String? {
         player.currentTrack?.parentThumb
     }
 
     private var backgroundURL: URL? {
         guard let thumbPath, let server = serverConnection.currentServer else { return nil }
-        // Same size as the main Now Playing artwork so both share one cached image.
+        // Width/height here only influence the cache-miss download size (forced to at
+        // least 1000px by ImageCache regardless); the same URL identity is shared with
+        // the main Now Playing artwork's disk file.
         return client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx)
     }
 
@@ -1064,7 +1072,7 @@ struct NowPlayingBackground: View {
     private var resolvedImage: UIImage? {
         if let backgroundImage { return backgroundImage }
         guard let backgroundURL else { return nil }
-        return ImageCache.shared.memoryCachedImage(for: backgroundURL, targetPixelSize: ArtworkView.maxTranscodePx)
+        return ImageCache.shared.memoryCachedImage(for: backgroundURL, targetPixelSize: Self.blurredBackgroundPixelSize)
     }
 
     var body: some View {
@@ -1100,7 +1108,7 @@ struct NowPlayingBackground: View {
             backgroundImage = nil
             return
         }
-        let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx)
+        let image = await ImageCache.shared.image(for: url, targetPixelSize: Self.blurredBackgroundPixelSize)
         guard !Task.isCancelled, capturedThumb == player.currentTrack?.parentThumb else { return }
         backgroundImage = image
     }

@@ -22,6 +22,8 @@ struct TrackRowView: View {
     var isCompact: Bool = false
     var titleFont: Font? = nil
     var artistFont: Font? = nil
+    var titleColorOverride: Color? = nil
+    var secondaryColorOverride: Color? = nil
     var onNavigate: ((PlexMetadata) -> Void)? = nil
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
@@ -179,7 +181,7 @@ struct TrackRowView: View {
                 switch state {
                 case .queued:
                     Image(systemName: "clock")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                 case .downloading:
                     ProgressView()
                 case .failed:
@@ -193,7 +195,7 @@ struct TrackRowView: View {
         } else if downloadManager.isDownloaded(track.ratingKey) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                 .frame(width: 22)
                 .transition(.opacity.combined(with: .scale(scale: 0.8)))
         }
@@ -221,7 +223,7 @@ struct TrackRowView: View {
                         Text("\(track.index ?? (index + 1))")
                             .font(.body)
                             .monospacedDigit()
-                            .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                            .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(secondaryColorOverride ?? Color.secondary))
                     }
                 }
                 .frame(width: 28, alignment: .center)
@@ -231,17 +233,17 @@ struct TrackRowView: View {
                 Text(track.title)
                     .font(titleFont ?? (isCompact ? .caption : .body))
                     .lineLimit(1)
-                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(titleColorOverride ?? Color.primary))
 
                 if let subtitle {
                     Text(subtitle)
                         .font(artistFont ?? (isCompact ? .caption2 : .caption))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                         .lineLimit(1)
                 } else if showArtist {
                     Text(track.artistDisplayName)
                         .font(artistFont ?? (isCompact ? .caption2 : .caption))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                         .lineLimit(1)
                 }
             }
@@ -251,7 +253,7 @@ struct TrackRowView: View {
             if isFavorited && showFavoriteStar {
                 Image(systemName: "star.fill")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                     .frame(width: 16)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
@@ -259,7 +261,7 @@ struct TrackRowView: View {
             if showDuration, !track.durationFormatted.isEmpty {
                 Text(track.durationFormatted)
                     .font(isCompact ? .caption2 : .caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                     .monospacedDigit()
             }
 
@@ -271,7 +273,7 @@ struct TrackRowView: View {
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.body)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }

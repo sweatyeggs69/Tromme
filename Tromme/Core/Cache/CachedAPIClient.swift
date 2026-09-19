@@ -300,13 +300,17 @@ extension PlexAPIClient {
     /// Uses request coalescing, so if views are already fetching, this joins those requests.
     func warmCache(server: PlexServer, sectionId: String) async {
         // Phase 1: Fetch library data in parallel
-        var artists: [PlexMetadata] = []
         var albums: [PlexMetadata] = []
         var recentTracks: [PlexMetadata] = []
         var favoriteTracks: [PlexMetadata] = []
 
         await withTaskGroup(of: (String, [PlexMetadata]).self) { group in
-            group.addTask { ("artists", (try? await self.cachedArtists(server: server, sectionId: sectionId)) ?? []) }
+            group.addTask {
+                // Result isn't needed here — cachedArtists already caches the list and
+                // prefetches its artwork as a side effect (see cachedLibraryContents).
+                _ = try? await self.cachedArtists(server: server, sectionId: sectionId)
+                return ("artists", [])
+            }
             group.addTask { ("albums", (try? await self.cachedAlbums(server: server, sectionId: sectionId)) ?? []) }
             group.addTask {
                 _ = try? await self.cachedPlaylists(server: server)
@@ -332,7 +336,6 @@ extension PlexAPIClient {
 
             for await (key, items) in group {
                 switch key {
-                case "artists": artists = items
                 case "albums": albums = items
                 case "recent": recentTracks = items
                 case "favorites": favoriteTracks = items
@@ -344,9 +347,10 @@ extension PlexAPIClient {
         // Notify the home screen that fresh data is ready in the memory cache.
         NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
 
-        // Phase 2: Prefetch artwork for artists and albums in the background.
-        // No-op on expensive/low-power — guard is inside prefetchArtwork.
-        prefetchArtwork(for: artists + albums, server: server, size: 1000)
+        // Artwork for artists/albums is already prefetched as a side effect of the
+        // cachedArtists/cachedAlbums calls above (see cachedLibraryContents) — an
+        // explicit second sweep here duplicated a full-library artwork decode pass
+        // on every launch and every foreground-return smart refresh.
 
         // Phases 3 and 4 are opportunistic prefetch that would flood a constrained connection.
         // On metered or low-power, let the cache warm organically as the user navigates.

@@ -11,6 +11,9 @@ actor ImageCache {
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, UIImage>()
     private let diskURL: URL
     private let maxDiskBytes: Int = 500 * 1024 * 1024 // 500 MB
+    // Tracked incrementally so routine saves don't need a full directory scan;
+    // only refreshed by an authoritative re-scan when trimDiskCacheIfNeeded() runs.
+    private var currentDiskBytes: Int = 0
     private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
     // Short timeout so unreachable servers don't block artwork for tens of seconds.
     private static let downloadSession: URLSession = {
@@ -32,6 +35,16 @@ actor ImageCache {
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
         memoryCache.countLimit = 200
         memoryCache.totalCostLimit = 100 * 1024 * 1024 // 100 MB
+        currentDiskBytes = Self.scanDiskBytes(at: diskURL)
+    }
+
+    private static func scanDiskBytes(at url: URL) -> Int {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: url, includingPropertiesForKeys: [.fileSizeKey]
+        ) else { return 0 }
+        return files.reduce(0) { total, file in
+            total + ((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        }
     }
 
     // MARK: - Public API
@@ -126,9 +139,17 @@ actor ImageCache {
     }
 
     func prefetch(urls: [URL], targetPixelSize: Int? = nil, maxConcurrent: Int = 6) async {
+        // Skip anything already decoded and sitting in the memory cache. Several call
+        // sites (warmCache, repeated screen visits) prefetch overlapping artist/album
+        // sets, and image(for:) always re-decodes on a disk hit — without this filter,
+        // covering the same library twice redecodes every item's artwork all over again.
+        let pending = urls.filter {
+            memoryCache.object(forKey: memoryCacheKey(for: cacheKey(for: $0), targetPixelSize: targetPixelSize) as NSString) == nil
+        }
+        guard !pending.isEmpty else { return }
         // Process in batches to avoid overwhelming the network
-        for batch in stride(from: 0, to: urls.count, by: maxConcurrent) {
-            let batchURLs = urls[batch..<min(batch + maxConcurrent, urls.count)]
+        for batch in stride(from: 0, to: pending.count, by: maxConcurrent) {
+            let batchURLs = pending[batch..<min(batch + maxConcurrent, pending.count)]
             await withTaskGroup(of: Void.self) { group in
                 for url in batchURLs {
                     group.addTask {
@@ -166,6 +187,7 @@ actor ImageCache {
         }
         try? FileManager.default.removeItem(at: diskURL)
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        currentDiskBytes = 0
 #if DEBUG
         debugStats.memoryClears += 1
 #endif
@@ -224,11 +246,17 @@ actor ImageCache {
 
     private func saveToDisk(data: Data, key: String) {
         let fileURL = diskURL.appendingPathComponent(key)
+        let previousSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? nil
         try? data.write(to: fileURL, options: .atomic)
+        currentDiskBytes += data.count - (previousSize ?? 0)
         trimDiskCacheIfNeeded()
     }
 
+    /// Cheap check against the incrementally-tracked byte total; only falls back to a
+    /// full directory scan (needed to find the oldest files) once actually over the cap,
+    /// instead of scanning every file on every single save.
     private func trimDiskCacheIfNeeded() {
+        guard currentDiskBytes > maxDiskBytes else { return }
         let fm = FileManager.default
         guard let files = try? fm.contentsOfDirectory(
             at: diskURL,
@@ -246,15 +274,14 @@ actor ImageCache {
             fileInfos.append((file, date, size))
         }
 
-        guard totalSize > maxDiskBytes else { return }
-
         // Evict oldest files first
         fileInfos.sort { $0.date < $1.date }
         for info in fileInfos {
+            guard totalSize > maxDiskBytes / 2 else { break }
             try? fm.removeItem(at: info.url)
             totalSize -= info.size
-            if totalSize <= maxDiskBytes / 2 { break }
         }
+        currentDiskBytes = totalSize
     }
 
     private func cacheKey(for url: URL) -> String {

@@ -19,7 +19,13 @@ final class AppContext {
 
     private init() {
         if let server = serverConnection.currentServer {
-            audioPlayer.configure(server: server, client: plexClient)
+            // Deferred: configure() can synchronously reach code (e.g.
+            // maybeRefillInfiniteQueueIfNeeded) that touches AppContext.shared,
+            // which would re-enter this initializer's dispatch_once and trap.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.audioPlayer.configure(server: server, client: self.plexClient)
+            }
         }
         // Re-configure the player whenever the server connection changes (e.g. after reprobe
         // finds a better URI). Without this, CarPlay playback fails when the stored server URI

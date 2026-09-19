@@ -18,6 +18,14 @@ struct AllAlbumsView: View {
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var selectedAlbum: PlexMetadata?
 
+    // Filtered/sorted/sectioned results, computed off the main actor by applyDisplayState().
+    @State private var displayAlbums: [PlexMetadata] = []
+    @State private var displaySections: [(title: String, items: [PlexMetadata])] = []
+    @State private var sortGeneration: Int = 0
+    @State private var lastSortedCount: Int = -1
+    @State private var lastSortedOrder: AlbumSortOrder = .titleAscending
+    @State private var lastSortedQuery: String = ""
+
     private let previewAlbums: [PlexMetadata]?
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -27,14 +35,64 @@ struct AllAlbumsView: View {
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
     }
 
-    private var filteredAlbums: [PlexMetadata] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedQuery = Self.normalizeForSearch(query)
-        var result = query.isEmpty ? albums : albums.filter { album in
-            Self.normalizeForSearch(album.title).contains(normalizedQuery)
-            || (album.parentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
+    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
+    nonisolated private static func normalizeForSearch(_ string: String) -> String {
+        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
+        return String(String.UnicodeScalarView(scalars))
+            .split(separator: " ")
+            .joined(separator: " ")
+    }
+
+    // Sorts, filters, and sections all off the main actor to keep UI responsive at large library sizes.
+    // Skips work if the data and sort parameters haven't changed since the last pass.
+    // A generation counter ensures only the most recent request writes to state,
+    // preventing stale results from piled-up tasks when navigating between tabs quickly.
+    private func applyDisplayState() async {
+        guard !albums.isEmpty else {
+            displayAlbums = []
+            displaySections = []
+            return
         }
-        switch sortOrder {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentSort = sortOrder
+
+        if !displaySections.isEmpty,
+           albums.count == lastSortedCount,
+           currentSort == lastSortedOrder,
+           query == lastSortedQuery {
+            return
+        }
+
+        let snapshot = albums
+        sortGeneration &+= 1
+        let myGeneration = sortGeneration
+
+        let (filtered, sections) = await Task.detached(priority: .userInitiated) {
+            let normalizedQuery = Self.normalizeForSearch(query)
+            let base = query.isEmpty ? snapshot : snapshot.filter { album in
+                Self.normalizeForSearch(album.title).contains(normalizedQuery)
+                || (album.parentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
+            }
+            let sorted = Self.sort(base, by: currentSort)
+            var sections = Self.buildSections(from: sorted, sortOrder: currentSort)
+            let exact = Self.exactMatches(in: sorted, query: query)
+            if !exact.isEmpty {
+                sections.insert((title: "Exact Matches", items: exact), at: 0)
+            }
+            return (sorted, sections)
+        }.value
+
+        guard sortGeneration == myGeneration else { return }
+        displayAlbums = filtered
+        displaySections = sections
+        lastSortedCount = albums.count
+        lastSortedOrder = currentSort
+        lastSortedQuery = query
+    }
+
+    nonisolated private static func sort(_ albums: [PlexMetadata], by order: AlbumSortOrder) -> [PlexMetadata] {
+        var result = albums
+        switch order {
         case .titleAscending:
             result.sort {
                 ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending
@@ -71,36 +129,26 @@ struct AllAlbumsView: View {
         return result
     }
 
-    private var exactMatches: [PlexMetadata] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        return filteredAlbums.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
-    }
-
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
-    private static func normalizeForSearch(_ string: String) -> String {
-        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
-        return String(String.UnicodeScalarView(scalars))
-            .split(separator: " ")
-            .joined(separator: " ")
-    }
-
-    private var albumSections: [(title: String, items: [PlexMetadata])] {
-        var sections: [(title: String, items: [PlexMetadata])]
+    nonisolated private static func buildSections(
+        from albums: [PlexMetadata],
+        sortOrder: AlbumSortOrder
+    ) -> [(title: String, items: [PlexMetadata])] {
         switch sortOrder {
         case .artistAscending, .artistDescending:
-            sections = alphabetSections(for: filteredAlbums) { $0.parentTitle ?? "" }
+            return alphabetSections(for: albums) { $0.parentTitle ?? "" }
         case .yearOldest, .yearNewest:
-            sections = decadeSections(for: filteredAlbums)
+            return decadeSections(for: albums)
         case .dateAddedNewest, .dateAddedOldest:
-            sections = addedYearSections(for: filteredAlbums)
+            return addedYearSections(for: albums)
         default:
-            sections = alphabetSections(for: filteredAlbums) { $0.titleSort ?? $0.title }
+            return alphabetSections(for: albums) { $0.titleSort ?? $0.title }
         }
-        if !exactMatches.isEmpty {
-            sections.insert((title: "Exact Matches", items: exactMatches), at: 0)
-        }
-        return sections
+    }
+
+    nonisolated private static func exactMatches(in albums: [PlexMetadata], query: String) -> [PlexMetadata] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        return albums.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
     }
 
     init(previewAlbums: [PlexMetadata]? = nil) {
@@ -193,9 +241,16 @@ struct AllAlbumsView: View {
                 .tint(.primary)
             }
         }
-        .task(id: loadTaskID) {
-            guard previewAlbums == nil else { return }
-            await loadAlbums()
+        .task(id: previewAlbums != nil ? "preview" : loadTaskID) {
+            if previewAlbums != nil {
+                await applyDisplayState()
+            } else {
+                await loadAlbums()
+            }
+        }
+        // Cancels and restarts whenever sort order or search text changes.
+        .task(id: "\(sortOrder.rawValue)|\(searchText)") {
+            await applyDisplayState()
         }
         .task(id: artworkPrefetchKey) {
             await prefetchVisibleArtwork()
@@ -216,12 +271,12 @@ struct AllAlbumsView: View {
     private var contentView: some View {
         switch viewMode {
         case .grid:
-            if filteredAlbums.isEmpty, !searchText.isEmpty {
+            if displayAlbums.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(albumSections, id: \.title) { section in
+                        ForEach(displaySections, id: \.title) { section in
                             Text(section.title)
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -283,11 +338,11 @@ struct AllAlbumsView: View {
             }
 
         case .list:
-            if filteredAlbums.isEmpty, !searchText.isEmpty {
+            if displayAlbums.isEmpty, !searchText.isEmpty {
                 ContentUnavailableView.search(text: searchText)
             } else {
                 List {
-                    ForEach(albumSections, id: \.title) { section in
+                    ForEach(displaySections, id: \.title) { section in
                         Section(section.title) {
                             ForEach(section.items) { album in
                                 Button {
@@ -350,7 +405,7 @@ struct AllAlbumsView: View {
     }
 
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(filteredAlbums.count)|\(searchText)|\(sortOrder.rawValue)"
+        "\(viewMode.rawValue)|\(displayAlbums.count)|\(searchText)|\(sortOrder.rawValue)"
     }
 
     private func loadAlbums() async {
@@ -370,10 +425,9 @@ struct AllAlbumsView: View {
                !cached.isEmpty {
                 var sorted = cached
                 sorted.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
-                withAnimation(.easeIn(duration: 0.25)) {
-                    albums = sorted
-                    isLoading = false
-                }
+                albums = sorted
+                await applyDisplayState()
+                withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
                 return
             }
         }
@@ -392,10 +446,9 @@ struct AllAlbumsView: View {
             ))
         }
         result.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
-        withAnimation(.easeIn(duration: 0.25)) {
-            albums = result
-            isLoading = false
-        }
+        albums = result
+        await applyDisplayState()
+        withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
     }
 
     private func loadAlbumsOnline() async {
@@ -410,6 +463,7 @@ struct AllAlbumsView: View {
         // Memory cache (sync, no actor hop).
         if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
             albums = cached
+            await applyDisplayState()
             isLoading = false
         }
 
@@ -418,18 +472,16 @@ struct AllAlbumsView: View {
         if albums.isEmpty,
            let diskCached = await LibraryCache.shared.get([PlexMetadata].self, forKey: cacheKey)?.value,
            !diskCached.isEmpty {
-            withAnimation(.easeIn(duration: 0.25)) {
-                albums = diskCached
-                isLoading = false
-            }
+            albums = diskCached
+            await applyDisplayState()
+            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
         }
 
         do {
             let result = try await client.cachedAlbums(server: server, sectionId: sectionId)
-            withAnimation(.easeIn(duration: 0.25)) {
-                albums = result
-                isLoading = false
-            }
+            albums = result
+            await applyDisplayState()
+            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
         } catch {
 #if DEBUG
             print("[AllAlbumsView] Failed to load albums: \(error)")
@@ -451,7 +503,7 @@ struct AllAlbumsView: View {
             AppStyle.AlbumLayout.listArtworkSize
         }
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
-        let urls = filteredAlbums.prefix(prefetchCount).compactMap { album in
+        let urls = displayAlbums.prefix(prefetchCount).compactMap { album in
             client.artworkURL(server: server, path: album.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
@@ -498,7 +550,7 @@ struct AllAlbumsView: View {
         addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
     }
 
-    private func alphabetSections(
+    nonisolated private static func alphabetSections(
         for items: [PlexMetadata],
         sortKey: (PlexMetadata) -> String
     ) -> [(title: String, items: [PlexMetadata])] {
@@ -512,14 +564,14 @@ struct AllAlbumsView: View {
         return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
-    private func releaseYearInt(for album: PlexMetadata) -> Int {
+    nonisolated private static func releaseYearInt(for album: PlexMetadata) -> Int {
         if let dateStr = album.originallyAvailableAt, dateStr.count >= 4, let y = Int(dateStr.prefix(4)) {
             return y
         }
         return album.year ?? 0
     }
 
-    private func addedYearSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
+    nonisolated private static func addedYearSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
         var sectionItems: [String: [PlexMetadata]] = [:]
         var sectionOrder: [String] = []
         for item in items {
@@ -536,7 +588,7 @@ struct AllAlbumsView: View {
         return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
-    private func decadeSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
+    nonisolated private static func decadeSections(for items: [PlexMetadata]) -> [(title: String, items: [PlexMetadata])] {
         var sectionItems: [String: [PlexMetadata]] = [:]
         var sectionOrder: [String] = []
         for item in items {
@@ -548,7 +600,7 @@ struct AllAlbumsView: View {
         return sectionOrder.map { ($0, sectionItems[$0]!) }
     }
 
-    private func alphabetSectionTitle(for value: String) -> String {
+    nonisolated private static func alphabetSectionTitle(for value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = trimmed.first else { return "#" }
         let letter = String(first).uppercased()

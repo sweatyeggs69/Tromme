@@ -86,6 +86,8 @@ final class DownloadManager: @unchecked Sendable {
     private var activeDownloadCount = 0
     private let maxConcurrentDownloads = 3
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
+    /// Set while a debounced `persistRecordsNow()` write is pending — see `persistRecords()`.
+    private var persistScheduled = false
 
     static let downloadFormatKey = "downloadFormat"
     static let downloadTranscodeBitrateKbps = 320
@@ -441,7 +443,26 @@ final class DownloadManager: @unchecked Sendable {
 
     // MARK: - Persistence
 
+    /// Debounces bursts of `persistRecords()` calls (e.g. a library-wide auto-download
+    /// completing many tracks back to back) into a single encode+write instead of
+    /// re-encoding the entire records dictionary to UserDefaults on every completion.
     private func persistRecords() {
+        guard !persistScheduled else { return }
+        persistScheduled = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(300))
+            persistScheduled = false
+            persistRecordsNow()
+        }
+    }
+
+    /// Call before the app becomes inactive/terminates so no debounced write is lost.
+    func flushPendingPersist() {
+        persistScheduled = false
+        persistRecordsNow()
+    }
+
+    private func persistRecordsNow() {
         guard let data = try? JSONEncoder().encode(Array(records.values)) else { return }
         UserDefaults.standard.set(data, forKey: persistenceKey)
     }
