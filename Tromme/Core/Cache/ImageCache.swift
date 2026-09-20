@@ -200,7 +200,7 @@ actor ImageCache {
         // Fetch at least 512px so small row requests still store a reasonably sharp shared
         // copy. Larger surfaces re-fetch at their own size when the stored file is too small.
         // Memory is still decoded at the originally requested size.
-        let fetchURL = upgradedDownloadURL(from: url, minimumSize: 1000)
+        let fetchURL = upgradedDownloadURL(from: url, minimumSize: 512)
         do {
             let (data, response) = try await Self.downloadSession.data(from: fetchURL)
             // If cache was cleared during download, don't save stale data

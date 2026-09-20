@@ -2511,7 +2511,7 @@ final class AudioPlayerService: Sendable {
                 let generation = playbackGeneration
                 let capturedTrackKey = trackKey
                 nowPlayingArtworkTask = Task {
-                    guard let image = await ImageCache.shared.image(for: url) else { return }
+                    guard let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx) else { return }
                     guard !Task.isCancelled else { return }
                     guard self.playbackGeneration == generation else { return }
                     guard self.currentTrack?.ratingKey == capturedTrackKey else { return }

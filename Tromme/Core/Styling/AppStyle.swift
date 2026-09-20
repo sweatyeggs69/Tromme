@@ -96,7 +96,7 @@ enum AppStyle {
         static let iPadLandscapeBottomActionsExtraPadding: CGFloat = 0
         static let portraitArtworkBottomPadding: CGFloat = 10
         static let portraitTrackInfoBottomPadding: CGFloat = 6
-        static let portraitBottomControlsHeightFraction: CGFloat = 0.42
+        static let portraitBottomControlsHeightFraction: CGFloat = 0.41
         static let landscapeBottomControlsHeightFraction: CGFloat = 0.35
         static let bottomActionsTopPadding: CGFloat = 10
         static let bottomScreenPaddingWithSafeArea: CGFloat = 4

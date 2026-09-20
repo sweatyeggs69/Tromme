@@ -3,6 +3,23 @@ import AVKit
 import MediaPlayer
 import UIKit
 
+/// Marks where the shared Now Playing artwork should sit — either its full-size
+/// resting spot, or the small thumbnail spot next to the track title when the
+/// Queue/Lyrics panel is open. A single floating artwork view is positioned
+/// between these two measured rects so it visually shrinks/slides between them
+/// instead of two separate views cross-fading (which looks like a duplicate).
+private enum ArtworkAnimationSlot: Hashable {
+    case full
+    case compact
+}
+
+private struct ArtworkSlotAnchorsKey: PreferenceKey {
+    static var defaultValue: [ArtworkAnimationSlot: Anchor<CGRect>] { [:] }
+    static func reduce(value: inout [ArtworkAnimationSlot: Anchor<CGRect>], nextValue: () -> [ArtworkAnimationSlot: Anchor<CGRect>]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 struct NowPlayingView: View {
     // MARK: - Environment
 
@@ -180,24 +197,13 @@ struct NowPlayingView: View {
 
                     Spacer(minLength: 16)
 
-                    // Artwork and panel content crossfade in the same visual area.
+                    // Reserves the full-size artwork's resting spot; the real artwork
+                    // is rendered once, floating, and positioned over this spot (or
+                    // the small one in trackInfo) via the anchor overlay below.
                     ZStack {
-                        VStack(spacing: 0) {
-                            Spacer(minLength: 0)
-
-                            ArtworkView(
-                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                                size: artworkSize,
-                                cornerRadius: 6
-                            )
-                            .shadow(color: .black.opacity(player.isPlaying ? 0.38 : 0.14), radius: 36, x: 0, y: 18)
-                            .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 8, x: 0, y: 4)
-                            .scaleEffect(player.isPlaying ? 1.0 : 0.85)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
-
-                            Spacer(minLength: 0)
-                        }
-                        .opacity(isCompact ? 0 : 1)
+                        Color.clear
+                            .frame(width: artworkSize, height: artworkSize)
+                            .anchorPreference(key: ArtworkSlotAnchorsKey.self, value: .bounds) { [.full: $0] }
 
                         lyricsQueueContent
                             .frame(width: controlsContainerWidth)
@@ -213,7 +219,8 @@ struct NowPlayingView: View {
                         trackAndPlaybackControls(
                             horizontalPadding: controlsHorizontalPadding,
                             isPadPortrait: isPadPortrait,
-                            trackInfoBottomPadding: portraitTrackInfoBottomPadding
+                            trackInfoBottomPadding: portraitTrackInfoBottomPadding,
+                            showsCompactArtwork: true
                         )
                         .frame(maxHeight: .infinity)
                         bottomActions
@@ -226,7 +233,31 @@ struct NowPlayingView: View {
                     .frame(height: bottomControlsHeight)
                     .padding(.bottom, bottomScreenPadding)
                 }
-                .animation(.easeInOut(duration: 0.25), value: isCompact)
+                .overlayPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
+                    GeometryReader { proxy in
+                        if let fullAnchor = anchors[.full] {
+                            let fullRect = proxy[fullAnchor]
+                            let targetRect: CGRect = {
+                                if isCompact, let compactAnchor = anchors[.compact] {
+                                    return proxy[compactAnchor]
+                                }
+                                return fullRect
+                            }()
+
+                            ArtworkView(
+                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
+                                size: targetRect.width,
+                                cornerRadius: isCompact ? 4 : 6
+                            )
+                            .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
+                            .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
+                            .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                            .position(x: targetRect.midX, y: targetRect.midY)
+                            .allowsHitTesting(false)
+                        }
+                    }
+                }
             }
             // Tracks valid geometry to recover from the brief invalid dimensions
             // reported during CarPlay + app-switch scene transitions.
@@ -337,8 +368,14 @@ struct NowPlayingView: View {
 
     // MARK: - Track Info
 
-    private var trackInfo: some View {
-        HStack(alignment: .center) {
+    private func trackInfo(showsCompactArtwork: Bool = false) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            if showsCompactArtwork && isCompact {
+                Color.clear
+                    .frame(width: 44, height: 44)
+                    .anchorPreference(key: ArtworkSlotAnchorsKey.self, value: .bounds) { [.compact: $0] }
+            }
+
             VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
                     .font(.title3.bold())
@@ -393,10 +430,11 @@ struct NowPlayingView: View {
     private func trackAndPlaybackControls(
         horizontalPadding: CGFloat,
         isPadPortrait: Bool,
-        trackInfoBottomPadding: CGFloat
+        trackInfoBottomPadding: CGFloat,
+        showsCompactArtwork: Bool = false
     ) -> some View {
         VStack(spacing: 0) {
-            trackInfo
+            trackInfo(showsCompactArtwork: showsCompactArtwork)
                 .padding(.horizontal, horizontalPadding)
                 .padding(.bottom, trackInfoBottomPadding)
 
@@ -1112,10 +1150,4 @@ struct NowPlayingBackground: View {
         guard !Task.isCancelled, capturedThumb == player.currentTrack?.parentThumb else { return }
         backgroundImage = image
     }
-}
-
-
-#Preview {
-    NowPlayingView()
-        .environment(AudioPlayerService())
 }
