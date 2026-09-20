@@ -27,7 +27,7 @@ This applies to everything:
 - Volume: use MPVolumeView — never fake volume sliders
 - AirPlay: use AVRoutePickerView — never fake AirPlay buttons
 - Materials: let the system apply Liquid Glass — only use .glassEffect when the system doesn't provide it automatically
-- Alerts/confirmations: use .alert, .confirmationDialog — never custom alert views
+- Alerts/confirmations: use .alert — never .confirmationDialog or custom alert views (see "Popups & Confirmation UX" below)
 - Pull to refresh: use .refreshable — never custom pull indicators
 - Scroll indicators, safe areas, keyboard avoidance: use system defaults
 
@@ -43,19 +43,20 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - use AppStorage for simple scalar user preferences
 - use SwiftData for persistent models
 - use disk files (Codable → JSON) for complex persistent state (e.g. playback queue); never NSUserDefaults for structured data
+  - Known pre-existing exceptions (small structured blobs, not full migration targets): `DownloadManager`'s downloaded-track records and `ServerConnectionManager`'s cached `PlexServer` are still JSON-encoded into UserDefaults. Don't copy this pattern for new persistent state — use disk files instead.
 - Toggles and buttons with different states should always transform unless otherwise stated.
 
 ## Build System
 - use BuildProject for completion (not shell commands or xcodebuild)
 - Previews are available via RenderPreview
 - SPM for package management - no CocoaPods
-- Build target: "MyApp" iOS
+- Build target: "Tromme" iOS
 
 ## Testing
 - Use Swift Testing framework -- NOT XCTest
 - Test functions use @Test attribute, not func textXYZ()
 - Use #expect() for assertions - not XCTAssertEqual
-- Test target: CLAUDEmdTests
+- Test target: TrommeTests
 - Run with RunAllTests or RunSomeTests MCP tools
 
 ## Documentation & APIs
@@ -101,11 +102,14 @@ If you are unsure whether Apple provides something, assume they do and look for 
 ## Plex Offline Downloads
 - MP3 (space-saver) downloads use the documented Download Queue API — never the streaming universal-transcode endpoint:
   - POST `/downloadQueue` → get-or-create this client's queue (idempotent per client id + token)
-  - POST `/downloadQueue/{queueId}/add` with `keys`, `protocol=http`, `directPlay=0`, `directStream=0`, `directStreamAudio=0`, `musicBitrate`, plus `X-Plex-Client-Profile-Extra: add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=mp3&audioCodec=mp3&replace=true)`
+  - POST `/downloadQueue/{queueId}/add` with `keys`, `protocol=http`, `directPlay=0`, `directStream=0`, `directStreamAudio=0`, `musicBitrate`, plus `X-Plex-Client-Profile-Extra: add-transcode-target(type=musicProfile&context=static&protocol=http&container=mp3&audioCodec=mp3&replace=true)`
+    - `context` must be `static`, not `streaming` — the Download Queue's decision engine evaluates a one-shot, non-realtime conversion under the static context. `context=streaming` here yields a hard server-side `decisionError` on every item and PMS never transcodes at all. (`context=streaming` is correct for the *playback* profiles under "Plex Audio Streaming" above — those really are a live streaming session. Don't carry that value over to downloads just because it looks like the same directive shape.)
+    - This POST must explicitly set `Accept: application/json` on the request. Unlike the other Download Queue calls, this one is built from `playbackHeaders()`/`downloadTranscodeHeaders()`, which don't set `Accept` — without it PMS defaults to XML and the JSON decode throws, which silently looks like a normal thrown error and falls back to downloading the untouched original file.
   - Poll GET `/downloadQueue/{queueId}/items/{itemId}` until status is `available` (or fail on `error`/`expired`)
   - GET `/downloadQueue/{queueId}/item/{itemId}/media` (singular "item") to fetch the finished file
   - DELETE `/downloadQueue/{queueId}/items/{itemId}` (plural "items") afterward for cleanup
 - Original-quality downloads use the documented direct part endpoint instead: `/library/parts/{partId}/{changestamp}/{filename}?download=1` — this is its own documented endpoint, not part of the Download Queue family, so don't route it through the queue.
+- If an "MP3 download" comes back playable but is actually the source codec/container (e.g. AAC in M4A), don't assume the profile string is wrong first — check for a silent fallback: `DownloadManager.performDownload` falls back to downloading the plain original file whenever the queue conversion throws or ends in `error`/`expired`/timeout, and that fallback path still exists on purpose (resilience), so a broken conversion won't surface as a visible error to the user. Verify with the actual queue item status/error field before changing request parameters.
 
 ## Code Style
 - All new views must include a #Preview Block

@@ -878,6 +878,9 @@ final class PlexAPIClient: Sendable {
             request.setValue(value, forHTTPHeaderField: field)
         }
         request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        // playbackHeaders() (used to build `headers`) doesn't set Accept, and PMS
+        // defaults to XML without it — which then fails to decode as JSON here.
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let response: DownloadQueueAddResponse = try await perform(request)
         guard let itemId = response.mediaContainer.addedQueueItems?.first?.id else {
@@ -898,10 +901,10 @@ final class PlexAPIClient: Sendable {
         request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
 
         let response: DownloadQueueItemsResponse = try await perform(request)
-        guard let status = response.mediaContainer.items?.first?.status else {
+        guard let item = response.mediaContainer.items?.first else {
             throw PlexAPIError.serverError(-1)
         }
-        return status
+        return item.status
     }
 
     /// Builds the request to fetch the finished file for a queue item once
@@ -934,14 +937,14 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Transcode-target profile for converted offline downloads.
-    /// Must be context=streaming: the universal decision endpoint evaluates in
-    /// the streaming context, so a static target yields "No conversion profile
-    /// found for protocol http" and start returns 400. `replace=true` is
+    /// Must be context=static: the Download Queue's decision engine evaluates
+    /// a one-shot, non-realtime conversion — context=streaming here yields
+    /// "decisionError" and PMS never transcodes at all. `replace=true` is
     /// required so this target overrides the Generic profile's existing one.
     /// Only MP3 works here — PMS's progressive http muxer produces zero bytes
     /// for AAC (ADTS) and MP4 output.
     static func profileExtraDownload(container: String, codec: String) -> String {
-        "add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=\(container)&audioCodec=\(codec)&replace=true)"
+        "add-transcode-target(type=musicProfile&context=static&protocol=http&container=\(container)&audioCodec=\(codec)&replace=true)"
     }
 
     func downloadTranscodeHeaders(
@@ -1413,7 +1416,9 @@ private struct DownloadQueueAddResponse: Decodable, Sendable {
 
 private struct DownloadQueueItemsResponse: Decodable, Sendable {
     struct Container: Decodable, Sendable {
-        struct Item: Decodable, Sendable { let status: DownloadQueueItemStatus }
+        struct Item: Decodable, Sendable {
+            let status: DownloadQueueItemStatus
+        }
         let items: [Item]?
         enum CodingKeys: String, CodingKey { case items = "DownloadQueueItem" }
     }

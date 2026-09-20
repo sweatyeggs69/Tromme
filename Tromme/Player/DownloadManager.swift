@@ -397,11 +397,17 @@ final class DownloadManager: @unchecked Sendable {
             case .available:
                 return true
             case .error, .expired:
+                #if DEBUG
+                print("[DownloadManager] Queue item \(itemId) ended with status=\(status)")
+                #endif
                 return false
             case .deciding, .waiting, .processing:
                 try await Task.sleep(for: .seconds(1))
             }
         }
+        #if DEBUG
+        print("[DownloadManager] Queue item \(itemId) timed out waiting for availability")
+        #endif
         return false
     }
 
