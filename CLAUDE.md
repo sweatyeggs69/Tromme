@@ -6,7 +6,7 @@
 - Minimum deployment: iOS 27
 - SwiftUI is preferred, use UIKit as fallback
 - All UI must follow iOS 27 design language and Liquid Glass styling
-- Always use lean changelogs when pushing commits-
+- Always use lean changelogs when pushing commits
 
 ## STRICT RULE: Always Use Stock Apple First
 
