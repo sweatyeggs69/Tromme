@@ -6,7 +6,7 @@
 - Minimum deployment: iOS 27
 - SwiftUI is preferred, use UIKit as fallback
 - All UI must follow iOS 27 design language and Liquid Glass styling
-- Always use lean changelogs when pushing commits
+- Always use lean changelogs when pushing commits-
 
 ## STRICT RULE: Always Use Stock Apple First
 
@@ -78,6 +78,14 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - Confirmation flows must use alert-style popups (`.alert`) instead of confirmation sheets (`.confirmationDialog`).
 - Use destructive alert actions for destructive operations (delete, sign out, clear cache), with an explicit cancel action.
 
+## STRICT RULE: Plex API Must Match the Documented Architecture 1:1
+
+`/Users/kylemcclain/Tromme/plex-api.json` (repo root) is the source of truth for all Plex Media Server integration. No matter what:
+1. Before adding or changing any PMS request, look up the exact endpoint, path, and query/header parameter names in `plex-api.json` first.
+2. Only call endpoints that exist in that spec, with only the parameter names it documents. Never invent, guess, or carry over an undocumented endpoint/param just because another Plex client (or old Tromme code) used it.
+3. Use the purpose-built endpoint family for the task at hand instead of repurposing a different one — e.g. offline downloads go through the `/downloadQueue` family (`Download Queue` tag), not the streaming `/{transcodeType}/:/transcode/universal/*` endpoints used for playback.
+4. If a desired behavior has no documented endpoint, treat that as a sign to re-check the spec or ask for the correct one — don't fall back to an undocumented path "because it happens to work."
+
 ## Plex Audio Streaming
 - FLAC files use the universal transcode endpoint to convert FLAC→ALAC (Apple Lossless) via HLS
   - ALAC is lossless — identical decoded audio to FLAC — with proper AVPlayer seeking/timeline
@@ -89,6 +97,15 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - NEVER direct-stream raw FLAC files — AVPlayer audio drifts out of sync over time due to FLAC's variable bitrate
 - HLS+MPEGTS cannot carry FLAC (Apple only supports AAC/MP3/AC3 in MPEGTS)
 - Always send `X-Plex-Client-Profile-Extra` header — without it PMS returns 400 ("client provided bad data")
+
+## Plex Offline Downloads
+- MP3 (space-saver) downloads use the documented Download Queue API — never the streaming universal-transcode endpoint:
+  - POST `/downloadQueue` → get-or-create this client's queue (idempotent per client id + token)
+  - POST `/downloadQueue/{queueId}/add` with `keys`, `protocol=http`, `directPlay=0`, `directStream=0`, `directStreamAudio=0`, `musicBitrate`, plus `X-Plex-Client-Profile-Extra: add-transcode-target(type=musicProfile&context=streaming&protocol=http&container=mp3&audioCodec=mp3&replace=true)`
+  - Poll GET `/downloadQueue/{queueId}/items/{itemId}` until status is `available` (or fail on `error`/`expired`)
+  - GET `/downloadQueue/{queueId}/item/{itemId}/media` (singular "item") to fetch the finished file
+  - DELETE `/downloadQueue/{queueId}/items/{itemId}` (plural "items") afterward for cleanup
+- Original-quality downloads use the documented direct part endpoint instead: `/library/parts/{partId}/{changestamp}/{filename}?download=1` — this is its own documented endpoint, not part of the Download Queue family, so don't route it through the queue.
 
 ## Code Style
 - All new views must include a #Preview Block

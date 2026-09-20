@@ -317,9 +317,11 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
-    /// Downloads the track converted to `container` (AAC/MP3) via the PMS
-    /// universal transcoder. Returns false when the server refuses or the
-    /// transfer fails, so the caller can fall back to the original file.
+    /// Downloads the track converted to `container` (MP3) via the PMS
+    /// Download Queue API: add the track to the queue, poll until PMS
+    /// finishes deciding/transcoding, then fetch the finished file. Returns
+    /// false when the server refuses or the transfer fails, so the caller
+    /// can fall back to the original file.
     private func downloadConverted(
         track: PlexMetadata,
         container: String,
@@ -330,40 +332,36 @@ final class DownloadManager: @unchecked Sendable {
         let bitrate = Self.downloadTranscodeBitrateKbps
         let metadataPath = track.key ?? "/library/metadata/\(ratingKey)"
         let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
-        let sessionID = UUID().uuidString
         let headers = client.downloadTranscodeHeaders(
             server: server,
-            sessionID: sessionID,
+            sessionID: UUID().uuidString,
             container: container,
             codec: container
         )
-        guard let url = client.transcodeDownloadURL(
-            server: server,
-            metadataPath: normalizedPath,
-            sessionID: sessionID,
-            fileExtension: container,
-            bitrateKbps: bitrate
-        ) else { return false }
 
-        var request = URLRequest(url: url)
-        for (field, value) in headers {
-            request.setValue(value, forHTTPHeaderField: field)
-        }
-
-        defer {
-            Task { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
-        }
         do {
-            try await client.universalDecision(
+            let queueId = try await client.getOrCreateDownloadQueue(server: server)
+            let itemId = try await client.addToDownloadQueue(
                 server: server,
+                queueId: queueId,
                 metadataPath: normalizedPath,
-                sessionID: sessionID,
                 headers: headers,
-                streamProtocol: "http",
-                allowDirectStream: false,
-                constrainAudioBitrate: true,
-                cellularTranscodeBitrate: bitrate
+                musicBitrate: bitrate
             )
+            defer {
+                Task { await client.deleteDownloadQueueItem(server: server, queueId: queueId, itemId: itemId) }
+            }
+
+            guard try await waitForDownloadQueueItem(
+                server: server,
+                queueId: queueId,
+                itemId: itemId,
+                client: client
+            ) else { return false }
+
+            guard let request = client.downloadQueueMediaRequest(server: server, queueId: queueId, itemId: itemId) else {
+                return false
+            }
             try await fetchAndStore(
                 request: request,
                 filename: "\(ratingKey).\(container)",
@@ -381,6 +379,30 @@ final class DownloadManager: @unchecked Sendable {
             }
             return false
         }
+    }
+
+    /// Polls a download queue item until PMS finishes deciding/transcoding.
+    /// Returns true once the item is `available`, false on `error`/`expired`/timeout.
+    private func waitForDownloadQueueItem(
+        server: PlexServer,
+        queueId: Int,
+        itemId: Int,
+        client: PlexAPIClient
+    ) async throws -> Bool {
+        let deadline = Date().addingTimeInterval(120)
+        while Date() < deadline {
+            try Task.checkCancellation()
+            let status = try await client.downloadQueueItemStatus(server: server, queueId: queueId, itemId: itemId)
+            switch status {
+            case .available:
+                return true
+            case .error, .expired:
+                return false
+            case .deciding, .waiting, .processing:
+                try await Task.sleep(for: .seconds(1))
+            }
+        }
+        return false
     }
 
     private func fetchAndStore(

@@ -11,20 +11,17 @@ struct AllAlbumsView: View {
 
     @State private var albums: [PlexMetadata]
     @State private var isLoading: Bool
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
     @AppStorage("allAlbumsSortOrder") private var sortOrder: AlbumSortOrder = .titleAscending
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var selectedAlbum: PlexMetadata?
 
-    // Filtered/sorted/sectioned results, computed off the main actor by applyDisplayState().
+    // Sorted/sectioned results, computed off the main actor by applyDisplayState().
     @State private var displayAlbums: [PlexMetadata] = []
     @State private var displaySections: [(title: String, items: [PlexMetadata])] = []
     @State private var sortGeneration: Int = 0
     @State private var lastSortedCount: Int = -1
     @State private var lastSortedOrder: AlbumSortOrder = .titleAscending
-    @State private var lastSortedQuery: String = ""
 
     private let previewAlbums: [PlexMetadata]?
 
@@ -35,15 +32,7 @@ struct AllAlbumsView: View {
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
     }
 
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
-    nonisolated private static func normalizeForSearch(_ string: String) -> String {
-        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
-        return String(String.UnicodeScalarView(scalars))
-            .split(separator: " ")
-            .joined(separator: " ")
-    }
-
-    // Sorts, filters, and sections all off the main actor to keep UI responsive at large library sizes.
+    // Sorts and sections all off the main actor to keep UI responsive at large library sizes.
     // Skips work if the data and sort parameters haven't changed since the last pass.
     // A generation counter ensures only the most recent request writes to state,
     // preventing stale results from piled-up tasks when navigating between tabs quickly.
@@ -53,13 +42,11 @@ struct AllAlbumsView: View {
             displaySections = []
             return
         }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentSort = sortOrder
 
         if !displaySections.isEmpty,
            albums.count == lastSortedCount,
-           currentSort == lastSortedOrder,
-           query == lastSortedQuery {
+           currentSort == lastSortedOrder {
             return
         }
 
@@ -67,27 +54,17 @@ struct AllAlbumsView: View {
         sortGeneration &+= 1
         let myGeneration = sortGeneration
 
-        let (filtered, sections) = await Task.detached(priority: .userInitiated) {
-            let normalizedQuery = Self.normalizeForSearch(query)
-            let base = query.isEmpty ? snapshot : snapshot.filter { album in
-                Self.normalizeForSearch(album.title).contains(normalizedQuery)
-                || (album.parentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
-            }
-            let sorted = Self.sort(base, by: currentSort)
-            var sections = Self.buildSections(from: sorted, sortOrder: currentSort)
-            let exact = Self.exactMatches(in: sorted, query: query)
-            if !exact.isEmpty {
-                sections.insert((title: "Exact Matches", items: exact), at: 0)
-            }
+        let (sorted, sections) = await Task.detached(priority: .userInitiated) {
+            let sorted = Self.sort(snapshot, by: currentSort)
+            let sections = Self.buildSections(from: sorted, sortOrder: currentSort)
             return (sorted, sections)
         }.value
 
         guard sortGeneration == myGeneration else { return }
-        displayAlbums = filtered
+        displayAlbums = sorted
         displaySections = sections
         lastSortedCount = albums.count
         lastSortedOrder = currentSort
-        lastSortedQuery = query
     }
 
     nonisolated private static func sort(_ albums: [PlexMetadata], by order: AlbumSortOrder) -> [PlexMetadata] {
@@ -145,12 +122,6 @@ struct AllAlbumsView: View {
         }
     }
 
-    nonisolated private static func exactMatches(in albums: [PlexMetadata], query: String) -> [PlexMetadata] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        return albums.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
-    }
-
     init(previewAlbums: [PlexMetadata]? = nil) {
         self.previewAlbums = previewAlbums
         _albums = State(initialValue: previewAlbums ?? [])
@@ -169,12 +140,6 @@ struct AllAlbumsView: View {
         .navigationTitle("Albums")
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchPresented,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter albums"
-        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -227,18 +192,14 @@ struct AllAlbumsView: View {
                 .tint(.primary)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker(selection: $viewMode) {
-                        Label("Grid", systemImage: "square.grid.2x2").tag(AlbumViewMode.grid)
-                        Label("List", systemImage: "list.bullet").tag(AlbumViewMode.list)
-                    } label: {
-                        EmptyView()
-                    }
-                    .pickerStyle(.inline)
+                Button {
+                    viewMode = viewMode == .grid ? .list : .grid
                 } label: {
-                    Image(systemName: viewMode == .grid ? "square.grid.2x2" : "list.bullet")
+                    Image(systemName: viewMode == .grid ? "list.bullet" : "square.grid.2x2")
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .tint(.primary)
+                .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
             }
         }
         .task(id: previewAlbums != nil ? "preview" : loadTaskID) {
@@ -248,16 +209,12 @@ struct AllAlbumsView: View {
                 await loadAlbums()
             }
         }
-        // Cancels and restarts whenever sort order or search text changes.
-        .task(id: "\(sortOrder.rawValue)|\(searchText)") {
+        // Cancels and restarts whenever sort order changes.
+        .task(id: sortOrder.rawValue) {
             await applyDisplayState()
         }
         .task(id: artworkPrefetchKey) {
             await prefetchVisibleArtwork()
-        }
-        .onDisappear {
-            searchText = ""
-            isSearchPresented = false
         }
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
@@ -271,114 +228,106 @@ struct AllAlbumsView: View {
     private var contentView: some View {
         switch viewMode {
         case .grid:
-            if displayAlbums.isEmpty, !searchText.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(displaySections, id: \.title) { section in
-                            Text(section.title)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-                                .padding(.top, 16)
-                                .padding(.bottom, 6)
-
-                            LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-                                ForEach(section.items) { album in
-                                    Button {
-                                        selectedAlbum = album
-                                    } label: {
-                                        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                                            GeometryReader { geo in
-                                                ArtworkView(
-                                                    thumbPath: album.thumb,
-                                                    size: geo.size.width,
-                                                    cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                                                )
-                                            }
-                                            .aspectRatio(1, contentMode: .fit)
-
-                                            Text(album.title)
-                                                .appItemTitleStyle()
-
-                                            Text(album.parentTitle ?? "")
-                                                .appItemSubtitleStyle()
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .contextMenu {
-                                        albumContextMenu(for: album)
-                                    } preview: {
-                                        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                                            ArtworkView(
-                                                thumbPath: album.thumb,
-                                                size: 200,
-                                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                                            )
-                                            .frame(width: 200, height: 200)
-                                            Text(album.title)
-                                                .appItemTitleStyle()
-                                            Text(album.parentTitle ?? "")
-                                                .appItemSubtitleStyle()
-                                        }
-                                        .frame(width: 200)
-                                        .padding()
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-                            .padding(.bottom, 12)
-                        }
-                    }
-                }
-                .tint(.secondary)
-            }
-
-        case .list:
-            if displayAlbums.isEmpty, !searchText.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            } else {
-                List {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(displaySections, id: \.title) { section in
-                        Section(section.title) {
+                        Text(section.title)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                            .padding(.top, 16)
+                            .padding(.bottom, 6)
+
+                        LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
                             ForEach(section.items) { album in
                                 Button {
                                     selectedAlbum = album
                                 } label: {
-                                    HStack(spacing: 10) {
-                                        ArtworkView(
-                                            thumbPath: album.thumb,
-                                            size: AppStyle.AlbumLayout.listArtworkSize,
-                                            cornerRadius: AppStyle.AlbumLayout.listArtworkCornerRadius
-                                        )
-
-                                        VStack(alignment: .leading, spacing: AppStyle.AlbumLayout.listTextSpacing) {
-                                            Text(album.title)
-                                                .appItemTitleStyle()
-
-                                            Text(album.parentTitle ?? "")
-                                                .appItemSubtitleStyle()
+                                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                        GeometryReader { geo in
+                                            ArtworkView(
+                                                thumbPath: album.thumb,
+                                                size: geo.size.width,
+                                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                            )
                                         }
+                                        .aspectRatio(1, contentMode: .fit)
+
+                                        Text(album.title)
+                                            .appItemTitleStyle()
+
+                                        Text(album.parentTitle ?? "")
+                                            .appItemSubtitleStyle()
                                     }
-                                    .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
                                     albumContextMenu(for: album)
+                                } preview: {
+                                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                        ArtworkView(
+                                            thumbPath: album.thumb,
+                                            size: 200,
+                                            cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                        )
+                                        .frame(width: 200, height: 200)
+                                        Text(album.title)
+                                            .appItemTitleStyle()
+                                        Text(album.parentTitle ?? "")
+                                            .appItemSubtitleStyle()
+                                    }
+                                    .frame(width: 200)
+                                    .padding()
                                 }
-                                .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
+                        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                        .padding(.bottom, 12)
                     }
                 }
-                .listStyle(.plain)
-                .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
-                .tint(.secondary)
             }
+            .tint(.secondary)
+
+        case .list:
+            List {
+                ForEach(displaySections, id: \.title) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { album in
+                            Button {
+                                selectedAlbum = album
+                            } label: {
+                                HStack(spacing: 10) {
+                                    ArtworkView(
+                                        thumbPath: album.thumb,
+                                        size: AppStyle.AlbumLayout.listArtworkSize,
+                                        cornerRadius: AppStyle.AlbumLayout.listArtworkCornerRadius
+                                    )
+
+                                    VStack(alignment: .leading, spacing: AppStyle.AlbumLayout.listTextSpacing) {
+                                        Text(album.title)
+                                            .appItemTitleStyle()
+
+                                        Text(album.parentTitle ?? "")
+                                            .appItemSubtitleStyle()
+                                    }
+                                }
+                                .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                albumContextMenu(for: album)
+                            }
+                            .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
+                        }
+                    }
+                    .sectionIndexLabel(section.title)
+                }
+            }
+            .listStyle(.plain)
+            .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
+            .tint(.secondary)
         }
     }
 
@@ -405,7 +354,7 @@ struct AllAlbumsView: View {
     }
 
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(displayAlbums.count)|\(searchText)|\(sortOrder.rawValue)"
+        "\(viewMode.rawValue)|\(displayAlbums.count)|\(sortOrder.rawValue)"
     }
 
     private func loadAlbums() async {

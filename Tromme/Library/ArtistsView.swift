@@ -9,8 +9,6 @@ struct ArtistsView: View {
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -32,41 +30,14 @@ struct ArtistsView: View {
     }
 
     private var columns: [GridItem] {
-        let count = isRegularLayout ? 4 : 2
+        let count = isRegularLayout ? 4 : 3
         return Array(repeating: GridItem(.flexible(), spacing: gridColumnSpacing), count: count)
     }
 
-    private var filteredArtists: [PlexMetadata] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return artists }
-        let normalizedQuery = Self.normalizeForSearch(query)
-        return artists.filter { artist in
-            Self.normalizeForSearch(artist.title).contains(normalizedQuery)
-        }
-    }
-
-    private var exactMatches: [PlexMetadata] {
-        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        return filteredArtists.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
-    }
-
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
-    private static func normalizeForSearch(_ string: String) -> String {
-        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
-        return String(String.UnicodeScalarView(scalars))
-            .split(separator: " ")
-            .joined(separator: " ")
-    }
-
     private var artistSections: [(title: String, items: [PlexMetadata])] {
-        var sections = alphabetSections(for: filteredArtists) { artist in
+        alphabetSections(for: artists) { artist in
             artistSortKey(for: artist.title)
         }
-        if !exactMatches.isEmpty {
-            sections.insert((title: "Exact Matches", items: exactMatches), at: 0)
-        }
-        return sections
     }
 
     var body: some View {
@@ -81,18 +52,13 @@ struct ArtistsView: View {
         .navigationTitle("Artists")
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .scrollEdgeEffectStyle(.soft, for: .top)
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchPresented,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter artists"
-        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     viewMode = viewMode == .grid ? .list : .grid
                 } label: {
                     Image(systemName: viewMode == .grid ? "list.bullet" : "square.grid.2x2")
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .tint(.primary)
                 .accessibilityLabel(viewMode == .grid ? "Show as list" : "Show as grid")
@@ -100,79 +66,71 @@ struct ArtistsView: View {
         }
         .task(id: loadTaskID) { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
-        .onDisappear {
-            searchText = ""
-            isSearchPresented = false
-        }
     }
 
     @ViewBuilder
     private var contentView: some View {
         switch viewMode {
         case .list:
-            if filteredArtists.isEmpty, !searchText.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            } else {
-                List {
-                    ForEach(artistSections, id: \.title) { section in
-                        Section(section.title) {
-                            ForEach(section.items) { artist in
-                                NavigationLink(value: artist) {
-                                    HStack(spacing: 10) {
-                                        ArtworkView(thumbPath: artist.thumb, size: 48, cornerRadius: 24)
+            List {
+                ForEach(artistSections, id: \.title) { section in
+                    Section(section.title) {
+                        ForEach(section.items) { artist in
+                            NavigationLink(value: artist) {
+                                HStack(spacing: 10) {
+                                    ArtworkView(
+                                        thumbPath: artist.thumb,
+                                        size: AppStyle.AlbumLayout.listArtworkSize,
+                                        cornerRadius: AppStyle.AlbumLayout.listArtworkSize / 2
+                                    )
 
-                                        Text(artist.title)
-                                            .font(.body)
-                                    }
+                                    Text(artist.title)
+                                        .font(.body)
                                 }
-                                .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
+                            .listRowInsets(AppStyle.TrackList.rowInsets)
                         }
-                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
                     }
+                    .sectionIndexLabel(section.title)
                 }
-                .listStyle(.plain)
-                .listSectionIndexVisibility(.automatic)
-                .tint(.secondary)
             }
+            .listStyle(.plain)
+            .listSectionIndexVisibility(.automatic)
+            .tint(.secondary)
 
         case .grid:
-            if filteredArtists.isEmpty, !searchText.isEmpty {
-                ContentUnavailableView.search(text: searchText)
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(artistSections, id: \.title) { section in
-                            Text(section.title)
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, gridHorizontalPadding)
-
-                            LazyVGrid(columns: columns, spacing: gridRowSpacing) {
-                                ForEach(section.items) { artist in
-                                    NavigationLink(value: artist) {
-                                        VStack(alignment: .center, spacing: 4) {
-                                            GeometryReader { geo in
-                                                let size = geo.size.width
-                                                ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
-                                            }
-                                            .aspectRatio(1, contentMode: .fit)
-
-                                            Text(artist.title)
-                                                .appItemTitleStyle()
-                                                .multilineTextAlignment(.center)
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .center)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(artistSections, id: \.title) { section in
+                        Text(section.title)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, gridHorizontalPadding)
+
+                        LazyVGrid(columns: columns, spacing: gridRowSpacing) {
+                            ForEach(section.items) { artist in
+                                NavigationLink(value: artist) {
+                                    VStack(alignment: .center, spacing: 4) {
+                                        GeometryReader { geo in
+                                            let size = geo.size.width
+                                            ArtworkView(thumbPath: artist.thumb, size: size, cornerRadius: size / 2)
+                                        }
+                                        .aspectRatio(1, contentMode: .fit)
+
+                                        Text(artist.title)
+                                            .appItemTitleStyle()
+                                            .multilineTextAlignment(.center)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
+                        .padding(.horizontal, gridHorizontalPadding)
                     }
-                    .padding(.vertical, 8)
                 }
+                .padding(.vertical, 8)
             }
         }
     }
@@ -184,7 +142,7 @@ struct ArtistsView: View {
     }
 
     private var artworkPrefetchKey: String {
-        "\(viewMode.rawValue)|\(filteredArtists.count)|\(searchText)"
+        "\(viewMode.rawValue)|\(artists.count)"
     }
 
     private func loadArtists() async {
@@ -309,9 +267,9 @@ struct ArtistsView: View {
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let prefetchCount = viewMode == .grid ? 60 : 80
-        let pointSize: CGFloat = viewMode == .grid ? 184 : 48
+        let pointSize: CGFloat = viewMode == .grid ? 184 : AppStyle.AlbumLayout.listArtworkSize
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: pointSize, displayScale: displayScale)
-        let urls = filteredArtists.prefix(prefetchCount).compactMap { artist in
+        let urls = artists.prefix(prefetchCount).compactMap { artist in
             client.artworkURL(server: server, path: artist.thumb, width: pixelSize, height: pixelSize)
         }
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)

@@ -1,5 +1,10 @@
 import Foundation
 
+/// Status of an item in the Plex `/downloadQueue` (Download Queue API).
+enum DownloadQueueItemStatus: String, Decodable, Sendable {
+    case deciding, waiting, processing, available, error, expired
+}
+
 enum PlexAPIError: Error, LocalizedError {
     case invalidURL
     case unauthorized
@@ -816,29 +821,116 @@ final class PlexAPIClient: Sendable {
         return nil
     }
 
-    /// Progressive (non-HLS) transcode URL for offline downloads. PMS converts
-    /// the track server-side and serves a complete file in the target format,
-    /// so the device never has to transcode locally.
-    func transcodeDownloadURL(
-        server: PlexServer,
-        metadataPath: String,
-        sessionID: String,
-        fileExtension: String,
-        bitrateKbps: Int
-    ) -> URL? {
+    // MARK: - Download Queue
+
+    /// Get or create this client's download queue. PMS scopes exactly one
+    /// queue per client identifier + token, so this is safe to call before
+    /// every download — it returns the existing queue id when one is
+    /// already open. Endpoint: POST /downloadQueue.
+    func getOrCreateDownloadQueue(server: PlexServer) async throws -> Int {
         guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
-        components.path = "/music/:/transcode/universal/start.\(fileExtension)"
-        components.queryItems = universalQueryItems(
-            server: server,
-            metadataPath: metadataPath,
-            sessionID: sessionID,
-            streamProtocol: "http",
-            allowDirectStream: false,
-            constrainAudioBitrate: true,
-            cellularTranscodeBitrate: bitrateKbps
-        )
-        return components.url
+              let url = URL(string: "/downloadQueue", relativeTo: baseURL) else {
+            throw PlexAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let response: DownloadQueueResponse = try await perform(request)
+        guard let queueId = response.mediaContainer.downloadQueue?.first?.id else {
+            throw PlexAPIError.serverError(-1)
+        }
+        return queueId
+    }
+
+    /// Adds a track to the download queue, requesting the MP3 conversion via
+    /// the same `X-Plex-Client-Profile-Extra` directive used for streaming
+    /// profile augmentation. Returns the queue item id used to poll status
+    /// and fetch the resulting file. Endpoint: POST /downloadQueue/{queueId}/add.
+    func addToDownloadQueue(
+        server: PlexServer,
+        queueId: Int,
+        metadataPath: String,
+        headers: [String: String],
+        musicBitrate: Int
+    ) async throws -> Int {
+        guard let baseURL = server.baseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw PlexAPIError.invalidURL
+        }
+        components.path = "/downloadQueue/\(queueId)/add"
+        components.queryItems = [
+            URLQueryItem(name: "keys", value: metadataPath),
+            URLQueryItem(name: "mediaIndex", value: "0"),
+            URLQueryItem(name: "partIndex", value: "0"),
+            URLQueryItem(name: "protocol", value: "http"),
+            URLQueryItem(name: "directPlay", value: "0"),
+            URLQueryItem(name: "directStream", value: "0"),
+            URLQueryItem(name: "directStreamAudio", value: "0"),
+            URLQueryItem(name: "musicBitrate", value: "\(musicBitrate)"),
+        ]
+        guard let url = components.url else { throw PlexAPIError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let response: DownloadQueueAddResponse = try await perform(request)
+        guard let itemId = response.mediaContainer.addedQueueItems?.first?.id else {
+            throw PlexAPIError.serverError(-1)
+        }
+        return itemId
+    }
+
+    /// Polls the current state of a queued download item.
+    /// Endpoint: GET /downloadQueue/{queueId}/items/{itemId}.
+    func downloadQueueItemStatus(server: PlexServer, queueId: Int, itemId: Int) async throws -> DownloadQueueItemStatus {
+        guard let baseURL = server.baseURL,
+              let url = URL(string: "/downloadQueue/\(queueId)/items/\(itemId)", relativeTo: baseURL) else {
+            throw PlexAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+
+        let response: DownloadQueueItemsResponse = try await perform(request)
+        guard let status = response.mediaContainer.items?.first?.status else {
+            throw PlexAPIError.serverError(-1)
+        }
+        return status
+    }
+
+    /// Builds the request to fetch the finished file for a queue item once
+    /// its status is `available`. Endpoint: GET /downloadQueue/{queueId}/item/{itemId}/media
+    /// (note: singular "item", unlike the plural "items" used for status/delete).
+    func downloadQueueMediaRequest(server: PlexServer, queueId: Int, itemId: Int) -> URLRequest? {
+        guard let baseURL = server.baseURL,
+              let url = URL(string: "/downloadQueue/\(queueId)/item/\(itemId)/media", relativeTo: baseURL) else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        return request
+    }
+
+    /// Removes a finished/failed item from the download queue.
+    /// Best-effort cleanup; never throws — PMS will expire stale items on its own.
+    /// Endpoint: DELETE /downloadQueue/{queueId}/items/{itemId}.
+    func deleteDownloadQueueItem(server: PlexServer, queueId: Int, itemId: Int) async {
+        guard let baseURL = server.baseURL,
+              let url = URL(string: "/downloadQueue/\(queueId)/items/\(itemId)", relativeTo: baseURL) else {
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        applyPlexHeaders(to: &request)
+        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        _ = try? await session.data(for: request)
     }
 
     /// Transcode-target profile for converted offline downloads.
@@ -1297,4 +1389,34 @@ private final class ArtworkXMLParserDelegate: NSObject, XMLParserDelegate {
         )
         images.append(image)
     }
+}
+
+private struct DownloadQueueResponse: Decodable, Sendable {
+    struct Container: Decodable, Sendable {
+        struct Entry: Decodable, Sendable { let id: Int }
+        let downloadQueue: [Entry]?
+        enum CodingKeys: String, CodingKey { case downloadQueue = "DownloadQueue" }
+    }
+    let mediaContainer: Container
+    enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
+}
+
+private struct DownloadQueueAddResponse: Decodable, Sendable {
+    struct Container: Decodable, Sendable {
+        struct AddedItem: Decodable, Sendable { let id: Int }
+        let addedQueueItems: [AddedItem]?
+        enum CodingKeys: String, CodingKey { case addedQueueItems = "AddedQueueItems" }
+    }
+    let mediaContainer: Container
+    enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
+}
+
+private struct DownloadQueueItemsResponse: Decodable, Sendable {
+    struct Container: Decodable, Sendable {
+        struct Item: Decodable, Sendable { let status: DownloadQueueItemStatus }
+        let items: [Item]?
+        enum CodingKeys: String, CodingKey { case items = "DownloadQueueItem" }
+    }
+    let mediaContainer: Container
+    enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
 }

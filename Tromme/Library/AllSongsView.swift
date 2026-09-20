@@ -13,10 +13,7 @@ struct AllSongsView: View {
     @State private var sortGeneration: Int = 0
     @State private var lastSortedCount: Int = -1
     @State private var lastSortedOrder: SongSortOrder = .titleAscending
-    @State private var lastSortedQuery: String = ""
     @State private var isLoading = true
-    @State private var searchText = ""
-    @State private var isSearchPresented = false
     @AppStorage("allSongsSortOrder") private var sortOrder: SongSortOrder = .titleAscending
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
@@ -33,8 +30,6 @@ struct AllSongsView: View {
             if isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if displaySections.isEmpty && !searchText.isEmpty {
-                ContentUnavailableView.search(text: searchText)
             } else if displaySections.isEmpty && !network.isConnected {
                 ContentUnavailableView {
                     Label("No Downloads", systemImage: "arrow.down.circle")
@@ -60,7 +55,7 @@ struct AllSongsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
+                        .sectionIndexLabel(section.title)
                     }
                 }
                 .listStyle(.plain)
@@ -79,12 +74,6 @@ struct AllSongsView: View {
                 AlbumDetailView(album: target)
             }
         }
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchPresented,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter songs"
-        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -150,13 +139,9 @@ struct AllSongsView: View {
             guard previewTracks == nil, !network.isConnected else { return }
             Task { await loadTracksForCurrentState() }
         }
-        // Cancels and restarts whenever sort order or search text changes.
-        .task(id: "\(sortOrder.rawValue)|\(searchText)") {
+        // Cancels and restarts whenever sort order changes.
+        .task(id: sortOrder.rawValue) {
             await applyDisplayState()
-        }
-        .onDisappear {
-            searchText = ""
-            isSearchPresented = false
         }
     }
 
@@ -220,7 +205,7 @@ struct AllSongsView: View {
         withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
     }
 
-    // Sorts, filters, and sections all off the main actor to keep UI responsive at 100k tracks.
+    // Sorts and sections all off the main actor to keep UI responsive at 100k tracks.
     // Skips work if the data and sort parameters haven't changed since the last sort.
     // A generation counter ensures only the most recent sort request writes to state,
     // preventing stale results from piled-up tasks when navigating between tabs quickly.
@@ -230,14 +215,12 @@ struct AllSongsView: View {
             displaySections = []
             return
         }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let currentSort = sortOrder
 
         // Nothing changed since the last sort — skip the work entirely.
         if !displaySections.isEmpty,
            loadedTracks.count == lastSortedCount,
-           currentSort == lastSortedOrder,
-           query == lastSortedQuery {
+           currentSort == lastSortedOrder {
             return
         }
 
@@ -246,18 +229,8 @@ struct AllSongsView: View {
         let myGeneration = sortGeneration
 
         let (sorted, sections) = await Task.detached(priority: .userInitiated) {
-            // Album title is intentionally excluded — this view filters on song title (and artist), not album.
-            let normalizedQuery = Self.normalizeForSearch(query)
-            let base = query.isEmpty ? snapshot : snapshot.filter { track in
-                Self.normalizeForSearch(track.title).contains(normalizedQuery)
-                || (track.grandparentTitle.map { Self.normalizeForSearch($0).contains(normalizedQuery) } ?? false)
-            }
-            let sorted = Self.sort(base, by: currentSort)
-            var sections = Self.buildSections(from: sorted, sortOrder: currentSort)
-            let exact = Self.exactMatches(in: sorted, query: query)
-            if !exact.isEmpty {
-                sections.insert((title: "Exact Matches", items: exact), at: 0)
-            }
+            let sorted = Self.sort(snapshot, by: currentSort)
+            let sections = Self.buildSections(from: sorted, sortOrder: currentSort)
             return (sorted, sections)
         }.value
 
@@ -266,7 +239,6 @@ struct AllSongsView: View {
         displaySections = sections
         lastSortedCount = loadedTracks.count
         lastSortedOrder = currentSort
-        lastSortedQuery = query
     }
 
     nonisolated private static func sort(_ tracks: [PlexMetadata], by order: SongSortOrder) -> [PlexMetadata] {
@@ -323,25 +295,6 @@ struct AllSongsView: View {
             sectionItems[title, default: []].append((index: offset, track: track))
         }
         return sectionOrder.map { ($0, sectionItems[$0]!) }
-    }
-
-    nonisolated private static func exactMatches(
-        in tracks: [PlexMetadata],
-        query: String
-    ) -> [(index: Int, track: PlexMetadata)] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
-        return tracks.enumerated()
-            .filter { $0.element.title.caseInsensitiveCompare(trimmed) == .orderedSame }
-            .map { (index: $0.offset, track: $0.element) }
-    }
-
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
-    nonisolated private static func normalizeForSearch(_ string: String) -> String {
-        let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
-        return String(String.UnicodeScalarView(scalars))
-            .split(separator: " ")
-            .joined(separator: " ")
     }
 
     nonisolated private static func alphabetSectionTitle(for value: String) -> String {
