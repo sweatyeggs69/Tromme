@@ -20,6 +20,15 @@ struct TrommeApp: App {
         AppIconOption.accentColor(for: selectedAppIconId)
     }
 
+    /// These icon packs are designed against a dark background — force dark mode
+    /// while they're selected so the app doesn't clash with a light system appearance.
+    private var forcedColorScheme: ColorScheme? {
+        switch selectedAppIconId {
+        case "trommeify", "murderedout": .dark
+        default: nil
+        }
+    }
+
     init() {
         let storedId = UserDefaults.standard.string(forKey: "selectedAppIconId") ?? "default"
         let accentColor = UIColor(AppIconOption.accentColor(for: storedId))
@@ -48,6 +57,7 @@ struct TrommeApp: App {
         WindowGroup {
             ContentView()
                 .tint(currentTint)
+                .preferredColorScheme(forcedColorScheme)
                 .environment(\.appAccentColor, currentTint)
                 .onChange(of: selectedAppIconId) { _, newId in
                     Self.applyTabBarAppearance(accentColor: UIColor(AppIconOption.accentColor(for: newId)))
