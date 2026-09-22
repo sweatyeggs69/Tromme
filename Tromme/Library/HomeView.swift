@@ -121,7 +121,7 @@ struct HomeView: View {
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
         .scrollEdgeEffectStyle(.soft, for: .top)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarLeading) {
                 Menu {
                     Button("Change Library", systemImage: "books.vertical") {
                         showingLibrarySwitcher = true
@@ -138,6 +138,10 @@ struct HomeView: View {
                         .font(.headline)
                 }
                 .tint(.primary)
+                if isRefreshingLibrary {
+                    ProgressView()
+                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
+                }
             }
         }
         .sheet(item: $addToPlaylistRequest) { request in
@@ -166,12 +170,12 @@ struct HomeView: View {
     private func refreshLibrary() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
-        isRefreshingLibrary = true
+        withAnimation(.easeInOut(duration: 0.2)) { isRefreshingLibrary = true }
         await LibraryCache.shared.clearAll()
         await ImageCache.shared.clearAll()
         await client.warmCache(server: server, sectionId: sectionId)
         await loadHomeContent(forceRefresh: false)
-        isRefreshingLibrary = false
+        withAnimation(.easeInOut(duration: 0.2)) { isRefreshingLibrary = false }
     }
 
     private var loadTaskID: String {
