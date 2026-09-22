@@ -1,6 +1,7 @@
 import SwiftUI
 import CryptoKit
 import ImageIO
+import UniformTypeIdentifiers
 
 /// Two-tier image cache: NSCache (memory) + disk (Caches directory).
 /// Images are keyed by URL string, hashed to SHA256 for disk filenames.
@@ -210,7 +211,11 @@ actor ImageCache {
                   let image = decodeImage(from: data, targetPixelSize: targetPixelSize) else { return nil }
 
             memoryCache.setObject(image, forKey: memoryKey as NSString, cost: image.decodedCost)
-            saveToDisk(data: data, key: diskKey)
+            // Re-encode to HEIC before writing to disk — roughly half the file size of the
+            // JPEG Plex sends at the same visual quality, and it's hardware-accelerated on
+            // every device this app targets. Falls back to the original bytes if HEIC
+            // encoding is unavailable (e.g. running on a Simulator without the encoder).
+            saveToDisk(data: heicData(from: data) ?? data, key: diskKey)
 #if DEBUG
             debugStats.networkSuccesses += 1
 #endif
@@ -337,6 +342,22 @@ actor ImageCache {
     private func memoryCacheKey(for baseKey: String, targetPixelSize: Int?) -> String {
         let bucket = (targetPixelSize ?? 0) / 32 * 32
         return "\(baseKey)_\(bucket)"
+    }
+
+    /// Re-encodes downloaded image bytes as HEIC at full resolution for disk storage.
+    /// Returns nil if the source can't be decoded or the device has no HEIC encoder,
+    /// in which case the caller falls back to storing the original bytes as-is.
+    private func heicData(from data: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let mutableData = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            mutableData, UTType.heic.identifier as CFString, 1, nil
+        ) else { return nil }
+        let options = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
+        CGImageDestinationAddImage(destination, cgImage, options)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return mutableData as Data
     }
 
     private func decodeImage(from data: Data, targetPixelSize: Int?) -> UIImage? {

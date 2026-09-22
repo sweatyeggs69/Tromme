@@ -409,14 +409,24 @@ extension PlexAPIClient {
 
     /// Build artwork URLs for metadata items and prefetch them into the image cache.
     /// Fires in the background so it doesn't block the caller.
+    ///
+    /// Capped at `maxPrefetchItems` — this fires from `cachedLibraryContents` on every
+    /// artist/album list load, including a full cold sweep right after Refresh Library
+    /// clears the image cache. Without a cap it queued a full-resolution download for
+    /// every artist and album in the whole library, starving the small on-screen thumbnail
+    /// requests that share the same download session and making artwork crawl in.
+    /// The rest of the library still loads lazily as each screen's own windowed prefetch
+    /// (e.g. ArtistsView.prefetchVisibleArtwork) or on-demand ArtworkView requests run.
     func prefetchArtwork(for items: [PlexMetadata], server: PlexServer, size: Int = 256) {
         guard NetworkStatus.shared.isConnected,
               !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        let maxPrefetchItems = 150
         var seen = Set<String>()
         let thumbPaths = items
             .compactMap(\.thumb)
             .filter { seen.insert($0).inserted }
+            .prefix(maxPrefetchItems)
         guard !thumbPaths.isEmpty else { return }
 
         let urls = thumbPaths.compactMap { path in
@@ -424,7 +434,7 @@ extension PlexAPIClient {
         }
 
         Task(priority: .utility) {
-            await ImageCache.shared.prefetch(urls: urls, targetPixelSize: size, maxConcurrent: 2)
+            await ImageCache.shared.prefetch(urls: urls, targetPixelSize: size, maxConcurrent: 4)
         }
     }
 

@@ -1743,6 +1743,7 @@ final class AudioPlayerService: Sendable {
                 switch status {
                 case .readyToPlay:
                     self.isReadyToPlay = true
+                    let durationBeforeReady = self.duration
                     // An offset stream's asset duration only covers the remainder
                     // of the track, so keep the metadata duration in that case.
                     // Local files keep Plex metadata duration — downloaded MP3
@@ -1783,9 +1784,20 @@ final class AudioPlayerService: Sendable {
                                 self.reportTimelineState(self.isPlaying ? "playing" : "paused")
                             }
                         }
+                        // The seek completion above republishes nowPlayingInfo
+                        // once it lands, so skip the immediate call below —
+                        // otherwise CarPlay's transport row gets two rewrites
+                        // (rate/duration unchanged in between) in the same beat,
+                        // which visibly flashes the play/pause button.
+                    } else if self.duration != durationBeforeReady {
+                        // Only republish if the asset's authoritative duration
+                        // actually corrected the metadata-derived estimate from
+                        // startPlayback(). Otherwise this is a no-op rewrite of
+                        // nowPlayingInfo moments after startPlayback() already
+                        // published it, which still causes CarPlay to flash the
+                        // play/pause button on every track start.
+                        self.updateNowPlayingInfo()
                     }
-
-                    self.updateNowPlayingInfo()
                 case .failed:
                     self.isReadyToPlay = false
                     self.logPlayback("item_failed", "error=\(errorDesc ?? "unknown")")

@@ -16,6 +16,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var favFilledButton: CPNowPlayingImageButton?
     private var favOutlineButton: CPNowPlayingImageButton?
     private var currentTrackFavorited = false
+    /// Last favorited state actually pushed to `CPNowPlayingTemplate`. Several
+    /// listeners (pushNowPlaying, the player-state observation loop) react to
+    /// the same track-change event and each call rebuildNowPlayingButtons();
+    /// without this guard they redundantly re-call updateNowPlayingButtons()
+    /// with an unchanged value, and each call flashes the whole button row
+    /// (shuffle included) as CarPlay redraws it.
+    private var lastPublishedFavoriteState: Bool?
     private var observationTask: Task<Void, Never>?
     private var connectionObservationTask: Task<Void, Never>?
     private var recentlyPlayedObservationTask: Task<Void, Never>?
@@ -964,6 +971,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         self.favOutlineButton = outline
 
         nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, mixBtn])
+        lastPublishedFavoriteState = false
         syncMixButtons()
     }
 
@@ -981,6 +989,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         guard let s = shuffleNPButton, let r = repeatNPButton,
               let mix = magicMixButton,
               let filled = favFilledButton, let outline = favOutlineButton else { return }
+        guard lastPublishedFavoriteState != currentTrackFavorited else { return }
+        lastPublishedFavoriteState = currentTrackFavorited
         let fav = currentTrackFavorited ? filled : outline
         CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, mix])
     }

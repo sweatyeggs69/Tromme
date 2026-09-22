@@ -312,8 +312,10 @@ struct AllAlbumsView: View {
                                         Text(album.parentTitle ?? "")
                                             .appItemSubtitleStyle()
                                     }
+                                    Spacer(minLength: 0)
                                 }
                                 .padding(.vertical, AppStyle.AlbumLayout.listRowVerticalPadding)
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
