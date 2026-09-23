@@ -3,6 +3,7 @@ import SwiftUI
 struct FavoritesView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
 
     @State private var tracks: [PlexMetadata] = []
@@ -109,10 +110,17 @@ struct FavoritesView: View {
         .onChange(of: tracks) { _, _ in
             Task { await applyFilter() }
         }
+        .task(id: artworkPrefetchKey) {
+            await prefetchVisibleArtwork()
+        }
         .onDisappear {
             searchText = ""
             isSearchPresented = false
         }
+    }
+
+    private var artworkPrefetchKey: String {
+        "\(filteredTracks.count)|\(searchText)"
     }
 
     private var exactMatches: [PlexMetadata] {
@@ -158,6 +166,19 @@ struct FavoritesView: View {
             }
         }.value
         filteredTracks = result
+    }
+
+    private func prefetchVisibleArtwork() async {
+        guard !isLoading, let server = serverConnection.currentServer else { return }
+        // Skip aggressive prefetching on metered networks or in Low Power Mode —
+        // images will still load lazily as the user scrolls.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: AppStyle.TrackList.browseArtworkSize, displayScale: displayScale)
+        let urls = filteredTracks.prefix(80).compactMap { track in
+            client.artworkURL(server: server, path: track.thumb ?? track.parentThumb, width: pixelSize, height: pixelSize)
+        }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
     }
 
     private func sortedFavorites(_ favorites: [PlexMetadata]) -> [PlexMetadata] {

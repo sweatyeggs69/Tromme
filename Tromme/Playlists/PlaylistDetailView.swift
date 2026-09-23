@@ -4,6 +4,7 @@ struct PlaylistDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadManager.self) private var downloadManager
 
@@ -386,6 +387,10 @@ struct PlaylistDetailView: View {
             guard !isPreviewMode else { return }
             await loadTracks()
         }
+        .task(id: tracks.count) {
+            guard !isPreviewMode else { return }
+            await prefetchVisibleArtwork()
+        }
     }
 
     private func playPlaylistNext() {
@@ -419,6 +424,19 @@ struct PlaylistDetailView: View {
             if tracks.isEmpty { tracks = [] }
         }
         isLoading = false
+    }
+
+    private func prefetchVisibleArtwork() async {
+        guard !isLoading, let server = serverConnection.currentServer else { return }
+        // Skip aggressive prefetching on metered networks or in Low Power Mode —
+        // images will still load lazily as the user scrolls.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: AppStyle.TrackList.browseArtworkSize, displayScale: displayScale)
+        let urls = tracks.prefix(80).compactMap { track in
+            client.artworkURL(server: server, path: track.thumb ?? track.parentThumb, width: pixelSize, height: pixelSize)
+        }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
     }
 
     private func moveTracks(from source: IndexSet, to destination: Int) {

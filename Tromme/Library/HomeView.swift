@@ -324,7 +324,7 @@ struct HomeView: View {
     @MainActor
     private func queueAlbumNext(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         for track in tracks.reversed() {
             player.addToQueue(track)
         }
@@ -333,7 +333,7 @@ struct HomeView: View {
     @MainActor
     private func queueAlbumLast(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         for track in tracks {
             player.addToEndOfQueue(track)
         }
@@ -342,7 +342,7 @@ struct HomeView: View {
     @MainActor
     private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
     }
 
@@ -482,16 +482,23 @@ struct HomeView: View {
         }
 
         if forceRefresh {
+            // Mirrors the key set smartRefresh invalidates on cold launch (see CachedAPIClient.smartRefresh) —
+            // artists and the raw favoriteTracks fetch were missing here, so pull-to-refresh could leave a
+            // newly added artist (or a favorite change) stuck on stale cached data for up to their full TTL.
+            let artistsKey = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
             let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
             let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
             let playlistsKey = CacheKey.playlists(serverId: server.machineIdentifier)
+            let favoriteTracksKey = CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId)
             let homeFavoritesKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
             let homeRecentTracksKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
             let homeRecentAlbumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
             let homePlaylistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
+            await LibraryCache.shared.remove(forKey: artistsKey)
             await LibraryCache.shared.remove(forKey: tracksKey)
             await LibraryCache.shared.remove(forKey: albumsKey)
             await LibraryCache.shared.remove(forKey: playlistsKey)
+            await LibraryCache.shared.remove(forKey: favoriteTracksKey)
             await LibraryCache.shared.remove(forKey: homeFavoritesKey)
             await LibraryCache.shared.remove(forKey: homeRecentTracksKey)
             await LibraryCache.shared.remove(forKey: homeRecentAlbumsKey)

@@ -443,7 +443,7 @@ struct AlbumDetailView: View {
     private func loadTracks() async {
         guard network.isConnected else {
             // Prefer disk-cached track list so non-downloaded albums still show tracks.
-            let childrenKey = CacheKey.children(ratingKey: album.ratingKey)
+            let childrenKey = CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt)
             if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
                !cached.isEmpty {
                 tracks = cached
@@ -466,14 +466,14 @@ struct AlbumDetailView: View {
 
         // Pre-populate from memory cache synchronously (no actor hop needed).
         // Eliminates the spinner flash when the memory cache is warm.
-        let childrenKey = CacheKey.children(ratingKey: album.ratingKey)
+        let childrenKey = CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt)
         if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: childrenKey), !cached.isEmpty {
             tracks = cached
             isLoadingTracks = false
         }
 
         do {
-            tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey)
+            tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt)
             if let firstTrack = tracks.first {
                 firstTrackDetails = try await client.cachedMetadata(server: server, ratingKey: firstTrack.ratingKey)
             } else {
@@ -494,7 +494,7 @@ struct AlbumDetailView: View {
 
         guard network.isConnected else {
             // Prefer disk-cached artist releases so all albums show, not just downloaded ones.
-            let childrenKey = CacheKey.children(ratingKey: artist.ratingKey)
+            let childrenKey = CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
             if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
                !cached.isEmpty {
                 artistAlbums = cached

@@ -3,6 +3,7 @@ import SwiftUI
 struct AllSongsView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
     @Environment(NetworkStatus.self) private var network
     @Environment(DownloadManager.self) private var downloadManager
@@ -143,6 +144,13 @@ struct AllSongsView: View {
         .task(id: sortOrder.rawValue) {
             await applyDisplayState()
         }
+        .task(id: artworkPrefetchKey) {
+            await prefetchVisibleArtwork()
+        }
+    }
+
+    private var artworkPrefetchKey: String {
+        "\(displayTracks.count)|\(sortOrder.rawValue)"
     }
 
     private var loadTaskID: String {
@@ -203,6 +211,19 @@ struct AllSongsView: View {
         }
         await applyDisplayState()
         withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
+    }
+
+    private func prefetchVisibleArtwork() async {
+        guard !isLoading, let server = serverConnection.currentServer else { return }
+        // Skip aggressive prefetching on metered networks or in Low Power Mode —
+        // images will still load lazily as the user scrolls.
+        guard !NetworkStatus.shared.isExpensive,
+              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: AppStyle.TrackList.browseArtworkSize, displayScale: displayScale)
+        let urls = displayTracks.prefix(80).compactMap { track in
+            client.artworkURL(server: server, path: track.thumb ?? track.parentThumb, width: pixelSize, height: pixelSize)
+        }
+        await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
     }
 
     // Sorts and sections all off the main actor to keep UI responsive at 100k tracks.

@@ -376,7 +376,7 @@ struct ArtistDetailView: View {
     /// Returns true if enough data was found to populate the view.
     private func loadFromDiskCache(artist: PlexMetadata) async -> Bool {
         let metadataKey = CacheKey.metadata(ratingKey: artist.ratingKey)
-        let childrenKey = CacheKey.children(ratingKey: artist.ratingKey)
+        let childrenKey = CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
         let tracksKey = CacheKey.artistTracks(artistRatingKey: artist.ratingKey)
         let topTracksKey = CacheKey.topTracks(artistRatingKey: artist.ratingKey)
 

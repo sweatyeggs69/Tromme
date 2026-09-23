@@ -339,8 +339,13 @@ enum CacheKey {
     static func tracks(serverId: String, sectionId: String) -> String {
         "tracks_\(serverId)_\(sectionId)"
     }
-    static func children(ratingKey: String) -> String {
-        "children_\(ratingKey)"
+    /// Folds the parent's `updatedAt` into the key so a newly added child (e.g. an album
+    /// added to this artist, or a track added to this album) invalidates the cache the
+    /// moment the parent's updatedAt bumps, instead of waiting out the `.detail` TTL
+    /// (2h memory / 7 days disk) — mirrors smartRefresh's section-level updatedAt check.
+    static func children(ratingKey: String, updatedAt: Int? = nil) -> String {
+        guard let updatedAt else { return "children_\(ratingKey)" }
+        return "children_\(ratingKey)_\(updatedAt)"
     }
     static func metadata(ratingKey: String) -> String {
         "metadata_\(ratingKey)"

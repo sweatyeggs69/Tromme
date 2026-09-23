@@ -441,9 +441,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                     let allTracks = await withTaskGroup(of: [PlexMetadata].self) { group in
                         for album in albums {
                             let key = album.ratingKey
+                            let updatedAt = album.updatedAt
                             group.addTask {
                                 do {
-                                    return try await client.cachedChildren(server: server, ratingKey: key)
+                                    return try await client.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
                                 } catch {
                                     #if DEBUG
                                     print("[CarPlay] Failed to load tracks for album \(key): \(error)")

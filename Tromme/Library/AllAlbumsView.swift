@@ -479,7 +479,7 @@ struct AllAlbumsView: View {
     @MainActor
     private func queueAlbumNext(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         for track in tracks.reversed() {
             player.addToQueue(track)
         }
@@ -488,7 +488,7 @@ struct AllAlbumsView: View {
     @MainActor
     private func queueAlbumLast(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         for track in tracks {
             player.addToEndOfQueue(track)
         }
@@ -497,7 +497,7 @@ struct AllAlbumsView: View {
     @MainActor
     private func presentAddAlbumToPlaylist(_ album: PlexMetadata) async {
         guard let server = serverConnection.currentServer else { return }
-        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey), !tracks.isEmpty else { return }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return }
         addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
     }
 

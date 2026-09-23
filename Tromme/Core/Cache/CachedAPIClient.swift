@@ -32,7 +32,7 @@ extension PlexAPIClient {
     }
 
     func cachedArtistReleases(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
-        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey)
+        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
         let releaseKeys = Set(releases.map(\.ratingKey))
         let artistTracks = try await cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
         let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey))
@@ -190,9 +190,11 @@ extension PlexAPIClient {
 
     // MARK: - Cached Children (albums for artist, tracks for album)
 
-    func cachedChildren(server: PlexServer, ratingKey: String) async throws -> [PlexMetadata] {
+    /// Pass the parent's `updatedAt` (from the artist/album object you already have) whenever
+    /// possible so a newly added child busts the cache immediately — see `CacheKey.children`.
+    func cachedChildren(server: PlexServer, ratingKey: String, updatedAt: Int? = nil) async throws -> [PlexMetadata] {
         let items: [PlexMetadata] = try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.children(ratingKey: ratingKey),
+            forKey: CacheKey.children(ratingKey: ratingKey, updatedAt: updatedAt),
             policy: .detail
         ) {
             try await self.getMetadataChildren(server: server, ratingKey: ratingKey)
@@ -300,17 +302,13 @@ extension PlexAPIClient {
     /// Uses request coalescing, so if views are already fetching, this joins those requests.
     func warmCache(server: PlexServer, sectionId: String) async {
         // Phase 1: Fetch library data in parallel
+        var artists: [PlexMetadata] = []
         var albums: [PlexMetadata] = []
         var recentTracks: [PlexMetadata] = []
         var favoriteTracks: [PlexMetadata] = []
 
         await withTaskGroup(of: (String, [PlexMetadata]).self) { group in
-            group.addTask {
-                // Result isn't needed here — cachedArtists already caches the list and
-                // prefetches its artwork as a side effect (see cachedLibraryContents).
-                _ = try? await self.cachedArtists(server: server, sectionId: sectionId)
-                return ("artists", [])
-            }
+            group.addTask { ("artists", (try? await self.cachedArtists(server: server, sectionId: sectionId)) ?? []) }
             group.addTask { ("albums", (try? await self.cachedAlbums(server: server, sectionId: sectionId)) ?? []) }
             group.addTask {
                 _ = try? await self.cachedPlaylists(server: server)
@@ -336,6 +334,7 @@ extension PlexAPIClient {
 
             for await (key, items) in group {
                 switch key {
+                case "artists": artists = items
                 case "albums": albums = items
                 case "recent": recentTracks = items
                 case "favorites": favoriteTracks = items
@@ -369,25 +368,40 @@ extension PlexAPIClient {
         let topArtistKeys = Array(artistKeys.prefix(25))
         let topAlbumKeys = Array(albumKeys.prefix(30))
 
-        // Pre-fetch artist children (albums), artist metadata, and album children (tracks) in parallel.
-        // Low concurrency to avoid saturating the server.
-        await withTaskGroup(of: Void.self) { group in
-            for key in topArtistKeys {
-                group.addTask {
-                    async let children = self.cachedChildren(server: server, ratingKey: key)
-                    async let metadata = self.cachedMetadata(server: server, ratingKey: key)
-                    async let topTracks = self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
-                    _ = try? await children
-                    _ = try? await metadata
-                    _ = try? await topTracks
-                }
-            }
-            for key in topAlbumKeys {
-                group.addTask {
-                    async let children = self.cachedChildren(server: server, ratingKey: key)
-                    async let metadata = self.cachedMetadata(server: server, ratingKey: key)
-                    _ = try? await children
-                    _ = try? await metadata
+        // Looked up so the prefetch writes to the same updatedAt-versioned cache key
+        // that ArtistDetailView/AlbumDetailView will read (see CacheKey.children) —
+        // otherwise this prefetch warms an entry nothing else ever reads.
+        let artistUpdatedAtByKey = Dictionary(artists.map { ($0.ratingKey, $0.updatedAt ?? 0) }, uniquingKeysWith: { first, _ in first })
+        let albumUpdatedAtByKey = Dictionary(albums.map { ($0.ratingKey, $0.updatedAt ?? 0) }, uniquingKeysWith: { first, _ in first })
+
+        // Pre-fetch artist children (albums), artist metadata, and album children (tracks).
+        // Batched in groups of 5 to actually bound concurrency — each key fires 2-3 requests,
+        // so running all ~55 keys at once (as this used to) could queue ~150 simultaneous
+        // requests against the server, starving individual requests until they read as hung.
+        let prefetchKeys: [(key: String, isArtist: Bool)] =
+            topArtistKeys.map { ($0, true) } + topAlbumKeys.map { ($0, false) }
+
+        for batchStart in stride(from: 0, to: prefetchKeys.count, by: 5) {
+            let batch = prefetchKeys[batchStart..<min(batchStart + 5, prefetchKeys.count)]
+            await withTaskGroup(of: Void.self) { group in
+                for (key, isArtist) in batch {
+                    group.addTask {
+                        if isArtist {
+                            let updatedAt = artistUpdatedAtByKey[key]
+                            async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
+                            async let metadata = self.cachedMetadata(server: server, ratingKey: key)
+                            async let topTracks = self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
+                            _ = try? await children
+                            _ = try? await metadata
+                            _ = try? await topTracks
+                        } else {
+                            let updatedAt = albumUpdatedAtByKey[key]
+                            async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
+                            async let metadata = self.cachedMetadata(server: server, ratingKey: key)
+                            _ = try? await children
+                            _ = try? await metadata
+                        }
+                    }
                 }
             }
         }
