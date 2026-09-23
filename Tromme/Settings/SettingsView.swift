@@ -46,6 +46,18 @@ struct SettingsView: View {
                     Text("Server")
                 }
             }
+
+            Section {
+                VStack(spacing: 4) {
+                    Text("Tromme")
+                        .font(.footnote.weight(.medium))
+                    Text(appVersionString)
+                        .font(.footnote)
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .listRowBackground(Color.clear)
         }
         .navigationTitle("Settings")
         .task { await loadSections() }
@@ -59,6 +71,11 @@ struct SettingsView: View {
         } message: {
             Text("Thanks for using Tromme! If you like it, let us know what you think.")
         }
+    }
+
+    private var appVersionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        return "Version \(version)"
     }
 
     private var libraryBinding: Binding<String> {
