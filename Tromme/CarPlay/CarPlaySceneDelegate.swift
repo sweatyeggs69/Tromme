@@ -23,6 +23,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// with an unchanged value, and each call flashes the whole button row
     /// (shuffle included) as CarPlay redraws it.
     private var lastPublishedFavoriteState: Bool?
+    /// Last Magic Mix state actually pushed to `magicMixButton.isSelected`.
+    /// `syncMixButtons()` runs on every track change (currentTrack is one of
+    /// the tracked properties in the player observation loop), and `isSelected`
+    /// is a remote property on a CarPlay-rendered button — setting it, even to
+    /// its current value, is a real round-trip that visibly redraws the whole
+    /// button row (shuffle included), same as the unguarded favorite rebuild.
+    private var lastPublishedMagicMixState: Bool?
     private var observationTask: Task<Void, Never>?
     private var connectionObservationTask: Task<Void, Never>?
     private var recentlyPlayedObservationTask: Task<Void, Never>?
@@ -913,7 +920,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 .prefix(CPListTemplate.maximumItemCount - 1)
                 .enumerated()
                 .map { index, track -> CPListItem in
-                    let isFavorited = (track.userRating ?? 0) >= 4
+                    let isFavorited = (track.userRating ?? 0) >= 10
                     let numPrefix = track.index.map { "\($0)  " } ?? ""
                     let starPrefix = isFavorited ? "★ " : ""
                     let item = CPListItem(text: "\(numPrefix)\(starPrefix)\(track.title)", detailText: nil)
@@ -977,12 +984,16 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     }
 
     private func syncMixButtons() {
-        magicMixButton?.isSelected = player.isMagicMixActive
+        let isMagicMixActive = player.isMagicMixActive
+        if lastPublishedMagicMixState != isMagicMixActive {
+            lastPublishedMagicMixState = isMagicMixActive
+            magicMixButton?.isSelected = isMagicMixActive
+        }
         syncFavoriteButton()
     }
 
     private func syncFavoriteButton() {
-        currentTrackFavorited = (player.currentTrack?.userRating ?? 0) >= 4
+        currentTrackFavorited = (player.currentTrack?.userRating ?? 0) >= 10
         rebuildNowPlayingButtons()
     }
 
@@ -1002,22 +1013,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let wasFavorited = currentTrackFavorited
         currentTrackFavorited.toggle()
         rebuildNowPlayingButtons()
-        let apiRating = currentTrackFavorited ? 10 : -1
-        player.updateCurrentTrackRating(currentTrackFavorited ? 10 : 0)
         Task {
-            do {
-                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: apiRating)
-                if let sectionId {
-                    await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(
-                        serverId: server.machineIdentifier,
-                        sectionId: sectionId
-                    ))
-                }
-                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
-            } catch {
+            let success = await player.setFavorited(!wasFavorited, for: track, server: server, client: client, sectionId: sectionId)
+            if !success {
                 currentTrackFavorited = wasFavorited
                 rebuildNowPlayingButtons()
-                player.updateCurrentTrackRating(wasFavorited ? 10 : 0)
             }
         }
     }

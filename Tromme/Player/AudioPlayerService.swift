@@ -245,6 +245,28 @@ final class AudioPlayerService: Sendable {
         MPRemoteCommandCenter.shared().likeCommand.isActive = (userRating ?? 0) >= 10
     }
 
+    /// Persists a favorite/unfavorite rating for `track`, invalidating the favorites caches,
+    /// posting `.favoritesDidChange`, and syncing the lock-screen heart if `track` is the
+    /// currently playing track. Returns `true` on success; callers own their own optimistic
+    /// UI state and should roll it back on `false`.
+    @discardableResult
+    func setFavorited(_ isFavorited: Bool, for track: PlexMetadata, server: PlexServer, client: PlexAPIClient, sectionId: String?) async -> Bool {
+        let isCurrentTrack = track.ratingKey == currentTrack?.ratingKey
+        if isCurrentTrack { updateCurrentTrackRating(isFavorited ? 10 : 0) }
+        do {
+            try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: isFavorited ? 10 : -1)
+            if let sectionId {
+                await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId))
+                await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId))
+            }
+            NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
+            return true
+        } catch {
+            if isCurrentTrack { updateCurrentTrackRating(isFavorited ? 0 : 10) }
+            return false
+        }
+    }
+
     func updateAlbumThumb(albumRatingKey: String, newThumb: String?) {
         if currentTrack?.parentRatingKey == albumRatingKey {
             currentTrack?.parentThumb = newThumb
@@ -542,7 +564,6 @@ final class AudioPlayerService: Sendable {
             logPlayback("next_ignored", "reason=empty_queue")
             return
         }
-        playbackIntent = true
         if repeatMode == .one {
             logPlayback("next_repeat_one_reload")
             loadAndPlay(queue[currentIndex])
@@ -586,7 +607,6 @@ final class AudioPlayerService: Sendable {
 
     func previous() {
         guard !queue.isEmpty else { return }
-        playbackIntent = true
         if currentTime > 3 {
             seek(to: 0)
             return
@@ -1789,13 +1809,17 @@ final class AudioPlayerService: Sendable {
                         // otherwise CarPlay's transport row gets two rewrites
                         // (rate/duration unchanged in between) in the same beat,
                         // which visibly flashes the play/pause button.
-                    } else if self.duration != durationBeforeReady {
+                    } else if abs(self.duration - durationBeforeReady) > 0.5 {
                         // Only republish if the asset's authoritative duration
                         // actually corrected the metadata-derived estimate from
-                        // startPlayback(). Otherwise this is a no-op rewrite of
-                        // nowPlayingInfo moments after startPlayback() already
-                        // published it, which still causes CarPlay to flash the
-                        // play/pause button on every track start.
+                        // startPlayback() by more than floating-point/rounding
+                        // noise. Plex's metadata duration and AVFoundation's
+                        // parsed asset duration are almost never bit-for-bit
+                        // equal even when they agree to the second, so a strict
+                        // != comparison republished nowPlayingInfo on nearly
+                        // every track start — a no-op rewrite (rate/duration
+                        // unchanged in any way a user would notice) that still
+                        // causes CarPlay to flash the play/pause button.
                         self.updateNowPlayingInfo()
                     }
                 case .failed:
@@ -1835,6 +1859,11 @@ final class AudioPlayerService: Sendable {
 
                 if self.isNetworkRecovering {
                     self.logPlayback("stall_deferred_network_recovery")
+                    return
+                }
+
+                guard self.playbackIntent else {
+                    self.logPlayback("stall_ignored", "reason=paused")
                     return
                 }
 
@@ -2431,21 +2460,9 @@ final class AudioPlayerService: Sendable {
             guard let self, let track = self.currentTrack,
                   let server = self.server, let client = self.client else { return .commandFailed }
             let wasFavorited = (track.userRating ?? 0) >= 10
-            let newRating: Int = wasFavorited ? -1 : 10
-            self.updateCurrentTrackRating(wasFavorited ? 0 : 10)
+            let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId
             Task {
-                do {
-                    try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: newRating)
-                    if let sectionId = AppContext.shared.serverConnection.currentLibrarySectionId {
-                        await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(
-                            serverId: server.machineIdentifier,
-                            sectionId: sectionId
-                        ))
-                    }
-                } catch {
-                    self.updateCurrentTrackRating(wasFavorited ? 10 : 0)
-                }
-                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
+                await self.setFavorited(!wasFavorited, for: track, server: server, client: client, sectionId: sectionId)
             }
             return .success
         }

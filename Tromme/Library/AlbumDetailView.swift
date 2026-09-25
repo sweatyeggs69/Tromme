@@ -39,7 +39,7 @@ struct AlbumDetailView: View {
     }
 
     private var titleColor: Color {
-        artworkColor.isLightColor() ? .black : .white
+        artworkColor.contrastForeground
     }
 
     private var secondaryTextColor: Color {
@@ -55,19 +55,15 @@ struct AlbumDetailView: View {
     }
 
     private var controlForegroundColor: Color {
-        artworkColor.isLightColor() ? .white : .black
+        artworkColor.contrastControlForeground
     }
 
     private var controlBackgroundColor: Color {
-        artworkColor.isLightColor() ? Color.black.opacity(0.75) : Color.white.opacity(0.82)
-    }
-
-    private var controlShadowColor: Color {
-        artworkColor.isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
+        artworkColor.contrastControlBackground
     }
 
     private var iconForegroundColor: Color {
-        artworkColor.isLightColor() ? .black : .white
+        artworkColor.contrastForeground
     }
 
 
@@ -337,45 +333,21 @@ struct AlbumDetailView: View {
     }
 
     private func albumActionButtons(bottomPadding: CGFloat = 20) -> some View {
-        HStack(spacing: 14) {
-            Button {
+        ArtworkActionButtonsRow(
+            artworkColor: artworkColor,
+            isDisabled: controlsDisabled,
+            bottomPadding: bottomPadding,
+            onShuffle: {
                 guard !controlsDisabled else { return }
                 var shuffled = tracks
                 shuffled.shuffle()
                 player.play(tracks: shuffled, startingAt: 0)
-            } label: {
-                Image(systemName: "shuffle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(iconForegroundColor)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                    .shadow(color: controlShadowColor, radius: 6, y: -2)
-            }
-            .buttonStyle(.plain)
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-
-            Button {
+            },
+            onPlay: {
                 guard !controlsDisabled else { return }
                 player.play(tracks: tracks, startingAt: 0)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "play.fill")
-                    Text("Play")
-                }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(artworkColor)
-                .padding(.horizontal, 50)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-
-            Menu {
+            },
+            menuContent: {
                 Button("Play Next", systemImage: "text.insert") {
                     playAlbumNext()
                 }
@@ -385,19 +357,8 @@ struct AlbumDetailView: View {
                 Button("Add to Playlist", systemImage: "text.badge.plus") {
                     presentAddToPlaylist(for: tracks.map(\.ratingKey))
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(iconForegroundColor)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                    .shadow(color: controlShadowColor, radius: 6, y: -2)
             }
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-        }
-        .padding(.top, 6)
-        .padding(.bottom, bottomPadding)
+        )
     }
 
     private let isPreviewMode: Bool
@@ -1086,16 +1047,14 @@ private struct AlbumTrackRow: View {
 
     private func toggleFavorite() {
         guard let server = serverConnection.currentServer else { return }
+        let sectionId = serverConnection.currentLibrarySectionId
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
         favoriteOverride = removing ? 0 : 10
         isRating = true
         Task {
-            do {
-                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: removing ? -1 : 10)
-            } catch {
-                favoriteOverride = previous
-            }
+            let success = await player.setFavorited(!removing, for: track, server: server, client: client, sectionId: sectionId)
+            if !success { favoriteOverride = previous }
             isRating = false
         }
     }

@@ -66,21 +66,10 @@ struct TrackRowView: View {
         let previous = favoriteOverride ?? track.userRating
         let removing = isFavorited
         favoriteOverride = removing ? 0 : 10
-        let isCurrentTrack = track.ratingKey == player.currentTrack?.ratingKey
-        if isCurrentTrack { player.updateCurrentTrackRating(removing ? 0 : 10) }
         isRating = true
         Task {
-            do {
-                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: removing ? -1 : 10)
-                if let sectionId {
-                    await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId))
-                    await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId))
-                }
-                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
-            } catch {
-                favoriteOverride = previous
-                if isCurrentTrack { player.updateCurrentTrackRating(previous) }
-            }
+            let success = await player.setFavorited(!removing, for: track, server: server, client: client, sectionId: sectionId)
+            if !success { favoriteOverride = previous }
             isRating = false
         }
     }

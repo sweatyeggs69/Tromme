@@ -75,7 +75,7 @@ final class PlexAPIClient: Sendable {
 
     /// Applies the full set of X-Plex-* identification headers to a request.
     /// Per the API spec, these headers should be included on all requests.
-    private func applyPlexHeaders(to request: inout URLRequest) {
+    private func applyPlexHeaders(to request: inout URLRequest, token: String? = nil) {
         request.setValue(Self.clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         request.setValue(Self.product, forHTTPHeaderField: "X-Plex-Product")
         request.setValue(Self.version, forHTTPHeaderField: "X-Plex-Version")
@@ -84,6 +84,9 @@ final class PlexAPIClient: Sendable {
         request.setValue(Self.device, forHTTPHeaderField: "X-Plex-Device")
         request.setValue(Self.deviceName, forHTTPHeaderField: "X-Plex-Device-Name")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token {
+            request.setValue(token, forHTTPHeaderField: "X-Plex-Token")
+        }
     }
 
     // MARK: - Plex.tv Auth Endpoints
@@ -515,8 +518,7 @@ final class PlexAPIClient: Sendable {
         guard let url = components.url else { throw PlexAPIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
         if let sessionID {
             request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
         }
@@ -546,8 +548,7 @@ final class PlexAPIClient: Sendable {
         guard let url = components.url else { throw PlexAPIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
 
         let (_, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -573,8 +574,7 @@ final class PlexAPIClient: Sendable {
         guard let url = components.url else { throw PlexAPIError.invalidURL }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
 
         let (_, response) = try await session.data(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -724,8 +724,7 @@ final class PlexAPIClient: Sendable {
         guard let url = components.url else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
         request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
 
         do {
@@ -834,8 +833,7 @@ final class PlexAPIClient: Sendable {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
 
         let response: DownloadQueueResponse = try await perform(request)
         guard let queueId = response.mediaContainer.downloadQueue?.first?.id else {
@@ -897,8 +895,7 @@ final class PlexAPIClient: Sendable {
             throw PlexAPIError.invalidURL
         }
         var request = URLRequest(url: url)
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
 
         let response: DownloadQueueItemsResponse = try await perform(request)
         guard let item = response.mediaContainer.items?.first else {
@@ -916,8 +913,7 @@ final class PlexAPIClient: Sendable {
             return nil
         }
         var request = URLRequest(url: url)
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
         return request
     }
 
@@ -931,8 +927,7 @@ final class PlexAPIClient: Sendable {
         }
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
         _ = try? await session.data(for: request)
     }
 
@@ -1095,8 +1090,7 @@ final class PlexAPIClient: Sendable {
         }
         var request = URLRequest(url: url)
         request.httpMethod = method
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
         if method == "GET", shouldIncludeContainerHeaders(for: path),
            !path.contains("X-Plex-Container-Start") {
             request.setValue(Self.defaultContainerStart, forHTTPHeaderField: "X-Plex-Container-Start")
@@ -1138,8 +1132,7 @@ final class PlexAPIClient: Sendable {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        applyPlexHeaders(to: &request)
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
+        applyPlexHeaders(to: &request, token: server.accessToken)
 
         let data: Data
         let response: URLResponse
@@ -1219,9 +1212,8 @@ final class PlexAPIClient: Sendable {
 
         var request = URLRequest(url: url)
         request.httpMethod = method
-        applyPlexHeaders(to: &request)
+        applyPlexHeaders(to: &request, token: server.accessToken)
         request.setValue("*/*", forHTTPHeaderField: "Accept")
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
 
         let (_, response): (Data, URLResponse)
         do {

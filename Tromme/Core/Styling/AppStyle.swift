@@ -157,6 +157,21 @@ extension Color {
         }
         return blackContrast >= whiteContrast
     }
+
+    /// Foreground color that reads well against this color as a background: black when light, white when dark.
+    var contrastForeground: Color { isLightColor() ? .black : .white }
+
+    /// Foreground for a control drawn in the *inverse* tone of this color (e.g. a filled circle button sitting on top of artwork of this color).
+    var contrastControlForeground: Color { isLightColor() ? .white : .black }
+
+    /// Solid inverse-tone background for a prominent control (e.g. the primary Play button pill).
+    var contrastControlBackground: Color { isLightColor() ? Color.black.opacity(0.75) : Color.white.opacity(0.82) }
+
+    /// Translucent inverse-tone background for a secondary circular icon button (e.g. shuffle, add-to-menu).
+    var contrastCircleBackground: Color { isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15) }
+
+    /// Drop shadow color for controls sitting on top of artwork of this color.
+    var contrastControlShadow: Color { isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18) }
 }
 
 extension View {

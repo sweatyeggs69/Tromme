@@ -544,24 +544,10 @@ struct NowPlayingView: View {
         guard let track = player.currentTrack,
               let server = serverConnection.currentServer else { return }
         let sectionId = serverConnection.currentLibrarySectionId
-        let previousRating = track.userRating
         let removing = isFavorited
-        let apiRating = removing ? -1 : 10
-
-        player.updateCurrentTrackRating(removing ? nil : 10)
         isRating = true
-
         Task {
-            do {
-                try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: apiRating)
-                if let sectionId {
-                    await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId))
-                    await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId))
-                }
-                NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
-            } catch {
-                player.updateCurrentTrackRating(previousRating)
-            }
+            _ = await player.setFavorited(!removing, for: track, server: server, client: client, sectionId: sectionId)
             isRating = false
         }
     }

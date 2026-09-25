@@ -35,7 +35,7 @@ struct PlaylistDetailView: View {
     }
 
     private var titleColor: Color {
-        artworkColor.isLightColor() ? .black : .white
+        artworkColor.contrastForeground
     }
 
     private var tertiaryTextColor: Color {
@@ -43,11 +43,7 @@ struct PlaylistDetailView: View {
     }
 
     private var iconForegroundColor: Color {
-        artworkColor.isLightColor() ? .black : .white
-    }
-
-    private var controlShadowColor: Color {
-        artworkColor.isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18)
+        artworkColor.contrastForeground
     }
 
     private var controlsDisabled: Bool {
@@ -108,64 +104,29 @@ struct PlaylistDetailView: View {
     }
 
     private func playlistActionButtons(bottomPadding: CGFloat = 20) -> some View {
-        HStack(spacing: 14) {
-            Button {
+        ArtworkActionButtonsRow(
+            artworkColor: artworkColor,
+            isDisabled: controlsDisabled,
+            bottomPadding: bottomPadding,
+            onShuffle: {
                 guard !controlsDisabled else { return }
                 var shuffled = tracks
                 shuffled.shuffle()
                 player.play(tracks: shuffled)
-            } label: {
-                Image(systemName: "shuffle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(iconForegroundColor)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                    .shadow(color: controlShadowColor, radius: 6, y: -2)
-            }
-            .buttonStyle(.plain)
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-
-            Button {
+            },
+            onPlay: {
                 guard !controlsDisabled else { return }
                 player.play(tracks: tracks)
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "play.fill")
-                    Text("Play")
-                }
-                .font(.body.weight(.semibold))
-                .foregroundStyle(artworkColor)
-                .padding(.horizontal, 50)
-                .padding(.vertical, 14)
-                .background(
-                    Capsule().fill(artworkColor.isLightColor() ? Color.black : Color.white)
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-
-            Menu {
+            },
+            menuContent: {
                 Button("Play Next", systemImage: "text.insert") {
                     playPlaylistNext()
                 }
                 Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
                     addPlaylistToQueueEnd()
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(iconForegroundColor)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(artworkColor.isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15)))
-                    .shadow(color: controlShadowColor, radius: 6, y: -2)
             }
-            .disabled(controlsDisabled)
-            .opacity(controlsDisabled ? 0.45 : 1.0)
-        }
-        .padding(.top, 6)
-        .padding(.bottom, bottomPadding)
+        )
     }
 
     private var playlistHeader: some View {
