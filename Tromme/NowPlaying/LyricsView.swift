@@ -26,6 +26,11 @@ struct LyricsScrollView: View {
     private static let slinkyWindowAbove = 10
     private static let slinkyWindowBelow = 15
 
+    /// Height of the top/bottom fade mask NowPlayingView applies around this
+    /// view — content needs at least this much clearance so lines aren't
+    /// faded out or clipped at the edges.
+    private static let edgeFadeHeight: CGFloat = 80
+
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var lineFontSize: CGFloat { isPad ? 44 : 32 }
 
@@ -99,13 +104,21 @@ struct LyricsScrollView: View {
                 lyricsNotice("Instrumental")
             } else if let plainLyrics = lyricsService.plainLyrics, !plainLyrics.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
-                    Text(plainLyrics)
-                        .font(isPad ? .title.weight(.semibold) : .title3.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
-                        .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 40)
+                    VStack(spacing: 0) {
+                        // Clears the fade mask NowPlayingView wraps around this view,
+                        // matching the buffer LyricsScrollView keeps for synced lyrics
+                        // so the first line isn't faded/clipped against the top edge.
+                        Color.clear.frame(height: Self.edgeFadeHeight)
+
+                        Text(plainLyrics)
+                            .font(isPad ? .largeTitle.weight(.semibold) : .title2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
+                            .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
+                            .padding(.horizontal, leftAlignLyrics ? 0 : 20)
+
+                        Color.clear.frame(height: Self.edgeFadeHeight)
+                    }
                 }
             } else {
                 lyricsNotice("No Lyrics Available")
