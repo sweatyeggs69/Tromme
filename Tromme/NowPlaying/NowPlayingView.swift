@@ -381,10 +381,15 @@ struct NowPlayingView: View {
                     .font(.title3.bold())
                     .foregroundStyle(Color.white)
                     .lineLimit(1)
-                Text(player.currentTrack?.artistDisplayName ?? "")
-                    .font(.title3)
-                    .foregroundStyle(Color.white.opacity(0.6))
-                    .lineLimit(1)
+                Button {
+                    goToArtist()
+                } label: {
+                    Text(player.currentTrack?.artistDisplayName ?? "")
+                        .font(.title3)
+                        .foregroundStyle(Color.white.opacity(0.6))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
             }
 
             Spacer(minLength: 12)
@@ -512,10 +517,9 @@ struct NowPlayingView: View {
                     Text(track.parentTitle ?? "")
                 }
             }
-            if let artist = PlexMetadata.artistStub(from: track) {
+            if PlexMetadata.artistStub(from: track) != nil {
                 Button {
-                    onNavigate?(artist)
-                    dismiss()
+                    goToArtist()
                 } label: {
                     Label("Go to Artist", systemImage: "music.mic")
                     Text(track.grandparentTitle ?? track.artistName)
@@ -550,6 +554,15 @@ struct NowPlayingView: View {
             _ = await player.setFavorited(!removing, for: track, server: server, client: client, sectionId: sectionId)
             isRating = false
         }
+    }
+
+    // MARK: - Navigation
+
+    private func goToArtist() {
+        guard let track = player.currentTrack,
+              let artist = PlexMetadata.artistStub(from: track) else { return }
+        onNavigate?(artist)
+        dismiss()
     }
 
     // MARK: - Lyrics Refresh Button

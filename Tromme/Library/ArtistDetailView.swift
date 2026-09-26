@@ -10,6 +10,7 @@ struct ArtistDetailView: View {
     let artist: PlexMetadata
     @State private var resolvedArtist: PlexMetadata?
     @State private var artistTracks: [PlexMetadata] = []
+    @State private var allTracks: [PlexMetadata] = []
     @State private var topTracks: [PlexMetadata] = []
     @State private var artistAlbums: [PlexMetadata] = []
     @State private var selectedAlbum: PlexMetadata?
@@ -18,6 +19,7 @@ struct ArtistDetailView: View {
     @State private var similarArtists: [PlexMetadata] = []
     @State private var selectedSimilarArtist: PlexMetadata?
     @State private var showsAllSimilarArtists = false
+    @State private var showsAllTracks = false
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
     @State private var contentReady = false
@@ -34,6 +36,7 @@ struct ArtistDetailView: View {
         let artistTracks: [PlexMetadata]
         let topTracks: [PlexMetadata]
         let artistAlbums: [PlexMetadata]
+        var allTracks: [PlexMetadata] = []
         var appearsOnAlbums: [PlexMetadata] = []
         var similarArtists: [PlexMetadata] = []
     }
@@ -43,6 +46,7 @@ struct ArtistDetailView: View {
         self.previewData = previewData
         _resolvedArtist = State(initialValue: previewData?.resolvedArtist)
         _artistTracks = State(initialValue: previewData?.artistTracks ?? [])
+        _allTracks = State(initialValue: previewData?.allTracks ?? previewData?.artistTracks ?? [])
         _topTracks = State(initialValue: previewData?.topTracks ?? [])
         _artistAlbums = State(initialValue: previewData?.artistAlbums ?? [])
         _appearsOnAlbums = State(initialValue: previewData?.appearsOnAlbums ?? [])
@@ -132,25 +136,36 @@ struct ArtistDetailView: View {
 
     @ViewBuilder
     private func sectionHeader(_ title: String, disclosureAction: (() -> Void)? = nil) -> some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(.title3.bold())
-
+        Group {
             if let disclosureAction {
                 Button(action: disclosureAction) {
-                    Image(systemName: "chevron.right")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    sectionHeaderRow(title, showsChevron: true)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Show all \(title)")
+            } else {
+                sectionHeaderRow(title, showsChevron: false)
+            }
+        }
+        .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
+        .listRowSeparator(.hidden)
+    }
+
+    private func sectionHeaderRow(_ title: String, showsChevron: Bool) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.title3.bold())
+                .foregroundStyle(.primary)
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
             }
 
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
-        .listRowSeparator(.hidden)
     }
 
     private func similarArtistsRail(_ artists: [PlexMetadata]) -> some View {
@@ -190,8 +205,8 @@ struct ArtistDetailView: View {
     var body: some View {
         List {
             ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight, isHidden: $heroIsHidden) {
-                    guard !artistTracks.isEmpty else { return }
-                    player.play(tracks: artistTracks)
+                    guard !allTracks.isEmpty else { return }
+                    player.play(tracks: allTracks)
                     if !player.isShuffled {
                         player.toggleShuffle()
                     }
@@ -242,7 +257,7 @@ struct ArtistDetailView: View {
             }
 
             if !topTracks.isEmpty {
-                sectionHeader("Your Top Songs")
+                sectionHeader("Top Songs")
 
                 HorizontalTrackGrid(
                     tracks: Array(topTracks.prefix(10)),
@@ -260,7 +275,7 @@ struct ArtistDetailView: View {
             }
 
             if !artistAlbums.isEmpty {
-                sectionHeader("Discography")
+                sectionHeader("Discography", disclosureAction: allTracks.isEmpty ? nil : { showsAllTracks = true })
                 releaseGrid(artistAlbums)
             }
 
@@ -313,6 +328,9 @@ struct ArtistDetailView: View {
         .navigationDestination(isPresented: $showsAllSimilarArtists) {
             SimilarArtistsGridView(artists: similarArtists)
         }
+        .navigationDestination(isPresented: $showsAllTracks) {
+            ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)
+        }
         .listStyle(.plain)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
@@ -331,15 +349,15 @@ struct ArtistDetailView: View {
 
             // Load all data in parallel instead of sequentially
             async let metadataReq = client.cachedMetadata(server: server, ratingKey: artist.ratingKey)
-            async let topTracksReq = client.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
             async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
             async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
+            async let allTracksReq = client.allArtistTracks(server: server, sectionId: sectionId, artist: artist)
             async let appearsOnReq = client.appearsOnAlbums(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
             async let similarArtistsReq = client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artist.ratingKey)
 
             let fetchedMetadata = try? await metadataReq
-            let fetchedTopTracks = (try? await topTracksReq) ?? []
             let fetchedArtistTracks = (try? await artistTracksReq) ?? []
+            let fetchedAllTracks = (try? await allTracksReq) ?? fetchedArtistTracks
             let fetchedAlbums = (try? await releasesReq) ?? []
             let fetchedAppearsOn = (try? await appearsOnReq) ?? []
             let fetchedSimilar = (try? await similarArtistsReq) ?? []
@@ -347,12 +365,15 @@ struct ArtistDetailView: View {
             withAnimation(.easeIn(duration: 0.25)) {
                 resolvedArtist = fetchedMetadata
                 artistTracks = fetchedArtistTracks
+                allTracks = fetchedAllTracks
                 artistAlbums = fetchedAlbums
                 appearsOnAlbums = fetchedAppearsOn
                 similarArtists = fetchedSimilar
-                topTracks = fetchedTopTracks.isEmpty
-                    ? fetchedArtistTracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
-                    : fetchedTopTracks
+                topTracks = Array(
+                    fetchedAllTracks
+                        .sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
+                        .prefix(10)
+                )
                 contentReady = true
             }
         }
@@ -378,22 +399,21 @@ struct ArtistDetailView: View {
         let metadataKey = CacheKey.metadata(ratingKey: artist.ratingKey)
         let childrenKey = CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
         let tracksKey = CacheKey.artistTracks(artistRatingKey: artist.ratingKey)
-        let topTracksKey = CacheKey.topTracks(artistRatingKey: artist.ratingKey)
 
         async let cachedMetadata = LibraryCache.shared.get(PlexMetadata.self, forKey: metadataKey)?.value
         async let cachedAlbums = LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value
         async let cachedTracks = LibraryCache.shared.get([PlexMetadata].self, forKey: tracksKey)?.value
-        async let cachedTopTracks = LibraryCache.shared.get([PlexMetadata].self, forKey: topTracksKey)?.value
 
-        let (metadata, albums, tracks, top) = await (cachedMetadata, cachedAlbums, cachedTracks, cachedTopTracks)
+        let (metadata, albums, tracks) = await (cachedMetadata, cachedAlbums, cachedTracks)
 
         guard let tracks, !tracks.isEmpty else { return false }
 
         withAnimation(.easeIn(duration: 0.25)) {
             resolvedArtist = metadata
             artistTracks = tracks
+            allTracks = tracks
             artistAlbums = albums ?? []
-            topTracks = top?.isEmpty == false ? top! : tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
+            topTracks = Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
             appearsOnAlbums = []
             similarArtists = []
             contentReady = true
@@ -420,9 +440,124 @@ struct ArtistDetailView: View {
             )
         }
         artistTracks = records.map { $0.asPlexMetadata() }
+        allTracks = artistTracks
         topTracks = artistTracks
         appearsOnAlbums = []
         contentReady = true
+    }
+}
+
+private struct ArtistAllTracksListView: View {
+    @Environment(AudioPlayerService.self) private var player
+
+    let tracks: [PlexMetadata]
+    /// Release date/year live on the album, not the track — Plex doesn't return
+    /// `originallyAvailableAt`/`year` on track objects, so sorting off the track's own
+    /// (always-empty) fields silently no-ops. Look them up from the artist's albums instead.
+    let albums: [PlexMetadata]
+    @State private var trackNavigationTarget: PlexMetadata?
+    @AppStorage("artistAllTracksSortNewestFirst") private var sortNewestFirst = true
+
+    private var albumReleaseInfo: [String: (date: String, year: Int)] {
+        Dictionary(
+            albums.map { ($0.ratingKey, (date: $0.originallyAvailableAt ?? "", year: $0.year ?? 0)) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
+    /// Albums ordered by release date (direction set by `sortNewestFirst`); tracks within
+    /// the same album always stay in album order (disc, then track number).
+    private var sortedTracks: [PlexMetadata] {
+        let releaseInfo = albumReleaseInfo
+        return tracks.sorted { lhs, rhs in
+            let leftInfo = lhs.parentRatingKey.flatMap { releaseInfo[$0] }
+            let rightInfo = rhs.parentRatingKey.flatMap { releaseInfo[$0] }
+
+            let leftDate = leftInfo?.date ?? lhs.originallyAvailableAt ?? ""
+            let rightDate = rightInfo?.date ?? rhs.originallyAvailableAt ?? ""
+            if leftDate != rightDate {
+                return sortNewestFirst ? (leftDate > rightDate) : (leftDate < rightDate)
+            }
+
+            let leftYear = leftInfo?.year ?? lhs.year ?? 0
+            let rightYear = rightInfo?.year ?? rhs.year ?? 0
+            if leftYear != rightYear {
+                return sortNewestFirst ? (leftYear > rightYear) : (leftYear < rightYear)
+            }
+
+            let leftAlbum = lhs.parentTitle ?? ""
+            let rightAlbum = rhs.parentTitle ?? ""
+            if leftAlbum != rightAlbum {
+                return leftAlbum.localizedStandardCompare(rightAlbum) == .orderedAscending
+            }
+
+            let leftDisc = lhs.parentIndex ?? 0
+            let rightDisc = rhs.parentIndex ?? 0
+            if leftDisc != rightDisc { return leftDisc < rightDisc }
+
+            return (lhs.index ?? 0) < (rhs.index ?? 0)
+        }
+    }
+
+    var body: some View {
+        List {
+            ForEach(Array(sortedTracks.enumerated()), id: \.element.id) { index, track in
+                TrackRowView(
+                    track: track,
+                    tracks: sortedTracks,
+                    index: index,
+                    showArtwork: true,
+                    showArtist: true,
+                    showTrackNumber: false,
+                    artworkSize: AppStyle.TrackList.browseArtworkSize,
+                    artworkCornerRadius: AppStyle.TrackList.artworkCornerRadius,
+                    onNavigate: { trackNavigationTarget = $0 }
+                )
+                .listRowInsets(AppStyle.TrackList.rowInsets)
+            }
+        }
+        .listStyle(.plain)
+        .listRowSpacing(AppStyle.TrackList.rowSpacing)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $trackNavigationTarget) { target in
+            if target.type == "artist" {
+                ArtistDetailView(artist: target)
+            } else {
+                AlbumDetailView(album: target)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    sortNewestFirst.toggle()
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down")
+                        .symbolEffect(.bounce, value: sortNewestFirst)
+                }
+                .tint(.primary)
+                .accessibilityLabel(sortNewestFirst ? "Newest First" : "Oldest First")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    player.play(tracks: sortedTracks, startingAt: 0)
+                } label: {
+                    Image(systemName: "play.fill")
+                }
+                .tint(.primary)
+                .disabled(sortedTracks.isEmpty)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    var shuffled = sortedTracks
+                    shuffled.shuffle()
+                    player.play(tracks: shuffled, startingAt: 0)
+                } label: {
+                    Image(systemName: "shuffle")
+                }
+                .tint(.primary)
+                .disabled(sortedTracks.isEmpty)
+            }
+        }
     }
 }
 
@@ -601,7 +736,8 @@ private extension UIImage {
                 resolvedArtist: DevelopmentMockData.previewArtist,
                 artistTracks: DevelopmentMockData.artistAllTracks,
                 topTracks: DevelopmentMockData.artistTopTracks,
-                artistAlbums: DevelopmentMockData.artistAlbums
+                artistAlbums: DevelopmentMockData.artistAlbums,
+                allTracks: DevelopmentMockData.artistAllTracks
             )
         )
     }

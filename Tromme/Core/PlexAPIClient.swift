@@ -195,12 +195,6 @@ final class PlexAPIClient: Sendable {
         return allItems
     }
 
-    func getTopTracks(server: PlexServer, sectionId: String, artistRatingKey: String, limit: Int = 10) async throws -> [PlexMetadata] {
-        let path = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&sort=viewCount:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-        return response.mediaContainer.metadata ?? []
-    }
-
     func getRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
         let path = "/library/sections/\(sectionId)/all?type=\(type)&sort=addedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
         let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)

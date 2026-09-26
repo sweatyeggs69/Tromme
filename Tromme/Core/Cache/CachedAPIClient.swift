@@ -121,24 +121,25 @@ extension PlexAPIClient {
 
     // MARK: - Appears On Albums
 
-    /// Albums where the given artist is credited as a featured performer but is not the primary artist.
-    /// Uses the cached full track list and filters by `originalTitle` containing the artist name.
-    func appearsOnAlbums(server: PlexServer, sectionId: String, artistRatingKey: String, artistTitle: String) async throws -> [PlexMetadata] {
+    /// Tracks credited to `artistTitle` via track-level artist credit (`originalTitle`), on
+    /// albums whose primary artist is someone else — e.g. various-artist compilation tracks.
+    private func compilationCreditedTracks(server: PlexServer, sectionId: String, artistRatingKey: String, artistTitle: String) async throws -> [PlexMetadata] {
         let allTracks = try await cachedTracks(server: server, sectionId: sectionId)
-        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
-
         let artistTitleLower = artistTitle.lowercased()
-        let featuredAlbumKeys = Set(
-            allTracks.filter { track in
-                guard track.grandparentRatingKey != artistRatingKey else { return false }
-                guard let credit = track.originalTitle?.lowercased(), !credit.isEmpty else { return false }
-                return credit.contains(artistTitleLower)
-            }
-            .compactMap(\.parentRatingKey)
-        )
+        return allTracks.filter { track in
+            guard track.grandparentRatingKey != artistRatingKey else { return false }
+            guard let credit = track.originalTitle?.lowercased(), !credit.isEmpty else { return false }
+            return credit.contains(artistTitleLower)
+        }
+    }
 
+    /// Albums where the given artist is credited as a featured performer but is not the primary artist.
+    func appearsOnAlbums(server: PlexServer, sectionId: String, artistRatingKey: String, artistTitle: String) async throws -> [PlexMetadata] {
+        let featured = try await compilationCreditedTracks(server: server, sectionId: sectionId, artistRatingKey: artistRatingKey, artistTitle: artistTitle)
+        let featuredAlbumKeys = Set(featured.compactMap(\.parentRatingKey))
         guard !featuredAlbumKeys.isEmpty else { return [] }
 
+        let allAlbums = try await cachedAlbums(server: server, sectionId: sectionId)
         return allAlbums
             .filter { featuredAlbumKeys.contains($0.ratingKey) }
             .sorted { lhs, rhs in
@@ -148,6 +149,19 @@ extension PlexAPIClient {
                 if (lhs.year ?? 0) != (rhs.year ?? 0) { return (lhs.year ?? 0) > (rhs.year ?? 0) }
                 return (lhs.titleSort ?? lhs.title) < (rhs.titleSort ?? rhs.title)
             }
+    }
+
+    /// All tracks performed by this artist: their own discography plus any compilation
+    /// (various-artist album) appearances credited via track-level artist credit.
+    func allArtistTracks(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
+        async let ownTracksReq = cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
+        async let compilationTracksReq = compilationCreditedTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
+
+        let ownTracks = try await ownTracksReq
+        let compilationTracks = (try? await compilationTracksReq) ?? []
+
+        var seenKeys = Set<String>()
+        return (ownTracks + compilationTracks).filter { seenKeys.insert($0.ratingKey).inserted }
     }
 
     // MARK: - Cached Tracks
@@ -174,17 +188,6 @@ extension PlexAPIClient {
             policy: .homeContent
         ) {
             try await self.getRecentlyAdded(server: server, sectionId: sectionId, type: type, limit: limit)
-        }
-    }
-
-    // MARK: - Cached Top Tracks
-
-    func cachedTopTracks(server: PlexServer, sectionId: String, artistRatingKey: String, limit: Int = 10) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.topTracks(artistRatingKey: artistRatingKey),
-            policy: .detail
-        ) {
-            try await self.getTopTracks(server: server, sectionId: sectionId, artistRatingKey: artistRatingKey, limit: limit)
         }
     }
 
@@ -390,10 +393,8 @@ extension PlexAPIClient {
                             let updatedAt = artistUpdatedAtByKey[key]
                             async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
                             async let metadata = self.cachedMetadata(server: server, ratingKey: key)
-                            async let topTracks = self.cachedTopTracks(server: server, sectionId: sectionId, artistRatingKey: key)
                             _ = try? await children
                             _ = try? await metadata
-                            _ = try? await topTracks
                         } else {
                             let updatedAt = albumUpdatedAtByKey[key]
                             async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)

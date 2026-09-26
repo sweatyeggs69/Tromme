@@ -365,9 +365,6 @@ enum CacheKey {
     static func artistTracks(artistRatingKey: String) -> String {
         "artist_tracks_\(artistRatingKey)"
     }
-    static func topTracks(artistRatingKey: String) -> String {
-        "top_tracks_\(artistRatingKey)"
-    }
     static func lyrics(title: String, artist: String) -> String {
         "lyrics_\(artist)_\(title)"
     }
