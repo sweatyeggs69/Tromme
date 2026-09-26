@@ -7,7 +7,10 @@ import Observation
 final class AudioPlayerService: Sendable {
     var currentTrack: PlexMetadata?
     var queue: [PlexMetadata] = [] {
-        didSet { maybeRefillInfiniteQueueIfNeeded(trigger: "queue_changed") }
+        didSet {
+            maybeRefillInfiniteQueueIfNeeded(trigger: "queue_changed")
+            revalidatePreloadedNext()
+        }
     }
     var currentIndex: Int = 0 {
         didSet {
@@ -19,7 +22,9 @@ final class AudioPlayerService: Sendable {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     var isShuffled = false
-    var repeatMode: RepeatMode = .off
+    var repeatMode: RepeatMode = .off {
+        didSet { revalidatePreloadedNext() }
+    }
     /// Magic Mix isn't a toggle — it's a one-shot action you can press repeatedly to
     /// regenerate the mix. True only while a mix is actively being built.
     var isMagicMixActive: Bool { magicMixBuildTask != nil }
@@ -41,22 +46,25 @@ final class AudioPlayerService: Sendable {
     var activeRouteName: String?
 
     enum RepeatMode: String, Sendable {
-        case off, all, one
+        /// `song` loops the current song until turned off; `once` replays it one
+        /// more time, then switches itself off and the queue carries on.
+        case off, song, once
 
         var iconName: String {
             switch self {
-            case .off, .all: "repeat"
-            case .one: "repeat.1"
+            case .off, .song: "repeat"
+            case .once: "repeat.1"
             }
         }
 
         var isActive: Bool { self != .off }
     }
 
-    private var player: AVPlayer?
+    private var player: AVQueuePlayer?
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
+    private var currentItemObservation: NSKeyValueObservation?
     private var trackEndObserver: Any?
     private var playbackStalledObserver: Any?
     private var itemFailedToEndObserver: Any?
@@ -126,11 +134,23 @@ final class AudioPlayerService: Sendable {
     private var lastSeekCompletedAt: Date?
 
     private struct PreloadedNextTrack {
+        enum Source {
+            case local(codec: String?)
+            case direct
+            case hls(candidates: [URL], sessionID: String, shouldConstrain: Bool)
+        }
+
         let ratingKey: String
         let streamURL: URL
-        let candidates: [URL]
-        let sessionID: String
-        let shouldConstrain: Bool
+        let source: Source
+        /// Pre-built item enqueued behind the current item for gapless advance.
+        let item: AVPlayerItem
+        let detailedTrack: PlexMetadata?
+
+        var hlsSessionID: String? {
+            if case .hls(_, let sessionID, _) = source { return sessionID }
+            return nil
+        }
     }
 
     /// Progress from 0 to 1
@@ -548,11 +568,6 @@ final class AudioPlayerService: Sendable {
             loadAndPlay(queue[currentIndex])
             return
         }
-        if repeatMode == .all, !queue.isEmpty {
-            currentIndex = 0
-            loadAndPlay(queue[currentIndex])
-            return
-        }
 
         isPlaying = false
         playbackIntent = false
@@ -564,17 +579,9 @@ final class AudioPlayerService: Sendable {
             logPlayback("next_ignored", "reason=empty_queue")
             return
         }
-        if repeatMode == .one {
-            logPlayback("next_repeat_one_reload")
-            loadAndPlay(queue[currentIndex])
-            return
-        }
         if currentIndex < queue.count - 1 {
             currentIndex += 1
             logPlayback("next_advance", "to_index=\(currentIndex)")
-        } else if repeatMode == .all {
-            currentIndex = 0
-            logPlayback("next_wrap", "to_index=0")
         } else if isInfiniteModeActive {
             // Queue ran dry before refill completed — kick off a refill and
             // advance once tracks arrive (this is a rare race; refill normally
@@ -613,10 +620,28 @@ final class AudioPlayerService: Sendable {
         }
         if currentIndex > 0 {
             currentIndex -= 1
-        } else if repeatMode == .all {
-            currentIndex = queue.count - 1
         }
         loadAndPlay(queue[currentIndex])
+    }
+
+    /// Natural end-of-track (non-gapless path): repeat modes replay the song,
+    /// otherwise move on through the queue.
+    private func advanceAfterTrackEnd() {
+        if repeatMode != .off, queue.indices.contains(currentIndex) {
+            consumeRepeatOnce()
+            logPlayback("track_end_repeat", "mode=\(repeatMode.rawValue)")
+            loadAndPlay(queue[currentIndex])
+            return
+        }
+        next()
+    }
+
+    /// Repeat Once is spent the moment its replay starts.
+    private func consumeRepeatOnce() {
+        guard repeatMode == .once else { return }
+        repeatMode = .off
+        savePlaybackState()
+        updateShuffleRepeatState()
     }
 
     func seek(to time: TimeInterval) {
@@ -786,15 +811,17 @@ final class AudioPlayerService: Sendable {
                 currentIndex = idx
             }
         }
+        // The queue didSet ran before currentIndex was updated above.
+        revalidatePreloadedNext()
         savePlaybackState()
         updateShuffleRepeatState()
     }
 
     func cycleRepeatMode() {
         switch repeatMode {
-        case .off: repeatMode = .all
-        case .all: repeatMode = .one
-        case .one: repeatMode = .off
+        case .off: repeatMode = .song
+        case .song: repeatMode = .once
+        case .once: repeatMode = .off
         }
         savePlaybackState()
         updateShuffleRepeatState()
@@ -867,7 +894,7 @@ final class AudioPlayerService: Sendable {
         cancelAllBackgroundTasks()
         discardPreloadedNext()
         player?.pause()
-        player?.replaceCurrentItem(with: nil)
+        player?.removeAllItems()
         player = nil
         tearDownObservers()
         // Turn off infinite mode before clearing the queue below — otherwise its
@@ -964,6 +991,11 @@ final class AudioPlayerService: Sendable {
         if currentTrack != nil {
             reportTimelineState("stopped", continuing: true)
         }
+        // Repeat Once belongs to the song it was set on; moving to another song cancels it.
+        if repeatMode == .once, let currentTrack, currentTrack.ratingKey != track.ratingKey {
+            repeatMode = .off
+            updateShuffleRepeatState()
+        }
 
         currentTrack = track
         if recoveryTrackRatingKey != track.ratingKey {
@@ -991,13 +1023,14 @@ final class AudioPlayerService: Sendable {
 
         tearDownObservers()
         player?.pause()
-        player?.replaceCurrentItem(with: nil)
+        player?.removeAllItems()
 
         // Fast path: locally downloaded file — skip network transcode entirely.
         // Plex metadata duration is authoritative for local files: downloaded MP3
         // transcodes can have corrupt Xing/VBR headers that AVFoundation would
         // read as a wrong duration. duration is already set from track.duration above.
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
+            discardPreloadedNext()
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
             let ext = localURL.pathExtension
@@ -1048,18 +1081,22 @@ final class AudioPlayerService: Sendable {
         // A preloaded session always starts at 0, so it can't serve a mid-track resume.
         var preloadedSessionToStop: String?
         if boundedResume != nil {
-            preloadedSessionToStop = preloadedNext?.sessionID
+            preloadedSessionToStop = preloadedNext?.hlsSessionID
             discardPreloadedNext()
         }
 
         // Fast path: use preloaded next track URL/session if it matches.
         // Saves the universalDecision API round-trip on track transitions.
-        if let preloaded = consumePreloadedNextTrack(for: track.ratingKey) {
-            universalCandidatesForCurrentItem = preloaded.candidates
+        if let preloaded = consumePreloadedNextTrack(for: track.ratingKey),
+           case .hls(let candidates, let sessionID, let shouldConstrain) = preloaded.source {
+            universalCandidatesForCurrentItem = candidates
             universalCandidateIndexForCurrentItem = 0
             universalStreamURL = preloaded.streamURL
-            currentSessionID = preloaded.sessionID
-            isConstrainedPlaybackPath = preloaded.shouldConstrain
+            currentSessionID = sessionID
+            isConstrainedPlaybackPath = shouldConstrain
+            if let detailed = preloaded.detailedTrack {
+                detailedTrackForSoundCheck = detailed
+            }
             logPlayback("load_using_preload", "track=\(track.ratingKey)")
             startPlayback(url: preloaded.streamURL)
             return
@@ -1178,9 +1215,13 @@ final class AudioPlayerService: Sendable {
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {
-            item.preferredForwardBufferDuration = preferredFullTrackBufferDuration()
+            item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: duration)
         }
-        player = AVPlayer(playerItem: item)
+        let queuePlayer = AVQueuePlayer(playerItem: item)
+        // Only advance on item end while a gapless next item is enqueued; otherwise
+        // keep the finished item so resume-from-end and end-of-queue seeks still work.
+        queuePlayer.actionAtItemEnd = .pause
+        player = queuePlayer
         // Local files are on disk — stall minimization only applies to network streams.
         player?.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile
         player?.volume = soundCheckVolume(for: currentTrack)
@@ -1197,11 +1238,16 @@ final class AudioPlayerService: Sendable {
             isPlaying = false
         }
 
+        beginTrackSession(item: item)
+    }
+
+    private func beginTrackSession(item: AVPlayerItem) {
         observeItemStatus(item)
         observePlayerState()
+        observeQueueAdvance()
         observePlaybackFailures(item)
         addTimeObserver()
-        observeTrackEnd()
+        observeTrackEnd(item)
         updateNowPlayingInfo()
         prefetchGainMetadata()
         prefetchUpcomingArtwork()
@@ -1536,6 +1582,7 @@ final class AudioPlayerService: Sendable {
         let lostConnection = oldConnected && !newConnected
         let reconnected = !oldConnected && newConnected
         guard interfaceChanged || reconnected || lostConnection else { return }
+        revalidatePreloadedNext(networkChanged: true)
         guard isPlaying, currentTrack != nil else { return }
 
         logPlayback("network_path_change", "interface_changed=\(interfaceChanged) lost=\(lostConnection) reconnected=\(reconnected)")
@@ -1585,45 +1632,55 @@ final class AudioPlayerService: Sendable {
 
     /// Buffer enough of the current track to make playback resilient to network changes.
     /// Caps at 30 minutes to avoid runaway memory on very long items.
-    private func preferredFullTrackBufferDuration() -> TimeInterval {
-        let known = duration
+    private func preferredFullTrackBufferDuration(for known: TimeInterval) -> TimeInterval {
         let target = known > 0 ? known + 30 : 600
         return min(target, 1800)
     }
 
     // MARK: - Next Track Preload
 
+    /// The queue slot that plays when the current track ends on its own.
+    private func nextAutoAdvanceTarget() -> (index: Int, track: PlexMetadata)? {
+        guard queue.indices.contains(currentIndex) else { return nil }
+        if repeatMode != .off {
+            return (currentIndex, queue[currentIndex])
+        } else if currentIndex < queue.count - 1 {
+            return (currentIndex + 1, queue[currentIndex + 1])
+        }
+        return nil
+    }
+
     private func maybePreloadNextTrack() {
         guard duration > 0 else { return }
         let remaining = duration - currentTime
         guard remaining > 0, remaining <= 25 else { return }
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
-        guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
-
-        let nextTrack: PlexMetadata?
-        if repeatMode == .one {
-            nextTrack = currentTrack
-        } else if currentIndex < queue.count - 1 {
-            nextTrack = queue[currentIndex + 1]
-        } else if repeatMode == .all, !queue.isEmpty {
-            nextTrack = queue[0]
-        } else {
-            nextTrack = nil
-        }
-        guard let track = nextTrack else { return }
-        // Locally downloaded tracks skip the network transcode path entirely
-        // (see loadAndPlay's local-file fast path), so preloading a streaming
-        // session for them would just open an unused PMS session.
-        guard AppContext.shared.downloadManager.localURL(for: track.ratingKey) == nil else { return }
+        guard player?.currentItem != nil else { return }
+        guard let track = nextAutoAdvanceTarget()?.track else { return }
 
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
         }
     }
 
+    /// Resolves the next track's URL using the same decision tree as loadAndPlay
+    /// (local file → direct stream → HLS transcode) and enqueues a ready item.
     private func performPreload(_ track: PlexMetadata) async {
-        defer { nextTrackPreloadTask = nil }
+        // A cancelled preload has already been cleared by discardPreloadedNext(),
+        // and a replacement task may now own the slot.
+        defer { if !Task.isCancelled { nextTrackPreloadTask = nil } }
         guard let server, let client else { return }
+
+        let detailedTrack: PlexMetadata? = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
+            ? (try? await client.cachedMetadata(server: server, ratingKey: track.ratingKey))
+            : nil
+        guard !Task.isCancelled else { return }
+
+        if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
+            let ext = localURL.pathExtension
+            enqueuePreloaded(track, url: localURL, source: .local(codec: ext.isEmpty ? nil : ext.uppercased()), detailedTrack: detailedTrack)
+            return
+        }
 
         let playbackPath = resolvedPlaybackPath(for: server)
         let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
@@ -1635,10 +1692,15 @@ final class AudioPlayerService: Sendable {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularBitrate } ?? true
         let shouldConstrain = isConstrainedNetworkPath && sourceExceedsTarget
 
-        // Direct-stream-eligible tracks don't need a pre-negotiated transcode
-        // session — loadAndPlay resolves their URL instantly from local
-        // metadata, so preloading one here would just waste a PMS session.
-        guard shouldConstrain || sourceAudioCodec(for: track) == "flac" else { return }
+        if !shouldConstrain, sourceAudioCodec(for: track) != "flac",
+           let partKey = track.media?.first?.part?.first?.key,
+           let directURL = client.directStreamURL(server: server, partKey: partKey) {
+            enqueuePreloaded(track, url: directURL, source: .direct, detailedTrack: detailedTrack)
+            return
+        }
+
+        // Only the HLS path costs a PMS transcode session up front.
+        guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
 
         let sessionID = UUID().uuidString
         let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
@@ -1680,16 +1742,58 @@ final class AudioPlayerService: Sendable {
             return
         }
         let resolvedURL = await client.resolveUniversalVariantURL(masterURL: masterURL) ?? masterURL
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+            return
+        }
 
+        enqueuePreloaded(
+            track,
+            url: resolvedURL,
+            source: .hls(candidates: candidates, sessionID: sessionID, shouldConstrain: shouldConstrain),
+            detailedTrack: detailedTrack
+        )
+    }
+
+    private func enqueuePreloaded(_ track: PlexMetadata, url: URL, source: PreloadedNextTrack.Source, detailedTrack: PlexMetadata?) {
+        let item = makePlayerItem(url: url)
+        if case .local = source {} else {
+            item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: Double(track.duration ?? 0) / 1000.0)
+        }
+        // The queue or player may have changed while the URL was resolving.
+        guard let player, let currentItem = player.currentItem,
+              nextAutoAdvanceTarget()?.track.ratingKey == track.ratingKey,
+              player.canInsert(item, after: currentItem) else {
+            if case .hls(_, let sessionID, _) = source, let server, let client {
+                Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+            }
+            logPlayback("preload_dropped", "track=\(track.ratingKey)")
+            return
+        }
+        player.insert(item, after: currentItem)
+        player.actionAtItemEnd = .advance
         preloadedNext = PreloadedNextTrack(
             ratingKey: track.ratingKey,
-            streamURL: resolvedURL,
-            candidates: candidates,
-            sessionID: sessionID,
-            shouldConstrain: shouldConstrain
+            streamURL: url,
+            source: source,
+            item: item,
+            detailedTrack: detailedTrack
         )
         logPlayback("preload_complete", "track=\(track.ratingKey)")
+    }
+
+    /// Drops the enqueued item when it no longer matches what should play next
+    /// (queue edits, repeat changes), or when a network change makes a
+    /// streamed item's path/bitrate decision stale. The next time tick re-preloads.
+    private func revalidatePreloadedNext(networkChanged: Bool = false) {
+        guard let preloaded = preloadedNext else { return }
+        // Already advanced into it; handleTrackEnd will move state over.
+        guard player?.currentItem !== preloaded.item else { return }
+        let stillNext = nextAutoAdvanceTarget()?.track.ratingKey == preloaded.ratingKey
+        let isLocal = if case .local = preloaded.source { true } else { false }
+        guard !stillNext || (networkChanged && !isLocal) else { return }
+        logPlayback("preload_invalidated", "track=\(preloaded.ratingKey) network=\(networkChanged)")
+        discardPreloadedNext()
     }
 
     private func consumePreloadedNextTrack(for ratingKey: String) -> PreloadedNextTrack? {
@@ -1705,11 +1809,16 @@ final class AudioPlayerService: Sendable {
     private func discardPreloadedNext() {
         nextTrackPreloadTask?.cancel()
         nextTrackPreloadTask = nil
-        if let preloaded = preloadedNext, let server, let client {
-            let sessionID = preloaded.sessionID
-            Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+        if let preloaded = preloadedNext {
+            if let player, player.currentItem !== preloaded.item {
+                player.remove(preloaded.item)
+            }
+            if let sessionID = preloaded.hlsSessionID, let server, let client {
+                Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
+            }
         }
         preloadedNext = nil
+        player?.actionAtItemEnd = .pause
     }
 
     private func refreshAirPlayConnectionState() {
@@ -1937,6 +2046,8 @@ final class AudioPlayerService: Sendable {
         statusObservation = nil
         timeControlObservation?.invalidate()
         timeControlObservation = nil
+        currentItemObservation?.invalidate()
+        currentItemObservation = nil
         if let trackEndObserver {
             NotificationCenter.default.removeObserver(trackEndObserver)
         }
@@ -1966,6 +2077,8 @@ final class AudioPlayerService: Sendable {
                 guard let self, self.playbackGeneration == generation else { return }
                 guard !self.isSeeking else { return }
                 guard seconds.isFinite && seconds >= 0 else { return }
+                // Already playing the enqueued item; state moves over on the currentItem change.
+                if let preloaded = self.preloadedNext, self.player?.currentItem === preloaded.item { return }
 
                 if self.isPlayingLocalFile {
                     // Local files: map player time straight to currentTime — no HLS
@@ -2036,25 +2149,50 @@ final class AudioPlayerService: Sendable {
         }
     }
 
-    private func observeTrackEnd() {
-        if let trackEndObserver {
-            NotificationCenter.default.removeObserver(trackEndObserver)
-            self.trackEndObserver = nil
-        }
-        if let item = player?.currentItem {
-            trackEndObserver = NotificationCenter.default.addObserver(
-                forName: AVPlayerItem.didPlayToEndTimeNotification,
-                object: item,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.handleTrackEnd()
+    private func observeQueueAdvance() {
+        currentItemObservation = player?.observe(\.currentItem, options: [.new]) { [weak self] observedPlayer, _ in
+            Task { @MainActor [weak self] in
+                guard let self, observedPlayer === self.player,
+                      let preloaded = self.preloadedNext else { return }
+                if observedPlayer.currentItem === preloaded.item {
+                    self.advanceToPreloadedTrack(preloaded)
+                } else if observedPlayer.currentItem == nil {
+                    // The enqueued item failed and AVQueuePlayer skipped past it.
+                    self.logPlayback("gapless_advance_failed", "track=\(preloaded.ratingKey)")
+                    self.discardPreloadedNext()
+                    self.next()
                 }
             }
         }
     }
 
+    private func observeTrackEnd(_ item: AVPlayerItem) {
+        if let trackEndObserver {
+            NotificationCenter.default.removeObserver(trackEndObserver)
+            self.trackEndObserver = nil
+        }
+        trackEndObserver = NotificationCenter.default.addObserver(
+            forName: AVPlayerItem.didPlayToEndTimeNotification,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleTrackEnd()
+            }
+        }
+    }
+
     private func handleTrackEnd() {
+        // With a gapless item enqueued, AVQueuePlayer advances on any real
+        // end-of-item — including the seek races suppressed below. The
+        // currentItem observer moves app state over; this notification can
+        // arrive before the advance, so only act here if it already happened.
+        if let preloaded = preloadedNext, player?.items().contains(preloaded.item) == true {
+            if player?.currentItem === preloaded.item {
+                advanceToPreloadedTrack(preloaded)
+            }
+            return
+        }
         // A zero-tolerance seek on a local VBR file can land at the physical end of
         // the audio data and fire AVPlayerItemDidPlayToEndTime before the seek
         // completion callback clears isSeeking. Ignore the notification in that case.
@@ -2090,7 +2228,82 @@ final class AudioPlayerService: Sendable {
         maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
         reportTimelineState("stopped", continuing: hasNext)
-        next()
+        advanceAfterTrackEnd()
+    }
+
+    /// Moves app state onto the enqueued item AVQueuePlayer has (or is about to)
+    /// advance to, without rebuilding the player — this is what makes it gapless.
+    private func advanceToPreloadedTrack(_ preloaded: PreloadedNextTrack) {
+        guard let player, let target = nextAutoAdvanceTarget(),
+              target.track.ratingKey == preloaded.ratingKey else {
+            logPlayback("gapless_advance_mismatch", "preloaded=\(preloaded.ratingKey)")
+            discardPreloadedNext()
+            next()
+            return
+        }
+
+        maybeReportScrobble(force: true)
+        reportTimelineState("stopped", continuing: true)
+        stopActiveTranscodeSession()
+        tearDownObservers()
+
+        preloadedNext = nil
+        player.actionAtItemEnd = .pause
+        consumeRepeatOnce()
+
+        let track = target.track
+        currentIndex = target.index
+        currentTrack = track
+        recoveryTrackRatingKey = track.ratingKey
+        recoveryAttemptsForTrack = 0
+        scrobbledTrackRatingKey = nil
+        playbackGeneration += 1
+        pendingInitialSeekTime = nil
+        streamTimeOffset = 0
+        pendingStreamOffsetCalibration = false
+        duration = Double(track.duration ?? 0) / 1000.0
+        currentTime = 0
+        detailedTrackForSoundCheck = preloaded.detailedTrack
+        universalCandidateIndexForCurrentItem = 0
+
+        switch preloaded.source {
+        case .local(let codec):
+            isPlayingLocalFile = true
+            localFileCodec = codec
+            isDirectStreamAttempt = false
+            isConstrainedPlaybackPath = false
+            currentSessionID = nil
+            universalStreamURL = nil
+            universalCandidatesForCurrentItem = []
+        case .direct:
+            isPlayingLocalFile = false
+            localFileCodec = nil
+            isDirectStreamAttempt = true
+            isConstrainedPlaybackPath = false
+            currentSessionID = nil
+            universalStreamURL = nil
+            universalCandidatesForCurrentItem = []
+        case .hls(let candidates, let sessionID, let shouldConstrain):
+            isPlayingLocalFile = false
+            localFileCodec = nil
+            isDirectStreamAttempt = false
+            isConstrainedPlaybackPath = shouldConstrain
+            currentSessionID = sessionID
+            universalStreamURL = preloaded.streamURL
+            universalCandidatesForCurrentItem = candidates
+        }
+
+        let item = preloaded.item
+        isReadyToPlay = item.status == .readyToPlay
+        let itemDuration = item.duration.seconds
+        if !isPlayingLocalFile, itemDuration.isFinite, itemDuration > 0 {
+            duration = itemDuration
+        }
+        player.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile
+        player.volume = soundCheckVolume(for: track)
+
+        logPlayback("gapless_advance", "to=\(track.ratingKey) index=\(target.index)")
+        beginTrackSession(item: item)
     }
 
     // MARK: - Timeline Reporting
@@ -2446,9 +2659,10 @@ final class AudioPlayerService: Sendable {
         center.changeRepeatModeCommand.addTarget { [weak self] event in
             guard let self, let event = event as? MPChangeRepeatModeCommandEvent else { return .commandFailed }
             switch event.repeatType {
+            // Mapped so the system repeat / repeat.1 icons match the in-app ones.
             case .off: self.repeatMode = .off
-            case .one: self.repeatMode = .one
-            case .all: self.repeatMode = .all
+            case .all: self.repeatMode = .song
+            case .one: self.repeatMode = .once
             @unknown default: break
             }
             self.savePlaybackState()
@@ -2474,8 +2688,8 @@ final class AudioPlayerService: Sendable {
         center.changeShuffleModeCommand.currentShuffleType = isShuffled ? .items : .off
         switch repeatMode {
         case .off: center.changeRepeatModeCommand.currentRepeatType = .off
-        case .all: center.changeRepeatModeCommand.currentRepeatType = .all
-        case .one: center.changeRepeatModeCommand.currentRepeatType = .one
+        case .song: center.changeRepeatModeCommand.currentRepeatType = .all
+        case .once: center.changeRepeatModeCommand.currentRepeatType = .one
         }
     }
 
