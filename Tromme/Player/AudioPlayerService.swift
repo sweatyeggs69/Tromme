@@ -2135,7 +2135,13 @@ final class AudioPlayerService: Sendable {
                 let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
                 // Preserve the current "playing intent" while AVPlayer is briefly
                 // buffering so transport controls do not flicker.
-                let playing = status == .playing || (waitingForPlayback && self.isPlaying)
+                // actionAtItemEnd = .pause makes AVPlayer pause itself when a track
+                // finishes, just before didPlayToEndTime advances the queue. That's
+                // not a user pause, so keep the playing state instead of briefly
+                // publishing rate 0 (which flashes Play on CarPlay / lock screen).
+                let pausedAtItemEnd = status == .paused && self.playbackIntent && !self.isSeeking
+                    && Self.hasReachedEnd(observedPlayer.currentItem)
+                let playing = status == .playing || ((waitingForPlayback || pausedAtItemEnd) && self.isPlaying)
                 #if DEBUG
                 if self.lastLoggedTimeControlStatus != status {
                     self.lastLoggedTimeControlStatus = status
@@ -2147,6 +2153,13 @@ final class AudioPlayerService: Sendable {
                 self.updateNowPlayingInfo()
             }
         }
+    }
+
+    private static func hasReachedEnd(_ item: AVPlayerItem?) -> Bool {
+        guard let item, item.status == .readyToPlay else { return false }
+        let itemDuration = item.duration.seconds
+        guard itemDuration.isFinite, itemDuration > 0 else { return false }
+        return CMTimeGetSeconds(item.currentTime()) >= itemDuration - 0.5
     }
 
     private func observeQueueAdvance() {
