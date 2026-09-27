@@ -12,7 +12,7 @@
 
 Before implementing ANY feature, control, layout, or behavior:
 1. Check if Apple provides a stock/default/built-in way to do it in iOS 27
-2. If Apple provides it, use it — no custom implementations
+2. If Apple provides it, use it
 3. Only build custom when Apple has NO equivalent
 
 This applies to everything:
@@ -47,7 +47,6 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - Toggles and buttons with different states should always transform unless otherwise stated.
 
 ## Build System
-- use BuildProject for completion (not shell commands or xcodebuild)
 - Previews are available via RenderPreview
 - SPM for package management - no CocoaPods
 - Build target: "Tromme" iOS
