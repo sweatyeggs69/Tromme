@@ -70,7 +70,8 @@ struct HomeView: View {
                 // Full-library changes (new albums/tracks) sync in the background and arrive
                 // via libraryContentDidChange; the quick part — play counts, ratings,
                 // playlists — is awaited so the spinner covers it.
-                Task { await LibrarySyncService.shared.refreshIfNeeded(client: client, server: server, sectionId: sectionId) }
+                // Forced: deletes/merges made in Plex don't always advance the section's updatedAt.
+                Task { await LibrarySyncService.shared.refreshIfNeeded(client: client, server: server, sectionId: sectionId, force: true) }
                 await client.refreshDynamicContent(server: server, sectionId: sectionId)
             }
             await withTaskGroup(of: Void.self) { group in
