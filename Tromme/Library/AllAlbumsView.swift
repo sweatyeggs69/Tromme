@@ -216,6 +216,16 @@ struct AllAlbumsView: View {
         .task(id: artworkPrefetchKey) {
             await prefetchVisibleArtwork()
         }
+        .task {
+            // Re-run when a pull-to-refresh or cold-launch/foreground smartRefresh elsewhere
+            // detects the library changed — otherwise this tab, once loaded, never notices
+            // since loadTaskID doesn't change on refresh.
+            guard previewAlbums == nil else { return }
+            for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
+                guard !Task.isCancelled else { break }
+                await loadAlbums()
+            }
+        }
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }

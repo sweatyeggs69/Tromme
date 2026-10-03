@@ -15,8 +15,6 @@ struct HomeView: View {
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var showingLibrarySwitcher = false
     @State private var showingSignOutConfirmation = false
-    @State private var showingRefreshLibraryConfirmation = false
-    @State private var isRefreshingLibrary = false
     @State private var featuredAlbums: [PlexMetadata]
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
@@ -67,6 +65,15 @@ struct HomeView: View {
         }
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
+            // Catches newly-scanned tracks in existing albums/artists, which needs a slow
+            // per-item cache walk (see CachedAPIClient.invalidateLibraryCaches) — run it in
+            // the background so it doesn't hold the pull-to-refresh spinner up. AllAlbumsView/
+            // ArtistsView pick up the result via the libraryContentDidChange notification
+            // once it finishes.
+            if let server = serverConnection.currentServer,
+               let sectionId = serverConnection.currentLibrarySectionId {
+                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
+            }
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await loadHomeContent(forceRefresh: true) }
                 group.addTask { await loadFeaturedAlbum(forced: false) }
@@ -126,10 +133,6 @@ struct HomeView: View {
                     Button("Change Library", systemImage: "books.vertical") {
                         showingLibrarySwitcher = true
                     }
-                    Button("Refresh Library", systemImage: "arrow.clockwise") {
-                        showingRefreshLibraryConfirmation = true
-                    }
-                    .disabled(isRefreshingLibrary)
                     Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                         showingSignOutConfirmation = true
                     }
@@ -138,10 +141,6 @@ struct HomeView: View {
                         .font(.headline)
                 }
                 .tint(.primary)
-                if isRefreshingLibrary {
-                    ProgressView()
-                        .transition(.opacity.combined(with: .scale(scale: 0.5)))
-                }
             }
         }
         .sheet(item: $addToPlaylistRequest) { request in
@@ -157,25 +156,6 @@ struct HomeView: View {
         } message: {
             Text("You'll need to sign in again to access your music.")
         }
-        .alert("Refresh Library", isPresented: $showingRefreshLibraryConfirmation) {
-            Button("Refresh", role: .destructive) {
-                Task { await refreshLibrary() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will clear all cached data, including artwork, and re-download it from the server.")
-        }
-    }
-
-    private func refreshLibrary() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-        withAnimation(.easeInOut(duration: 0.2)) { isRefreshingLibrary = true }
-        await LibraryCache.shared.clearAll()
-        await ImageCache.shared.clearAll()
-        await client.warmCache(server: server, sectionId: sectionId)
-        await loadHomeContent(forceRefresh: false)
-        withAnimation(.easeInOut(duration: 0.2)) { isRefreshingLibrary = false }
     }
 
     private var loadTaskID: String {
@@ -482,27 +462,10 @@ struct HomeView: View {
         }
 
         if forceRefresh {
-            // Mirrors the key set smartRefresh invalidates on cold launch (see CachedAPIClient.smartRefresh) —
-            // artists and the raw favoriteTracks fetch were missing here, so pull-to-refresh could leave a
-            // newly added artist (or a favorite change) stuck on stale cached data for up to their full TTL.
-            let artistsKey = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
-            let tracksKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
-            let albumsKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
-            let playlistsKey = CacheKey.playlists(serverId: server.machineIdentifier)
-            let favoriteTracksKey = CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId)
-            let homeFavoritesKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
-            let homeRecentTracksKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
-            let homeRecentAlbumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
-            let homePlaylistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
-            await LibraryCache.shared.remove(forKey: artistsKey)
-            await LibraryCache.shared.remove(forKey: tracksKey)
-            await LibraryCache.shared.remove(forKey: albumsKey)
-            await LibraryCache.shared.remove(forKey: playlistsKey)
-            await LibraryCache.shared.remove(forKey: favoriteTracksKey)
-            await LibraryCache.shared.remove(forKey: homeFavoritesKey)
-            await LibraryCache.shared.remove(forKey: homeRecentTracksKey)
-            await LibraryCache.shared.remove(forKey: homeRecentAlbumsKey)
-            await LibraryCache.shared.remove(forKey: homePlaylistsKey)
+            // Cheap, unconditional invalidation so home content and the library lists
+            // always re-fetch on a manual pull. The slower per-album/per-artist children
+            // cache walk runs separately in the background (see the .refreshable closure).
+            await client.invalidateHomeAndListCaches(server: server, sectionId: sectionId)
         } else {
             await hydrateFromHomeCacheIfAvailable(server: server, sectionId: sectionId)
         }

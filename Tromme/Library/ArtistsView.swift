@@ -66,6 +66,15 @@ struct ArtistsView: View {
         }
         .task(id: loadTaskID) { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
+        .task {
+            // Re-run when a pull-to-refresh or cold-launch/foreground smartRefresh elsewhere
+            // detects the library changed — otherwise this tab, once loaded, never notices
+            // since loadTaskID doesn't change on refresh.
+            for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
+                guard !Task.isCancelled else { break }
+                await loadArtists()
+            }
+        }
     }
 
     @ViewBuilder

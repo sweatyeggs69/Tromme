@@ -263,10 +263,61 @@ extension PlexAPIClient {
 
     // MARK: - Smart Refresh
 
+    /// Invalidates the flat per-section/home list caches (artists/albums/tracks/home
+    /// sections/playlists). Cheap — a fixed handful of key removals, no per-item disk
+    /// walk — so it's safe to call unconditionally on every manual pull-to-refresh.
+    func invalidateHomeAndListCaches(server: PlexServer, sectionId: String) async {
+        let sid = server.machineIdentifier
+        await LibraryCache.shared.remove(forKey: CacheKey.artists(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.albums(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.tracks(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyAdded(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyPlayed(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: sid, sectionId: sectionId))
+        await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: sid))
+        await LibraryCache.shared.remove(forKey: CacheKey.homePlaylists(serverId: sid))
+        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+    }
+
+    /// Invalidates everything `invalidateHomeAndListCaches` does, plus each
+    /// currently-cached artist's and album's `children` cache (its track/album listing).
+    ///
+    /// The `children` cache key is normally versioned by the parent's `updatedAt`
+    /// (see `CacheKey.children`) so it self-invalidates when the parent changes —
+    /// but Plex does not reliably bump an album/artist's own `updatedAt` just
+    /// because a track was added to it via a library scan. Relying on that alone
+    /// left newly-scanned tracks missing from an existing album until the
+    /// `children` entry's TTL (up to 7 days on disk) expired on its own. Removing
+    /// the stale entries outright guarantees the next read is a real network
+    /// fetch regardless of whether the parent's `updatedAt` moved.
+    ///
+    /// Walking every cached artist/album is too slow to run on every interactive
+    /// pull-to-refresh — only call this when the library is known to have actually
+    /// changed (see `smartRefresh`), and preferably off the main refresh gesture.
+    func invalidateLibraryCaches(server: PlexServer, sectionId: String) async {
+        let sid = server.machineIdentifier
+        let artistsKey = CacheKey.artists(serverId: sid, sectionId: sectionId)
+        let albumsKey = CacheKey.albums(serverId: sid, sectionId: sectionId)
+
+        if let staleArtists = await LibraryCache.shared.get([PlexMetadata].self, forKey: artistsKey)?.value {
+            for artist in staleArtists {
+                await LibraryCache.shared.remove(forKey: CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt))
+            }
+        }
+        if let staleAlbums = await LibraryCache.shared.get([PlexMetadata].self, forKey: albumsKey)?.value {
+            for album in staleAlbums {
+                await LibraryCache.shared.remove(forKey: CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt))
+            }
+        }
+
+        await invalidateHomeAndListCaches(server: server, sectionId: sectionId)
+    }
+
     /// Checks the server's `updatedAt` timestamp for the section before deciding what to refresh.
     /// - If nothing changed: warms memory from disk only (no library network traffic).
-    /// - If the library changed: invalidates only the stale list keys (artists, albums, tracks,
-    ///   recently added) so `warmCache` re-fetches them. Images are never cleared.
+    /// - If the library changed: invalidates the stale caches (see `invalidateLibraryCaches`)
+    ///   so `warmCache` re-fetches them. Images are never cleared.
     ///
     /// Use this for cold-launch and foreground-return checks. Use `warmCache` directly only
     /// when you know a full rebuild is needed (e.g., after changing the selected library).
@@ -283,16 +334,7 @@ extension PlexAPIClient {
 
         if serverUpdatedAt != lastUpdatedAt {
             UserDefaults.standard.set(serverUpdatedAt, forKey: udKey)
-            let sid = server.machineIdentifier
-            await LibraryCache.shared.remove(forKey: CacheKey.artists(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.albums(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.tracks(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyAdded(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyPlayed(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: sid, sectionId: sectionId))
-            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: sid))
-            NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+            await invalidateLibraryCaches(server: server, sectionId: sectionId)
         }
 
         await warmCache(server: server, sectionId: sectionId)
