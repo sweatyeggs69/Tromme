@@ -371,14 +371,6 @@ struct PlaylistDetailView: View {
     private func loadTracks() async {
         guard let server = serverConnection.currentServer else { return }
 
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates the spinner flash when the memory cache is warm.
-        let cacheKey = CacheKey.playlistItems(playlistKey: playlistItemRequestKey)
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
-            tracks = cached
-            isLoading = false
-        }
-
         do {
             tracks = try await client.cachedPlaylistItems(server: server, playlistKey: playlistItemRequestKey)
         } catch {
@@ -425,7 +417,7 @@ struct PlaylistDetailView: View {
                     afterPlaylistItemID: afterTrack?.playlistItemID
                 )
             }
-            await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: playlistItemRequestKey))
+            await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
         } catch {
             tracks = previousTracks
         }
@@ -439,7 +431,7 @@ struct PlaylistDetailView: View {
         do {
             try await client.renamePlaylist(server: server, playlistId: playlist.ratingKey, newTitle: trimmed)
             displayTitle = trimmed
-            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
+            await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
         } catch {
             // silently fail — displayTitle remains unchanged
         }
@@ -455,11 +447,7 @@ struct PlaylistDetailView: View {
 
         do {
             try await client.deletePlaylist(server: server, playlistId: playlist.ratingKey)
-            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
-            await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: playlist.ratingKey))
-            if let key = playlist.key {
-                await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: key))
-            }
+            await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
             dismiss()
         } catch {
             playlistDeleteErrorMessage = error.localizedDescription

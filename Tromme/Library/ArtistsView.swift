@@ -108,10 +108,12 @@ struct ArtistsView: View {
             .tint(.secondary)
 
         case .grid:
+            ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(artistSections, id: \.title) { section in
                         Text(section.title)
+                            .id(section.title)
                             .font(.headline)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, gridHorizontalPadding)
@@ -140,7 +142,16 @@ struct ArtistsView: View {
                     }
                 }
                 .padding(.vertical, 8)
+                .padding(.trailing, AppStyle.Spacing.sectionIndexInset)
             }
+            .overlay(alignment: .trailing) {
+                SectionIndexBar(titles: artistSections.map(\.title)) { title in
+                    proxy.scrollTo(title, anchor: .top)
+                }
+                .padding(.trailing, 0)
+            }
+            }
+            .tint(.secondary)
         }
     }
 
@@ -166,9 +177,9 @@ struct ArtistsView: View {
         // Prefer full disk-cached library (correct artist photos, complete list).
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
-            let key = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
-            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: key)?.value,
-               !cached.isEmpty {
+            let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+            let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope)
+            if !cached.isEmpty {
                 var sorted = cached
                 sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
                 withAnimation(.easeIn(duration: 0.25)) {
@@ -206,29 +217,16 @@ struct ArtistsView: View {
             return
         }
 
-        let cacheKey = CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId)
-
-        // Memory cache (sync, no actor hop).
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+        // Paint synchronously from the in-memory copy of the local library when available.
+        let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryStore.memory.items(scope: scope, kind: LibraryStore.Kind.artist), !cached.isEmpty {
             var sorted = cached
             sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
             artists = sorted
             isLoading = false
         }
 
-        // Disk cache — avoids spinner on cold launch when memory cache is empty.
-        if artists.isEmpty,
-           let diskCached = await LibraryCache.shared.get([PlexMetadata].self, forKey: cacheKey)?.value,
-           !diskCached.isEmpty {
-            var sorted = diskCached
-            sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
-            withAnimation(.easeIn(duration: 0.25)) {
-                artists = sorted
-                isLoading = false
-            }
-        }
-
-        // Phase 1: Show the standard artist list immediately from cache.
+        // Phase 1: Read the artist list from the local library (waits only on the very first sync).
         do {
             var result = try await client.cachedArtists(server: server, sectionId: sectionId)
             result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }

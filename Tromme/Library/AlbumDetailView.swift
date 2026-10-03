@@ -404,12 +404,16 @@ struct AlbumDetailView: View {
     private func loadTracks() async {
         guard network.isConnected else {
             // Prefer disk-cached track list so non-downloaded albums still show tracks.
-            let childrenKey = CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt)
-            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
-               !cached.isEmpty {
-                tracks = cached
-                isLoadingTracks = false
-                return
+            if let server = serverConnection.currentServer {
+                let cached = await LibraryStore.shared.children(
+                    of: album.ratingKey,
+                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: serverConnection.currentLibrarySectionId ?? "")
+                )
+                if !cached.isEmpty {
+                    tracks = cached
+                    isLoadingTracks = false
+                    return
+                }
             }
             let albumKey = album.ratingKey
             let albumTitle = album.title
@@ -423,14 +427,6 @@ struct AlbumDetailView: View {
         guard let server = serverConnection.currentServer else {
             isLoadingTracks = false
             return
-        }
-
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates the spinner flash when the memory cache is warm.
-        let childrenKey = CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt)
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: childrenKey), !cached.isEmpty {
-            tracks = cached
-            isLoadingTracks = false
         }
 
         do {
@@ -455,11 +451,15 @@ struct AlbumDetailView: View {
 
         guard network.isConnected else {
             // Prefer disk-cached artist releases so all albums show, not just downloaded ones.
-            let childrenKey = CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
-            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value,
-               !cached.isEmpty {
-                artistAlbums = cached
-                return
+            if let server = serverConnection.currentServer {
+                let cached = await LibraryStore.shared.children(
+                    of: artist.ratingKey,
+                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: serverConnection.currentLibrarySectionId ?? "")
+                )
+                if !cached.isEmpty {
+                    artistAlbums = cached
+                    return
+                }
             }
             var seenAlbums = Set<String>()
             artistAlbums = downloadManager.downloadedTracksSorted
@@ -992,8 +992,13 @@ struct AlbumDetailView: View {
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: album.ratingKey)
             for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
-            await LibraryCache.shared.clearAll()
-            await ImageCache.shared.clearAll()
+            await LibraryStore.shared.remove(ratingKey: album.ratingKey, serverId: server.machineIdentifier)
+            for track in tracks {
+                await LibraryStore.shared.remove(ratingKey: track.ratingKey, serverId: server.machineIdentifier)
+            }
+            if let sectionId = serverConnection.currentLibrarySectionId {
+                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
+            }
             dismiss()
         } catch {
             albumDeleteErrorMessage = error.localizedDescription
@@ -1223,8 +1228,10 @@ private struct AlbumTrackRow: View {
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
             downloadManager.deleteDownload(ratingKey: track.ratingKey)
-            await LibraryCache.shared.clearAll()
-            await ImageCache.shared.clearAll()
+            await LibraryStore.shared.remove(ratingKey: track.ratingKey, serverId: server.machineIdentifier)
+            if let sectionId = serverConnection.currentLibrarySectionId {
+                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
+            }
             onDelete(track)
         } catch {
             trackDeleteErrorMessage = error.localizedDescription

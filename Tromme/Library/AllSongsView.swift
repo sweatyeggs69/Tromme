@@ -188,15 +188,6 @@ struct AllSongsView: View {
             return
         }
 
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates the spinner flash when the memory cache is warm.
-        let cacheKey = CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId)
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
-            loadedTracks = cached
-            await applyDisplayState()
-            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
-        }
-
         do {
             loadedTracks = try await client.cachedTracks(server: server, sectionId: sectionId)
             if autoDownloadEnabled,

@@ -1,60 +1,74 @@
 import Foundation
 
-/// Extension on PlexAPIClient providing cache-first access to library data.
-/// Pattern: return cached data immediately if available. If stale or missing,
-/// fetch from network and update cache. Concurrent requests for the same data
-/// are coalesced via LibraryCache.withFetch so only one network call fires.
+/// Extension on PlexAPIClient providing local-first access to library data.
+///
+/// Artists, albums, tracks, album/artist children and metadata are read from the on-disk
+/// `LibraryStore`, which `LibrarySyncService` keeps in sync in the background — browsing
+/// never waits on the network once the library has been mirrored. Home rows (recently
+/// added/played, favorites) are local queries over the same store; playlists and the
+/// section list live in it too. The server is only asked for changes, via `smartRefresh`.
 extension PlexAPIClient {
 
-    // MARK: - Cached Library Sections
+    // MARK: - Library Sections
 
+    /// Served from disk; refreshed in the background so a newly added library shows up
+    /// next time. Only the very first call (nothing stored yet) waits on the network.
     func cachedLibrarySections(server: PlexServer) async throws -> [LibrarySection] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.sections(serverId: server.machineIdentifier),
-            policy: .detail
-        ) {
-            try await self.getLibrarySections(server: server)
+        let serverId = server.machineIdentifier
+        if let stored = await LibraryStore.shared.sections(serverId: serverId) {
+            Task(priority: .utility) {
+                if let fresh = try? await self.getLibrarySections(server: server) {
+                    await LibraryStore.shared.saveSections(fresh, serverId: serverId)
+                }
+            }
+            return stored
         }
+        let fresh = try await getLibrarySections(server: server)
+        await LibraryStore.shared.saveSections(fresh, serverId: serverId)
+        return fresh
     }
 
-    // MARK: - Cached Artists
+    // MARK: - Local Library Reads
+
+    private func scope(_ server: PlexServer, _ sectionId: String) -> String {
+        LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+    }
+
+    /// Ensures `kind` has been mirrored (waiting on / starting the first sync if not).
+    private func awaitLibrary(kind: Int, server: PlexServer, sectionId: String) async throws {
+        try await LibrarySyncService.shared.waitUntilReady(kind: kind, client: self, server: server, sectionId: sectionId)
+    }
+
+    private func localItems(kind: Int, server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
+        try await awaitLibrary(kind: kind, server: server, sectionId: sectionId)
+        return await LibraryStore.shared.items(kind: kind, scope: scope(server, sectionId))
+    }
+
+    // MARK: - Artists / Albums / Tracks
 
     func cachedArtists(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
-        try await cachedLibraryContents(server: server, sectionId: sectionId, type: 8,
-            key: CacheKey.artists(serverId: server.machineIdentifier, sectionId: sectionId))
+        try await localItems(kind: LibraryStore.Kind.artist, server: server, sectionId: sectionId)
     }
 
-    // MARK: - Cached Albums
-
     func cachedAlbums(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
-        try await cachedLibraryContents(server: server, sectionId: sectionId, type: 9,
-            key: CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId))
+        try await localItems(kind: LibraryStore.Kind.album, server: server, sectionId: sectionId)
+    }
+
+    func cachedTracks(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
+        try await localItems(kind: LibraryStore.Kind.track, server: server, sectionId: sectionId)
     }
 
     func cachedArtistReleases(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
-        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
+        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey, sectionId: sectionId)
         let releaseKeys = Set(releases.map(\.ratingKey))
         let artistTracks = try await cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
-        let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey))
-            .subtracting(releaseKeys)
+        let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey)).subtracting(releaseKeys)
 
-        if !missingReleaseKeys.isEmpty {
-            let missingReleases = await withTaskGroup(of: PlexMetadata?.self) { group in
-                for key in missingReleaseKeys {
-                    group.addTask {
-                        try? await self.cachedMetadata(server: server, ratingKey: key)
-                    }
-                }
-
-                var results: [PlexMetadata] = []
-                for await release in group {
-                    if let release {
-                        results.append(release)
-                    }
-                }
-                return results
+        // Albums credited to another album-artist but containing this artist's tracks.
+        for key in missingReleaseKeys {
+            if let release = await LibraryStore.shared.item(ratingKey: key, serverId: server.machineIdentifier) {
+                releases.append(release)
             }
-            releases.append(contentsOf: missingReleases)
         }
 
         var seenKeys = Set<String>()
@@ -64,24 +78,22 @@ extension PlexAPIClient {
     }
 
     func cachedArtistTracks(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.artistTracks(artistRatingKey: artist.ratingKey),
-            policy: .detail
-        ) {
-            try await self.getArtistTracks(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey)
-        }
+        try await awaitLibrary(kind: LibraryStore.Kind.track, server: server, sectionId: sectionId)
+        return await LibraryStore.shared.tracks(byArtist: artist.ratingKey, scope: scope(server, sectionId))
     }
 
+    // MARK: - Favorites
 
-    // MARK: - Cached Favorite Tracks
+    /// Matches the threshold of `getFavoriteTracks` so local and server results agree.
+    private static let favoriteMinRating: Double = 4
 
+    /// Local query once tracks are mirrored; until then (first launch) one network fetch.
     func cachedFavoriteTracks(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId),
-            policy: .userContent
-        ) {
-            try await self.getFavoriteTracks(server: server, sectionId: sectionId)
+        let scope = scope(server, sectionId)
+        if await LibraryStore.shared.isReady(kind: LibraryStore.Kind.track, scope: scope) {
+            return await LibraryStore.shared.favorites(scope: scope, minUserRating: Self.favoriteMinRating)
         }
+        return try await getFavoriteTracks(server: server, sectionId: sectionId)
     }
 
     // MARK: - Similar Artists
@@ -164,302 +176,209 @@ extension PlexAPIClient {
         return (ownTracks + compilationTracks).filter { seenKeys.insert($0.ratingKey).inserted }
     }
 
-    // MARK: - Cached Tracks
-
-    func cachedTracks(server: PlexServer, sectionId: String) async throws -> [PlexMetadata] {
-        try await cachedLibraryContents(server: server, sectionId: sectionId, type: 10,
-            key: CacheKey.tracks(serverId: server.machineIdentifier, sectionId: sectionId))
-    }
-
-    // MARK: - Cached Recently Played / Recently Added
+    // MARK: - Recently Played / Recently Added
 
     func cachedRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId),
-            policy: .homeContent
-        ) {
-            try await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: limit)
+        let scope = scope(server, sectionId)
+        if await LibraryStore.shared.isReady(kind: LibraryStore.Kind.track, scope: scope) {
+            return await LibraryStore.shared.recentlyPlayed(scope: scope, limit: limit)
         }
+        return try await getRecentlyPlayed(server: server, sectionId: sectionId, limit: limit)
     }
 
-    func cachedRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId),
-            policy: .homeContent
-        ) {
-            try await self.getRecentlyAdded(server: server, sectionId: sectionId, type: type, limit: limit)
+    func cachedRecentlyAdded(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
+        let scope = scope(server, sectionId)
+        if await LibraryStore.shared.isReady(kind: LibraryStore.Kind.album, scope: scope) {
+            return await LibraryStore.shared.recentlyAdded(scope: scope, limit: limit)
         }
+        return try await getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: limit)
     }
 
-    // MARK: - Cached Children (albums for artist, tracks for album)
+    // MARK: - Children (albums for artist, tracks for album)
 
-    /// Pass the parent's `updatedAt` (from the artist/album object you already have) whenever
-    /// possible so a newly added child busts the cache immediately — see `CacheKey.children`.
-    func cachedChildren(server: PlexServer, ratingKey: String, updatedAt: Int? = nil) async throws -> [PlexMetadata] {
-        let items: [PlexMetadata] = try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.children(ratingKey: ratingKey, updatedAt: updatedAt),
-            policy: .detail
-        ) {
-            try await self.getMetadataChildren(server: server, ratingKey: ratingKey)
+    /// Local lookup by parent key. If the library hasn't mirrored the item yet (first sync
+    /// still running, or an item added since the last sync) it falls back to one network
+    /// fetch so the screen is never empty. `updatedAt` is accepted for source compatibility;
+    /// the store is kept current by the sync, so it no longer versions anything.
+    func cachedChildren(server: PlexServer, ratingKey: String, updatedAt: Int? = nil, sectionId: String? = nil) async throws -> [PlexMetadata] {
+        let serverId = server.machineIdentifier
+        let resolvedSection: String?
+        if let sectionId {
+            resolvedSection = sectionId
+        } else {
+            resolvedSection = await LibraryStore.shared.sectionId(ofRatingKey: ratingKey, serverId: serverId)
         }
-        prefetchArtwork(for: items, server: server)
+        guard let resolvedSection else {
+            return try await getMetadataChildren(server: server, ratingKey: ratingKey)
+        }
+
+        let scope = scope(server, resolvedSection)
+        var items = await LibraryStore.shared.children(of: ratingKey, scope: scope)
+        if items.isEmpty {
+            try? await awaitLibrary(kind: LibraryStore.Kind.track, server: server, sectionId: resolvedSection)
+            items = await LibraryStore.shared.children(of: ratingKey, scope: scope)
+        }
+        if items.isEmpty {
+            return try await getMetadataChildren(server: server, ratingKey: ratingKey)
+        }
         return items
     }
 
-    // MARK: - Cached Playlists
+    // MARK: - Playlists
+
+    /// Playlist keys arrive as a ratingKey or as a `/playlists/{id}/items` path.
+    static func playlistRatingKey(from key: String) -> String {
+        guard key.hasPrefix("/playlists/") else { return key }
+        return key.split(separator: "/").dropFirst().first.map(String.init) ?? key
+    }
 
     func cachedPlaylists(server: PlexServer) async throws -> [PlexPlaylist] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.playlists(serverId: server.machineIdentifier),
-            policy: .userContent
-        ) {
-            try await self.getPlaylists(server: server)
+        let serverId = server.machineIdentifier
+        if !(await LibraryStore.shared.playlistsSynced(serverId: serverId)) {
+            try await refreshPlaylists(server: server)
         }
+        return await LibraryStore.shared.playlists(serverId: serverId)
     }
-
-    // MARK: - Cached Playlist Items
 
     func cachedPlaylistItems(server: PlexServer, playlistKey: String) async throws -> [PlexMetadata] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.playlistItems(playlistKey: playlistKey),
-            policy: .userContent
-        ) {
-            try await self.getPlaylistItems(server: server, playlistKey: playlistKey)
+        let serverId = server.machineIdentifier
+        let key = Self.playlistRatingKey(from: playlistKey)
+        if let stored = await LibraryStore.shared.playlistItems(playlistKey: key, serverId: serverId) {
+            return stored
         }
+        let items = try await getPlaylistItems(server: server, playlistKey: playlistKey)
+        await LibraryStore.shared.savePlaylistItems(items, playlistKey: key, serverId: serverId)
+        return items
     }
 
-    // MARK: - Cached Search
-
-    func cachedSearch(server: PlexServer, query: String, sectionId: String? = nil, limit: Int = 20) async throws -> [Hub] {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.search(query: query, sectionId: sectionId),
-            policy: .search
-        ) {
-            try await self.search(server: server, query: query, sectionId: sectionId, limit: limit)
-        }
+    /// Mirrors the playlist list and the items of any playlist that is new or changed.
+    /// Coalesced: concurrent callers share one refresh.
+    func refreshPlaylists(server: PlexServer) async throws {
+        try await LibrarySyncService.shared.refreshPlaylists(client: self, server: server)
     }
 
-    // MARK: - Cached Metadata (single item)
+    /// The uncoalesced work behind `refreshPlaylists` — call that instead.
+    func performPlaylistRefresh(server: PlexServer) async throws {
+        let serverId = server.machineIdentifier
+        let fresh = try await getPlaylists(server: server)
+        await LibraryStore.shared.savePlaylists(fresh, serverId: serverId)
 
+        let musicKeys = Set(fresh.filter(\.isMusicPlaylist).map(\.ratingKey))
+        let stale = await LibraryStore.shared.playlistKeysNeedingItems(serverId: serverId).filter(musicKeys.contains)
+
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = stale.makeIterator()
+            func addNext() {
+                guard let key = iterator.next() else { return }
+                group.addTask {
+                    guard let items = try? await self.getPlaylistItems(server: server, playlistKey: key) else { return }
+                    await LibraryStore.shared.savePlaylistItems(items, playlistKey: key, serverId: serverId)
+                }
+            }
+            for _ in 0..<3 { addNext() }
+            while await group.next() != nil { addNext() }
+        }
+        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+    }
+
+    /// Re-reads one playlist (listing + items) after the user changed it.
+    func refreshPlaylist(server: PlexServer, playlistKey: String) async {
+        let serverId = server.machineIdentifier
+        let key = Self.playlistRatingKey(from: playlistKey)
+        guard let fresh = try? await getPlaylists(server: server) else { return }
+        await LibraryStore.shared.savePlaylists(fresh, serverId: serverId)
+        if fresh.contains(where: { $0.ratingKey == key }),
+           let items = try? await getPlaylistItems(server: server, playlistKey: key) {
+            await LibraryStore.shared.savePlaylistItems(items, playlistKey: key, serverId: serverId)
+        } else {
+            await LibraryStore.shared.removePlaylist(playlistKey: key, serverId: serverId)
+        }
+        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+    }
+
+    // MARK: - Metadata (single item)
+
+    /// Detail metadata for one item. Served from disk while it's current for the item's
+    /// `updatedAt` (artist details are pre-fetched by the library sync); otherwise fetched
+    /// once and persisted. Offline, falls back to whatever is stored.
     func cachedMetadata(server: PlexServer, ratingKey: String) async throws -> PlexMetadata? {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.metadata(ratingKey: ratingKey),
-            policy: .detail
-        ) {
-            try await self.getMetadata(server: server, ratingKey: ratingKey)
+        let serverId = server.machineIdentifier
+        if let fresh = await LibraryStore.shared.freshDetail(ratingKey: ratingKey, serverId: serverId) {
+            return fresh
+        }
+        do {
+            let fetched = try await getMetadata(server: server, ratingKey: ratingKey)
+            if let fetched { await LibraryStore.shared.saveDetail(fetched, serverId: serverId) }
+            return fetched
+        } catch {
+            if let stored = await LibraryStore.shared.anyMetadata(ratingKey: ratingKey, serverId: serverId) {
+                return stored
+            }
+            throw error
         }
     }
 
-    /// Album-detail metadata with a shorter disk lifetime so album summaries
-    /// are refreshed at least once per day.
     func cachedAlbumMetadata(server: PlexServer, ratingKey: String) async throws -> PlexMetadata? {
-        try await LibraryCache.shared.cachedFetch(
-            forKey: CacheKey.metadata(ratingKey: ratingKey),
-            policy: .albumInfo
-        ) {
-            try await self.getMetadata(server: server, ratingKey: ratingKey)
-        }
+        try await cachedMetadata(server: server, ratingKey: ratingKey)
     }
 
-    // MARK: - Smart Refresh
+    // MARK: - Refresh
 
-    /// Invalidates the flat per-section/home list caches (artists/albums/tracks/home
-    /// sections/playlists). Cheap — a fixed handful of key removals, no per-item disk
-    /// walk — so it's safe to call unconditionally on every manual pull-to-refresh.
-    func invalidateHomeAndListCaches(server: PlexServer, sectionId: String) async {
-        let sid = server.machineIdentifier
-        await LibraryCache.shared.remove(forKey: CacheKey.artists(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.albums(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.tracks(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyAdded(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.homeRecentlyPlayed(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: sid, sectionId: sectionId))
-        await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: sid))
-        await LibraryCache.shared.remove(forKey: CacheKey.homePlaylists(serverId: sid))
+    /// Cold-launch / foreground / pull-to-refresh entry point: brings the local library up
+    /// to date if the server's section changed, and pulls changed user state and playlists.
+    func smartRefresh(server: PlexServer, sectionId: String, forceLibrarySync: Bool = false) async {
+        async let dynamic: Void = refreshDynamicContent(server: server, sectionId: sectionId)
+        await LibrarySyncService.shared.refreshIfNeeded(client: self, server: server, sectionId: sectionId, force: forceLibrarySync)
+        await dynamic
+    }
+
+    /// The fast, frequently-changing part of a refresh: play counts / ratings (which drive
+    /// Home's recently played and favorites) and playlists.
+    func refreshDynamicContent(server: PlexServer, sectionId: String) async {
+        async let playlists: Void = { try? await refreshPlaylists(server: server) }()
+        await refreshUserState(server: server, sectionId: sectionId)
+        await playlists
+    }
+
+    /// Fetches recently played and favorited tracks and writes their fresh play counts and
+    /// ratings into the store. Tracks that were favorited locally but no longer are on the
+    /// server are re-read by id (batched) so un-favorites propagate too.
+    func refreshUserState(server: PlexServer, sectionId: String) async {
+        let scope = scope(server, sectionId)
+        guard await LibraryStore.shared.isReady(kind: LibraryStore.Kind.track, scope: scope) else { return }
+
+        async let recentRequest = try? getRecentlyPlayed(server: server, sectionId: sectionId, limit: 50)
+        async let favoritesRequest = try? getFavoriteTracks(server: server, sectionId: sectionId)
+        let (recent, favorites) = await (recentRequest, favoritesRequest)
+
+        var updates = recent ?? []
+        if let favorites {
+            updates += favorites
+            let stale = await LibraryStore.shared.favoriteKeys(scope: scope, minUserRating: Self.favoriteMinRating)
+                .subtracting(favorites.map(\.ratingKey))
+            updates += await fetchMetadata(server: server, ratingKeys: Array(stale))
+        }
+        guard !updates.isEmpty else { return }
+        await LibraryStore.shared.applyTrackUpdates(updates, scope: scope)
         NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
     }
 
-    /// Invalidates everything `invalidateHomeAndListCaches` does, plus each
-    /// currently-cached artist's and album's `children` cache (its track/album listing).
-    ///
-    /// The `children` cache key is normally versioned by the parent's `updatedAt`
-    /// (see `CacheKey.children`) so it self-invalidates when the parent changes —
-    /// but Plex does not reliably bump an album/artist's own `updatedAt` just
-    /// because a track was added to it via a library scan. Relying on that alone
-    /// left newly-scanned tracks missing from an existing album until the
-    /// `children` entry's TTL (up to 7 days on disk) expired on its own. Removing
-    /// the stale entries outright guarantees the next read is a real network
-    /// fetch regardless of whether the parent's `updatedAt` moved.
-    ///
-    /// Walking every cached artist/album is too slow to run on every interactive
-    /// pull-to-refresh — only call this when the library is known to have actually
-    /// changed (see `smartRefresh`), and preferably off the main refresh gesture.
-    func invalidateLibraryCaches(server: PlexServer, sectionId: String) async {
-        let sid = server.machineIdentifier
-        let artistsKey = CacheKey.artists(serverId: sid, sectionId: sectionId)
-        let albumsKey = CacheKey.albums(serverId: sid, sectionId: sectionId)
-
-        if let staleArtists = await LibraryCache.shared.get([PlexMetadata].self, forKey: artistsKey)?.value {
-            for artist in staleArtists {
-                await LibraryCache.shared.remove(forKey: CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt))
-            }
-        }
-        if let staleAlbums = await LibraryCache.shared.get([PlexMetadata].self, forKey: albumsKey)?.value {
-            for album in staleAlbums {
-                await LibraryCache.shared.remove(forKey: CacheKey.children(ratingKey: album.ratingKey, updatedAt: album.updatedAt))
-            }
-        }
-
-        await invalidateHomeAndListCaches(server: server, sectionId: sectionId)
+    /// Re-reads one track after the user rated or played it, so Home and Favorites update
+    /// from the store immediately.
+    func refreshItem(server: PlexServer, ratingKey: String) async {
+        guard let sectionId = await LibraryStore.shared.sectionId(ofRatingKey: ratingKey, serverId: server.machineIdentifier),
+              let fresh = try? await getMetadata(server: server, ratingKey: ratingKey) else { return }
+        await LibraryStore.shared.applyTrackUpdates([fresh], scope: scope(server, sectionId))
     }
 
-    /// Checks the server's `updatedAt` timestamp for the section before deciding what to refresh.
-    /// - If nothing changed: warms memory from disk only (no library network traffic).
-    /// - If the library changed: invalidates the stale caches (see `invalidateLibraryCaches`)
-    ///   so `warmCache` re-fetches them. Images are never cleared.
-    ///
-    /// Use this for cold-launch and foreground-return checks. Use `warmCache` directly only
-    /// when you know a full rebuild is needed (e.g., after changing the selected library).
-    func smartRefresh(server: PlexServer, sectionId: String) async {
-        guard let sections = try? await getLibrarySections(server: server),
-              let section = sections.first(where: { $0.key == sectionId }),
-              let serverUpdatedAt = section.updatedAt else {
-            await warmCache(server: server, sectionId: sectionId)
-            return
+    /// `/library/metadata/{ids}` accepts a comma-separated list, so many items cost one request.
+    func fetchMetadata(server: PlexServer, ratingKeys: [String], batchSize: Int = 50) async -> [PlexMetadata] {
+        var result: [PlexMetadata] = []
+        for start in stride(from: 0, to: ratingKeys.count, by: batchSize) {
+            let batch = Array(ratingKeys[start..<min(start + batchSize, ratingKeys.count)])
+            if let items = try? await getMetadata(server: server, ratingKeys: batch) { result += items }
         }
-
-        let udKey = "lastLibraryUpdatedAt_\(server.machineIdentifier)_\(sectionId)"
-        let lastUpdatedAt = UserDefaults.standard.integer(forKey: udKey)
-
-        if serverUpdatedAt != lastUpdatedAt {
-            UserDefaults.standard.set(serverUpdatedAt, forKey: udKey)
-            await invalidateLibraryCaches(server: server, sectionId: sectionId)
-        }
-
-        await warmCache(server: server, sectionId: sectionId)
-    }
-
-    // MARK: - Cache Warming
-
-    /// Preload the core library data (artists, albums, tracks) in parallel,
-    /// then prefetch artwork for the loaded items.
-    /// Uses request coalescing, so if views are already fetching, this joins those requests.
-    func warmCache(server: PlexServer, sectionId: String) async {
-        // Phase 1: Fetch library data in parallel
-        var artists: [PlexMetadata] = []
-        var albums: [PlexMetadata] = []
-        var recentTracks: [PlexMetadata] = []
-        var favoriteTracks: [PlexMetadata] = []
-
-        await withTaskGroup(of: (String, [PlexMetadata]).self) { group in
-            group.addTask { ("artists", (try? await self.cachedArtists(server: server, sectionId: sectionId)) ?? []) }
-            group.addTask { ("albums", (try? await self.cachedAlbums(server: server, sectionId: sectionId)) ?? []) }
-            group.addTask {
-                _ = try? await self.cachedPlaylists(server: server)
-                return ("playlists", [])
-            }
-            group.addTask { ("favorites", (try? await self.cachedFavoriteTracks(server: server, sectionId: sectionId)) ?? []) }
-            group.addTask {
-                _ = try? await self.cachedTracks(server: server, sectionId: sectionId)
-                return ("tracks", [])
-            }
-            // Always fetch dynamic home content directly so the home screen reflects
-            // the current server state, not whatever happened to be in the disk cache.
-            group.addTask {
-                let recent = (try? await self.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10)) ?? []
-                await LibraryCache.shared.set(recent, forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId))
-                return ("recent", recent)
-            }
-            group.addTask {
-                let added = (try? await self.getRecentlyAdded(server: server, sectionId: sectionId)) ?? []
-                await LibraryCache.shared.set(added, forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId))
-                return ("recentlyAdded", [])
-            }
-
-            for await (key, items) in group {
-                switch key {
-                case "artists": artists = items
-                case "albums": albums = items
-                case "recent": recentTracks = items
-                case "favorites": favoriteTracks = items
-                default: break
-                }
-            }
-        }
-
-        // Notify the home screen that fresh data is ready in the memory cache.
-        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
-
-        // Artwork for artists/albums is already prefetched as a side effect of the
-        // cachedArtists/cachedAlbums calls above (see cachedLibraryContents) — an
-        // explicit second sweep here duplicated a full-library artwork decode pass
-        // on every launch and every foreground-return smart refresh.
-
-        // Phases 3 and 4 are opportunistic prefetch that would flood a constrained connection.
-        // On metered or low-power, let the cache warm organically as the user navigates.
-        guard !NetworkStatus.shared.isExpensive,
-              !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
-
-        // Phase 3: Pre-fetch detail data for frequently accessed artists and albums.
-        // Collect unique artist and album keys from recent + favorite tracks.
-        var artistKeys = Set<String>()
-        var albumKeys = Set<String>()
-        for track in recentTracks + favoriteTracks {
-            if let key = track.grandparentRatingKey { artistKeys.insert(key) }
-            if let key = track.parentRatingKey { albumKeys.insert(key) }
-        }
-
-        let topArtistKeys = Array(artistKeys.prefix(25))
-        let topAlbumKeys = Array(albumKeys.prefix(30))
-
-        // Looked up so the prefetch writes to the same updatedAt-versioned cache key
-        // that ArtistDetailView/AlbumDetailView will read (see CacheKey.children) —
-        // otherwise this prefetch warms an entry nothing else ever reads.
-        let artistUpdatedAtByKey = Dictionary(artists.map { ($0.ratingKey, $0.updatedAt ?? 0) }, uniquingKeysWith: { first, _ in first })
-        let albumUpdatedAtByKey = Dictionary(albums.map { ($0.ratingKey, $0.updatedAt ?? 0) }, uniquingKeysWith: { first, _ in first })
-
-        // Pre-fetch artist children (albums), artist metadata, and album children (tracks).
-        // Batched in groups of 5 to actually bound concurrency — each key fires 2-3 requests,
-        // so running all ~55 keys at once (as this used to) could queue ~150 simultaneous
-        // requests against the server, starving individual requests until they read as hung.
-        let prefetchKeys: [(key: String, isArtist: Bool)] =
-            topArtistKeys.map { ($0, true) } + topAlbumKeys.map { ($0, false) }
-
-        for batchStart in stride(from: 0, to: prefetchKeys.count, by: 5) {
-            let batch = prefetchKeys[batchStart..<min(batchStart + 5, prefetchKeys.count)]
-            await withTaskGroup(of: Void.self) { group in
-                for (key, isArtist) in batch {
-                    group.addTask {
-                        if isArtist {
-                            let updatedAt = artistUpdatedAtByKey[key]
-                            async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
-                            async let metadata = self.cachedMetadata(server: server, ratingKey: key)
-                            _ = try? await children
-                            _ = try? await metadata
-                        } else {
-                            let updatedAt = albumUpdatedAtByKey[key]
-                            async let children = self.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
-                            async let metadata = self.cachedMetadata(server: server, ratingKey: key)
-                            _ = try? await children
-                            _ = try? await metadata
-                        }
-                    }
-                }
-            }
-        }
-
-        // Phase 4: Pre-extract artwork colors for those albums so detail views open instantly.
-        let colorAlbums = albums.filter { albumKeys.contains($0.ratingKey) }
-        let colorClient = self
-        let colorServer = server
-        for album in colorAlbums {
-            await ArtworkColorCache.shared.resolveColor(
-                for: album.thumb,
-                using: colorClient,
-                server: colorServer
-            )
-        }
+        return result
     }
 
     // MARK: - Artwork Prefetching
@@ -496,20 +415,6 @@ extension PlexAPIClient {
     }
 
     // MARK: - Private Helpers
-
-    private func cachedLibraryContents(server: PlexServer, sectionId: String, type: Int, key: String) async throws -> [PlexMetadata] {
-        let items: [PlexMetadata] = try await LibraryCache.shared.cachedFetch(
-            forKey: key,
-            policy: .library
-        ) {
-            try await self.getLibraryContents(server: server, sectionId: sectionId, type: type)
-        }
-        // Prefetch artwork for newly fetched items (artists/albums have thumb, tracks less important)
-        if type == 8 || type == 9 {
-            prefetchArtwork(for: items, server: server, size: 1000)
-        }
-        return items
-    }
 
     private func releaseSort(_ lhs: PlexMetadata, _ rhs: PlexMetadata) -> Bool {
         let leftDate = lhs.originallyAvailableAt ?? ""

@@ -1,13 +1,13 @@
 import SwiftUI
 import CryptoKit
 import ImageIO
-import UniformTypeIdentifiers
 
-/// Two-tier image cache: NSCache (memory) + disk (Caches directory).
+/// Two-tier image cache: NSCache (memory) + disk (Application Support, so the OS never
+/// purges artwork the library prefetch has already downloaded).
 /// Images are keyed by URL string, hashed to SHA256 for disk filenames.
 ///
 /// The actor only guards bookkeeping (in-flight requests, disk byte count, generation).
-/// Disk reads, decoding, and HEIC encoding run off the actor in `@concurrent` helpers,
+/// Disk reads, decoding, and file writes run off the actor in `@concurrent` helpers,
 /// so many rows can decode in parallel instead of queueing behind one another.
 actor ImageCache {
     static let shared = ImageCache()
@@ -15,7 +15,8 @@ actor ImageCache {
     // NSCache is documented thread-safe, so reads/writes from nonisolated contexts are fine.
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, UIImage>()
     private let diskURL: URL
-    private let maxDiskBytes: Int = 500 * 1024 * 1024 // 500 MB
+    // Sized to hold a whole library's artwork at full resolution (see `storeToDisk`).
+    private let maxDiskBytes: Int = 3 * 1024 * 1024 * 1024 // 3 GB
     // Tracked incrementally so routine saves don't need a full directory scan;
     // only refreshed by an authoritative re-scan when trimDiskCacheIfNeeded() runs.
     private var currentDiskBytes: Int = 0
@@ -39,9 +40,18 @@ actor ImageCache {
 #endif
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        diskURL = caches.appendingPathComponent("TrommeImageCache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        // Artwork used to live in Caches, which iOS purges under storage pressure.
+        if let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? fm.removeItem(at: caches.appendingPathComponent("TrommeImageCache", isDirectory: true))
+        }
+        var dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TrommeImageStore", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dir.setResourceValues(values)
+        diskURL = dir
         // Cost is the real limit; the count is only a backstop so long lists of small
         // row thumbnails aren't evicted while well under the byte budget.
         memoryCache.countLimit = 1000
@@ -157,6 +167,44 @@ actor ImageCache {
         }
     }
 
+    /// Downloads artwork straight to disk without decoding or touching the memory cache —
+    /// used by the library prefetch so thousands of covers are on hand before they're
+    /// scrolled to. Skips files already stored at `pixelSize` or larger. Stops early (and
+    /// can simply be re-run) if the task is cancelled or the connection drops.
+    func storeToDisk(urls: [URL], pixelSize: Int, maxConcurrent: Int = 4) async {
+        var seen = Set<String>()
+        var pending: [(url: URL, diskKey: String)] = []
+        for url in urls {
+            let diskKey = diskCacheKey(for: url)
+            guard seen.insert(diskKey).inserted else { continue }
+            let fileURL = diskURL.appendingPathComponent(diskKey)
+            if await Self.storedPixelSize(at: fileURL) >= pixelSize { continue }
+            pending.append((upgradedDownloadURL(from: url, minimumSize: pixelSize), diskKey))
+        }
+        guard !pending.isEmpty else { return }
+
+        var remaining = pending[...]
+        await withTaskGroup(of: Void.self) { group in
+            func start() {
+                guard !Task.isCancelled, NetworkStatus.shared.isConnected,
+                      let next = remaining.popFirst() else { return }
+                group.addTask(priority: .utility) {
+                    await self.downloadToDisk(url: next.url, diskKey: next.diskKey)
+                }
+            }
+            for _ in 0..<max(maxConcurrent, 1) { start() }
+            while await group.next() != nil { start() }
+        }
+    }
+
+    private func downloadToDisk(url: URL, diskKey: String) async {
+        let startGeneration = generation
+        guard let data = await Self.fetchData(url), generation == startGeneration else { return }
+        let fileURL = diskURL.appendingPathComponent(diskKey)
+        let bytesDelta = await Self.writeToDisk(data, to: fileURL)
+        didWriteToDisk(fileURL: fileURL, bytesDelta: bytesDelta, generation: startGeneration)
+    }
+
     /// Synchronously returns an in-memory cached image if present. Used by views that need
     /// to render cached art on the very first frame without waiting for an actor hop.
     nonisolated func memoryCachedImage(for url: URL, targetPixelSize: Int? = nil) -> UIImage? {
@@ -251,11 +299,11 @@ actor ImageCache {
         guard generation == startGeneration else { return nil }
 
         memoryCache.setObject(image, forKey: memoryKey as NSString, cost: image.decodedCost)
-        // Hand the image back now; the HEIC re-encode and disk write happen in the
+        // Hand the image back now; the disk write happens in the
         // background so they never delay this or any other artwork request.
         let fileURL = diskURL.appendingPathComponent(diskKey)
         Task(priority: .background) {
-            let bytesDelta = await Self.encodeAndWrite(data, to: fileURL)
+            let bytesDelta = await Self.writeToDisk(data, to: fileURL)
             self.didWriteToDisk(fileURL: fileURL, bytesDelta: bytesDelta, generation: startGeneration)
         }
 #if DEBUG
@@ -299,7 +347,7 @@ actor ImageCache {
         // Evict oldest files first
         fileInfos.sort { $0.date < $1.date }
         for info in fileInfos {
-            guard totalSize > maxDiskBytes / 2 else { break }
+            guard totalSize > maxDiskBytes * 4 / 5 else { break }
             try? fm.removeItem(at: info.url)
             totalSize -= info.size
         }
@@ -374,7 +422,9 @@ actor ImageCache {
     /// caller to re-fetch a larger copy instead of upscaling.
     @concurrent
     private static func loadFromDisk(at fileURL: URL, targetPixelSize: Int?, requireFullSize: Bool, touch: Bool) async -> DiskImage? {
-        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
+        // Check first: ImageIO logs an error to the console for every missing file.
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
         var isFullSize = true
         if let targetPixelSize, targetPixelSize > 0 {
             let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
@@ -391,6 +441,26 @@ actor ImageCache {
         return DiskImage(image: image, isFullSize: isFullSize)
     }
 
+    /// Longest edge, in pixels, of the stored file (0 if missing/unreadable). Reads only the header.
+    @concurrent
+    private static func storedPixelSize(at fileURL: URL) async -> Int {
+        guard FileManager.default.fileExists(atPath: fileURL.path),
+              let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return 0 }
+        let width = properties[kCGImagePropertyPixelWidth] as? Int ?? 0
+        let height = properties[kCGImagePropertyPixelHeight] as? Int ?? 0
+        return max(width, height)
+    }
+
+    @concurrent
+    private static func fetchData(_ url: URL) async -> Data? {
+        guard let (data, response) = try? await downloadSession.data(from: url),
+              let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              !data.isEmpty else { return nil }
+        return data
+    }
+
     @concurrent
     private static func fetchAndDecode(_ url: URL, targetPixelSize: Int?) async -> (Data, UIImage)? {
         guard let (data, response) = try? await downloadSession.data(from: url),
@@ -400,32 +470,14 @@ actor ImageCache {
         return (data, image)
     }
 
-    /// Writes downloaded bytes to disk and returns the change in on-disk size.
-    /// Re-encodes to HEIC first — roughly half the file size of the JPEG Plex sends at
-    /// the same visual quality, and it's hardware-accelerated on every device this app
-    /// targets. Falls back to the original bytes if HEIC encoding is unavailable (e.g.
-    /// running on a Simulator without the encoder).
+    /// Writes the downloaded bytes to disk as-is and returns the change in on-disk size.
+    /// Artwork is stored exactly as Plex sent it — no re-encoding, so no extra CPU and no
+    /// blocking encoder calls on the concurrency pool.
     @concurrent
-    private static func encodeAndWrite(_ data: Data, to fileURL: URL) async -> Int {
-        let encoded = heicData(from: data) ?? data
+    private static func writeToDisk(_ data: Data, to fileURL: URL) async -> Int {
         let previousSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-        guard (try? encoded.write(to: fileURL, options: .atomic)) != nil else { return 0 }
-        return encoded.count - previousSize
-    }
-
-    /// Re-encodes image bytes as HEIC at full resolution. Returns nil if the source can't
-    /// be decoded or the device has no HEIC encoder.
-    private static func heicData(from data: Data) -> Data? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        let mutableData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            mutableData, UTType.heic.identifier as CFString, 1, nil
-        ) else { return nil }
-        let options = [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary
-        CGImageDestinationAddImage(destination, cgImage, options)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return mutableData as Data
+        guard (try? data.write(to: fileURL, options: .atomic)) != nil else { return 0 }
+        return data.count - previousSize
     }
 
     private static func decodeImage(from data: Data, targetPixelSize: Int?) -> UIImage? {

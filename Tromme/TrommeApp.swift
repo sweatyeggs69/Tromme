@@ -133,6 +133,7 @@ struct TrommeApp: App {
             named: UIApplication.didReceiveMemoryWarningNotification
         ) {
             await ImageCache.shared.clearMemory()
+            await LibraryStore.shared.clearMemory()
         }
     }
 

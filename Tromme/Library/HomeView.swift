@@ -65,24 +65,23 @@ struct HomeView: View {
         }
         .refreshable {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
-            // Catches newly-scanned tracks in existing albums/artists, which needs a slow
-            // per-item cache walk (see CachedAPIClient.invalidateLibraryCaches) — run it in
-            // the background so it doesn't hold the pull-to-refresh spinner up. AllAlbumsView/
-            // ArtistsView pick up the result via the libraryContentDidChange notification
-            // once it finishes.
             if let server = serverConnection.currentServer,
                let sectionId = serverConnection.currentLibrarySectionId {
-                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
+                // Full-library changes (new albums/tracks) sync in the background and arrive
+                // via libraryContentDidChange; the quick part — play counts, ratings,
+                // playlists — is awaited so the spinner covers it.
+                Task { await LibrarySyncService.shared.refreshIfNeeded(client: client, server: server, sectionId: sectionId) }
+                await client.refreshDynamicContent(server: server, sectionId: sectionId)
             }
             await withTaskGroup(of: Void.self) { group in
-                group.addTask { await loadHomeContent(forceRefresh: true) }
+                group.addTask { await loadHomeContent() }
                 group.addTask { await loadFeaturedAlbum(forced: false) }
             }
         }
         .task(id: loadTaskID) {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             await withTaskGroup(of: Void.self) { group in
-                group.addTask { await loadHomeContent(forceRefresh: false) }
+                group.addTask { await loadHomeContent() }
                 group.addTask { await loadFeaturedAlbum(forced: false) }
             }
         }
@@ -94,10 +93,6 @@ struct HomeView: View {
                       let sectionId = serverConnection.currentLibrarySectionId else { continue }
                 if let favorites = try? await client.cachedFavoriteTracks(server: server, sectionId: sectionId) {
                     applyFavorites(plexFavorites: favorites)
-                    await LibraryCache.shared.set(
-                        favoriteTracks,
-                        forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
-                    )
                 }
             }
         }
@@ -105,7 +100,7 @@ struct HomeView: View {
             guard previewRecentTracks == nil && previewPlaylists == nil && previewRecentAlbums == nil else { return }
             for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
                 guard !Task.isCancelled else { break }
-                await loadHomeContent(forceRefresh: false)
+                await loadHomeContent()
             }
         }
         .task {
@@ -114,10 +109,8 @@ struct HomeView: View {
                 guard !Task.isCancelled,
                       let server = serverConnection.currentServer,
                       let sectionId = serverConnection.currentLibrarySectionId else { continue }
-                // Fetch directly from network — if offline, this throws and we leave
-                // the existing cache and UI state untouched.
-                guard let fresh = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId) else { continue }
-                await LibraryCache.shared.set(fresh, forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId))
+                // The player already wrote the scrobble into the store; just re-read it.
+                guard let fresh = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId) else { continue }
                 withAnimation(.easeIn(duration: 0.25)) {
                     recentTracks = Array(fresh.prefix(10))
                 }
@@ -424,22 +417,8 @@ struct HomeView: View {
         }
     }
 
-    private func loadHomeContent(forceRefresh: Bool) async {
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates spinner flash when the memory cache is warm.
-        if !forceRefresh,
-           let server = serverConnection.currentServer,
-           let sectionId = serverConnection.currentLibrarySectionId {
-            let favKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
-            let recentKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
-            let albumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
-            let playlistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
-            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: favKey) { favoriteTracks = cached }
-            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: recentKey) { recentTracks = cached }
-            if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: albumsKey) { recentAlbums = cached }
-            if let cached = LibraryCache.shared.memoryCached([PlexPlaylist].self, forKey: playlistsKey) { playlists = cached }
-        }
-
+    /// Every row is a local query over the library store, so this is effectively instant.
+    private func loadHomeContent() async {
         let hadFavorites = !favoriteTracks.isEmpty
         let hadRecentTracks = !recentTracks.isEmpty
         let hadPlaylists = !playlists.isEmpty
@@ -459,15 +438,6 @@ struct HomeView: View {
             recentAlbums = []
             isLoading = false
             return
-        }
-
-        if forceRefresh {
-            // Cheap, unconditional invalidation so home content and the library lists
-            // always re-fetch on a manual pull. The slower per-album/per-artist children
-            // cache walk runs separately in the background (see the .refreshable closure).
-            await client.invalidateHomeAndListCaches(server: server, sectionId: sectionId)
-        } else {
-            await hydrateFromHomeCacheIfAvailable(server: server, sectionId: sectionId)
         }
 
         enum HomeLoadResult {
@@ -553,34 +523,6 @@ struct HomeView: View {
             isLoading = false
         }
 
-        if favoritesResult != nil {
-            await LibraryCache.shared.set(
-                favoriteTracks,
-                forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
-            )
-        }
-
-        if recentlyPlayedResult != nil {
-            await LibraryCache.shared.set(
-                recentTracks,
-                forKey: CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
-            )
-        }
-
-        if playlistsResult != nil {
-            await LibraryCache.shared.set(
-                playlists,
-                forKey: CacheKey.homePlaylists(serverId: server.machineIdentifier)
-            )
-        }
-
-        if recentlyAddedResult != nil {
-            await LibraryCache.shared.set(
-                recentAlbums,
-                forKey: CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
-            )
-        }
-
         let snapshotFavorites = favoriteTracks
         let snapshotRecentTracks = recentTracks
         let snapshotPlaylists = playlists
@@ -613,38 +555,6 @@ struct HomeView: View {
                 return nil
             } catch {
                 return nil
-            }
-        }
-    }
-
-    private func hydrateFromHomeCacheIfAvailable(server: PlexServer, sectionId: String) async {
-        let favoritesKey = CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId)
-        let recentTracksKey = CacheKey.homeRecentlyPlayed(serverId: server.machineIdentifier, sectionId: sectionId)
-        let recentAlbumsKey = CacheKey.homeRecentlyAdded(serverId: server.machineIdentifier, sectionId: sectionId)
-        let playlistsKey = CacheKey.homePlaylists(serverId: server.machineIdentifier)
-
-        if let cachedFavorites = await LibraryCache.shared.get([PlexMetadata].self, forKey: favoritesKey)?.value {
-            withAnimation(.easeIn(duration: 0.25)) {
-                favoriteTracks = cachedFavorites
-                isLoading = false
-            }
-        }
-        if let cachedRecentTracks = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentTracksKey)?.value {
-            withAnimation(.easeIn(duration: 0.25)) {
-                recentTracks = cachedRecentTracks
-                isLoading = false
-            }
-        }
-        if let cachedRecentAlbums = await LibraryCache.shared.get([PlexMetadata].self, forKey: recentAlbumsKey)?.value {
-            withAnimation(.easeIn(duration: 0.25)) {
-                recentAlbums = cachedRecentAlbums
-                isLoading = false
-            }
-        }
-        if let cachedPlaylists = await LibraryCache.shared.get([PlexPlaylist].self, forKey: playlistsKey)?.value {
-            withAnimation(.easeIn(duration: 0.25)) {
-                playlists = cachedPlaylists
-                isLoading = false
             }
         }
     }

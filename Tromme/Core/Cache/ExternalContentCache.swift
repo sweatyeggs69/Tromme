@@ -1,15 +1,12 @@
 import Foundation
 
-/// Cache for Plex library API responses. Uses NSCache for memory and
-/// JSON files on disk for persistence across launches.
+/// Cache for third-party responses that are not Plex library data (LRCLIB lyrics, Last.fm
+/// top tracks). Everything from the Plex server — library, playlists, Home — lives in
+/// `LibraryStore` instead. NSCache in memory plus JSON files on disk (Application Support).
 ///
-/// Strategy: return cached data immediately, then refresh in background.
-/// Views call `get()` for cache-first, or `fetch()` to force refresh.
-///
-/// In-flight deduplication: concurrent requests for the same key share
-/// one network fetch via `withFetch(_:forKey:)`.
-actor LibraryCache {
-    static let shared = LibraryCache()
+/// In-flight deduplication: concurrent requests for the same key share one network fetch.
+actor ExternalContentCache {
+    static let shared = ExternalContentCache()
 
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, CacheEntry>()
     private let diskURL: URL
@@ -27,9 +24,20 @@ actor LibraryCache {
     private var currentDiskBytes: Int = 0
 
     private init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        diskURL = caches.appendingPathComponent("TrommeLibraryCache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        // Retire the pre-LibraryStore cache (it held Plex library blobs, now in the store).
+        if let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? fm.removeItem(at: caches.appendingPathComponent("TrommeLibraryCache", isDirectory: true))
+        }
+        try? fm.removeItem(at: fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TrommeLibraryCache", isDirectory: true))
+        var dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("TrommeExternalContentCache", isDirectory: true)
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dir.setResourceValues(values)
+        diskURL = dir
         memoryCache.countLimit = 100
         // Entries hold serialized library payloads (artist/album/track lists), which can
         // be several MB each for large libraries — cap total bytes, not just entry count.
@@ -327,61 +335,8 @@ struct CachedResult<T: Sendable>: Sendable {
 // MARK: - Cache Keys
 
 enum CacheKey {
-    static func sections(serverId: String) -> String {
-        "sections_\(serverId)"
-    }
-    static func artists(serverId: String, sectionId: String) -> String {
-        "artists_\(serverId)_\(sectionId)"
-    }
-    static func albums(serverId: String, sectionId: String) -> String {
-        "albums_\(serverId)_\(sectionId)"
-    }
-    static func tracks(serverId: String, sectionId: String) -> String {
-        "tracks_\(serverId)_\(sectionId)"
-    }
-    /// Folds the parent's `updatedAt` into the key so a newly added child (e.g. an album
-    /// added to this artist, or a track added to this album) invalidates the cache the
-    /// moment the parent's updatedAt bumps, instead of waiting out the `.detail` TTL
-    /// (2h memory / 7 days disk) — mirrors smartRefresh's section-level updatedAt check.
-    static func children(ratingKey: String, updatedAt: Int? = nil) -> String {
-        guard let updatedAt else { return "children_\(ratingKey)" }
-        return "children_\(ratingKey)_\(updatedAt)"
-    }
-    static func metadata(ratingKey: String) -> String {
-        "metadata_\(ratingKey)"
-    }
-    static func playlists(serverId: String) -> String {
-        "playlists_\(serverId)"
-    }
-    static func playlistItems(playlistKey: String) -> String {
-        // v2: bumped so stale entries cached before `PlexMetadata.playlistItemID`
-        // existed (which decode with that field as nil, silently breaking reorder
-        // persistence) are orphaned and refetched instead of served from disk.
-        "playlist_items_v2_\(playlistKey)"
-    }
-    static func search(query: String, sectionId: String?) -> String {
-        "search_\(query)_\(sectionId ?? "all")"
-    }
-    static func artistTracks(artistRatingKey: String) -> String {
-        "artist_tracks_\(artistRatingKey)"
-    }
     static func lyrics(title: String, artist: String) -> String {
         "lyrics_\(artist)_\(title)"
-    }
-    static func homeFavorites(serverId: String, sectionId: String) -> String {
-        "home_favorites_\(serverId)_\(sectionId)"
-    }
-    static func homeRecentlyPlayed(serverId: String, sectionId: String) -> String {
-        "home_recently_played_\(serverId)_\(sectionId)"
-    }
-    static func homeRecentlyAdded(serverId: String, sectionId: String) -> String {
-        "home_recently_added_\(serverId)_\(sectionId)"
-    }
-    static func homePlaylists(serverId: String) -> String {
-        "home_playlists_\(serverId)"
-    }
-    static func favoriteTracks(serverId: String, sectionId: String) -> String {
-        "favorite_tracks_\(serverId)_\(sectionId)"
     }
     static func lastFMTopTracks(artist: String) -> String {
         "lastfm_toptracks_\(artist.lowercased())"

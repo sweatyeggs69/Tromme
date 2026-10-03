@@ -289,8 +289,10 @@ struct TrackRowView: View {
         do {
             try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
             downloadManager.deleteDownload(ratingKey: track.ratingKey)
-            await LibraryCache.shared.clearAll()
-            await ImageCache.shared.clearAll()
+            await LibraryStore.shared.remove(ratingKey: track.ratingKey, serverId: server.machineIdentifier)
+            if let sectionId = serverConnection.currentLibrarySectionId {
+                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
+            }
         } catch {
             trackDeleteErrorMessage = error.localizedDescription
         }

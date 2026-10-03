@@ -194,14 +194,6 @@ struct FavoritesView: View {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else { return }
 
-        // Pre-populate from memory cache synchronously (no actor hop needed).
-        // Eliminates the spinner flash when the memory cache is warm.
-        let cacheKey = CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId)
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
-            tracks = sortedFavorites(cached)
-            isLoading = false
-        }
-
         do {
             let favorites = try await client.cachedFavoriteTracks(server: server, sectionId: sectionId)
             tracks = sortedFavorites(favorites)

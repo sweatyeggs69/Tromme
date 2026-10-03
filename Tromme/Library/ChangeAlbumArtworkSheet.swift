@@ -235,8 +235,11 @@ struct ChangeAlbumArtworkSheet: View {
                 return
             }
 
-            await LibraryCache.shared.remove(forKey: CacheKey.metadata(ratingKey: albumRatingKey))
-            await ImageCache.shared.clearAll()
+            if let fresh = try? await client.getMetadata(server: server, ratingKey: albumRatingKey) {
+                await LibraryStore.shared.replaceListing(fresh, serverId: server.machineIdentifier)
+            }
+            // The new artwork has a new thumb path, so it is fetched fresh; the rest of the
+            // prefetched library artwork stays on disk.
             await onArtworkChanged()
             dismiss()
         } catch {

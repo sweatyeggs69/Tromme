@@ -28,7 +28,7 @@ final class LyricsService {
 
     func refresh(track: PlexMetadata) async {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistDisplayName)
-        await LibraryCache.shared.remove(forKey: cacheKey)
+        await ExternalContentCache.shared.remove(forKey: cacheKey)
         inFlightTrackKey = nil
         await fetch(track: track)
     }
@@ -50,10 +50,10 @@ final class LyricsService {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
 
         let result: LRCLIBResponse?
-        if let cached = await LibraryCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
+        if let cached = await ExternalContentCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
             result = cached.value
         } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
-            await LibraryCache.shared.set(fetched, forKey: cacheKey)
+            await ExternalContentCache.shared.set(fetched, forKey: cacheKey)
             result = fetched
         } else {
             result = nil

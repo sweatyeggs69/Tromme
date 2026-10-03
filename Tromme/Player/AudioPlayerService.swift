@@ -275,10 +275,8 @@ final class AudioPlayerService: Sendable {
         if isCurrentTrack { updateCurrentTrackRating(isFavorited ? 10 : 0) }
         do {
             try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: isFavorited ? 10 : -1)
-            if let sectionId {
-                await LibraryCache.shared.remove(forKey: CacheKey.favoriteTracks(serverId: server.machineIdentifier, sectionId: sectionId))
-                await LibraryCache.shared.remove(forKey: CacheKey.homeFavorites(serverId: server.machineIdentifier, sectionId: sectionId))
-            }
+            // Write the new rating into the local library before announcing the change.
+            await client.refreshItem(server: server, ratingKey: track.ratingKey)
             NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             return true
         } catch {
@@ -2383,6 +2381,7 @@ final class AudioPlayerService: Sendable {
         let capturedRatingKey = currentTrack.ratingKey
         Task {
             try? await client.reportScrobble(server: capturedServer, ratingKey: capturedRatingKey)
+            await client.refreshItem(server: capturedServer, ratingKey: capturedRatingKey)
             NotificationCenter.default.post(name: .recentlyPlayedDidChange, object: nil)
         }
     }

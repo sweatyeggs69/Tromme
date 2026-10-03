@@ -120,42 +120,62 @@ final class PlexAPIClient: Sendable {
     }
 
     func getLibraryContents(server: PlexServer, sectionId: String, type: Int? = nil) async throws -> [PlexMetadata] {
+        var allItems: [PlexMetadata] = []
+        try await streamLibraryContents(server: server, sectionId: sectionId, type: type) { page in
+            allItems.append(contentsOf: page)
+        }
+        return allItems
+    }
+
+    /// Pages through `/library/sections/{id}/all`, handing each page to `onPage` in order
+    /// as it arrives so callers (the library sync) can persist incrementally instead of
+    /// holding an entire library in memory.
+    func streamLibraryContents(
+        server: PlexServer,
+        sectionId: String,
+        type: Int? = nil,
+        onPage: (_ page: [PlexMetadata]) async throws -> Void
+    ) async throws {
         let pageSize = 1000
         let typeParam = type.map { "&type=\($0)" } ?? ""
 
-        // Fetch first page to discover the total item count
-        let firstPath = "/library/sections/\(sectionId)/all?X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)\(typeParam)"
-        let firstResponse: PlexResponse<PlexMetadata> = try await retryingRequest {
-            try await self.serverRequest(server: server, path: firstPath)
-        }
-        var allItems = firstResponse.mediaContainer.metadata ?? []
-        let total = firstResponse.mediaContainer.totalSize ?? allItems.count
-        guard total > allItems.count else { return allItems }
-
-        // Fetch remaining pages concurrently in batches of 10 to avoid overwhelming the server
-        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
-        for batchOffset in stride(from: 0, to: pageStarts.count, by: 10) {
-            let batch = pageStarts[batchOffset..<min(batchOffset + 10, pageStarts.count)]
-            let batchItems = try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
-                for start in batch {
-                    let path = "/library/sections/\(sectionId)/all?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)\(typeParam)"
-                    group.addTask {
-                        let response: PlexResponse<PlexMetadata> = try await self.retryingRequest {
-                            try await self.serverRequest(server: server, path: path)
-                        }
-                        return response.mediaContainer.metadata ?? []
-                    }
-                }
-                var results: [PlexMetadata] = []
-                for try await items in group {
-                    results.append(contentsOf: items)
-                }
-                return results
+        func fetchPage(start: Int) async throws -> PlexResponse<PlexMetadata> {
+            let path = "/library/sections/\(sectionId)/all?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)\(typeParam)"
+            #if DEBUG
+            let began = ContinuousClock.now
+            print("[LibraryFetch] type \(type ?? 0) start \(start): requesting from \(server.baseURL?.host() ?? "?")")
+            defer { print("[LibraryFetch] type \(type ?? 0) start \(start): returned after \(ContinuousClock.now - began)") }
+            #endif
+            return try await retryingRequest {
+                try await self.serverRequest(server: server, path: path)
             }
-            allItems.append(contentsOf: batchItems)
         }
 
-        return allItems
+        // Fetch first page to discover the total item count
+        let firstResponse = try await fetchPage(start: 0)
+        let firstPage = firstResponse.mediaContainer.metadata ?? []
+        try await onPage(firstPage)
+        let total = firstResponse.mediaContainer.totalSize ?? firstPage.count
+        guard total > firstPage.count else { return }
+
+        // Remaining pages: at most 10 in flight, each handed to `onPage` the moment it
+        // arrives (page order doesn't matter to the store) so progress is steady and only
+        // a few pages are ever held in memory.
+        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
+        try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
+            var iterator = pageStarts.makeIterator()
+            func addNext() {
+                guard let start = iterator.next() else { return }
+                group.addTask {
+                    try await fetchPage(start: start).mediaContainer.metadata ?? []
+                }
+            }
+            for _ in 0..<10 { addNext() }
+            while let page = try await group.next() {
+                try await onPage(page)
+                addNext()
+            }
+        }
     }
 
     /// Fetch tracks considered favorites by Plex (typically user-rated 4+ stars).
@@ -221,6 +241,16 @@ final class PlexAPIClient: Sendable {
             path: "/library/metadata/\(ratingKey)"
         )
         return response.mediaContainer.metadata?.first
+    }
+
+    /// One request for several items: the path takes a comma-separated list of ids.
+    func getMetadata(server: PlexServer, ratingKeys: [String]) async throws -> [PlexMetadata] {
+        guard !ratingKeys.isEmpty else { return [] }
+        let response: PlexResponse<PlexMetadata> = try await serverRequest(
+            server: server,
+            path: "/library/metadata/\(ratingKeys.joined(separator: ","))"
+        )
+        return response.mediaContainer.metadata ?? []
     }
 
     func getMetadataArtworkOptions(server: PlexServer, ratingKey: String) async throws -> [PlexImageResource] {

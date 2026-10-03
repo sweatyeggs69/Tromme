@@ -171,7 +171,7 @@ struct ContentView: View {
 
         let base = tabs
             .tabViewSearchActivation(.searchTabSelection)
-            .tabViewBottomAccessory {
+            .tabViewBottomAccessory(isEnabled: player.currentTrack != nil) {
                 MiniPlayerView(showNowPlaying: $showNowPlaying) { panel in
                     openNowPlaying(panel)
                 }

@@ -231,7 +231,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
         // Recently Added
         Task {
-            if let recentlyAdded = try? await client.getRecentlyAdded(server: server, sectionId: sectionId, type: 9, limit: 10),
+            if let recentlyAdded = try? await client.cachedRecentlyAdded(server: server, sectionId: sectionId, limit: 10),
                !recentlyAdded.isEmpty {
                 let limited = Array(recentlyAdded.prefix(10))
                 let imageRow = await makeImageRow(
@@ -263,7 +263,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// initial home load and by the live `.favoritesDidChange` refresh so
     /// CarPlay mirrors the same rating state as the in-app Home screen.
     private func loadFavoritesSection(server: PlexServer, sectionId: String) async -> CPListSection? {
-        guard let favorites = try? await client.getFavoriteTracks(server: server, sectionId: sectionId),
+        guard let favorites = try? await client.cachedFavoriteTracks(server: server, sectionId: sectionId),
               !favorites.isEmpty else { return nil }
         let sorted = favorites.sorted { ($0.userRating ?? 0) > ($1.userRating ?? 0) }
         let preview = Array(sorted.prefix(4))
@@ -308,7 +308,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// the initial home load and by the live `.recentlyPlayedDidChange` refresh so
     /// CarPlay mirrors the same scrobble-driven state as the in-app Home screen.
     private func loadRecentlyPlayedSection(server: PlexServer, sectionId: String) async -> CPListSection? {
-        guard let recentlyPlayed = try? await client.getRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
+        guard let recentlyPlayed = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
               !recentlyPlayed.isEmpty else { return nil }
         let preview = Array(recentlyPlayed.prefix(4))
         let full = Array(recentlyPlayed.prefix(10))

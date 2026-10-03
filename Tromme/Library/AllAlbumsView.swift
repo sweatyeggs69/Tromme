@@ -238,10 +238,12 @@ struct AllAlbumsView: View {
     private var contentView: some View {
         switch viewMode {
         case .grid:
+            ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(displaySections, id: \.title) { section in
                         Text(section.title)
+                            .id(section.title)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
@@ -297,6 +299,16 @@ struct AllAlbumsView: View {
                         .padding(.bottom, 12)
                     }
                 }
+                .padding(.trailing, !(isYearSortActive || isDateAddedSortActive) ? AppStyle.Spacing.sectionIndexInset : 0)
+            }
+            .overlay(alignment: .trailing) {
+                if !(isYearSortActive || isDateAddedSortActive) {
+                    SectionIndexBar(titles: displaySections.map(\.title)) { title in
+                        proxy.scrollTo(title, anchor: .top)
+                    }
+                    .padding(.trailing, 0)
+                }
+            }
             }
             .tint(.secondary)
 
@@ -381,9 +393,9 @@ struct AllAlbumsView: View {
         // Prefer full disk-cached library (complete list, correct artwork).
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
-            let key = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
-            if let cached = await LibraryCache.shared.get([PlexMetadata].self, forKey: key)?.value,
-               !cached.isEmpty {
+            let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+            let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.album, scope: scope)
+            if !cached.isEmpty {
                 var sorted = cached
                 sorted.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
                 albums = sorted
@@ -419,23 +431,12 @@ struct AllAlbumsView: View {
             return
         }
 
-        let cacheKey = CacheKey.albums(serverId: server.machineIdentifier, sectionId: sectionId)
-
-        // Memory cache (sync, no actor hop).
-        if let cached = LibraryCache.shared.memoryCached([PlexMetadata].self, forKey: cacheKey), !cached.isEmpty {
+        // Paint synchronously from the in-memory copy of the local library when available.
+        let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+        if let cached = LibraryStore.memory.items(scope: scope, kind: LibraryStore.Kind.album), !cached.isEmpty {
             albums = cached
             await applyDisplayState()
             isLoading = false
-        }
-
-        // Disk cache — avoids spinner on cold launch when memory cache is empty.
-        // Also warms NSCache so the cachedAlbums() call below returns from memory.
-        if albums.isEmpty,
-           let diskCached = await LibraryCache.shared.get([PlexMetadata].self, forKey: cacheKey)?.value,
-           !diskCached.isEmpty {
-            albums = diskCached
-            await applyDisplayState()
-            withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
         }
 
         do {

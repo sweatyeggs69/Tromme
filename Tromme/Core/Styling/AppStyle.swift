@@ -11,6 +11,8 @@ enum AppStyle {
         static let pageHorizontal: CGFloat = 20
         static let nowPlayingHorizontal: CGFloat = 0
         static let listItemGap: CGFloat = 0
+        /// Extra trailing inset for grid content so it clears the `SectionIndexBar`.
+        static let sectionIndexInset: CGFloat = 8
     }
 
     enum Radius {

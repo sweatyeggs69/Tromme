@@ -146,12 +146,8 @@ struct AddToPlaylistSheet: View {
                 try await group.waitForAll()
             }
 
-            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
             for playlist in targets {
-                await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: playlist.ratingKey))
-                if let key = playlist.key {
-                    await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: key))
-                }
+                await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
             }
 
             onComplete(targets.count)
@@ -181,11 +177,7 @@ struct AddToPlaylistSheet: View {
             playlists.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
             selectedPlaylistIDs.insert(created.id)
             newPlaylistTitle = ""
-            await LibraryCache.shared.remove(forKey: CacheKey.playlists(serverId: server.machineIdentifier))
-            await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: created.ratingKey))
-            if let key = created.key {
-                await LibraryCache.shared.remove(forKey: CacheKey.playlistItems(playlistKey: key))
-            }
+            await client.refreshPlaylist(server: server, playlistKey: created.ratingKey)
         } catch {
             errorMessage = error.localizedDescription
         }

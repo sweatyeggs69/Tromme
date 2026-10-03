@@ -396,23 +396,23 @@ struct ArtistDetailView: View {
     /// Reads artist data from disk cache without any network calls.
     /// Returns true if enough data was found to populate the view.
     private func loadFromDiskCache(artist: PlexMetadata) async -> Bool {
-        let metadataKey = CacheKey.metadata(ratingKey: artist.ratingKey)
-        let childrenKey = CacheKey.children(ratingKey: artist.ratingKey, updatedAt: artist.updatedAt)
-        let tracksKey = CacheKey.artistTracks(artistRatingKey: artist.ratingKey)
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return false }
+        let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
 
-        async let cachedMetadata = LibraryCache.shared.get(PlexMetadata.self, forKey: metadataKey)?.value
-        async let cachedAlbums = LibraryCache.shared.get([PlexMetadata].self, forKey: childrenKey)?.value
-        async let cachedTracks = LibraryCache.shared.get([PlexMetadata].self, forKey: tracksKey)?.value
+        async let storedMetadata = LibraryStore.shared.anyMetadata(ratingKey: artist.ratingKey, serverId: server.machineIdentifier)
+        async let storedAlbums = LibraryStore.shared.children(of: artist.ratingKey, scope: scope)
+        async let storedTracks = LibraryStore.shared.tracks(byArtist: artist.ratingKey, scope: scope)
 
-        let (metadata, albums, tracks) = await (cachedMetadata, cachedAlbums, cachedTracks)
+        let (metadata, albums, tracks) = await (storedMetadata, storedAlbums, storedTracks)
 
-        guard let tracks, !tracks.isEmpty else { return false }
+        guard !tracks.isEmpty else { return false }
 
         withAnimation(.easeIn(duration: 0.25)) {
             resolvedArtist = metadata
             artistTracks = tracks
             allTracks = tracks
-            artistAlbums = albums ?? []
+            artistAlbums = albums
             topTracks = Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
             appearsOnAlbums = []
             similarArtists = []

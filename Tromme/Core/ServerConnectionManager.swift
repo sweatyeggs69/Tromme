@@ -62,7 +62,6 @@ final class ServerConnectionManager {
                 UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt_\(serverId)_\(sectionId)")
             }
             UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt") // legacy key
-            Task { await LibraryCache.shared.clearAll() }
         }
         // Warm cache for the selected library
         if let server = currentServer, let client {
@@ -74,7 +73,7 @@ final class ServerConnectionManager {
     func warmCache(server: PlexServer, sectionId: String, client: PlexAPIClient) {
         warmingTask?.cancel()
         warmingTask = Task {
-            await client.warmCache(server: server, sectionId: sectionId)
+            await client.smartRefresh(server: server, sectionId: sectionId)
         }
     }
 
@@ -90,7 +89,8 @@ final class ServerConnectionManager {
         UserDefaults.standard.removeObject(forKey: Self.libraryKey)
         UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
         Task {
-            await LibraryCache.shared.clearAll()
+            await ExternalContentCache.shared.clearAll()
+            await LibraryStore.shared.deleteAll()
             await ImageCache.shared.clearAll()
         }
     }
@@ -161,7 +161,7 @@ final class ServerConnectionManager {
             UserDefaults.standard.removeObject(forKey: Self.libraryKey)
             UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
             Task {
-                await LibraryCache.shared.clearAll()
+                await ExternalContentCache.shared.clearAll()
                 await ImageCache.shared.clearAll()
             }
         }

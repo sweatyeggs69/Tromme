@@ -16,7 +16,7 @@ struct LastFMService: Sendable {
 
         let topTenNormalized: [String]
         do {
-            topTenNormalized = try await LibraryCache.shared.cachedFetch(
+            topTenNormalized = try await ExternalContentCache.shared.cachedFetch(
                 [String].self,
                 forKey: cacheKey,
                 policy: .lastFM
