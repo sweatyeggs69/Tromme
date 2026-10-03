@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var showNowPlaying = false
     @State private var nowPlayingStartPanel: NowPlayingStartPanel = .none
     @State private var discoveryError: String?
+    @AppStorage("showTabBarLabels") private var showTabBarLabels = false
     @State private var selectedTab: String = "home"
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
@@ -118,38 +119,56 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func tabLabel(_ title: String, systemImage: String) -> some View {
+        if showTabBarLabels {
+            Label(title, systemImage: systemImage)
+        } else {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+        }
+    }
+
     private var mainTabView: some View {
         let tabs = TabView(selection: $selectedTab) {
-            Tab("Home", systemImage: "house.fill", value: "home") {
+            Tab(value: "home") {
                 NavigationStack {
                     HomeView(onSignOut: signOut)
                         .navigationDestinations()
                         .settingsToolbar(alwaysVisible: true)
                 }
+            } label: {
+                tabLabel("Home", systemImage: "house.fill")
             }
 
-            Tab("Artists", systemImage: "music.mic", value: "artists") {
+            Tab(value: "artists") {
                 NavigationStack(path: $artistsPath) {
                     ArtistsView()
                         .navigationDestinations()
                         .settingsToolbar()
                 }
+            } label: {
+                tabLabel("Artists", systemImage: "music.mic")
             }
 
-            Tab("Albums", systemImage: "square.stack", value: "albums") {
+            Tab(value: "albums") {
                 NavigationStack(path: $albumsPath) {
                     AllAlbumsView()
                         .navigationDestinations()
                         .settingsToolbar()
                 }
+            } label: {
+                tabLabel("Albums", systemImage: "square.stack")
             }
 
-            Tab("Songs", systemImage: "music.note", value: "songs") {
+            Tab(value: "songs") {
                 NavigationStack {
                     AllSongsView()
                         .navigationDestinations()
                         .settingsToolbar()
                 }
+            } label: {
+                tabLabel("Songs", systemImage: "music.note")
             }
 
             if UIDevice.current.userInterfaceIdiom == .pad {
