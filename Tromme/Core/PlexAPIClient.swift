@@ -373,9 +373,24 @@ final class PlexAPIClient: Sendable {
     // MARK: - Playlists
 
     func getPlaylists(server: PlexServer) async throws -> [PlexPlaylist] {
-        let data = try await rawServerRequest(server: server, path: "/playlists")
-        let decoded = try JSONDecoder().decode(PlexResponse<PlexPlaylist>.self, from: data)
-        return decoded.mediaContainer.metadata ?? []
+        // Page through the full list; a single request is capped by the container size,
+        // which silently dropped every playlist past the first page.
+        let pageSize = 1000
+        var allPlaylists: [PlexPlaylist] = []
+        var start = 0
+        while true {
+            let path = "/playlists?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
+            let response: PlexResponse<PlexPlaylist> = try await serverRequest(server: server, path: path)
+            let playlists = response.mediaContainer.metadata ?? []
+            allPlaylists.append(contentsOf: playlists)
+            start += playlists.count
+            if let total = response.mediaContainer.totalSize {
+                guard start < total, !playlists.isEmpty else { break }
+            } else {
+                guard playlists.count == pageSize else { break }
+            }
+        }
+        return allPlaylists
     }
 
     func getPlaylistItems(server: PlexServer, playlistKey: String) async throws -> [PlexMetadata] {
