@@ -1408,6 +1408,56 @@ final class AudioPlayerService: Sendable {
         currentIndex -= dropCount
     }
 
+    /// Infinite Mode candidates: tracks from albums sharing a genre with the current
+    /// track's album and at least `infiniteMinSharedStyles` of its styles. If that finds
+    /// nothing it relaxes the style requirement but keeps the genre; only when the current
+    /// album has no genre at all (album or artist) does it use the whole library.
+    private let infiniteMinSharedStyles = 2
+
+    private func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata], artists: [PlexMetadata]) -> [PlexMetadata] {
+        let queuedKeys = Set(queue.map(\.ratingKey))
+        let fresh = tracks.filter { !queuedKeys.contains($0.ratingKey) }
+        let fallback = fresh.isEmpty ? tracks : fresh
+
+        func tagSet(_ tags: [PlexTag]?) -> Set<String> {
+            Set((tags ?? []).compactMap { $0.tag?.lowercased() })
+        }
+
+        let artistGenres = Dictionary(artists.map { ($0.ratingKey, tagSet($0.genre)) }, uniquingKeysWith: { first, _ in first })
+
+        /// Album genres, falling back to the album artist's genres when the album has none.
+        func genres(of album: PlexMetadata) -> Set<String> {
+            let own = tagSet(album.genre)
+            guard own.isEmpty, let artistKey = album.parentRatingKey else { return own }
+            return artistGenres[artistKey] ?? []
+        }
+
+        guard let albumKey = currentTrack?.parentRatingKey,
+              let seed = albums.first(where: { $0.ratingKey == albumKey }) else { return fallback }
+        let seedGenres = genres(of: seed)
+        let seedStyles = tagSet(seed.style)
+        guard !seedGenres.isEmpty else { return fallback }
+
+        let sameGenreAlbums = albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) }
+        let freshByAlbum = Dictionary(grouping: fresh, by: { $0.parentRatingKey ?? "" })
+
+        func tracksOf(_ albums: [PlexMetadata]) -> [PlexMetadata] {
+            albums.flatMap { freshByAlbum[$0.ratingKey] ?? [] }
+        }
+
+        // Same genre plus the required shared styles, relaxed to what the seed actually has
+        // (a seed with one style can only share one). Never drops the genre requirement.
+        let requiredStyles = min(infiniteMinSharedStyles, seedStyles.count)
+        if requiredStyles > 0 {
+            let styled = tracksOf(sameGenreAlbums.filter {
+                tagSet($0.style).intersection(seedStyles).count >= requiredStyles
+            })
+            if !styled.isEmpty { return styled }
+        }
+        let sameGenre = tracksOf(sameGenreAlbums)
+        return sameGenre.isEmpty ? fallback : sameGenre
+    }
+
     private func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
         guard isInfiniteModeActive else { return }
         // Defer to Magic Mix while it's active so a random infinite-mode track
@@ -1439,10 +1489,26 @@ final class AudioPlayerService: Sendable {
                 return
             }
 
+            // Genre/style tags live on albums in Plex, not tracks.
+            // The listing omits Style, so read the stored detail payloads.
+            var allAlbums = await LibraryStore.shared.albumsPreferringDetail(
+                scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
+            )
+            // Make sure the seed album's tags are current even if enrichment hasn't reached it.
+            let seedAlbumKey = await MainActor.run { self.currentTrack?.parentRatingKey }
+            if let seedAlbumKey,
+               let detail = try? await client.cachedMetadata(server: server, ratingKey: seedAlbumKey),
+               let index = allAlbums.firstIndex(where: { $0.ratingKey == seedAlbumKey }) {
+                allAlbums[index] = detail
+            }
+            let allArtists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
+            guard !Task.isCancelled else { return }
+
             let selected: [PlexMetadata] = await MainActor.run {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
-                return Array(allTracks.shuffled().prefix(currentNeeded))
+                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists)
+                return Array(pool.shuffled().prefix(currentNeeded))
             }
 
             guard !selected.isEmpty else { return }

@@ -42,6 +42,7 @@ actor LibrarySyncService {
             return
         }
 
+        if force { await LibraryStore.shared.invalidateDetails(scope: scope) }
         let run = startRun(client: client, server: server, sectionId: sectionId, scope: scope, serverUpdatedAt: serverUpdatedAt, firstSync: !state.metaReady)
         _ = try? await run.meta.value
         _ = try? await run.tracks.value
@@ -129,7 +130,7 @@ actor LibrarySyncService {
         // Stages after the library itself: 3) artist details, then 4) artwork — last, so it
         // never competes with the data the UI actually needs.
         enrichmentTasks[scope] = Task(priority: .utility) {
-            await Self.enrichArtists(client: client, server: server, scope: scope)
+            await Self.enrichDetails(client: client, server: server, scope: scope)
             self.finishEnrichment(scope: scope)
             self.schedulePrefetch(client: client, server: server, sectionId: sectionId, includeTracks: true)
         }
@@ -189,12 +190,13 @@ actor LibrarySyncService {
         #endif
     }
 
-    /// Fetches `/library/metadata/{id}` for every artist so bio, similar artists, etc. are
-    /// on disk before the user opens an artist page. Bounded and low-priority; skipped on
-    /// metered networks / Low Power Mode (the artist page falls back to fetching on demand).
-    private static func enrichArtists(client: PlexAPIClient, server: PlexServer, scope: String) async {
+    /// Fetches `/library/metadata/{id}` for every artist and album so bio, similar artists,
+    /// album style tags, etc. are on disk before they're needed. Bounded and low-priority;
+    /// skipped on metered networks / Low Power Mode (pages fall back to fetching on demand).
+    private static func enrichDetails(client: PlexAPIClient, server: PlexServer, scope: String) async {
         guard !NetworkStatus.shared.isExpensive, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
-        let keys = await LibraryStore.shared.artistKeysNeedingDetail(scope: scope)
+        let keys = await LibraryStore.shared.keysNeedingDetail(kind: LibraryStore.Kind.artist, scope: scope)
+            + LibraryStore.shared.keysNeedingDetail(kind: LibraryStore.Kind.album, scope: scope)
         guard !keys.isEmpty else { return }
         let serverId = server.machineIdentifier
 

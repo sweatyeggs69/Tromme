@@ -14,7 +14,7 @@ struct PlaybackSettingsView: View {
                 Toggle("Infinite Mode", isOn: infiniteModeBinding)
                     .tint(.green)
             } footer: {
-                Text("Keeps music playing continuously when the queue is empty.")
+                Text("When the queue empties, keep playing related music.")
             }
 
             if supportsCellularSettings {
@@ -22,7 +22,7 @@ struct PlaybackSettingsView: View {
                     Toggle("Cellular Transcoding", isOn: cellularTranscodingBinding)
                         .tint(.green)
                 } footer: {
-                    Text("Transcode files over 320 kbps to use less data on mobile networks.")
+                    Text("Transcode streams to use less data on mobile networks.")
                 }
             }
 
@@ -44,7 +44,7 @@ struct PlaybackSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Sound Check keeps song volume more consistent using track or album gain.")
+                Text("Keeps song volume more consistent using track or album gain.")
             }
         }
         .navigationTitle("Playback")

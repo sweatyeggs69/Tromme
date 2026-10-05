@@ -5,16 +5,10 @@ struct HomeSettingsView: View {
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "large"
     @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
-    @AppStorage("showTabBarLabels") private var showTabBarLabels = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
 
     var body: some View {
         Form {
-            Section {
-                Toggle("Tab Bar Labels", isOn: $showTabBarLabels)
-                    .tint(.green)
-            }
-
             Section("Home") {
                 Toggle("Featured Section", isOn: $showFeaturedSection)
                     .tint(.green)

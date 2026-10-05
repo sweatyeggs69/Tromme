@@ -12,7 +12,6 @@ struct ContentView: View {
     @State private var showNowPlaying = false
     @State private var nowPlayingStartPanel: NowPlayingStartPanel = .none
     @State private var discoveryError: String?
-    @AppStorage("showTabBarLabels") private var showTabBarLabels = false
     @State private var selectedTab: String = "home"
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
@@ -119,14 +118,9 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     private func tabLabel(_ title: String, systemImage: String) -> some View {
-        if showTabBarLabels {
-            Label(title, systemImage: systemImage)
-        } else {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.iconOnly)
-        }
+        Label(title, systemImage: systemImage)
+            .labelStyle(.iconOnly)
     }
 
     private var mainTabView: some View {

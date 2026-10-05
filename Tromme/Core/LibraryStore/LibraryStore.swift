@@ -208,15 +208,38 @@ actor LibraryStore {
         return paths
     }
 
-    /// Artists whose detail payload is missing or out of date.
-    func artistKeysNeedingDetail(scope: String) -> [String] {
-        let kind = Kind.artist
+    /// Items of `kind` whose detail payload is missing or out of date.
+    func keysNeedingDetail(kind: Int, scope: String) -> [String] {
         let descriptor = FetchDescriptor<LibraryRecord>(
             predicate: #Predicate { $0.scope == scope && $0.kind == kind }
         )
         return ((try? modelContext.fetch(descriptor)) ?? [])
             .filter { $0.detail == nil || $0.detailUpdatedAt != $0.updatedAt }
             .map(\.ratingKey)
+    }
+
+    /// Albums with their detail payload where one exists. The listing omits `Style` tags,
+    /// so anything tag-based must read these instead of `items(kind:scope:)`.
+    func albumsPreferringDetail(scope: String) -> [PlexMetadata] {
+        let kind = Kind.album
+        let descriptor = FetchDescriptor<LibraryRecord>(
+            predicate: #Predicate { $0.scope == scope && $0.kind == kind }
+        )
+        let decoder = JSONDecoder()
+        return ((try? modelContext.fetch(descriptor)) ?? []).compactMap {
+            try? decoder.decode(PlexMetadata.self, from: $0.detail ?? $0.payload)
+        }
+    }
+
+    /// Marks every artist/album detail as stale so the next enrichment pass refetches it
+    /// (tag edits on the server don't always change the item's `updatedAt`).
+    func invalidateDetails(scope: String) {
+        let artist = Kind.artist, album = Kind.album
+        let descriptor = FetchDescriptor<LibraryRecord>(
+            predicate: #Predicate { $0.scope == scope && ($0.kind == artist || $0.kind == album) }
+        )
+        for row in (try? modelContext.fetch(descriptor)) ?? [] { row.detailUpdatedAt = nil }
+        try? modelContext.save()
     }
 
     // MARK: - Writes

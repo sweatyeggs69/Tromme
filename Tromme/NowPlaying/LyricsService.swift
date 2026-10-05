@@ -50,10 +50,15 @@ final class LyricsService {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
 
         let result: LRCLIBResponse?
-        if let cached = await ExternalContentCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL) {
+        // Only synced results are cached. Plain-only results may just mean a lookup failed or
+        // LRCLIB hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
+        if let cached = await ExternalContentCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
+           cached.value.hasSynced {
             result = cached.value
         } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
-            await ExternalContentCache.shared.set(fetched, forKey: cacheKey)
+            if fetched.hasSynced {
+                await ExternalContentCache.shared.set(fetched, forKey: cacheKey)
+            }
             result = fetched
         } else {
             result = nil
@@ -64,76 +69,29 @@ final class LyricsService {
         isLoading = false
     }
 
-    // Candidate lookups, most-trustworthy first. Each tries to resolve the same track under a
-    // different name/album guess — needed because /api/get requires an exact metadata match,
-    // and compilations/soundtracks often have mismatched artist or album names in Plex vs LRCLIB.
-    private nonisolated static func lookups(track: PlexMetadata, artist: String) -> [@Sendable () async -> LRCLIBResponse?] {
-        let title = track.title
-        let dur = track.duration
-        var lookups: [@Sendable () async -> LRCLIBResponse?] = [
-            // No album — avoids false negatives from mismatched release names (e.g. "Song - Single" vs album)
-            { await get(title: title, artist: artist, album: nil, duration: dur) }
-        ]
-        if let album = track.parentTitle {
-            if artist != track.artistName {
-                // Compilations: drop artist, keep album
-                lookups.append { await get(title: title, artist: nil, album: album, duration: dur) }
-            }
-            // Album as last-resort disambiguator for /api/get
-            lookups.append { await get(title: title, artist: artist, album: album, duration: dur) }
-        }
-        // Fuzzy search — handles artist name variations and metadata that exact matching rejects
-        lookups.append { await search(title: title, artist: artist, duration: dur) }
-        return lookups
-    }
-
-    // Runs all candidate lookups concurrently, then picks the highest-priority synced hit,
-    // falling back to the highest-priority plain hit if none are synced.
+    // Fetches every LRCLIB match for the track and prefers one with synced lyrics, choosing the
+    // closest duration among them. Falls back to the closest plain-only match.
+    // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
     private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
-        let lookups = lookups(track: track, artist: artist)
-        let results = await withTaskGroup(of: (Int, LRCLIBResponse?).self) { group in
-            for (index, lookup) in lookups.enumerated() {
-                group.addTask { (index, await lookup()) }
-            }
-            var ordered = [LRCLIBResponse?](repeating: nil, count: lookups.count)
-            for await (index, result) in group { ordered[index] = result }
-            return ordered.compactMap { $0 }
+        var results = await search([.init(name: "track_name", value: track.title),
+                                    .init(name: "artist_name", value: artist)])
+        if results.isEmpty {
+            results = await search([.init(name: "q", value: "\(artist) \(track.title)")])
         }
+        let pool = results.filter(\.hasSynced)
+        let candidates = pool.isEmpty ? results : pool
 
-        if let synced = results.first(where: { $0.syncedLyrics?.isEmpty == false }) { return synced }
-        return results.first
-    }
-
-    private nonisolated static func get(title: String, artist: String?, album: String?, duration: Int?) async -> LRCLIBResponse? {
-        var components = URLComponents(string: "https://lrclib.net/api/get")!
-        var items = [URLQueryItem(name: "track_name", value: title)]
-        if let artist { items.append(.init(name: "artist_name", value: artist)) }
-        if let album  { items.append(.init(name: "album_name",  value: album))  }
-        if let ms = duration { items.append(.init(name: "duration", value: "\(ms / 1000)")) }
-        components.queryItems = items
-        guard let url = components.url, let data = await lrclibFetch(url) else { return nil }
-        return try? JSONDecoder().decode(LRCLIBResponse.self, from: data)
-    }
-
-    private nonisolated static func search(title: String, artist: String, duration: Int?) async -> LRCLIBResponse? {
-        var components = URLComponents(string: "https://lrclib.net/api/search")!
-        components.queryItems = [
-            .init(name: "track_name", value: title),
-            .init(name: "artist_name", value: artist)
-        ]
-        guard let url = components.url, let data = await lrclibFetch(url) else { return nil }
-        let results = (try? JSONDecoder().decode([LRCLIBResponse].self, from: data)) ?? []
-        guard !results.isEmpty else { return nil }
-
-        let trackSeconds = duration.map { Double($0) / 1000 }
-        let withSynced = results.filter { $0.syncedLyrics?.isEmpty == false }
-        let pool = withSynced.isEmpty ? results : withSynced
-
-        guard let trackSeconds else { return pool.first }
-        return pool.min(by: {
-            abs(($0.duration ?? trackSeconds) - trackSeconds) <
-            abs(($1.duration ?? trackSeconds) - trackSeconds)
+        guard let seconds = track.duration.map({ Double($0) / 1000 }) else { return candidates.first }
+        return candidates.min(by: {
+            abs(($0.duration ?? seconds) - seconds) < abs(($1.duration ?? seconds) - seconds)
         })
+    }
+
+    private nonisolated static func search(_ query: [URLQueryItem]) async -> [LRCLIBResponse] {
+        var components = URLComponents(string: "https://lrclib.net/api/search")!
+        components.queryItems = query
+        guard let url = components.url, let data = await lrclibFetch(url) else { return [] }
+        return (try? JSONDecoder().decode([LRCLIBResponse].self, from: data)) ?? []
     }
 
     // Retries transient failures (timeouts, dropped connections, 429/5xx) so a momentary
@@ -158,7 +116,8 @@ final class LyricsService {
             lines = parseLRC(synced)
             hasSynced = !lines.isEmpty
             hasLyrics = hasSynced
-        } else if let plain = response.plainLyrics, !plain.isEmpty {
+        }
+        if !hasSynced, let plain = response.plainLyrics, !plain.isEmpty {
             plainLyrics = plain
             hasLyrics = true
         }
@@ -203,4 +162,6 @@ struct LRCLIBResponse: Codable, Sendable {
     let syncedLyrics: String?
     let plainLyrics: String?
     let duration: Double?
+
+    var hasSynced: Bool { syncedLyrics?.isEmpty == false }
 }
