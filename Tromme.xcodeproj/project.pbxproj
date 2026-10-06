@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8B7D9E8C10E193809C45A8D1 /* WordWipeTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E547DA57B8B53901FCF307A9 /* WordWipeTextRenderer.swift */; };
 		BAB01B6511139523F8649A6F /* WordSyncedLyricText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */; };
 		FCDC662C4145C838BC5F4C03 /* LrcRedLyricsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */; };
 		84544CB0FA22E46CECC9BC7F /* LRCParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */; };
@@ -78,6 +79,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E547DA57B8B53901FCF307A9 /* WordWipeTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordWipeTextRenderer.swift; sourceTree = "<group>"; };
 		2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordSyncedLyricText.swift; sourceTree = "<group>"; };
 		5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LrcRedLyricsProvider.swift; sourceTree = "<group>"; };
 		7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRCParser.swift; sourceTree = "<group>"; };
@@ -166,6 +168,7 @@
 			children = (
 				80F60A1414C22BBC00295E2B /* LyricsService.swift */,
 				8EE6435FB2579A760B517C43 /* LyricsView.swift */,
+				E547DA57B8B53901FCF307A9 /* WordWipeTextRenderer.swift */,
 				2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */,
 				5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */,
 				7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */,
@@ -471,6 +474,7 @@
 				25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */,
 				CE9812586C3367CC672E5700 /* LyricsService.swift in Sources */,
 				A9BDE9C4493EBF7424C122DD /* LyricsView.swift in Sources */,
+				8B7D9E8C10E193809C45A8D1 /* WordWipeTextRenderer.swift in Sources */,
 				BAB01B6511139523F8649A6F /* WordSyncedLyricText.swift in Sources */,
 				FCDC662C4145C838BC5F4C03 /* LrcRedLyricsProvider.swift in Sources */,
 				84544CB0FA22E46CECC9BC7F /* LRCParser.swift in Sources */,
