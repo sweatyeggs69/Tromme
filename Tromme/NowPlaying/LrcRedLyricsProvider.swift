@@ -46,19 +46,35 @@ enum LrcRedLyricsProvider {
     }
 
     /// ISRCs of search hits for the same song by the same artist, closest
-    /// duration first.
+    /// duration first. Searches with version tags dropped first, since text
+    /// like "(Taylor's Version)" can crowd the song itself out of the limited
+    /// hit list, then retries with the title exactly as given.
     private static func matchingISRCs(title: String, artist: String, duration: TimeInterval?) async -> [String] {
+        let wantedTitle = normalizedTitle(title)
+        guard !wantedTitle.isEmpty else { return [] }
+
+        let base = baseTitle(title)
+        let titles = base == title ? [title] : [base, title]
+        for searchTitle in titles {
+            let hits = await search(query: "\(artist) \(searchTitle)")
+            let isrcs = rankedISRCs(hits, title: wantedTitle, artist: artist, duration: duration)
+            if !isrcs.isEmpty { return isrcs }
+        }
+        return []
+    }
+
+    private static func search(query: String) async -> [Hit] {
         var components = URLComponents(url: baseURL.appending(path: "search.json"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [.init(name: "q", value: "\(artist) \(title)")]
+        components.queryItems = [.init(name: "q", value: query)]
         guard let url = components.url,
               let data = await LyricsService.fetchWithRetry(url),
               let response = try? JSONDecoder().decode(SearchResponse.self, from: data) else { return [] }
+        return response.hits
+    }
 
-        let wantedTitle = normalizedTitle(title)
+    private static func rankedISRCs(_ hits: [Hit], title wantedTitle: String, artist: String, duration: TimeInterval?) -> [String] {
         let wantedArtist = normalized(artist)
-        guard !wantedTitle.isEmpty else { return [] }
-
-        let matches = response.hits.filter { hit in
+        let matches = hits.filter { hit in
             guard normalizedTitle(hit.title) == wantedTitle else { return false }
             let hitArtist = normalized(hit.artist)
             guard !hitArtist.isEmpty,
@@ -94,11 +110,15 @@ enum LrcRedLyricsProvider {
 
     /// Drops version tags so "Song (Remastered 2011)" and "Song - Live" match "Song".
     private static func normalizedTitle(_ title: String) -> String {
+        normalized(baseTitle(title))
+    }
+
+    private static func baseTitle(_ title: String) -> String {
         var base = title.replacingOccurrences(of: "\\s*[\\(\\[][^\\)\\]]*[\\)\\]]", with: "", options: .regularExpression)
         if let dash = base.range(of: " - ") {
             base = String(base[..<dash.lowerBound])
         }
-        return normalized(base)
+        return base.trimmingCharacters(in: .whitespaces)
     }
 
     private static func normalized(_ text: String) -> String {
