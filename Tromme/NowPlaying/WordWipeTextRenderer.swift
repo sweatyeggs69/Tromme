@@ -21,8 +21,11 @@ struct WordWipeTextRenderer: TextRenderer {
         set { activeAmount = newValue }
     }
 
-    /// How dim unsung words in the active line are, matching inactive lines.
-    private static let unsungOpacity = 0.3
+    /// Dimmed text, matching inactive lyric lines. Word-synced lines own their
+    /// whole opacity (the line itself stays fully opaque), so a line becoming
+    /// active only fades the wipe overlay in and out and never has to
+    /// coordinate two animations of its base text.
+    private static let dimOpacity = 0.3
     /// Half-width of the soft edge, as a fraction of the line height.
     private static let featherRatio = 0.35
 
@@ -30,7 +33,9 @@ struct WordWipeTextRenderer: TextRenderer {
         for line in layout {
             for run in line {
                 guard let timing = run[Timing.self] else {
-                    context.draw(run)
+                    var dim = context
+                    dim.opacity *= Self.dimOpacity
+                    dim.draw(run)
                     continue
                 }
                 draw(run, timing: timing, in: context)
@@ -64,10 +69,8 @@ struct WordWipeTextRenderer: TextRenderer {
             }
         }
 
-        // The line's own styling (opacity, size, blur) is unchanged; only
-        // unsung words in the active line are dimmed so the wipe shows.
         var base = context
-        base.opacity *= 1 - activeAmount * (1 - Self.unsungOpacity)
+        base.opacity *= Self.dimOpacity
         base.draw(run)
         if showsBright { bright.draw(run) }
     }

@@ -272,7 +272,8 @@ struct LyricsScrollView: View {
     private func lyricLine(_ line: LyricsLine, isActive: Bool) -> some View {
         lyricLineText(line, isActive: isActive)
             .font(.system(size: lineFontSize, weight: .bold))
-            .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.3))
+            // Word-synced lines dim their own text in WordWipeTextRenderer.
+            .foregroundStyle(.white.opacity(isActive || !line.words.isEmpty ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
