@@ -12,21 +12,9 @@ struct LyricsScrollView: View {
 
     @State private var clock = LyricsClock()
 
-    // Slinky advance: on a natural one-line advance the scroll jumps
-    // instantly to the new position while nearby lines are pushed back to
-    // where they were, then each line springs into place staggered by its
-    // distance below the active line — Apple Music's cascade.
-    @State private var lineMidYs: [UUID: CGFloat] = [:]
-    @State private var slinkyOffsets: [UUID: CGFloat] = [:]
-
     /// Highlight lines slightly ahead of their timestamp so the active lyric
     /// is already in place when it's sung.
     private static let lyricLeadTime: TimeInterval = 0.15
-
-    /// How many lines around the active one take part in the cascade —
-    /// generous enough to cover everything on screen.
-    private static let slinkyWindowAbove = 10
-    private static let slinkyWindowBelow = 15
 
     /// Height of the top/bottom fade mask NowPlayingView applies around this
     /// view — content needs at least this much clearance so lines aren't
@@ -40,19 +28,13 @@ struct LyricsScrollView: View {
     /// often, otherwise closely timed lines would switch up to half a second
     /// late and then have to catch up.
     @State private var currentIndex = 0
-    @State private var lastAdvanceDate = Date.distantPast
 
-    /// A line-to-line cascade takes about this long to settle. A new advance
-    /// arriving sooner retargets with a plain scroll instead of restarting
-    /// the cascade from partway through the previous one.
-    private static let cascadeDuration: TimeInterval = 1.0
-
-    private var targetIndex: Int {
-        lyricsService.currentLineIndex(at: clock.time() + Self.lyricLeadTime)
+    private func lineIndex(at date: Date = .now) -> Int {
+        lyricsService.currentLineIndex(at: clock.time(at: date) + Self.lyricLeadTime)
     }
 
     private func updateCurrentIndex() {
-        let index = targetIndex
+        let index = lineIndex()
         if index != currentIndex { currentIndex = index }
     }
 
@@ -71,12 +53,6 @@ struct LyricsScrollView: View {
                             ForEach(Array(lyricsService.lines.enumerated()), id: \.element.id) { i, line in
                                 lyricLine(line, isActive: i == currentIndex)
                                     .id(line.id)
-                                    .onGeometryChange(for: CGFloat.self) { proxy in
-                                        proxy.frame(in: .named("lyricsContent")).midY
-                                    } action: { midY in
-                                        lineMidYs[line.id] = midY
-                                    }
-                                    .offset(y: slinkyOffsets[line.id] ?? 0)
                                     .onTapGesture {
                                         player.seek(to: line.time)
                                         scrollResumeTask?.cancel()
@@ -87,7 +63,6 @@ struct LyricsScrollView: View {
                             Color.clear.frame(height: bufferHeight)
                         }
                         .padding(.horizontal, leftAlignLyrics ? 0 : 20)
-                        .coordinateSpace(.named("lyricsContent"))
                     }
                     .onGeometryChange(for: CGFloat.self) { proxy in
                         proxy.size.height
@@ -95,24 +70,26 @@ struct LyricsScrollView: View {
                         containerHeight = max(0, height)
                     }
                     .onAppear {
-                        let index = targetIndex
+                        let index = lineIndex()
                         currentIndex = index
                         guard index < lyricsService.lines.count else { return }
                         proxy.scrollTo(lyricsService.lines[index].id, anchor: .center)
                     }
-                    .task(id: player.isPlaying) {
-                        updateCurrentIndex()
-                        while player.isPlaying, !Task.isCancelled {
-                            try? await Task.sleep(for: .milliseconds(30))
-                            updateCurrentIndex()
+                    .background {
+                        // Re-checks the active line every frame while playing, since the
+                        // player's own time only updates twice a second.
+                        TimelineView(.animation(paused: !player.isPlaying)) { context in
+                            Color.clear.onChange(of: lineIndex(at: context.date)) { _, newIndex in
+                                if newIndex != currentIndex { currentIndex = newIndex }
+                            }
                         }
                     }
                     .onChange(of: lyricsService.lines.first?.id) { _, _ in
                         updateCurrentIndex()
                     }
-                    .onChange(of: currentIndex) { oldIndex, newIndex in
+                    .onChange(of: currentIndex) { _, newIndex in
                         guard newIndex < lyricsService.lines.count, !isUserScrolling else { return }
-                        advance(from: oldIndex, to: newIndex, proxy: proxy)
+                        recenter(on: lyricsService.lines[newIndex].id, proxy: proxy)
                     }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 5)
@@ -170,61 +147,9 @@ struct LyricsScrollView: View {
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
             isUserScrolling = false
-            slinkyOffsets.removeAll()
             if currentIndex < lyricsService.lines.count {
                 withAnimation(.spring(duration: 0.7, bounce: 0.15)) {
                     proxy.scrollTo(lyricsService.lines[currentIndex].id, anchor: .center)
-                }
-            }
-        }
-    }
-
-    /// Advances the lyrics with an Apple Music-style cascade: the scroll jumps
-    /// instantly to center the new line while every nearby line is pushed back
-    /// down by the same distance (net zero movement on screen), then each line
-    /// springs into place, staggered by its distance below the active line.
-    ///
-    /// Only the natural next-line advance cascades. Seeks, taps, and the index
-    /// churn from a stream restart re-center with a plain smooth scroll so the
-    /// view always converges on the active line.
-    private func advance(from oldIndex: Int, to newIndex: Int, proxy: ScrollViewProxy) {
-        let lines = lyricsService.lines
-        let targetID = lines[newIndex].id
-
-        // A cascade still settling would be restarted from partway through, so
-        // lines close together just retarget the scroll instead.
-        let previousAdvance = lastAdvanceDate
-        lastAdvanceDate = .now
-        guard Date.now.timeIntervalSince(previousAdvance) > Self.cascadeDuration,
-              newIndex == oldIndex + 1,
-              lines.indices.contains(oldIndex),
-              let oldY = lineMidYs[lines[oldIndex].id],
-              let newY = lineMidYs[targetID] else {
-            recenter(on: targetID, proxy: proxy)
-            return
-        }
-
-        let delta = newY - oldY
-        guard delta > 0, delta < containerHeight / 2 else {
-            recenter(on: targetID, proxy: proxy)
-            return
-        }
-
-        let window = max(0, newIndex - Self.slinkyWindowAbove)..<min(lines.count, newIndex + Self.slinkyWindowBelow)
-        var jump = Transaction()
-        jump.disablesAnimations = true
-        withTransaction(jump) {
-            proxy.scrollTo(targetID, anchor: .center)
-            for i in window {
-                slinkyOffsets[lines[i].id] = delta
-            }
-        }
-        // Release on the next runloop tick so the settle registers as its own
-        // change; explicit withAnimation carries each line's staggered spring.
-        Task { @MainActor in
-            for i in window {
-                withAnimation(.spring(duration: 0.8, bounce: 0.2).delay(slinkyDelay(for: i, activeIndex: newIndex))) {
-                    slinkyOffsets[lines[i].id] = 0
                 }
             }
         }
@@ -234,12 +159,6 @@ struct LyricsScrollView: View {
         withAnimation(.spring(duration: 0.7, bounce: 0.15)) {
             proxy.scrollTo(targetID, anchor: .center)
         }
-    }
-
-    private func slinkyDelay(for index: Int, activeIndex: Int) -> Double {
-        let distance = index - activeIndex
-        guard distance > 0 else { return 0 }
-        return min(Double(distance) * 0.055, 0.44)
     }
 
     @ViewBuilder
