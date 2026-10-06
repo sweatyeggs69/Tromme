@@ -67,10 +67,12 @@ final class LyricsService {
            cached.value.hasSynced {
             result = cached.value
         } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
-            if fetched.hasSynced {
-                await ExternalContentCache.shared.set(fetched, forKey: cacheKey)
+            // A fallback reached only because lrc.red timed out isn't cached, so the
+            // next play can still find the word-synced version.
+            if fetched.lyrics.hasSynced, fetched.isFinal {
+                await ExternalContentCache.shared.set(fetched.lyrics, forKey: cacheKey)
             }
-            result = fetched
+            result = fetched.lyrics
         } else {
             result = nil
         }
@@ -82,12 +84,42 @@ final class LyricsService {
 
     // Fallback chain: word-synced from lrc.red, then line-synced from lrc.red, then synced
     // from LRCLIB, then plain from LRCLIB.
-    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> ResolvedLyrics? {
+    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
+        let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
-        if let lrc = await LrcRedLyricsProvider.syncedLyrics(title: track.title, artist: artist, duration: seconds) {
-            return ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil)
+
+        let lrcRed = await withDeadline(sourceTimeout) {
+            await LrcRedLyricsProvider.syncedLyrics(title: title, artist: artist, duration: seconds)
         }
-        return await resolveLRCLIB(track: track, artist: artist)
+        if let lrc = lrcRed.value {
+            return (ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil), true)
+        }
+
+        let lrclib = await withDeadline(sourceTimeout) {
+            await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
+        }
+        guard let lyrics = lrclib.value else { return nil }
+        return (lyrics, !lrcRed.timedOut)
+    }
+
+    /// How long each source gets before the next one is tried.
+    private nonisolated static let sourceTimeout: TimeInterval = 2
+
+    /// Runs `operation`, giving up on it after `seconds`.
+    private nonisolated static func withDeadline<T: Sendable>(
+        _ seconds: TimeInterval,
+        _ operation: @escaping @Sendable () async -> T?
+    ) async -> (value: T?, timedOut: Bool) {
+        await withTaskGroup(of: (T?, Bool).self) { group in
+            group.addTask { (await operation(), false) }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return (nil, true)
+            }
+            let first = await group.next() ?? (nil, true)
+            group.cancelAll()
+            return (first.0, first.1)
+        }
     }
 
     /// Synced lyrics from a recording whose length differs by more than this
@@ -99,14 +131,14 @@ final class LyricsService {
     // tolerance, choosing the closest duration among them. Otherwise falls back to the closest
     // match's plain lyrics, since untimed text doesn't depend on the recording.
     // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
-    private nonisolated static func resolveLRCLIB(track: PlexMetadata, artist: String) async -> ResolvedLyrics? {
-        var results = await search([.init(name: "track_name", value: track.title),
+    private nonisolated static func resolveLRCLIB(title: String, artist: String, seconds: Double?) async -> ResolvedLyrics? {
+        var results = await search([.init(name: "track_name", value: title),
                                     .init(name: "artist_name", value: artist)])
         if results.isEmpty {
-            results = await search([.init(name: "q", value: "\(artist) \(track.title)")])
+            results = await search([.init(name: "q", value: "\(artist) \(title)")])
         }
 
-        guard let seconds = track.duration.map({ Double($0) / 1000 }) else {
+        guard let seconds else {
             return results.first(where: \.hasSynced) ?? results.first
         }
         let offset = { (result: ResolvedLyrics) in abs((result.duration ?? seconds) - seconds) }
