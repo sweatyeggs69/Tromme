@@ -38,8 +38,34 @@ struct LyricsScrollView: View {
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var lineFontSize: CGFloat { isPad ? 44 : 32 }
 
-    private var currentIndex: Int {
-        lyricsService.currentLineIndex(at: player.currentTime + Self.lyricLeadTime)
+    /// The player only publishes its time every half second, so the active
+    /// line is derived from a time extrapolated from the last report and
+    /// re-checked often. Otherwise closely timed lines would switch up to half
+    /// a second late and then have to catch up.
+    @State private var currentIndex = 0
+    @State private var lastAdvanceDate = Date.distantPast
+
+    /// Never extrapolate further than this past a report, so a stalled
+    /// stream doesn't run the lyrics ahead of the audio.
+    private static let maxExtrapolation: TimeInterval = 1
+
+    /// A line-to-line cascade takes about this long to settle. A new advance
+    /// arriving sooner retargets with a plain scroll instead of restarting
+    /// the cascade from partway through the previous one.
+    private static let cascadeDuration: TimeInterval = 1.0
+
+    private var estimatedTime: TimeInterval {
+        guard player.isPlaying else { return timeAnchor.time }
+        return timeAnchor.time + min(max(Date.now.timeIntervalSince(timeAnchor.date), 0), Self.maxExtrapolation)
+    }
+
+    private var targetIndex: Int {
+        lyricsService.currentLineIndex(at: estimatedTime + Self.lyricLeadTime)
+    }
+
+    private func updateCurrentIndex() {
+        let index = targetIndex
+        if index != currentIndex { currentIndex = index }
     }
 
     private var bufferHeight: CGFloat {
@@ -81,8 +107,20 @@ struct LyricsScrollView: View {
                         containerHeight = max(0, height)
                     }
                     .onAppear {
-                        guard currentIndex < lyricsService.lines.count else { return }
-                        proxy.scrollTo(lyricsService.lines[currentIndex].id, anchor: .center)
+                        let index = targetIndex
+                        currentIndex = index
+                        guard index < lyricsService.lines.count else { return }
+                        proxy.scrollTo(lyricsService.lines[index].id, anchor: .center)
+                    }
+                    .task(id: player.isPlaying) {
+                        updateCurrentIndex()
+                        while player.isPlaying, !Task.isCancelled {
+                            try? await Task.sleep(for: .milliseconds(30))
+                            updateCurrentIndex()
+                        }
+                    }
+                    .onChange(of: lyricsService.lines.first?.id) { _, _ in
+                        updateCurrentIndex()
                     }
                     .onChange(of: currentIndex) { oldIndex, newIndex in
                         guard newIndex < lyricsService.lines.count, !isUserScrolling else { return }
@@ -101,6 +139,7 @@ struct LyricsScrollView: View {
                     )
                     .onChange(of: player.currentTime, initial: true) { _, time in
                         timeAnchor = (time: time, date: .now)
+                        updateCurrentIndex()
                     }
                     .onChange(of: player.isPlaying) { _, isPlaying in
                         timeAnchor = (time: player.currentTime, date: .now)
@@ -164,7 +203,12 @@ struct LyricsScrollView: View {
         let lines = lyricsService.lines
         let targetID = lines[newIndex].id
 
-        guard newIndex == oldIndex + 1,
+        // A cascade still settling would be restarted from partway through, so
+        // lines close together just retarget the scroll instead.
+        let previousAdvance = lastAdvanceDate
+        lastAdvanceDate = .now
+        guard Date.now.timeIntervalSince(previousAdvance) > Self.cascadeDuration,
+              newIndex == oldIndex + 1,
               lines.indices.contains(oldIndex),
               let oldY = lineMidYs[lines[oldIndex].id],
               let newY = lineMidYs[targetID] else {
