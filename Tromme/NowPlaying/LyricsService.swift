@@ -23,7 +23,6 @@ final class LyricsService {
     private(set) var plainLyrics: String?
     private(set) var isLoading = false
     private(set) var hasSynced = false
-    private(set) var hasWordSync = false
     private(set) var hasLyrics = false
 
     private var activeRequestID: UUID?
@@ -53,7 +52,6 @@ final class LyricsService {
         lines = []
         plainLyrics = nil
         hasSynced = false
-        hasWordSync = false
         hasLyrics = false
 
         // Use track-level artist so compilations match by performer, not "Various Artists"
@@ -148,7 +146,6 @@ final class LyricsService {
         if let synced = response.syncedLyrics, !synced.isEmpty {
             lines = LRCParser.parse(synced)
             hasSynced = !lines.isEmpty
-            hasWordSync = lines.contains { !$0.words.isEmpty }
             hasLyrics = hasSynced
         }
         if !hasSynced, let plain = response.plainLyrics, !plain.isEmpty {
@@ -157,26 +154,8 @@ final class LyricsService {
         }
     }
 
-    /// Line-synced lines activate slightly ahead of their timestamp so the
-    /// active lyric is already in place when it's sung.
-    private static let lineSyncedLeadTime: TimeInterval = 0.15
-
-    /// Word-synced lines activate up to this far ahead of their first word so
-    /// the new line has settled before its wipe starts.
-    private static let wordSyncedLeadTime: TimeInterval = 1
-
     func currentLineIndex(at time: TimeInterval) -> Int {
-        lines.indices.last(where: { activationTime(of: $0) <= time }) ?? 0
-    }
-
-    /// Word-synced lines only advance early into the gap after the previous
-    /// line's last word, so tight verses aren't cut off mid-line.
-    private func activationTime(of index: Int) -> TimeInterval {
-        let line = lines[index]
-        guard hasWordSync else { return line.time - Self.lineSyncedLeadTime }
-        let early = line.time - Self.wordSyncedLeadTime
-        guard index > 0, let previousEnd = lines[index - 1].words.last?.endTime else { return early }
-        return min(max(early, previousEnd), line.time)
+        lines.lastIndex(where: { $0.time <= time }) ?? 0
     }
 
     private static func looksInstrumental(_ text: String) -> Bool {

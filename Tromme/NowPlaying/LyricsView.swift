@@ -21,6 +21,10 @@ struct LyricsScrollView: View {
     @State private var lineMidYs: [UUID: CGFloat] = [:]
     @State private var slinkyOffsets: [UUID: CGFloat] = [:]
 
+    /// Highlight lines slightly ahead of their timestamp so the active lyric
+    /// is already in place when it's sung.
+    private static let lyricLeadTime: TimeInterval = 0.15
+
     /// How many lines around the active one take part in the cascade —
     /// generous enough to cover everything on screen.
     private static let slinkyWindowAbove = 10
@@ -35,7 +39,7 @@ struct LyricsScrollView: View {
     private var lineFontSize: CGFloat { isPad ? 44 : 32 }
 
     private var currentIndex: Int {
-        lyricsService.currentLineIndex(at: player.currentTime)
+        lyricsService.currentLineIndex(at: player.currentTime + Self.lyricLeadTime)
     }
 
     private var bufferHeight: CGFloat {
@@ -224,8 +228,7 @@ struct LyricsScrollView: View {
     private func lyricLine(_ line: LyricsLine, isActive: Bool) -> some View {
         lyricLineText(line, isActive: isActive)
             .font(.system(size: lineFontSize, weight: .bold))
-            // Word-synced lines handle their own dimming in WordWipeTextRenderer.
-            .foregroundStyle(.white.opacity(isActive || !line.words.isEmpty ? 1.0 : 0.3))
+            .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
