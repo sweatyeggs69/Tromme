@@ -28,9 +28,25 @@ struct LyricsScrollView: View {
     /// often, otherwise closely timed lines would switch up to half a second
     /// late and then have to catch up.
     @State private var currentIndex = 0
+    /// The line the view last jumped to without animation, so the index change
+    /// that jump causes doesn't also trigger an animated scroll to the same line.
+    @State private var settledIndex: Int?
 
     private func lineIndex(at date: Date = .now) -> Int {
         lyricsService.currentLineIndex(at: clock.time(at: date) + Self.lyricLeadTime)
+    }
+
+    /// Positions the view on the active line with no animation.
+    private func jumpToActiveLine(proxy: ScrollViewProxy) {
+        let index = lineIndex()
+        currentIndex = index
+        settledIndex = index
+        guard lyricsService.lines.indices.contains(index) else { return }
+        var jump = Transaction()
+        jump.disablesAnimations = true
+        withTransaction(jump) {
+            proxy.scrollTo(lyricsService.lines[index].id, anchor: .center)
+        }
     }
 
     private func updateCurrentIndex() {
@@ -70,10 +86,14 @@ struct LyricsScrollView: View {
                         containerHeight = max(0, height)
                     }
                     .onAppear {
-                        let index = lineIndex()
-                        currentIndex = index
-                        guard index < lyricsService.lines.count else { return }
-                        proxy.scrollTo(lyricsService.lines[index].id, anchor: .center)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: player.isPlaying)
+                        jumpToActiveLine(proxy: proxy)
+                    }
+                    .onChange(of: containerHeight) { _, _ in
+                        // The buffers above and below the lines depend on the height, so the
+                        // first real measurement (or a rotation) shifts the content.
+                        guard !isUserScrolling else { return }
+                        jumpToActiveLine(proxy: proxy)
                     }
                     .background {
                         // Re-checks the active line every frame while playing, since the
@@ -85,9 +105,11 @@ struct LyricsScrollView: View {
                         }
                     }
                     .onChange(of: lyricsService.lines.first?.id) { _, _ in
-                        updateCurrentIndex()
+                        jumpToActiveLine(proxy: proxy)
                     }
                     .onChange(of: currentIndex) { _, newIndex in
+                        guard newIndex != settledIndex else { return }
+                        settledIndex = nil
                         guard newIndex < lyricsService.lines.count, !isUserScrolling else { return }
                         recenter(on: lyricsService.lines[newIndex].id, proxy: proxy)
                     }
@@ -102,7 +124,7 @@ struct LyricsScrollView: View {
                                 scheduleScrollResume(proxy: proxy)
                             }
                     )
-                    .onChange(of: player.currentTime, initial: true) { _, time in
+                    .onChange(of: player.currentTime) { _, time in
                         clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying)
                         updateCurrentIndex()
                     }
