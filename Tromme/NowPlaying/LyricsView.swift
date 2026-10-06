@@ -214,23 +214,11 @@ struct LyricsScrollView: View {
             WordSyncedLyricText(
                 words: line.words,
                 isActive: isActive,
-                letterScale: activeLineScale / Self.wordSyncedLineScale,
                 anchorTime: timeAnchor.time,
                 anchorDate: timeAnchor.date,
                 isPlaying: player.isPlaying
             )
         }
-    }
-
-    private var activeLineScale: CGFloat { leftAlignLyrics ? 1.0 : 1.08 }
-
-    /// Word-synced lines stay small when active and their letters scale up
-    /// to the normal active size as they're sung, so the growth reads clearly.
-    private static let wordSyncedLineScale: CGFloat = 0.92
-
-    private func lineScale(_ line: LyricsLine, isActive: Bool) -> CGFloat {
-        guard isActive else { return 0.90 }
-        return line.words.isEmpty ? activeLineScale : Self.wordSyncedLineScale
     }
 
     private func lyricLine(_ line: LyricsLine, isActive: Bool) -> some View {
@@ -242,7 +230,7 @@ struct LyricsScrollView: View {
             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
             .contentShape(Rectangle())
-            .scaleEffect(lineScale(line, isActive: isActive), anchor: leftAlignLyrics ? .leading : .center)
+            .scaleEffect(isActive ? (leftAlignLyrics ? 1.0 : 1.08) : 0.90, anchor: leftAlignLyrics ? .leading : .center)
             .animation(.spring(duration: 0.7, bounce: 0.2), value: isActive)
     }
 

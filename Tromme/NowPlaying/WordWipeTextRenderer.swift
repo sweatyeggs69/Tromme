@@ -1,13 +1,12 @@
 import SwiftUI
 
 /// Draws a word-synced lyric line the way Apple Music does: each word starts
-/// dimmed, a soft bright edge wipes across it as it's sung, and each letter
-/// scales up to full size as the edge reaches it. Words are tagged with
-/// `Timing` so the line still wraps as ordinary text.
+/// dimmed and a soft bright edge wipes across it as it's sung. Words are
+/// tagged with `Timing` so the line still wraps as ordinary text.
 ///
 /// `activeAmount` animates between 0 (inactive) and 1 (active), so when the
-/// line hands off to the next one the highlight fades out and the letters
-/// settle back instead of snapping.
+/// line hands off to the next one the highlight fades out instead of
+/// snapping off.
 struct WordWipeTextRenderer: TextRenderer {
     struct Timing: TextAttribute {
         let start: TimeInterval
@@ -16,8 +15,6 @@ struct WordWipeTextRenderer: TextRenderer {
 
     var time: TimeInterval
     var activeAmount: Double
-    /// How much a sung letter grows, relative to the line's own scale.
-    var letterScale: Double
 
     var animatableData: Double {
         get { activeAmount }
@@ -28,8 +25,6 @@ struct WordWipeTextRenderer: TextRenderer {
     private static let dimOpacity = 0.3
     /// Half-width of the soft edge, as a fraction of the line height.
     private static let featherRatio = 0.35
-    /// How long a letter takes to scale up once the edge reaches it.
-    private static let letterGrowDuration: TimeInterval = 0.25
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         for line in layout {
@@ -71,31 +66,9 @@ struct WordWipeTextRenderer: TextRenderer {
             }
         }
 
-        for letter in run {
-            let bounds = letter.typographicBounds.rect
-            // Once the edge reaches this letter's center it scales up over a
-            // fixed short duration, rather than tracking the edge, so each
-            // letter visibly pops to full size.
-            let reachedAt = timing.start + span * (bounds.midX - (rect.minX - feather)) / travel
-            let grow = min(max((time - reachedAt) / Self.letterGrowDuration, 0), 1)
-            let eased = 1 - pow(1 - grow, 3)
-            let scale = 1 + (letterScale - 1) * eased * activeAmount
-
-            var dim = context
-            Self.scale(&dim, by: scale, around: bounds)
-            dim.opacity *= Self.dimOpacity
-            dim.draw(letter)
-
-            guard showsBright else { continue }
-            var lit = bright
-            Self.scale(&lit, by: scale, around: bounds)
-            lit.draw(letter)
-        }
-    }
-
-    private static func scale(_ context: inout GraphicsContext, by scale: Double, around rect: CGRect) {
-        context.translateBy(x: rect.midX, y: rect.midY)
-        context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: -rect.midX, y: -rect.midY)
+        var dim = context
+        dim.opacity *= Self.dimOpacity
+        dim.draw(run)
+        if showsBright { bright.draw(run) }
     }
 }

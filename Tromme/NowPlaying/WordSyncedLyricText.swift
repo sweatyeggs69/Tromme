@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// A line of word-synced lyrics. While it's the active line, each word is
-/// wiped bright and grows slightly as it's sung (see `WordWipeTextRenderer`);
-/// otherwise it's dimmed like any other line.
+/// wiped bright as it's sung (see `WordWipeTextRenderer`); otherwise it's
+/// dimmed like any other line.
 ///
 /// The player only publishes its time every half second, which is too coarse
 /// for word timing, so the time is extrapolated from the last reported value
@@ -10,8 +10,6 @@ import SwiftUI
 struct WordSyncedLyricText: View {
     let words: [LyricsWord]
     let isActive: Bool
-    /// How much each sung letter grows; see `WordWipeTextRenderer`.
-    let letterScale: Double
     /// Last time the player reported, and when it reported it.
     let anchorTime: TimeInterval
     let anchorDate: Date
@@ -27,7 +25,7 @@ struct WordSyncedLyricText: View {
                 ? anchorTime + min(max(context.date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
                 : anchorTime
             lineText
-                .textRenderer(WordWipeTextRenderer(time: time, activeAmount: isActive ? 1 : 0, letterScale: letterScale))
+                .textRenderer(WordWipeTextRenderer(time: time, activeAmount: isActive ? 1 : 0))
         }
     }
 
@@ -54,7 +52,6 @@ struct WordSyncedLyricText: View {
             LyricsWord(time: 2.0, endTime: 2.9, text: "life?")
         ],
         isActive: true,
-        letterScale: 1.17,
         anchorTime: 1.0,
         anchorDate: .now,
         isPlaying: false
