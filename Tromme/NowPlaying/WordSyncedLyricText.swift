@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// A line of word-synced lyrics. While it's the active line, each word
-/// brightens as it's sung; otherwise it's dimmed like any other line.
+/// A line of word-synced lyrics. While it's the active line, each word is
+/// wiped bright and grows slightly as it's sung (see `WordWipeTextRenderer`);
+/// otherwise it's dimmed like any other line.
 ///
 /// The player only publishes its time every half second, which is too coarse
 /// for word timing, so the time is extrapolated from the last reported value
@@ -17,30 +18,27 @@ struct WordSyncedLyricText: View {
     /// Never extrapolate further than this past a report, so a stalled
     /// stream doesn't run the highlight ahead of the audio.
     private static let maxExtrapolation: TimeInterval = 1
-    private static let dimOpacity = 0.3
 
     var body: some View {
         TimelineView(.animation(paused: !isActive || !isPlaying)) { context in
             let time = isPlaying
                 ? anchorTime + min(max(context.date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
                 : anchorTime
-            Text(attributedLine(at: time))
+            lineText
+                .textRenderer(WordWipeTextRenderer(time: time, isActive: isActive))
         }
     }
 
-    private func attributedLine(at time: TimeInterval) -> AttributedString {
-        words.reduce(into: AttributedString()) { line, word in
-            var run = AttributedString(word.text)
-            run.swiftUI.foregroundColor = Color.white.opacity(opacity(of: word, at: time))
-            line.append(run)
+    /// Tags each word with its timing for the renderer. Trailing spaces are
+    /// left untagged so a word's wipe and growth are centered on its letters.
+    private var lineText: Text {
+        words.reduce(Text(verbatim: "")) { line, word in
+            let leading = word.text.first?.isWhitespace == true ? " " : ""
+            let trailing = word.text.last?.isWhitespace == true ? " " : ""
+            let timed = Text(verbatim: word.text.trimmingCharacters(in: .whitespaces))
+                .customAttribute(WordWipeTextRenderer.Timing(start: word.time, end: word.endTime))
+            return Text("\(line)\(Text(verbatim: leading))\(timed)\(Text(verbatim: trailing))")
         }
-    }
-
-    private func opacity(of word: LyricsWord, at time: TimeInterval) -> Double {
-        guard isActive else { return Self.dimOpacity }
-        let span = max(word.endTime - word.time, 0.05)
-        let progress = min(max((time - word.time) / span, 0), 1)
-        return Self.dimOpacity + (1 - Self.dimOpacity) * progress
     }
 }
 
@@ -59,6 +57,7 @@ struct WordSyncedLyricText: View {
         isPlaying: false
     )
     .font(.system(size: 32, weight: .bold))
+    .foregroundStyle(.white)
     .padding()
     .background(.black)
 }
