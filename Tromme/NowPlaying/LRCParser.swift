@@ -62,10 +62,6 @@ enum LRCParser {
         return min(next.time, line.time + 1.5 + 0.08 * Double(line.text.count))
     }
 
-    static func isWordSynced(_ lrc: String) -> Bool {
-        parse(lrc).contains { !$0.words.isEmpty }
-    }
-
     /// Splits `<mm:ss.xx>word <mm:ss.xx>word <mm:ss.xx>` into timed words.
     /// A word ends where the next stamp begins; a trailing stamp with no text
     /// only marks the end of the last word. Returns [] for a plain LRC line.

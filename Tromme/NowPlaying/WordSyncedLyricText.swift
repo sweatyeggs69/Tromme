@@ -4,28 +4,16 @@ import SwiftUI
 /// wiped bright as it's sung (see `WordWipeTextRenderer`); otherwise it's
 /// dimmed like any other line.
 ///
-/// The player only publishes its time every half second, which is too coarse
-/// for word timing, so the time is extrapolated from the last reported value
-/// on every frame while playing.
+/// The time comes from `LyricsClock`, re-evaluated on every frame while playing.
 struct WordSyncedLyricText: View {
     let words: [LyricsWord]
     let isActive: Bool
-    /// Last time the player reported, and when it reported it.
-    let anchorTime: TimeInterval
-    let anchorDate: Date
-    let isPlaying: Bool
-
-    /// Never extrapolate further than this past a report, so a stalled
-    /// stream doesn't run the highlight ahead of the audio.
-    private static let maxExtrapolation: TimeInterval = 1
+    let clock: LyricsClock
 
     var body: some View {
-        TimelineView(.animation(paused: !isActive || !isPlaying)) { context in
-            let time = isPlaying
-                ? anchorTime + min(max(context.date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
-                : anchorTime
+        TimelineView(.animation(paused: !isActive || !clock.isPlaying)) { context in
             lineText
-                .textRenderer(WordWipeTextRenderer(time: time, activeAmount: isActive ? 1 : 0))
+                .textRenderer(WordWipeTextRenderer(time: clock.time(at: context.date), activeAmount: isActive ? 1 : 0))
         }
     }
 
@@ -52,9 +40,7 @@ struct WordSyncedLyricText: View {
             LyricsWord(time: 2.0, endTime: 2.9, text: "life?")
         ],
         isActive: true,
-        anchorTime: 1.0,
-        anchorDate: .now,
-        isPlaying: false
+        clock: LyricsClock(anchorTime: 1.0)
     )
     .font(.system(size: 32, weight: .bold))
     .foregroundStyle(.white)

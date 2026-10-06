@@ -18,18 +18,18 @@ enum LrcRedLyricsProvider {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
         guard !candidates.isEmpty else { return nil }
 
-        let lrcs = await withTaskGroup(of: (Int, String?).self) { group in
+        let lrcs = await withTaskGroup(of: (rank: Int, lrc: FetchedLRC?).self) { group in
             for (rank, isrc) in candidates.enumerated() {
                 group.addTask { (rank, await lrc(isrc: isrc)) }
             }
-            var results: [(rank: Int, lrc: String)] = []
+            var results: [(rank: Int, lrc: FetchedLRC)] = []
             for await (rank, lrc) in group {
                 if let lrc { results.append((rank, lrc)) }
             }
             return results.sorted { $0.rank < $1.rank }.map(\.lrc)
         }
 
-        return lrcs.first(where: LRCParser.isWordSynced) ?? lrcs.first
+        return (lrcs.first(where: \.isWordSynced) ?? lrcs.first)?.text
     }
 
     // MARK: - Search
@@ -75,12 +75,19 @@ enum LrcRedLyricsProvider {
         return ranked.map(\.isrc).filter { seen.insert($0).inserted }.prefix(maxCandidates).map { $0 }
     }
 
-    private static func lrc(isrc: String) async -> String? {
+    /// An LRC that parsed to at least one line, with whether it has per-word timing.
+    private struct FetchedLRC: Sendable {
+        let text: String
+        let isWordSynced: Bool
+    }
+
+    private static func lrc(isrc: String) async -> FetchedLRC? {
         let url = baseURL.appending(path: "s/\(isrc).lrc")
         guard let data = await LyricsService.fetchWithRetry(url),
-              let text = String(data: data, encoding: .utf8),
-              !LRCParser.parse(text).isEmpty else { return nil }
-        return text
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let lines = LRCParser.parse(text)
+        guard !lines.isEmpty else { return nil }
+        return FetchedLRC(text: text, isWordSynced: lines.contains { !$0.words.isEmpty })
     }
 
     // MARK: - Matching

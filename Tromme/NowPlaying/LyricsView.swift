@@ -10,9 +10,7 @@ struct LyricsScrollView: View {
     @State private var isUserScrolling = false
     @State private var scrollResumeTask: Task<Void, Never>?
 
-    /// Last playback time the player reported and when, so word-synced
-    /// lines can extrapolate between the player's half-second updates.
-    @State private var timeAnchor = (time: TimeInterval(0), date: Date.now)
+    @State private var clock = LyricsClock()
 
     // Slinky advance: on a natural one-line advance the scroll jumps
     // instantly to the new position while nearby lines are pushed back to
@@ -38,29 +36,19 @@ struct LyricsScrollView: View {
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var lineFontSize: CGFloat { isPad ? 44 : 32 }
 
-    /// The player only publishes its time every half second, so the active
-    /// line is derived from a time extrapolated from the last report and
-    /// re-checked often. Otherwise closely timed lines would switch up to half
-    /// a second late and then have to catch up.
+    /// The active line is derived from the extrapolated clock and re-checked
+    /// often, otherwise closely timed lines would switch up to half a second
+    /// late and then have to catch up.
     @State private var currentIndex = 0
     @State private var lastAdvanceDate = Date.distantPast
-
-    /// Never extrapolate further than this past a report, so a stalled
-    /// stream doesn't run the lyrics ahead of the audio.
-    private static let maxExtrapolation: TimeInterval = 1
 
     /// A line-to-line cascade takes about this long to settle. A new advance
     /// arriving sooner retargets with a plain scroll instead of restarting
     /// the cascade from partway through the previous one.
     private static let cascadeDuration: TimeInterval = 1.0
 
-    private var estimatedTime: TimeInterval {
-        guard player.isPlaying else { return timeAnchor.time }
-        return timeAnchor.time + min(max(Date.now.timeIntervalSince(timeAnchor.date), 0), Self.maxExtrapolation)
-    }
-
     private var targetIndex: Int {
-        lyricsService.currentLineIndex(at: estimatedTime + Self.lyricLeadTime)
+        lyricsService.currentLineIndex(at: clock.time() + Self.lyricLeadTime)
     }
 
     private func updateCurrentIndex() {
@@ -138,11 +126,11 @@ struct LyricsScrollView: View {
                             }
                     )
                     .onChange(of: player.currentTime, initial: true) { _, time in
-                        timeAnchor = (time: time, date: .now)
+                        clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying)
                         updateCurrentIndex()
                     }
                     .onChange(of: player.isPlaying) { _, isPlaying in
-                        timeAnchor = (time: player.currentTime, date: .now)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: isPlaying)
                         guard isPlaying, isUserScrolling else { return }
                         scheduleScrollResume(proxy: proxy)
                     }
@@ -265,9 +253,7 @@ struct LyricsScrollView: View {
             WordSyncedLyricText(
                 words: line.words,
                 isActive: isActive,
-                anchorTime: timeAnchor.time,
-                anchorDate: timeAnchor.date,
-                isPlaying: player.isPlaying
+                clock: clock
             )
         }
     }
