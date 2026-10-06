@@ -10,6 +10,8 @@ import SwiftUI
 struct WordSyncedLyricText: View {
     let words: [LyricsWord]
     let isActive: Bool
+    /// How much each sung letter grows; see `WordWipeTextRenderer`.
+    let letterScale: Double
     /// Last time the player reported, and when it reported it.
     let anchorTime: TimeInterval
     let anchorDate: Date
@@ -25,7 +27,7 @@ struct WordSyncedLyricText: View {
                 ? anchorTime + min(max(context.date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
                 : anchorTime
             lineText
-                .textRenderer(WordWipeTextRenderer(time: time, isActive: isActive))
+                .textRenderer(WordWipeTextRenderer(time: time, activeAmount: isActive ? 1 : 0, letterScale: letterScale))
         }
     }
 
@@ -52,6 +54,7 @@ struct WordSyncedLyricText: View {
             LyricsWord(time: 2.0, endTime: 2.9, text: "life?")
         ],
         isActive: true,
+        letterScale: 1.17,
         anchorTime: 1.0,
         anchorDate: .now,
         isPlaying: false
