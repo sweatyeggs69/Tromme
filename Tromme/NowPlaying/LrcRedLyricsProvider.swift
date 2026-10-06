@@ -12,9 +12,6 @@ enum LrcRedLyricsProvider {
     /// timing, since they don't all carry the same sync level.
     private static let maxCandidates = 4
 
-    /// Two releases of the same recording rarely differ by more than this.
-    private static let durationTolerance: TimeInterval = 5
-
     /// Returns the best timed LRC for the track: word-synced if any matching
     /// release has it, otherwise line-synced, otherwise nil.
     static func syncedLyrics(title: String, artist: String, duration: TimeInterval?) async -> String? {
@@ -67,7 +64,7 @@ enum LrcRedLyricsProvider {
             guard !hitArtist.isEmpty,
                   hitArtist.contains(wantedArtist) || wantedArtist.contains(hitArtist) else { return false }
             guard let duration, let hitDuration = hit.duration else { return true }
-            return abs(hitDuration - duration) <= durationTolerance
+            return abs(hitDuration - duration) <= LyricsService.syncedDurationTolerance
         }
 
         let ranked = matches.sorted { a, b in

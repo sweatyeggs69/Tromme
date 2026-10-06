@@ -91,8 +91,14 @@ final class LyricsService {
         return ResolvedLyrics(syncedLyrics: lrclib.syncedLyrics, plainLyrics: lrclib.plainLyrics)
     }
 
-    // Fetches every LRCLIB match for the track and prefers one with synced lyrics, choosing the
-    // closest duration among them. Falls back to the closest plain-only match.
+    /// Synced lyrics from a recording whose length differs by more than this
+    /// are likely a different edit or master, so their timing would drift.
+    /// Matches the tolerance LRCLIB's own /api/get uses.
+    nonisolated static let syncedDurationTolerance: TimeInterval = 2
+
+    // Fetches every LRCLIB match for the track and prefers synced lyrics within the duration
+    // tolerance, choosing the closest duration among them. Otherwise falls back to the closest
+    // match's plain lyrics, since untimed text doesn't depend on the recording.
     // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
     private nonisolated static func resolveLRCLIB(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
         var results = await search([.init(name: "track_name", value: track.title),
@@ -100,13 +106,18 @@ final class LyricsService {
         if results.isEmpty {
             results = await search([.init(name: "q", value: "\(artist) \(track.title)")])
         }
-        let pool = results.filter(\.hasSynced)
-        let candidates = pool.isEmpty ? results : pool
 
-        guard let seconds = track.duration.map({ Double($0) / 1000 }) else { return candidates.first }
-        return candidates.min(by: {
-            abs(($0.duration ?? seconds) - seconds) < abs(($1.duration ?? seconds) - seconds)
-        })
+        guard let seconds = track.duration.map({ Double($0) / 1000 }) else {
+            return results.first(where: \.hasSynced) ?? results.first
+        }
+        let offset = { (result: LRCLIBResponse) in abs((result.duration ?? seconds) - seconds) }
+        let byDuration = results.sorted { offset($0) < offset($1) }
+
+        if let synced = byDuration.first(where: { $0.hasSynced && offset($0) <= syncedDurationTolerance }) {
+            return synced
+        }
+        guard let closest = byDuration.first(where: { $0.plainLyrics?.isEmpty == false }) else { return nil }
+        return LRCLIBResponse(syncedLyrics: nil, plainLyrics: closest.plainLyrics, duration: closest.duration)
     }
 
     private nonisolated static func search(_ query: [URLQueryItem]) async -> [LRCLIBResponse] {

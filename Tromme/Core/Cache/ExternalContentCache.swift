@@ -336,7 +336,7 @@ struct CachedResult<T: Sendable>: Sendable {
 
 enum CacheKey {
     static func lyrics(title: String, artist: String) -> String {
-        "lyrics_v2_\(artist)_\(title)"
+        "lyrics_v3_\(artist)_\(title)"
     }
     static func lastFMTopTracks(artist: String) -> String {
         "lastfm_toptracks_\(artist.lowercased())"
