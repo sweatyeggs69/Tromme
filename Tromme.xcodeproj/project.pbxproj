@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BAB01B6511139523F8649A6F /* WordSyncedLyricText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */; };
+		FCDC662C4145C838BC5F4C03 /* LrcRedLyricsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */; };
+		84544CB0FA22E46CECC9BC7F /* LRCParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */; };
 		01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311B274B9F165FE0F81E54FD /* SafariView.swift */; };
 		02EFFE2FF9FE8142805B0263 /* LibraryMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F650499E82802A9919E16B4 /* LibraryMemory.swift */; };
 		0603E2752890285A43E43246 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2FC699685A8C436EF372D6 /* ImageCache.swift */; };
@@ -75,6 +78,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordSyncedLyricText.swift; sourceTree = "<group>"; };
+		5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LrcRedLyricsProvider.swift; sourceTree = "<group>"; };
+		7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRCParser.swift; sourceTree = "<group>"; };
 		038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalContentCache.swift; sourceTree = "<group>"; };
 		054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuthService.swift; sourceTree = "<group>"; };
 		089047732CAA2781E1129B48 /* LibrarySyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncService.swift; sourceTree = "<group>"; };
@@ -160,6 +166,9 @@
 			children = (
 				80F60A1414C22BBC00295E2B /* LyricsService.swift */,
 				8EE6435FB2579A760B517C43 /* LyricsView.swift */,
+				2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */,
+				5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */,
+				7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */,
 				2EB138EDD82605DC91055038 /* MiniPlayerView.swift */,
 				FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */,
 				866C87D0462783ACE391CDD2 /* QueueView.swift */,
@@ -462,6 +471,9 @@
 				25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */,
 				CE9812586C3367CC672E5700 /* LyricsService.swift in Sources */,
 				A9BDE9C4493EBF7424C122DD /* LyricsView.swift in Sources */,
+				BAB01B6511139523F8649A6F /* WordSyncedLyricText.swift in Sources */,
+				FCDC662C4145C838BC5F4C03 /* LrcRedLyricsProvider.swift in Sources */,
+				84544CB0FA22E46CECC9BC7F /* LRCParser.swift in Sources */,
 				4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */,
 				0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */,
 				0E91C64F2F91B03000775275 /* AppContext.swift in Sources */,

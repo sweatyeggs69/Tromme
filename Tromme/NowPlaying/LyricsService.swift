@@ -5,6 +5,15 @@ struct LyricsLine: Identifiable, Sendable {
     let id = UUID()
     let time: TimeInterval
     let text: String
+    /// Per-word timing when the lyrics are word-synced; empty for line-synced lyrics.
+    var words: [LyricsWord] = []
+}
+
+struct LyricsWord: Sendable {
+    let time: TimeInterval
+    let endTime: TimeInterval
+    /// Includes any trailing space, so joining a line's words rebuilds its text.
+    let text: String
 }
 
 @MainActor
@@ -49,10 +58,10 @@ final class LyricsService {
         let trackArtist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
 
-        let result: LRCLIBResponse?
+        let result: ResolvedLyrics?
         // Only synced results are cached. Plain-only results may just mean a lookup failed or
-        // LRCLIB hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
-        if let cached = await ExternalContentCache.shared.get(LRCLIBResponse.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
+        // a provider hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
+        if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
            cached.value.hasSynced {
             result = cached.value
         } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
@@ -69,10 +78,21 @@ final class LyricsService {
         isLoading = false
     }
 
+    // Fallback chain: word-synced from lrc.red, then line-synced from lrc.red, then synced
+    // from LRCLIB, then plain from LRCLIB.
+    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> ResolvedLyrics? {
+        let seconds = track.duration.map { Double($0) / 1000 }
+        if let lrc = await LrcRedLyricsProvider.syncedLyrics(title: track.title, artist: artist, duration: seconds) {
+            return ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil)
+        }
+        guard let lrclib = await resolveLRCLIB(track: track, artist: artist) else { return nil }
+        return ResolvedLyrics(syncedLyrics: lrclib.syncedLyrics, plainLyrics: lrclib.plainLyrics)
+    }
+
     // Fetches every LRCLIB match for the track and prefers one with synced lyrics, choosing the
     // closest duration among them. Falls back to the closest plain-only match.
     // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
-    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
+    private nonisolated static func resolveLRCLIB(track: PlexMetadata, artist: String) async -> LRCLIBResponse? {
         var results = await search([.init(name: "track_name", value: track.title),
                                     .init(name: "artist_name", value: artist)])
         if results.isEmpty {
@@ -90,14 +110,14 @@ final class LyricsService {
     private nonisolated static func search(_ query: [URLQueryItem]) async -> [LRCLIBResponse] {
         var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = query
-        guard let url = components.url, let data = await lrclibFetch(url) else { return [] }
+        guard let url = components.url, let data = await fetchWithRetry(url) else { return [] }
         return (try? JSONDecoder().decode([LRCLIBResponse].self, from: data)) ?? []
     }
 
     // Retries transient failures (timeouts, dropped connections, 429/5xx) so a momentary
     // network hiccup doesn't get treated the same as a confirmed "no lyrics" 404 and cause
     // resolve() to settle prematurely on a worse (e.g. plain-only) fallback result.
-    private nonisolated static func lrclibFetch(_ url: URL, retries: Int = 2) async -> Data? {
+    nonisolated static func fetchWithRetry(_ url: URL, retries: Int = 2) async -> Data? {
         for attempt in 0...retries {
             if let (data, response) = try? await URLSession.shared.data(from: url),
                let http = response as? HTTPURLResponse {
@@ -111,9 +131,9 @@ final class LyricsService {
         return nil
     }
 
-    private func apply(_ response: LRCLIBResponse) {
+    private func apply(_ response: ResolvedLyrics) {
         if let synced = response.syncedLyrics, !synced.isEmpty {
-            lines = parseLRC(synced)
+            lines = LRCParser.parse(synced)
             hasSynced = !lines.isEmpty
             hasLyrics = hasSynced
         }
@@ -127,26 +147,6 @@ final class LyricsService {
         lines.lastIndex(where: { $0.time <= time }) ?? 0
     }
 
-    // MARK: - LRC Parsing
-
-    private func parseLRC(_ lrc: String) -> [LyricsLine] {
-        var result: [LyricsLine] = []
-        for rawLine in lrc.components(separatedBy: "\n") {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard line.hasPrefix("["),
-                  let closeBracket = line.firstIndex(of: "]") else { continue }
-            let timestamp = String(line[line.index(after: line.startIndex)..<closeBracket])
-            let text = String(line[line.index(after: closeBracket)...]).trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { continue }
-            let parts = timestamp.components(separatedBy: ":")
-            guard parts.count == 2,
-                  let minutes = Double(parts[0]),
-                  let seconds = Double(parts[1]) else { continue }
-            result.append(LyricsLine(time: minutes * 60 + seconds, text: text))
-        }
-        return result.sorted { $0.time < $1.time }
-    }
-
     private static func looksInstrumental(_ text: String) -> Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
@@ -154,6 +154,16 @@ final class LyricsService {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ") == "instrumental"
     }
+}
+
+// MARK: - Resolved Lyrics
+
+/// What the fallback chain settled on: a timed LRC (word- or line-synced) or plain text.
+struct ResolvedLyrics: Codable, Sendable {
+    let syncedLyrics: String?
+    let plainLyrics: String?
+
+    var hasSynced: Bool { syncedLyrics?.isEmpty == false }
 }
 
 // MARK: - lrclib Response
