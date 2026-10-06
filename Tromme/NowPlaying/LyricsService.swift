@@ -157,8 +157,26 @@ final class LyricsService {
         }
     }
 
+    /// Line-synced lines activate slightly ahead of their timestamp so the
+    /// active lyric is already in place when it's sung.
+    private static let lineSyncedLeadTime: TimeInterval = 0.15
+
+    /// Word-synced lines activate up to this far ahead of their first word so
+    /// the new line has settled before its wipe starts.
+    private static let wordSyncedLeadTime: TimeInterval = 1
+
     func currentLineIndex(at time: TimeInterval) -> Int {
-        lines.lastIndex(where: { $0.time <= time }) ?? 0
+        lines.indices.last(where: { activationTime(of: $0) <= time }) ?? 0
+    }
+
+    /// Word-synced lines only advance early into the gap after the previous
+    /// line's last word, so tight verses aren't cut off mid-line.
+    private func activationTime(of index: Int) -> TimeInterval {
+        let line = lines[index]
+        guard hasWordSync else { return line.time - Self.lineSyncedLeadTime }
+        let early = line.time - Self.wordSyncedLeadTime
+        guard index > 0, let previousEnd = lines[index - 1].words.last?.endTime else { return early }
+        return min(max(early, previousEnd), line.time)
     }
 
     private static func looksInstrumental(_ text: String) -> Bool {
