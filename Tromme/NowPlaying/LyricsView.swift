@@ -25,6 +25,10 @@ struct LyricsScrollView: View {
     /// is already in place when it's sung.
     private static let lyricLeadTime: TimeInterval = 0.15
 
+    /// Word-synced lines advance well ahead of their first word so the new
+    /// line has settled in place before its wipe starts.
+    private static let wordSyncedLeadTime: TimeInterval = 1
+
     /// How many lines around the active one take part in the cascade —
     /// generous enough to cover everything on screen.
     private static let slinkyWindowAbove = 10
@@ -39,7 +43,8 @@ struct LyricsScrollView: View {
     private var lineFontSize: CGFloat { isPad ? 44 : 32 }
 
     private var currentIndex: Int {
-        lyricsService.currentLineIndex(at: player.currentTime + Self.lyricLeadTime)
+        let leadTime = lyricsService.hasWordSync ? Self.wordSyncedLeadTime : Self.lyricLeadTime
+        return lyricsService.currentLineIndex(at: player.currentTime + leadTime)
     }
 
     private var bufferHeight: CGFloat {

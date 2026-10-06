@@ -23,6 +23,7 @@ final class LyricsService {
     private(set) var plainLyrics: String?
     private(set) var isLoading = false
     private(set) var hasSynced = false
+    private(set) var hasWordSync = false
     private(set) var hasLyrics = false
 
     private var activeRequestID: UUID?
@@ -52,6 +53,7 @@ final class LyricsService {
         lines = []
         plainLyrics = nil
         hasSynced = false
+        hasWordSync = false
         hasLyrics = false
 
         // Use track-level artist so compilations match by performer, not "Various Artists"
@@ -135,6 +137,7 @@ final class LyricsService {
         if let synced = response.syncedLyrics, !synced.isEmpty {
             lines = LRCParser.parse(synced)
             hasSynced = !lines.isEmpty
+            hasWordSync = lines.contains { !$0.words.isEmpty }
             hasLyrics = hasSynced
         }
         if !hasSynced, let plain = response.plainLyrics, !plain.isEmpty {
