@@ -256,7 +256,10 @@ struct LyricsScrollView: View {
 
     @ViewBuilder
     private func lyricLineText(_ line: LyricsLine, isActive: Bool) -> some View {
-        if line.words.isEmpty {
+        if line.isBreak {
+            Image(systemName: "music.note")
+                .accessibilityLabel("Instrumental break")
+        } else if line.words.isEmpty {
             Text(line.text)
         } else {
             WordSyncedLyricText(

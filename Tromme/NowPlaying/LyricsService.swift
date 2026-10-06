@@ -7,6 +7,8 @@ struct LyricsLine: Identifiable, Sendable {
     let text: String
     /// Per-word timing when the lyrics are word-synced; empty for line-synced lyrics.
     var words: [LyricsWord] = []
+    /// A music note shown in a long instrumental gap rather than a lyric.
+    var isBreak = false
 }
 
 struct LyricsWord: Sendable {
