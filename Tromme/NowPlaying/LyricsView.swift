@@ -10,6 +10,10 @@ struct LyricsScrollView: View {
     @State private var isUserScrolling = false
     @State private var scrollResumeTask: Task<Void, Never>?
 
+    /// Last playback time the player reported and when, so word-synced
+    /// lines can extrapolate between the player's half-second updates.
+    @State private var timeAnchor = (time: TimeInterval(0), date: Date.now)
+
     // Slinky advance: on a natural one-line advance the scroll jumps
     // instantly to the new position while nearby lines are pushed back to
     // where they were, then each line springs into place staggered by its
@@ -51,7 +55,7 @@ struct LyricsScrollView: View {
                             Color.clear.frame(height: bufferHeight)
 
                             ForEach(Array(lyricsService.lines.enumerated()), id: \.element.id) { i, line in
-                                lyricLine(text: line.text, isActive: i == currentIndex)
+                                lyricLine(line, isActive: i == currentIndex)
                                     .id(line.id)
                                     .onGeometryChange(for: CGFloat.self) { proxy in
                                         proxy.frame(in: .named("lyricsContent")).midY
@@ -95,7 +99,11 @@ struct LyricsScrollView: View {
                                 scheduleScrollResume(proxy: proxy)
                             }
                     )
+                    .onChange(of: player.currentTime, initial: true) { _, time in
+                        timeAnchor = (time: time, date: .now)
+                    }
                     .onChange(of: player.isPlaying) { _, isPlaying in
+                        timeAnchor = (time: player.currentTime, date: .now)
                         guard isPlaying, isUserScrolling else { return }
                         scheduleScrollResume(proxy: proxy)
                     }
@@ -202,8 +210,23 @@ struct LyricsScrollView: View {
         return min(Double(distance) * 0.055, 0.44)
     }
 
-    private func lyricLine(text: String, isActive: Bool) -> some View {
-        Text(text)
+    @ViewBuilder
+    private func lyricLineText(_ line: LyricsLine, isActive: Bool) -> some View {
+        if line.words.isEmpty {
+            Text(line.text)
+        } else {
+            WordSyncedLyricText(
+                words: line.words,
+                isActive: isActive,
+                anchorTime: timeAnchor.time,
+                anchorDate: timeAnchor.date,
+                isPlaying: player.isPlaying
+            )
+        }
+    }
+
+    private func lyricLine(_ line: LyricsLine, isActive: Bool) -> some View {
+        lyricLineText(line, isActive: isActive)
             .font(.system(size: lineFontSize, weight: .bold))
             .foregroundStyle(.white.opacity(isActive ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
