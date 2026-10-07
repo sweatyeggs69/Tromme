@@ -7,13 +7,18 @@ struct LyricsClock: Equatable {
     var anchorTime: TimeInterval = 0
     var anchorDate: Date = .now
     var isPlaying = false
+    /// How far lyrics run ahead of the audio, so they feel in sync.
+    var advance: TimeInterval = 0
 
     /// Never extrapolate further than this past a report, so a stalled
     /// stream doesn't run the lyrics ahead of the audio.
+    static let advanceKey = "lyricsAdvance"
+    static let defaultAdvance: TimeInterval = 0.3
+
     private static let maxExtrapolation: TimeInterval = 1
 
     func time(at date: Date = .now) -> TimeInterval {
-        guard isPlaying else { return anchorTime }
-        return anchorTime + min(max(date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
+        guard isPlaying else { return anchorTime + advance }
+        return anchorTime + advance + min(max(date.timeIntervalSince(anchorDate), 0), Self.maxExtrapolation)
     }
 }

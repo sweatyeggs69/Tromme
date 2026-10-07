@@ -12,9 +12,9 @@ struct LyricsScrollView: View {
 
     @State private var clock = LyricsClock()
 
-    /// Highlight lines slightly ahead of their timestamp so the active lyric
-    /// is already in place when it's sung.
-    private static let lyricLeadTime: TimeInterval = 0.15
+    /// Lyrics run ahead of the audio by this much (seconds), since perfectly
+    /// timed lyrics read as lagging.
+    @AppStorage(LyricsClock.advanceKey) private var lyricsAdvance = LyricsClock.defaultAdvance
 
     /// Height of the top/bottom fade mask NowPlayingView applies around this
     /// view — content needs at least this much clearance so lines aren't
@@ -33,7 +33,7 @@ struct LyricsScrollView: View {
     @State private var settledIndex: Int?
 
     private func lineIndex(at date: Date = .now) -> Int {
-        lyricsService.currentLineIndex(at: clock.time(at: date) + Self.lyricLeadTime)
+        lyricsService.currentLineIndex(at: clock.time(at: date))
     }
 
     /// Positions the view on the active line with no animation.
@@ -86,7 +86,7 @@ struct LyricsScrollView: View {
                         containerHeight = max(0, height)
                     }
                     .onAppear {
-                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: player.isPlaying)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: player.isPlaying, advance: lyricsAdvance)
                         jumpToActiveLine(proxy: proxy)
                     }
                     .onChange(of: containerHeight) { _, _ in
@@ -125,11 +125,11 @@ struct LyricsScrollView: View {
                             }
                     )
                     .onChange(of: player.currentTime) { _, time in
-                        clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying)
+                        clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying, advance: lyricsAdvance)
                         updateCurrentIndex()
                     }
                     .onChange(of: player.isPlaying) { _, isPlaying in
-                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: isPlaying)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: isPlaying, advance: lyricsAdvance)
                         guard isPlaying, isUserScrolling else { return }
                         scheduleScrollResume(proxy: proxy)
                     }

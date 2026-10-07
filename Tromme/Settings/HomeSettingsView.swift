@@ -6,6 +6,7 @@ struct HomeSettingsView: View {
     @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
+    @AppStorage(LyricsClock.advanceKey) private var lyricsAdvance = LyricsClock.defaultAdvance
 
     var body: some View {
         Form {
@@ -37,6 +38,12 @@ struct HomeSettingsView: View {
             Section("Lyrics") {
                 Toggle("Left Align Lyrics", isOn: $leftAlignLyrics)
                     .tint(.green)
+                VStack(alignment: .leading) {
+                    LabeledContent("Timing Offset", value: "\(lyricsAdvance.formatted(.number.precision(.fractionLength(2)))) s")
+                    Slider(value: $lyricsAdvance, in: 0...1, step: 0.05)
+                }
+            } footer: {
+                Text("Shows lyrics slightly ahead of the audio. Increase it if lyrics feel late.")
             }
         }
         .navigationTitle("Interface")
