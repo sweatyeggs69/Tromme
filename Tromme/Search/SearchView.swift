@@ -282,11 +282,8 @@ struct SearchView: View {
             Self.normalizeForSearch($0.title).contains(lowered)
             || ($0.parentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
         }
-        let matchedTracks = tracks.filter {
-            Self.normalizeForSearch($0.title).contains(lowered)
-            || ($0.grandparentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
-            || ($0.parentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
-        }
+        // Songs only match on their own title; tracks of a matching album or artist are not pulled in.
+        let matchedTracks = tracks.filter { Self.normalizeForSearch($0.title).contains(lowered) }
 
         let playlists = allPlaylists.filter {
             $0.isMusicPlaylist && Self.normalizeForSearch($0.title).contains(lowered)
