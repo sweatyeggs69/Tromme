@@ -5,17 +5,30 @@ import Foundation
 /// line ends with a stamp marking when the last word finishes:
 ///
 ///     [00:03.73]<00:03.73>Is <00:04.14>this <00:04.53>just <00:04.89>fantasy? <00:06.37>
+///
+/// Backing vocals sung over a line are folded into it as `LyricsLine.backing`:
+/// either a line explicitly tagged `[bg:<00:03.73>ooh <00:04.50>]`, or a
+/// word-synced line that starts before the previous line has finished.
 enum LRCParser {
     /// A gap between lyrics longer than this gets a music note.
     static let breakThreshold: TimeInterval = 5
 
     static func parse(_ lrc: String) -> [LyricsLine] {
-        var result: [LyricsLine] = []
+        var result: [(line: LyricsLine, isBackground: Bool)] = []
         // Empty stamps mark where a line ends, which tells a long instrumental
         // gap apart from a line that is simply held.
         var endMarkers: [TimeInterval] = []
         for rawLine in lrc.components(separatedBy: .newlines) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.lowercased().hasPrefix("[bg:"), line.hasSuffix("]") {
+                // A tagged backing line has no line stamp; its first word's stamp starts it.
+                line = String(line.dropFirst(4).dropLast())
+                let words = parseWords(line)
+                guard let first = words.first else { continue }
+                let text = words.map(\.text).joined().trimmingCharacters(in: .whitespaces)
+                result.append((LyricsLine(time: first.time, text: text, words: words), true))
+                continue
+            }
             guard line.hasPrefix("["),
                   let closeBracket = line.firstIndex(of: "]"),
                   let time = seconds(from: line[line.index(after: line.startIndex)..<closeBracket]) else { continue }
@@ -28,9 +41,41 @@ enum LRCParser {
                 endMarkers.append(time)
                 continue
             }
-            result.append(LyricsLine(time: time, text: text, words: words))
+            result.append((LyricsLine(time: time, text: text, words: words), false))
         }
-        return insertingBreaks(into: result.sorted { $0.time < $1.time }, endMarkers: endMarkers.sorted())
+        let sorted = result.sorted { $0.line.time < $1.line.time }
+        return insertingBreaks(into: foldingBacking(sorted), endMarkers: endMarkers.sorted())
+    }
+
+    /// Attaches backing vocals to the line they overlap, so the primary stays
+    /// active until it finishes instead of the lyrics advancing to the backing line.
+    private static func foldingBacking(_ entries: [(line: LyricsLine, isBackground: Bool)]) -> [LyricsLine] {
+        var result: [LyricsLine] = []
+        for (line, isBackground) in entries {
+            guard var primary = result.popLast() else {
+                result.append(line)
+                continue
+            }
+            let primaryEnd = primary.lastWordEnd
+            let overlaps = primaryEnd.map { line.time < $0 - 0.05 } ?? false
+            if overlaps, !line.words.isEmpty, isParenthesized(primary.text), !isParenthesized(line.text) {
+                // A parenthesized echo that starts first is the backing for the line it overlaps.
+                var promoted = line.withTime(primary.time)
+                promoted.backing = [primary]
+                result.append(promoted)
+            } else if isBackground || (overlaps && !line.words.isEmpty) {
+                primary.backing.append(line)
+                result.append(primary)
+            } else {
+                result.append(primary)
+                result.append(line)
+            }
+        }
+        return result
+    }
+
+    private static func isParenthesized(_ text: String) -> Bool {
+        text.hasPrefix("(") && text.hasSuffix(")")
     }
 
     /// Adds a music-note row at the start of every gap longer than
@@ -57,7 +102,7 @@ enum LRCParser {
     /// When a line finishes being sung: its last word, else an end marker,
     /// else an estimate from its length (capped at the next line's start).
     private static func endTime(of line: LyricsLine, before next: LyricsLine, endMarkers: [TimeInterval]) -> TimeInterval {
-        if let last = line.words.last { return last.endTime }
+        if let last = line.lastWordEnd { return last }
         if let marker = endMarkers.first(where: { $0 > line.time && $0 < next.time }) { return marker }
         return min(next.time, line.time + 1.5 + 0.08 * Double(line.text.count))
     }

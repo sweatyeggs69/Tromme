@@ -197,8 +197,15 @@ struct LyricsScrollView: View {
     }
 
     private func lyricLine(_ line: LyricsLine, isActive: Bool) -> some View {
-        lyricLineText(line, isActive: isActive)
-            .font(.system(size: lineFontSize, weight: .bold))
+        VStack(spacing: 6) {
+            lyricLineText(line, isActive: isActive)
+                .font(.system(size: lineFontSize, weight: .bold))
+            // Backing vocals sing alongside the primary, smaller and just below it.
+            ForEach(line.backing) { backing in
+                lyricLineText(backing, isActive: isActive)
+                    .font(.system(size: lineFontSize * 0.6, weight: .semibold))
+            }
+        }
             // Word-synced lines dim their own text in WordWipeTextRenderer.
             .foregroundStyle(.white.opacity(isActive || !line.words.isEmpty ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
