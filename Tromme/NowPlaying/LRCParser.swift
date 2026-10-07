@@ -56,7 +56,8 @@ enum LRCParser {
                 result.append(line)
                 continue
             }
-            let primaryEnd = primary.lastWordEnd
+            // Only the primary's own words count, so a long backing line can't swallow the next lyric.
+            let primaryEnd = primary.words.last?.endTime
             let overlaps = primaryEnd.map { line.time < $0 - 0.05 } ?? false
             if overlaps, !line.words.isEmpty, isParenthesized(primary.text), !isParenthesized(line.text) {
                 // A parenthesized echo that starts first is the backing for the line it overlaps.
