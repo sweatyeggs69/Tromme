@@ -200,10 +200,14 @@ struct LyricsScrollView: View {
         VStack(spacing: 6) {
             lyricLineText(line, isActive: isActive)
                 .font(.system(size: lineFontSize, weight: .bold))
+                .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
             // Backing vocals sing alongside the primary, smaller and just below it.
             ForEach(line.backing) { backing in
                 lyricLineText(backing, isActive: isActive)
                     .font(.system(size: lineFontSize * 0.6, weight: .semibold))
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(0.7)
             }
         }
             // Word-synced lines dim their own text in WordWipeTextRenderer.
