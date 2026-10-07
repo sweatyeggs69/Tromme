@@ -12,7 +12,8 @@ struct LyricsClock: Equatable {
 
     /// Never extrapolate further than this past a report, so a stalled
     /// stream doesn't run the lyrics ahead of the audio.
-    static let advanceKey = "lyricsAdvance"
+    /// Lyrics run ahead of the audio by this much, since perfectly timed
+    /// lyrics read as lagging.
     static let defaultAdvance: TimeInterval = 0.3
 
     private static let maxExtrapolation: TimeInterval = 1
