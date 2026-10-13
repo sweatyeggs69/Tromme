@@ -284,14 +284,13 @@ struct NowPlayingView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Separate backgrounds so the (oversized) blurred background can't widen the tall layer's proposal.
         .background {
-            ZStack {
-                NowPlayingBackground()
-                TallArtworkLayer(model: tallArtwork)
-                    .opacity(showsTallArtwork ? 1 : 0)
-                    .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
-            }
+            TallArtworkLayer(model: tallArtwork)
+                .opacity(showsTallArtwork ? 1 : 0)
+                .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
         }
+        .background { NowPlayingBackground() }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
                 .frame(width: 1, height: 1)
