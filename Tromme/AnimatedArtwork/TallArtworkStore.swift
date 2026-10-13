@@ -25,12 +25,15 @@ final class TallArtworkStore {
         let nextKey = Self.key(nextTrack)
 
         if current.key != currentKey {
-            current.reset()
+            let old = current
             if let next, next.key == currentKey {
                 current = next
                 self.next = nil
-                if isActive { current.activate() }
+            } else {
+                current = TallArtworkModel()
             }
+            if isActive { current.activate() }
+            retire(old)
         }
         current.prefetch(artist: currentTrack?.artistName ?? "", album: currentTrack?.albumName ?? "")
 
@@ -42,6 +45,14 @@ final class TallArtworkStore {
             let model = TallArtworkModel()
             model.prefetch(artist: nextTrack?.artistName ?? "", album: nextTrack?.albumName ?? "")
             next = model
+        }
+    }
+
+    /// Keeps the outgoing model rendering while its layer fades out, then releases it.
+    private func retire(_ model: TallArtworkModel) {
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            model.reset()
         }
     }
 

@@ -290,10 +290,18 @@ struct NowPlayingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Separate backgrounds so the (oversized) blurred background can't widen the tall layer's proposal.
+        // Each album's layer is its own view, so switching albums crossfades old into new
+        // instead of tearing the old video down mid-fade.
         .background {
-            TallArtworkLayer(model: tallArtwork)
-                .opacity(showsTallArtwork ? 1 : 0)
-                .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
+            ZStack {
+                if showsTallArtwork {
+                    TallArtworkLayer(model: tallArtwork)
+                        .id(ObjectIdentifier(tallArtwork))
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
+            .animation(.easeInOut(duration: 0.6), value: ObjectIdentifier(tallArtwork))
         }
         .background { NowPlayingBackground() }
         .overlay(alignment: .topLeading) {
@@ -302,7 +310,10 @@ struct NowPlayingView: View {
                 .allowsHitTesting(false)
                 .opacity(0.01)
         }
-        .preferredColorScheme(usesLightBackdrop ? .light : .dark)
+        // Flip content only; changing the presentation's scheme mid-skip makes the whole cover flash.
+        .environment(\.colorScheme, usesLightBackdrop ? .light : .dark)
+        .animation(.easeInOut(duration: 0.6), value: usesLightBackdrop)
+        .preferredColorScheme(.dark)
         .gesture(
             DragGesture()
                 .onEnded { value in
