@@ -9,11 +9,13 @@ import UIKit
 @Observable
 @MainActor
 final class TallArtworkModel {
-    /// Native size of the tall artwork.
-    static let aspectRatio: CGFloat = 2048.0 / 2732.0
+    /// Expected size of the tall artwork until the stream reports its real size.
+    static let defaultAspectRatio: CGFloat = 2048.0 / 2732.0
 
     private(set) var player: AVPlayer?
     private(set) var isReady = false
+    /// Width over height of the decoded video, set before `isReady`.
+    private(set) var aspectRatio: CGFloat = TallArtworkModel.defaultAspectRatio
     private(set) var bottomColor: Color = .black
 
     private var loadTask: Task<Void, Never>?
@@ -91,11 +93,14 @@ final class TallArtworkModel {
         while !Task.isCancelled, Date() < deadline {
             try? await Task.sleep(for: .milliseconds(100))
             guard newPlayer.timeControlStatus == .playing else { continue }
+            let size = item.presentationSize
+            guard size.width > 0, size.height > 0 else { continue }
             let time = item.currentTime()
             guard output.hasNewPixelBuffer(forItemTime: time),
                   let readOnly = output.pixelBufferAndDisplayTime(forItemTime: time).pixelBuffer,
                   let backdrop = readOnly.withUnsafeBuffer({ ArtworkBackdropColor(pixelBuffer: $0) }) else { continue }
             bottomColor = backdrop.color
+            aspectRatio = size.width / size.height
             if isActive {
                 withAnimation(.easeInOut(duration: 0.6)) { isReady = true }
             } else {

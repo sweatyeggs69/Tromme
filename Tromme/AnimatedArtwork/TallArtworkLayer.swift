@@ -11,12 +11,13 @@ struct TallArtworkLayer: View {
 
     var body: some View {
         GeometryReader { geo in
-            let videoHeight = geo.size.width / TallArtworkModel.aspectRatio
+            let videoHeight = geo.size.width / model.aspectRatio
             ZStack(alignment: .top) {
                 model.bottomColor
                 if let player = model.player {
                     TallArtworkPlayerView(player: player)
                         .frame(width: geo.size.width, height: videoHeight)
+                        .clipped()
                         .overlay(alignment: .bottom) {
                             LinearGradient(
                                 colors: [model.bottomColor.opacity(0), model.bottomColor],
@@ -39,7 +40,8 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
-        view.playerLayer.videoGravity = .resizeAspectFill
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.masksToBounds = true
         view.playerLayer.player = player
         return view
     }
