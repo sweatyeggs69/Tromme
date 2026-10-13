@@ -250,7 +250,9 @@ struct NowPlayingView: View {
                     .frame(height: bottomControlsHeight)
                     .padding(.bottom, bottomScreenPadding)
                 }
-                .overlayPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
+                .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
+                    // Behind the controls; the tall artwork sits above the static cover so it fades in over it.
+                    ZStack {
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
                             let fullRect = proxy[fullAnchor]
@@ -266,9 +268,10 @@ struct NowPlayingView: View {
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )
+                            // Hidden only once the tall artwork has fully faded in over it (so it can't
+                            // show through the fade); shown again instantly beneath an outgoing tall layer.
                             .opacity(showsTallArtwork ? 0 : 1)
-                            .blur(radius: showsTallArtwork ? 20 : 0)
-                            .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
+                            .animation(showsTallArtwork ? .linear(duration: 0.01).delay(0.6) : nil, value: showsTallArtwork)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
@@ -276,6 +279,8 @@ struct NowPlayingView: View {
                             .position(x: targetRect.midX, y: targetRect.midY)
                             .allowsHitTesting(false)
                         }
+                    }
+                    tallArtworkLayer
                     }
                 }
             }
@@ -291,19 +296,6 @@ struct NowPlayingView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Separate backgrounds so the (oversized) blurred background can't widen the tall layer's proposal.
-        // Each album's layer is its own view, so switching albums crossfades old into new
-        // instead of tearing the old video down mid-fade.
-        .background {
-            ZStack {
-                if showsTallArtwork {
-                    TallArtworkLayer(model: tallArtwork)
-                        .id(ObjectIdentifier(tallArtwork))
-                        .transition(BlurFadeTransition())
-                }
-            }
-            .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
-            .animation(.easeInOut(duration: 0.6), value: ObjectIdentifier(tallArtwork))
-        }
         .background { NowPlayingBackground() }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
@@ -350,6 +342,21 @@ struct NowPlayingView: View {
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
+    }
+
+    /// Each album's layer is its own view, so switching albums crossfades old into new
+    /// instead of tearing the old video down mid-fade.
+    private var tallArtworkLayer: some View {
+        ZStack {
+            if showsTallArtwork {
+                TallArtworkLayer(model: tallArtwork)
+                    .id(ObjectIdentifier(tallArtwork))
+                    .transition(BlurFadeTransition())
+            }
+        }
+        .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
+        .animation(.easeInOut(duration: 0.6), value: ObjectIdentifier(tallArtwork))
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
