@@ -37,6 +37,13 @@ struct ContentView: View {
                 mainTabView
             }
         }
+        .onChange(of: "\(player.currentTrack?.artistName ?? "")|\(player.currentTrack?.albumName ?? "")") { _, _ in
+            // Prefetch animated artwork so Now Playing opens straight into it.
+            TallArtworkModel.shared.prefetch(
+                artist: player.currentTrack?.artistName ?? "",
+                album: player.currentTrack?.albumName ?? ""
+            )
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             refreshAuthTokenFromKeychainIfNeeded()
