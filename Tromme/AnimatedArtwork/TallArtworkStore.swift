@@ -42,6 +42,11 @@ final class TallArtworkStore {
             if let oldKey = old.key, wanted[oldKey] != nil, neighbors[oldKey] == nil {
                 old.deactivate()
                 neighbors[oldKey] = old
+                // After its layer fades out, rewind it so skipping back starts without re-buffering.
+                Task {
+                    try? await Task.sleep(for: .seconds(0.7))
+                    if neighbors[oldKey] === old { old.parkAtStart() }
+                }
             } else {
                 retire(old)
             }

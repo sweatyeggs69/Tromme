@@ -46,6 +46,13 @@ final class TallArtworkModel {
         player?.pause()
     }
 
+    /// Parks a hidden model on its first frame so a later restart has those segments buffered.
+    func parkAtStart() {
+        guard !isActive, let player else { return }
+        player.pause()
+        player.seek(to: .zero)
+    }
+
     private func restart() {
         guard isActive, let player else { return }
         player.seek(to: .zero)
