@@ -10,25 +10,29 @@ struct TallArtworkLayer: View {
     private let fadeFraction: CGFloat = 0.15
 
     var body: some View {
-        GeometryReader { geo in
-            let videoHeight = geo.size.width / TallArtworkModel.aspectRatio
-            ZStack(alignment: .top) {
-                model.bottomColor
-                if let player = model.player {
-                    TallArtworkPlayerView(player: player)
-                        .frame(width: geo.size.width, height: videoHeight)
-                        .clipped()
-                        .overlay(alignment: .bottom) {
-                            LinearGradient(
-                                colors: [model.bottomColor.opacity(0), model.bottomColor],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .frame(height: videoHeight * fadeFraction)
+        ZStack(alignment: .top) {
+            model.bottomColor
+            VStack(spacing: 0) {
+                Color.clear
+                    .aspectRatio(TallArtworkModel.aspectRatio, contentMode: .fit)
+                    .overlay {
+                        if let player = model.player {
+                            TallArtworkPlayerView(player: player)
                         }
-                }
+                    }
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: model.bottomColor.opacity(0), location: 1 - fadeFraction),
+                                .init(color: model.bottomColor, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .clipped()
+                Spacer(minLength: 0)
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
@@ -40,7 +44,7 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
-        view.playerLayer.videoGravity = .resize
+        view.playerLayer.videoGravity = .resizeAspect
         view.playerLayer.player = player
         return view
     }
@@ -50,22 +54,8 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
     }
 
     final class PlayerLayerView: UIView {
-        let playerLayer = AVPlayerLayer()
-
-        override init(frame: CGRect) {
-            super.init(frame: frame)
-            clipsToBounds = true
-            layer.addSublayer(playerLayer)
-        }
-
-        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-
-        /// Pins the video to full width at 2048:2732 from the top, whatever size the host gives this view.
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            let height = bounds.width / TallArtworkModel.aspectRatio
-            playerLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: height)
-        }
+        override static var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
     }
 }
 
