@@ -267,6 +267,7 @@ struct NowPlayingView: View {
                                 cornerRadius: isCompact ? 4 : 6
                             )
                             .opacity(showsTallArtwork ? 0 : 1)
+                            .blur(radius: showsTallArtwork ? 20 : 0)
                             .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
@@ -297,7 +298,7 @@ struct NowPlayingView: View {
                 if showsTallArtwork {
                     TallArtworkLayer(model: tallArtwork)
                         .id(ObjectIdentifier(tallArtwork))
-                        .transition(.opacity)
+                        .transition(.blurReplace)
                 }
             }
             .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
