@@ -31,15 +31,9 @@ struct TallArtworkLayer: View {
                         )
                     }
                     .clipped()
-                    #if DEBUG
-                    .border(.red, width: 4)
-                    #endif
                 Spacer(minLength: 0)
             }
         }
-        #if DEBUG
-        .border(.green, width: 8)
-        #endif
         .ignoresSafeArea()
         .allowsHitTesting(false)
     }
