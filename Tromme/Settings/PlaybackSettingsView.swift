@@ -7,7 +7,6 @@ struct PlaybackSettingsView: View {
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
-    @AppStorage(AnimatedArtworkEntitlement.enabledKey) private var animatedArtworkEnabled = true
 
     var body: some View {
         Form {
@@ -46,16 +45,6 @@ struct PlaybackSettingsView: View {
                 }
             } footer: {
                 Text("Keeps song volume more consistent using track or album gain.")
-            }
-
-            Section {
-                Toggle("Animated Artwork", isOn: $animatedArtworkEnabled)
-                    .tint(.green)
-                    .disabled(!AnimatedArtworkEntitlement.isUnlocked)
-            } footer: {
-                Text(AnimatedArtworkEntitlement.isUnlocked
-                     ? "Show animated album artwork in Now Playing when available. Requires a connection."
-                     : "Animated album artwork is part of Tromme+.")
             }
         }
         .navigationTitle("Playback")

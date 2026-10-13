@@ -37,10 +37,6 @@ struct ContentView: View {
                 mainTabView
             }
         }
-        .onChange(of: player.currentTrack?.ratingKey) { _, _ in
-            // Prefetch animated artwork so Now Playing opens straight into it.
-            TallArtworkStore.shared.update(from: player)
-        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             refreshAuthTokenFromKeychainIfNeeded()

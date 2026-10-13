@@ -36,8 +36,6 @@ struct NowPlayingView: View {
     @State private var showLyrics = false
     @State private var showQueue = false
     @State private var lyricsService = LyricsService()
-    private var tallArtwork: TallArtworkModel { TallArtworkStore.shared.current }
-    @Environment(\.scenePhase) private var scenePhase
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
@@ -82,28 +80,8 @@ struct NowPlayingView: View {
 
     private var isCompact: Bool { showLyrics || showQueue }
 
-    /// Tall animated artwork replaces the square cover in the full iPhone portrait view only.
-    private var showsTallArtwork: Bool {
-        tallArtwork.isReady && !isCompact
-            && UIDevice.current.userInterfaceIdiom == .phone && geoSize.height >= geoSize.width
-    }
-
     private var artworkColor: Color {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
-    }
-
-    /// The static cover hides only once the tall video is actually on screen over it.
-    private var hidesStaticArtwork: Bool {
-        showsTallArtwork && tallArtwork.isVideoDisplayed
-    }
-
-    /// Light tall artwork backdrops switch Now Playing to dark controls, like Apple Music.
-    private var usesLightBackdrop: Bool {
-        hidesStaticArtwork && tallArtwork.isBackdropLight
-    }
-
-    private var tallArtworkKey: String {
-        "\(player.currentTrack?.artistName ?? "")|\(player.currentTrack?.albumName ?? "")"
     }
 
     private var isFavorited: Bool {
@@ -255,9 +233,7 @@ struct NowPlayingView: View {
                     .frame(height: bottomControlsHeight)
                     .padding(.bottom, bottomScreenPadding)
                 }
-                .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
-                    // Behind the controls; the tall artwork sits above the static cover so it fades in over it.
-                    ZStack {
+                .overlayPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
                             let fullRect = proxy[fullAnchor]
@@ -273,10 +249,6 @@ struct NowPlayingView: View {
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )
-                            // Hidden only once the tall artwork has fully faded in over it (so it can't
-                            // show through the fade); shown again instantly beneath an outgoing tall layer.
-                            .opacity(hidesStaticArtwork ? 0 : 1)
-                            .animation(hidesStaticArtwork ? .linear(duration: 0.01).delay(0.6) : nil, value: hidesStaticArtwork)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
@@ -284,8 +256,6 @@ struct NowPlayingView: View {
                             .position(x: targetRect.midX, y: targetRect.midY)
                             .allowsHitTesting(false)
                         }
-                    }
-                    tallArtworkLayer
                     }
                 }
             }
@@ -300,7 +270,6 @@ struct NowPlayingView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Separate backgrounds so the (oversized) blurred background can't widen the tall layer's proposal.
         .background { NowPlayingBackground() }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
@@ -308,9 +277,6 @@ struct NowPlayingView: View {
                 .allowsHitTesting(false)
                 .opacity(0.01)
         }
-        // Flip content only; changing the presentation's scheme mid-skip makes the whole cover flash.
-        .environment(\.colorScheme, usesLightBackdrop ? .light : .dark)
-        .animation(.easeInOut(duration: 0.6), value: usesLightBackdrop)
         .preferredColorScheme(.dark)
         .gesture(
             DragGesture()
@@ -322,7 +288,6 @@ struct NowPlayingView: View {
         )
         .onAppear {
             isVisible = true
-            TallArtworkStore.shared.activate()
             guard let track = player.currentTrack else { return }
             Task {
                 await lyricsService.fetch(track: track)
@@ -330,13 +295,6 @@ struct NowPlayingView: View {
         }
         .onDisappear {
             isVisible = false
-            TallArtworkStore.shared.deactivate()
-        }
-        .onChange(of: tallArtworkKey, initial: true) { _, _ in
-            TallArtworkStore.shared.update(from: player)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { TallArtworkStore.shared.activate() } else { TallArtworkStore.shared.deactivate() }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
             guard isVisible, let track = player.currentTrack else { return }
@@ -349,21 +307,6 @@ struct NowPlayingView: View {
         }
     }
 
-    /// Each album's layer is its own view, so switching albums crossfades old into new
-    /// instead of tearing the old video down mid-fade.
-    private var tallArtworkLayer: some View {
-        ZStack {
-            if showsTallArtwork {
-                TallArtworkLayer(model: tallArtwork)
-                    .id(ObjectIdentifier(tallArtwork))
-                    .transition(BlurFadeTransition())
-            }
-        }
-        .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
-        .animation(.easeInOut(duration: 0.6), value: ObjectIdentifier(tallArtwork))
-        .allowsHitTesting(false)
-    }
-
     @ViewBuilder
     private var lyricsQueueContent: some View {
         Group {
@@ -372,10 +315,10 @@ struct NowPlayingView: View {
                     if lyricsService.isLoading {
                         VStack(spacing: 12) {
                             ProgressView()
-                                .tint(Color.primary.opacity(0.82))
+                                .tint(.white.opacity(0.82))
                             Text("Fetching Lyrics…")
                                 .font(.callout)
-                                .foregroundStyle(Color.primary.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -395,10 +338,10 @@ struct NowPlayingView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "quote.bubble")
                                 .font(.system(size: 40))
-                                .foregroundStyle(Color.primary.opacity(0.3))
+                                .foregroundStyle(.white.opacity(0.3))
                             Text("No Lyrics Available")
                                 .font(.callout)
-                                .foregroundStyle(Color.primary.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.4))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -436,14 +379,14 @@ struct NowPlayingView: View {
             VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
                     .font(.title3.bold())
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
                 Button {
                     goToArtist()
                 } label: {
                     Text(player.currentTrack?.artistDisplayName ?? "")
                         .font(.title3)
-                        .foregroundStyle(Color.primary.opacity(0.6))
+                        .foregroundStyle(Color.white.opacity(0.6))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
@@ -457,10 +400,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(Color.primary.opacity(actionBackgroundOpacity))
+                            .fill(.white.opacity(actionBackgroundOpacity))
                         Image(systemName: isFavorited ? "star.fill" : "star")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(.white)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -473,10 +416,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(Color.primary.opacity(actionBackgroundOpacity))
+                            .fill(.white.opacity(actionBackgroundOpacity))
                         Image(systemName: "ellipsis")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(.white)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -631,7 +574,7 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
                 .frame(width: 30, height: 30)
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: lyricsService.isLoading)
                 .contentShape(Circle())
@@ -644,7 +587,7 @@ struct NowPlayingView: View {
 
     private var dragHandle: some View {
         RoundedRectangle(cornerRadius: 3)
-            .fill(Color.primary.opacity(0.3))
+            .fill(.white.opacity(0.3))
             .frame(width: 36, height: 5)
     }
 
@@ -656,14 +599,14 @@ struct NowPlayingView: View {
             Button { player.previous() } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
             Spacer()
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: player.isPlaying ? 52 : 46))
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(.white)
                     .frame(width: 72, height: 72)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: player.isPlaying)
@@ -672,7 +615,7 @@ struct NowPlayingView: View {
             Button { player.next() } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
             }
             Spacer()
@@ -784,10 +727,10 @@ struct NowPlayingView: View {
     private var shuffleBadge: some View {
         ZStack {
             Circle()
-                .fill(Color.primary.opacity(0.25))
+                .fill(.white.opacity(0.25))
             Image(systemName: "shuffle")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Color.primary.opacity(0.75))
+                .foregroundStyle(.white.opacity(0.75))
         }
         .frame(width: 17, height: 17)
         .offset(x: 4, y: -3)
@@ -798,7 +741,7 @@ struct NowPlayingView: View {
         if isActive {
             ZStack {
                 Circle()
-                    .fill(Color.primary.opacity(actionBackgroundActiveOpacity))
+                    .fill(.white.opacity(actionBackgroundActiveOpacity))
                 Image(systemName: systemName)
                     .foregroundStyle(.black)
                     .blendMode(.destinationOut)
@@ -807,7 +750,7 @@ struct NowPlayingView: View {
             .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         } else {
             Image(systemName: systemName)
-                .foregroundStyle(Color.primary.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
                 .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         }
     }
@@ -889,11 +832,11 @@ struct TimelineSlider: View {
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.primary.opacity(0.3))
+                    .fill(.white.opacity(0.3))
                     .frame(height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity)
                 Capsule()
-                    .fill(Color.primary)
+                    .fill(.white)
                     .frame(width: max(0, geo.size.width * CGFloat(progress)), height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity, alignment: .leading)
             }
@@ -929,7 +872,7 @@ struct TimelineSlider: View {
             Text("-\(formatTime(max(0, duration - displayValue)))")
         }
         .font(.caption2)
-        .foregroundStyle(Color.primary.opacity(0.45))
+        .foregroundStyle(.white.opacity(0.45))
         .monospacedDigit()
     }
 
@@ -950,10 +893,10 @@ struct TimelineSlider: View {
                     .font(.caption2.weight(.medium))
             }
         }
-        .foregroundStyle(Color.primary.opacity(0.45))
+        .foregroundStyle(.white.opacity(0.45))
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.08)))
     }
 }
 
@@ -963,7 +906,7 @@ struct AirPlayButton: UIViewRepresentable {
     var tintOpacity: CGFloat = 0.7
     var activeTintOpacity: CGFloat = 0.92
     var iconScale: CGFloat = 1.12
-    var baseColor: UIColor = .label
+    var baseColor: UIColor = .white
 
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView(frame: .zero)
@@ -994,17 +937,17 @@ struct VolumeSlider: View {
             HStack(spacing: 8) {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(.white)
                     .frame(width: 16, alignment: .center)
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(Color.primary.opacity(0.3))
+                            .fill(.white.opacity(0.3))
                             .frame(height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity)
                         Capsule()
-                            .fill(Color.primary)
+                            .fill(.white)
                             .frame(width: max(0, geo.size.width * CGFloat(isEnabled ? volume : 0)), height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity, alignment: .leading)
                     }
@@ -1026,7 +969,7 @@ struct VolumeSlider: View {
 
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Color.primary)
+                    .foregroundStyle(.white)
                     .frame(width: 22, alignment: .center)
             }
             .opacity(isDragging ? 1.0 : 0.55)
@@ -1108,7 +1051,7 @@ private struct MPVolumeSliderView: UIViewRepresentable {
     }
 
     private func styleSubviews(in view: MPVolumeView) {
-        view.tintColor = .label
+        view.tintColor = .white
         for subview in view.subviews {
             if let slider = subview as? UISlider {
                 slider.minimumTrackTintColor = .clear
