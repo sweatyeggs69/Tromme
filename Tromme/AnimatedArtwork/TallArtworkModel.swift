@@ -70,15 +70,15 @@ final class TallArtworkModel {
         }
 
         let item = AVPlayerItem(url: url)
-        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+        let output = AVPlayerItemVideoOutput(pixelBufferAttributes: CVPixelBufferAttributes(rawAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ])
+        ]))
         item.add(output)
         let newPlayer = AVPlayer(playerItem: item)
         newPlayer.isMuted = true
         newPlayer.actionAtItemEnd = .none
         endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+            forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.restart() }
         }
@@ -93,8 +93,8 @@ final class TallArtworkModel {
             guard newPlayer.timeControlStatus == .playing else { continue }
             let time = item.currentTime()
             guard output.hasNewPixelBuffer(forItemTime: time),
-                  let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil),
-                  let backdrop = ArtworkBackdropColor(pixelBuffer: buffer) else { continue }
+                  let readOnly = output.pixelBufferAndDisplayTime(forItemTime: time).pixelBuffer,
+                  let backdrop = readOnly.withUnsafeBuffer({ ArtworkBackdropColor(pixelBuffer: $0) }) else { continue }
             bottomColor = backdrop.color
             if isActive {
                 withAnimation(.easeInOut(duration: 0.6)) { isReady = true }
