@@ -12,15 +12,13 @@ final class TallArtworkModel {
     /// Native size of the tall artwork.
     static let aspectRatio: CGFloat = 2048.0 / 2732.0
 
-    static let shared = TallArtworkModel()
-
     private(set) var player: AVPlayer?
     private(set) var isReady = false
     private(set) var bottomColor: Color = .black
 
     private var loadTask: Task<Void, Never>?
     private var endObserver: (any NSObjectProtocol)?
-    private var key: String?
+    private(set) var key: String?
 
     /// Whether Now Playing is open and the app is active.
     private var isActive = false
@@ -52,7 +50,7 @@ final class TallArtworkModel {
         player.play()
     }
 
-    private func reset() {
+    func reset() {
         loadTask?.cancel()
         loadTask = nil
         player?.pause()

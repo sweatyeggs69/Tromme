@@ -36,7 +36,7 @@ struct NowPlayingView: View {
     @State private var showLyrics = false
     @State private var showQueue = false
     @State private var lyricsService = LyricsService()
-    private var tallArtwork: TallArtworkModel { .shared }
+    private var tallArtwork: TallArtworkModel { TallArtworkStore.shared.current }
     @Environment(\.scenePhase) private var scenePhase
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
@@ -309,7 +309,7 @@ struct NowPlayingView: View {
         )
         .onAppear {
             isVisible = true
-            tallArtwork.activate()
+            TallArtworkStore.shared.activate()
             guard let track = player.currentTrack else { return }
             Task {
                 await lyricsService.fetch(track: track)
@@ -317,13 +317,13 @@ struct NowPlayingView: View {
         }
         .onDisappear {
             isVisible = false
-            tallArtwork.deactivate()
+            TallArtworkStore.shared.deactivate()
         }
         .onChange(of: tallArtworkKey, initial: true) { _, _ in
-            tallArtwork.prefetch(artist: player.currentTrack?.artistName ?? "", album: player.currentTrack?.albumName ?? "")
+            TallArtworkStore.shared.update(from: player)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { tallArtwork.activate() } else { tallArtwork.deactivate() }
+            if phase == .active { TallArtworkStore.shared.activate() } else { TallArtworkStore.shared.deactivate() }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
             guard isVisible, let track = player.currentTrack else { return }
