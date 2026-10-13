@@ -92,6 +92,11 @@ struct NowPlayingView: View {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
     }
 
+    /// Light tall artwork backdrops switch Now Playing to dark controls, like Apple Music.
+    private var usesLightBackdrop: Bool {
+        showsTallArtwork && tallArtwork.isBackdropLight
+    }
+
     private var tallArtworkKey: String {
         "\(player.currentTrack?.artistName ?? "")|\(player.currentTrack?.albumName ?? "")"
     }
@@ -297,7 +302,7 @@ struct NowPlayingView: View {
                 .allowsHitTesting(false)
                 .opacity(0.01)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(usesLightBackdrop ? .light : .dark)
         .gesture(
             DragGesture()
                 .onEnded { value in
@@ -343,10 +348,10 @@ struct NowPlayingView: View {
                     if lyricsService.isLoading {
                         VStack(spacing: 12) {
                             ProgressView()
-                                .tint(.white.opacity(0.82))
+                                .tint(.primary.opacity(0.82))
                             Text("Fetching Lyrics…")
                                 .font(.callout)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.primary.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -366,10 +371,10 @@ struct NowPlayingView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "quote.bubble")
                                 .font(.system(size: 40))
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(.primary.opacity(0.3))
                             Text("No Lyrics Available")
                                 .font(.callout)
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.primary.opacity(0.4))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -407,14 +412,14 @@ struct NowPlayingView: View {
             VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
                     .font(.title3.bold())
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(Color.primary)
                     .lineLimit(1)
                 Button {
                     goToArtist()
                 } label: {
                     Text(player.currentTrack?.artistDisplayName ?? "")
                         .font(.title3)
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.primary.opacity(0.6))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
@@ -428,10 +433,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(.white.opacity(actionBackgroundOpacity))
+                            .fill(.primary.opacity(actionBackgroundOpacity))
                         Image(systemName: isFavorited ? "star.fill" : "star")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -444,10 +449,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(.white.opacity(actionBackgroundOpacity))
+                            .fill(.primary.opacity(actionBackgroundOpacity))
                         Image(systemName: "ellipsis")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -602,7 +607,7 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(.primary.opacity(actionIconInactiveOpacity))
                 .frame(width: 30, height: 30)
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: lyricsService.isLoading)
                 .contentShape(Circle())
@@ -615,7 +620,7 @@ struct NowPlayingView: View {
 
     private var dragHandle: some View {
         RoundedRectangle(cornerRadius: 3)
-            .fill(.white.opacity(0.3))
+            .fill(.primary.opacity(0.3))
             .frame(width: 36, height: 5)
     }
 
@@ -627,14 +632,14 @@ struct NowPlayingView: View {
             Button { player.previous() } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 56, height: 56)
             }
             Spacer()
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: player.isPlaying ? 52 : 46))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 72, height: 72)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: player.isPlaying)
@@ -643,7 +648,7 @@ struct NowPlayingView: View {
             Button { player.next() } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 56, height: 56)
             }
             Spacer()
@@ -755,10 +760,10 @@ struct NowPlayingView: View {
     private var shuffleBadge: some View {
         ZStack {
             Circle()
-                .fill(.white.opacity(0.25))
+                .fill(.primary.opacity(0.25))
             Image(systemName: "shuffle")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.primary.opacity(0.75))
         }
         .frame(width: 17, height: 17)
         .offset(x: 4, y: -3)
@@ -769,7 +774,7 @@ struct NowPlayingView: View {
         if isActive {
             ZStack {
                 Circle()
-                    .fill(.white.opacity(actionBackgroundActiveOpacity))
+                    .fill(.primary.opacity(actionBackgroundActiveOpacity))
                 Image(systemName: systemName)
                     .foregroundStyle(.black)
                     .blendMode(.destinationOut)
@@ -778,7 +783,7 @@ struct NowPlayingView: View {
             .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         } else {
             Image(systemName: systemName)
-                .foregroundStyle(.white.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(.primary.opacity(actionIconInactiveOpacity))
                 .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         }
     }
@@ -860,11 +865,11 @@ struct TimelineSlider: View {
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.white.opacity(0.3))
+                    .fill(.primary.opacity(0.3))
                     .frame(height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity)
                 Capsule()
-                    .fill(.white)
+                    .fill(.primary)
                     .frame(width: max(0, geo.size.width * CGFloat(progress)), height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity, alignment: .leading)
             }
@@ -900,7 +905,7 @@ struct TimelineSlider: View {
             Text("-\(formatTime(max(0, duration - displayValue)))")
         }
         .font(.caption2)
-        .foregroundStyle(.white.opacity(0.45))
+        .foregroundStyle(.primary.opacity(0.45))
         .monospacedDigit()
     }
 
@@ -921,10 +926,10 @@ struct TimelineSlider: View {
                     .font(.caption2.weight(.medium))
             }
         }
-        .foregroundStyle(.white.opacity(0.45))
+        .foregroundStyle(.primary.opacity(0.45))
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(RoundedRectangle(cornerRadius: 4).fill(.white.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 4).fill(.primary.opacity(0.08)))
     }
 }
 
@@ -934,7 +939,7 @@ struct AirPlayButton: UIViewRepresentable {
     var tintOpacity: CGFloat = 0.7
     var activeTintOpacity: CGFloat = 0.92
     var iconScale: CGFloat = 1.12
-    var baseColor: UIColor = .white
+    var baseColor: UIColor = .label
 
     func makeUIView(context: Context) -> AVRoutePickerView {
         let picker = AVRoutePickerView(frame: .zero)
@@ -965,17 +970,17 @@ struct VolumeSlider: View {
             HStack(spacing: 8) {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 16, alignment: .center)
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(.white.opacity(0.3))
+                            .fill(.primary.opacity(0.3))
                             .frame(height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity)
                         Capsule()
-                            .fill(.white)
+                            .fill(.primary)
                             .frame(width: max(0, geo.size.width * CGFloat(isEnabled ? volume : 0)), height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity, alignment: .leading)
                     }
@@ -997,7 +1002,7 @@ struct VolumeSlider: View {
 
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 22, alignment: .center)
             }
             .opacity(isDragging ? 1.0 : 0.55)
@@ -1079,7 +1084,7 @@ private struct MPVolumeSliderView: UIViewRepresentable {
     }
 
     private func styleSubviews(in view: MPVolumeView) {
-        view.tintColor = .white
+        view.tintColor = .label
         for subview in view.subviews {
             if let slider = subview as? UISlider {
                 slider.minimumTrackTintColor = .clear

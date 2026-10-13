@@ -15,6 +15,8 @@ final class TallArtworkModel {
     private(set) var player: AVPlayer?
     private(set) var isReady = false
     private(set) var bottomColor: Color = .black
+    /// True when the backdrop is light enough that controls should use dark content.
+    private(set) var isBackdropLight = false
 
     private var loadTask: Task<Void, Never>?
     private var endObserver: (any NSObjectProtocol)?
@@ -96,6 +98,7 @@ final class TallArtworkModel {
                   let readOnly = output.pixelBufferAndDisplayTime(forItemTime: time).pixelBuffer,
                   let backdrop = readOnly.withUnsafeBuffer({ ArtworkBackdropColor(pixelBuffer: $0) }) else { continue }
             bottomColor = backdrop.color
+            isBackdropLight = backdrop.isLight
             if isActive {
                 withAnimation(.easeInOut(duration: 0.6)) { isReady = true }
             } else {

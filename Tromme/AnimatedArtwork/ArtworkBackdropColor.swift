@@ -5,30 +5,23 @@ import UIKit
 /// Backdrop color derived from the bottom of artwork. Shared by every animated artwork
 /// surface (Now Playing, album details) so they blend into the page the same way.
 ///
-/// Matches Apple Music: the page color keeps the artwork's hue and saturation but sits
-/// dark enough for white text. Very light artwork (yellow, white) goes near-black.
+/// Matches Apple Music: the page continues the artwork's own bottom color, light or dark,
+/// and the controls flip to dark content when the color is light.
 struct ArtworkBackdropColor {
     let color: Color
+    /// True when black content reads better than white on `color`.
+    let isLight: Bool
 
     /// Frames darker than this are treated as the clip's black opening frames.
     private static let blackLuminance: CGFloat = 0.03
-    private static let maxBrightness: CGFloat = 0.40
-    private static let minBrightness: CGFloat = 0.14
-    private static let lightArtworkLuminance: CGFloat = 0.6
 
     /// Returns nil for black frames so callers keep waiting for real content.
     init?(pixelBuffer buffer: CVPixelBuffer) {
         guard let average = Self.bottomAverage(of: buffer) else { return nil }
         let luminance = 0.2126 * average.r + 0.7152 * average.g + 0.0722 * average.b
         guard luminance >= Self.blackLuminance else { return nil }
-
-        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0
-        UIColor(red: average.r, green: average.g, blue: average.b, alpha: 1)
-            .getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: nil)
-        let target = luminance > Self.lightArtworkLuminance
-            ? Self.minBrightness
-            : min(max(brightness, Self.minBrightness), Self.maxBrightness)
-        color = Color(hue: hue, saturation: saturation, brightness: target)
+        color = Color(red: average.r, green: average.g, blue: average.b)
+        isLight = color.isLightColor()
     }
 
     /// Average of the bottom quarter of the frame, subsampled; steadier than a few edge rows.
