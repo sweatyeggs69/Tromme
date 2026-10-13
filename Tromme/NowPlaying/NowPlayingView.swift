@@ -298,7 +298,7 @@ struct NowPlayingView: View {
                 if showsTallArtwork {
                     TallArtworkLayer(model: tallArtwork)
                         .id(ObjectIdentifier(tallArtwork))
-                        .transition(.blurReplace)
+                        .transition(BlurFadeTransition())
                 }
             }
             .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
