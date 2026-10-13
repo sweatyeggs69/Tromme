@@ -348,10 +348,10 @@ struct NowPlayingView: View {
                     if lyricsService.isLoading {
                         VStack(spacing: 12) {
                             ProgressView()
-                                .tint(.primary.opacity(0.82))
+                                .tint(Color.primary.opacity(0.82))
                             Text("Fetching Lyrics…")
                                 .font(.callout)
-                                .foregroundStyle(.primary.opacity(0.7))
+                                .foregroundStyle(Color.primary.opacity(0.7))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -371,10 +371,10 @@ struct NowPlayingView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "quote.bubble")
                                 .font(.system(size: 40))
-                                .foregroundStyle(.primary.opacity(0.3))
+                                .foregroundStyle(Color.primary.opacity(0.3))
                             Text("No Lyrics Available")
                                 .font(.callout)
-                                .foregroundStyle(.primary.opacity(0.4))
+                                .foregroundStyle(Color.primary.opacity(0.4))
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
@@ -433,10 +433,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(.primary.opacity(actionBackgroundOpacity))
+                            .fill(Color.primary.opacity(actionBackgroundOpacity))
                         Image(systemName: isFavorited ? "star.fill" : "star")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.primary)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -449,10 +449,10 @@ struct NowPlayingView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(.primary.opacity(actionBackgroundOpacity))
+                            .fill(Color.primary.opacity(actionBackgroundOpacity))
                         Image(systemName: "ellipsis")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Color.primary)
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
@@ -607,7 +607,7 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.primary.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(Color.primary.opacity(actionIconInactiveOpacity))
                 .frame(width: 30, height: 30)
                 .symbolEffect(.rotate, options: .repeat(.continuous), isActive: lyricsService.isLoading)
                 .contentShape(Circle())
@@ -620,7 +620,7 @@ struct NowPlayingView: View {
 
     private var dragHandle: some View {
         RoundedRectangle(cornerRadius: 3)
-            .fill(.primary.opacity(0.3))
+            .fill(Color.primary.opacity(0.3))
             .frame(width: 36, height: 5)
     }
 
@@ -632,14 +632,14 @@ struct NowPlayingView: View {
             Button { player.previous() } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: 56, height: 56)
             }
             Spacer()
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: player.isPlaying ? 52 : 46))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: 72, height: 72)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: player.isPlaying)
@@ -648,7 +648,7 @@ struct NowPlayingView: View {
             Button { player.next() } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: 56, height: 56)
             }
             Spacer()
@@ -760,10 +760,10 @@ struct NowPlayingView: View {
     private var shuffleBadge: some View {
         ZStack {
             Circle()
-                .fill(.primary.opacity(0.25))
+                .fill(Color.primary.opacity(0.25))
             Image(systemName: "shuffle")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.primary.opacity(0.75))
+                .foregroundStyle(Color.primary.opacity(0.75))
         }
         .frame(width: 17, height: 17)
         .offset(x: 4, y: -3)
@@ -774,7 +774,7 @@ struct NowPlayingView: View {
         if isActive {
             ZStack {
                 Circle()
-                    .fill(.primary.opacity(actionBackgroundActiveOpacity))
+                    .fill(Color.primary.opacity(actionBackgroundActiveOpacity))
                 Image(systemName: systemName)
                     .foregroundStyle(.black)
                     .blendMode(.destinationOut)
@@ -783,7 +783,7 @@ struct NowPlayingView: View {
             .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         } else {
             Image(systemName: systemName)
-                .foregroundStyle(.primary.opacity(actionIconInactiveOpacity))
+                .foregroundStyle(Color.primary.opacity(actionIconInactiveOpacity))
                 .frame(width: bottomActionIconSize, height: bottomActionIconSize)
         }
     }
@@ -865,11 +865,11 @@ struct TimelineSlider: View {
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(.primary.opacity(0.3))
+                    .fill(Color.primary.opacity(0.3))
                     .frame(height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity)
                 Capsule()
-                    .fill(.primary)
+                    .fill(Color.primary)
                     .frame(width: max(0, geo.size.width * CGFloat(progress)), height: isDragging ? 16 : 7)
                     .frame(maxHeight: .infinity, alignment: .leading)
             }
@@ -905,7 +905,7 @@ struct TimelineSlider: View {
             Text("-\(formatTime(max(0, duration - displayValue)))")
         }
         .font(.caption2)
-        .foregroundStyle(.primary.opacity(0.45))
+        .foregroundStyle(Color.primary.opacity(0.45))
         .monospacedDigit()
     }
 
@@ -926,10 +926,10 @@ struct TimelineSlider: View {
                     .font(.caption2.weight(.medium))
             }
         }
-        .foregroundStyle(.primary.opacity(0.45))
+        .foregroundStyle(Color.primary.opacity(0.45))
         .padding(.horizontal, 5)
         .padding(.vertical, 2)
-        .background(RoundedRectangle(cornerRadius: 4).fill(.primary.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.08)))
     }
 }
 
@@ -970,17 +970,17 @@ struct VolumeSlider: View {
             HStack(spacing: 8) {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: 16, alignment: .center)
 
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
-                            .fill(.primary.opacity(0.3))
+                            .fill(Color.primary.opacity(0.3))
                             .frame(height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity)
                         Capsule()
-                            .fill(.primary)
+                            .fill(Color.primary)
                             .frame(width: max(0, geo.size.width * CGFloat(isEnabled ? volume : 0)), height: isDragging ? 16 : 7)
                             .frame(maxHeight: .infinity, alignment: .leading)
                     }
@@ -1002,7 +1002,7 @@ struct VolumeSlider: View {
 
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color.primary)
                     .frame(width: 22, alignment: .center)
             }
             .opacity(isDragging ? 1.0 : 0.55)
