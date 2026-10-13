@@ -78,6 +78,8 @@ final class TallArtworkModel {
         item.add(output)
         let newPlayer = AVPlayer(playerItem: item)
         newPlayer.isMuted = true
+        // Never hand the artwork video to AirPlay or let it compete with the music.
+        newPlayer.allowsExternalPlayback = false
         newPlayer.actionAtItemEnd = .none
         endObserver = NotificationCenter.default.addObserver(
             forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main
@@ -89,9 +91,11 @@ final class TallArtworkModel {
         newPlayer.play()
 
         // Wait for a real (non-black) frame; many clips open on black. Never show the layout before then.
-        let deadline = Date().addingTimeInterval(10)
+        let deadline = Date().addingTimeInterval(20)
         while !Task.isCancelled, Date() < deadline {
             try? await Task.sleep(for: .milliseconds(100))
+            // The system can pause the muted video (e.g. around audio session changes on a skip).
+            if newPlayer.timeControlStatus == .paused { newPlayer.play() }
             guard newPlayer.timeControlStatus == .playing else { continue }
             let time = item.currentTime()
             guard output.hasNewPixelBuffer(forItemTime: time),
