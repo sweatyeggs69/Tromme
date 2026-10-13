@@ -36,6 +36,8 @@ struct NowPlayingView: View {
     @State private var showLyrics = false
     @State private var showQueue = false
     @State private var lyricsService = LyricsService()
+    @State private var tallArtwork = TallArtworkModel()
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
@@ -80,8 +82,18 @@ struct NowPlayingView: View {
 
     private var isCompact: Bool { showLyrics || showQueue }
 
+    /// Tall animated artwork replaces the square cover in the full iPhone portrait view only.
+    private var showsTallArtwork: Bool {
+        tallArtwork.isReady && !isCompact
+            && UIDevice.current.userInterfaceIdiom == .phone && geoSize.height >= geoSize.width
+    }
+
     private var artworkColor: Color {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
+    }
+
+    private var tallArtworkKey: String {
+        "\(player.currentTrack?.artistName ?? "")|\(player.currentTrack?.albumName ?? "")"
     }
 
     private var isFavorited: Bool {
@@ -249,6 +261,8 @@ struct NowPlayingView: View {
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )
+                            .opacity(showsTallArtwork ? 0 : 1)
+                            .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
@@ -270,7 +284,14 @@ struct NowPlayingView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { NowPlayingBackground() }
+        .background {
+            ZStack {
+                NowPlayingBackground()
+                TallArtworkLayer(model: tallArtwork)
+                    .opacity(showsTallArtwork ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.6), value: showsTallArtwork)
+            }
+        }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
                 .frame(width: 1, height: 1)
@@ -295,6 +316,13 @@ struct NowPlayingView: View {
         }
         .onDisappear {
             isVisible = false
+            tallArtwork.stop()
+        }
+        .onChange(of: tallArtworkKey, initial: true) { _, _ in
+            tallArtwork.load(artist: player.currentTrack?.artistName ?? "", album: player.currentTrack?.albumName ?? "")
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { tallArtwork.restart() } else { tallArtwork.pause() }
         }
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
             guard isVisible, let track = player.currentTrack else { return }
