@@ -11,7 +11,7 @@ struct TallArtworkLayer: View {
 
     var body: some View {
         GeometryReader { geo in
-            let videoHeight = geo.size.width / model.aspectRatio
+            let videoHeight = geo.size.width / TallArtworkModel.aspectRatio
             ZStack(alignment: .top) {
                 model.bottomColor
                 if let player = model.player {
@@ -41,7 +41,6 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
         view.playerLayer.videoGravity = .resizeAspect
-        view.playerLayer.masksToBounds = true
         view.playerLayer.player = player
         return view
     }
@@ -51,8 +50,22 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
     }
 
     final class PlayerLayerView: UIView {
-        override static var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        let playerLayer = AVPlayerLayer()
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            clipsToBounds = true
+            layer.addSublayer(playerLayer)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+        /// Pins the video to full width at 2048:2732 from the top, whatever size the host gives this view.
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let height = bounds.width / TallArtworkModel.aspectRatio
+            playerLayer.frame = CGRect(x: 0, y: 0, width: bounds.width, height: height)
+        }
     }
 }
 
