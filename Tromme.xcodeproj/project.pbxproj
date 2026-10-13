@@ -77,6 +77,12 @@
 		F2219C95C94B579CB35E6EA1 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36555852E06D7A32A2B7E0B6 /* PlaylistsView.swift */; };
 		F2DDE2E2C0CD183FD5A9EAD4 /* LibrarySyncRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D862074EECF70C3B28A5D49 /* LibrarySyncRecord.swift */; };
 		FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */; };
+		0785AA81F5B6B1DB345F23E7 /* AnimatedArtworkEntitlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD650FDD2C3440F5BDDF650B /* AnimatedArtworkEntitlement.swift */; };
+		2A44B55E1D0E619ECF86E784 /* AnimatedArtworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA62EC8448D10022351F81A4 /* AnimatedArtworkService.swift */; };
+		86111B9D910BE0A3074DD92A /* ArtworkBackdropColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A05E10EBC0736B7FECDBA209 /* ArtworkBackdropColor.swift */; };
+		58AF0DDBA297501EE28D1E30 /* TallArtworkLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1556ACFC3F6FB0AC1B24B9E0 /* TallArtworkLayer.swift */; };
+		4991950603AAD3E9074FEF39 /* TallArtworkModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA7C9242C2CDD7BCD1DE766D /* TallArtworkModel.swift */; };
+		49F38D62A174933E50EAAF90 /* TallArtworkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ADC1B874DBC0822B9B99BF3 /* TallArtworkStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -154,6 +160,12 @@
 		FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexModels.swift; sourceTree = "<group>"; };
 		FDBB42B4774E4A3CCABE886B /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		DD650FDD2C3440F5BDDF650B /* AnimatedArtworkEntitlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkEntitlement.swift; sourceTree = "<group>"; };
+		AA62EC8448D10022351F81A4 /* AnimatedArtworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkService.swift; sourceTree = "<group>"; };
+		A05E10EBC0736B7FECDBA209 /* ArtworkBackdropColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkBackdropColor.swift; sourceTree = "<group>"; };
+		1556ACFC3F6FB0AC1B24B9E0 /* TallArtworkLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TallArtworkLayer.swift; sourceTree = "<group>"; };
+		BA7C9242C2CDD7BCD1DE766D /* TallArtworkModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TallArtworkModel.swift; sourceTree = "<group>"; };
+		0ADC1B874DBC0822B9B99BF3 /* TallArtworkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TallArtworkStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -272,6 +284,7 @@
 				852BB8B5BDE4532EB4FB907A /* Auth */,
 				1FB3F7DCD46561FA7864B29B /* Core */,
 				98A459E4DCE9C4222C4676D4 /* Library */,
+				702BBE5CB1D131F3104F06EA /* AnimatedArtwork */,
 				02783B91F27C725E7443599C /* NowPlaying */,
 				B8A3E95C19F206D72C09142B /* Player */,
 				17A29833587CBE02F04626D4 /* Playlists */,
@@ -364,6 +377,19 @@
 				0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		702BBE5CB1D131F3104F06EA /* AnimatedArtwork */ = {
+			isa = PBXGroup;
+			children = (
+				DD650FDD2C3440F5BDDF650B /* AnimatedArtworkEntitlement.swift */,
+				AA62EC8448D10022351F81A4 /* AnimatedArtworkService.swift */,
+				A05E10EBC0736B7FECDBA209 /* ArtworkBackdropColor.swift */,
+				1556ACFC3F6FB0AC1B24B9E0 /* TallArtworkLayer.swift */,
+				BA7C9242C2CDD7BCD1DE766D /* TallArtworkModel.swift */,
+				0ADC1B874DBC0822B9B99BF3 /* TallArtworkStore.swift */,
+			);
+			path = AnimatedArtwork;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -486,6 +512,12 @@
 				0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */,
 				0E91C64F2F91B03000775275 /* AppContext.swift in Sources */,
 				0E723B1F304880390059BF86 /* AppIconPickerView.swift in Sources */,
+				0785AA81F5B6B1DB345F23E7 /* AnimatedArtworkEntitlement.swift in Sources */,
+				2A44B55E1D0E619ECF86E784 /* AnimatedArtworkService.swift in Sources */,
+				86111B9D910BE0A3074DD92A /* ArtworkBackdropColor.swift in Sources */,
+				58AF0DDBA297501EE28D1E30 /* TallArtworkLayer.swift in Sources */,
+				4991950603AAD3E9074FEF39 /* TallArtworkModel.swift in Sources */,
+				49F38D62A174933E50EAAF90 /* TallArtworkStore.swift in Sources */,
 				7E1DCA19C4645D2EDFB2A565 /* NowPlayingView.swift in Sources */,
 				0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */,
 				430DFB356E617473516BD8A3 /* PlaylistDetailView.swift in Sources */,
