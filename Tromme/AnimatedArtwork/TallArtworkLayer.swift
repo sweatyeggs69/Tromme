@@ -40,7 +40,7 @@ private struct TallArtworkPlayerView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
-        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.videoGravity = .resize
         view.playerLayer.player = player
         return view
     }
