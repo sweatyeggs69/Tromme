@@ -17,6 +17,8 @@ final class TallArtworkModel {
     private(set) var bottomColor: Color = .black
     /// True when the backdrop is light enough that controls should use dark content.
     private(set) var isBackdropLight = false
+    /// Set by the on-screen video layer once it has drawn a frame.
+    var isVideoDisplayed = false
 
     private var loadTask: Task<Void, Never>?
     private var endObserver: (any NSObjectProtocol)?

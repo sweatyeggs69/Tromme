@@ -19,7 +19,7 @@ struct TallArtworkLayer: View {
                     .aspectRatio(TallArtworkModel.aspectRatio, contentMode: .fit)
                     .overlay {
                         if let player = model.player {
-                            TallArtworkPlayerView(player: player)
+                            TallArtworkPlayerView(player: player, model: model)
                         }
                     }
                     .overlay {
@@ -52,18 +52,41 @@ struct TallArtworkLayer: View {
             }
         }
         .ignoresSafeArea()
+        // Stay invisible until the video layer has a frame on screen, so the static cover
+        // never shows through an empty video box.
+        .opacity(model.isVideoDisplayed ? 1 : 0)
+        .animation(.easeInOut(duration: 0.6), value: model.isVideoDisplayed)
         .allowsHitTesting(false)
     }
 }
 
 private struct TallArtworkPlayerView: UIViewRepresentable {
     let player: AVPlayer
+    let model: TallArtworkModel
+
+    final class Coordinator {
+        var observation: NSKeyValueObservation?
+        weak var model: TallArtworkModel?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeUIView(context: Context) -> PlayerLayerView {
         let view = PlayerLayerView()
         view.playerLayer.videoGravity = .resizeAspect
         view.playerLayer.player = player
+        context.coordinator.model = model
+        let model = model
+        context.coordinator.observation = view.playerLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { layer, _ in
+            let ready = layer.isReadyForDisplay
+            Task { @MainActor in model.isVideoDisplayed = ready }
+        }
         return view
+    }
+
+    static func dismantleUIView(_ uiView: PlayerLayerView, coordinator: Coordinator) {
+        coordinator.observation = nil
+        coordinator.model?.isVideoDisplayed = false
     }
 
     func updateUIView(_ uiView: PlayerLayerView, context: Context) {

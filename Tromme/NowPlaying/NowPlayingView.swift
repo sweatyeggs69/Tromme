@@ -92,9 +92,14 @@ struct NowPlayingView: View {
         ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
     }
 
+    /// The static cover hides only once the tall video is actually on screen over it.
+    private var hidesStaticArtwork: Bool {
+        showsTallArtwork && tallArtwork.isVideoDisplayed
+    }
+
     /// Light tall artwork backdrops switch Now Playing to dark controls, like Apple Music.
     private var usesLightBackdrop: Bool {
-        showsTallArtwork && tallArtwork.isBackdropLight
+        hidesStaticArtwork && tallArtwork.isBackdropLight
     }
 
     private var tallArtworkKey: String {
@@ -270,8 +275,8 @@ struct NowPlayingView: View {
                             )
                             // Hidden only once the tall artwork has fully faded in over it (so it can't
                             // show through the fade); shown again instantly beneath an outgoing tall layer.
-                            .opacity(showsTallArtwork ? 0 : 1)
-                            .animation(showsTallArtwork ? .linear(duration: 0.01).delay(0.6) : nil, value: showsTallArtwork)
+                            .opacity(hidesStaticArtwork ? 0 : 1)
+                            .animation(hidesStaticArtwork ? .linear(duration: 0.01).delay(0.6) : nil, value: hidesStaticArtwork)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
                             .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
