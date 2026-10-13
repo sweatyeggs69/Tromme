@@ -8,6 +8,8 @@ struct TallArtworkLayer: View {
 
     /// Fraction of the video's height covered by the fade.
     private let fadeFraction: CGFloat = 0.15
+    /// Fraction of the video's height that gets the progressive blur.
+    private let blurFraction: CGFloat = 0.25
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -19,6 +21,21 @@ struct TallArtworkLayer: View {
                         if let player = model.player {
                             TallArtworkPlayerView(player: player)
                         }
+                    }
+                    .overlay {
+                        // Progressive blur where the art meets the title, like Apple Music.
+                        Rectangle()
+                            .fill(.ultraThinMaterial)
+                            .mask {
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .clear, location: 1 - blurFraction),
+                                        .init(color: .white, location: 1)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            }
                     }
                     .overlay {
                         LinearGradient(
