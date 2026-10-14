@@ -771,6 +771,13 @@ private struct ArtistHeroHeaderView: View {
                 }
                 .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
                 .offset(y: -stretch + parallax)
+                // Never paint below the hero row, so the parallax-shifted photo can't
+                // bleed over the rows that scroll up beneath it.
+                .mask(alignment: .top) {
+                    Rectangle()
+                        .frame(width: geo.size.width, height: heroHeight + stretch)
+                        .offset(y: -stretch)
+                }
             }
         }
         .frame(height: heroHeight)
