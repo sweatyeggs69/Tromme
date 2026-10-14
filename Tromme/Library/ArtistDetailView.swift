@@ -709,6 +709,20 @@ private struct ArtistHeroHeaderView: View {
             }
             .padding(.bottom, 12)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+            .background(alignment: .bottom) {
+                // Scrim that travels with the title and controls, so they stay legible
+                // while the photo parallaxes behind them.
+                LinearGradient(
+                    stops: [
+                        .init(color: backdropColor.opacity(0), location: 0),
+                        .init(color: backdropColor.opacity(0.75), location: 0.5),
+                        .init(color: backdropColor, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(width: geo.size.width, height: 240)
+            }
             .background(alignment: .top) {
                 // Backdrop does not affect layout: it keeps its top pinned to the top of
                 // the screen and grows downward with the row on overscroll.
@@ -725,17 +739,35 @@ private struct ArtistHeroHeaderView: View {
                     }
                     .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
                     .clipped()
-
-                    // Fade the photo into the page backdrop.
-                    LinearGradient(
-                        stops: [
-                            .init(color: backdropColor.opacity(0), location: 0.45),
-                            .init(color: backdropColor.opacity(0.85), location: 0.8),
-                            .init(color: backdropColor, location: 0.92)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+                    .overlay {
+                        // Blur the lower part of the photo, then melt it into the backdrop.
+                        if let image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
+                                .clipped()
+                                .blur(radius: 24)
+                                .mask(
+                                    LinearGradient(
+                                        colors: [.clear, .clear, .black],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        }
+                    }
+                    .overlay {
+                        LinearGradient(
+                            stops: [
+                                .init(color: backdropColor.opacity(0), location: 0.5),
+                                .init(color: backdropColor.opacity(0.9), location: 0.85),
+                                .init(color: backdropColor, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
                 }
                 .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
                 .offset(y: -stretch + parallax)
