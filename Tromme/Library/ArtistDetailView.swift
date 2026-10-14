@@ -23,6 +23,7 @@ struct ArtistDetailView: View {
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
     @State private var contentReady = false
+    @State private var viewHeight: CGFloat = 800
     @Environment(\.colorScheme) private var colorScheme
 
     /// Page backdrop, derived from the artist photo through the same
@@ -36,7 +37,7 @@ struct ArtistDetailView: View {
     }
 
     /// The photo takes half of the screen height; the extra room holds the title and controls over the fade.
-    private var photoHeight: CGFloat { UIScreen.main.bounds.height * 0.5 }
+    private var photoHeight: CGFloat { viewHeight * 0.5 }
     private var heroHeight: CGFloat { photoHeight + 110 }
     private let previewData: PreviewData?
 
@@ -375,6 +376,7 @@ struct ArtistDetailView: View {
         .environment(\.colorScheme, backdropColor.isLightColor() ? .light : .dark)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewHeight = $0 }
         .task(id: displayArtist.thumb) {
             guard previewData == nil, let server = serverConnection.currentServer else { return }
             await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server)
