@@ -92,6 +92,12 @@ struct ArtistDetailView: View {
         return album.releaseYear
     }
 
+    /// Falls back to counting loaded tracks when the album has no `leafCount`.
+    private func songCount(in album: PlexMetadata) -> Int? {
+        let count = allTracks.filter { $0.parentRatingKey == album.ratingKey }.count
+        return count > 0 ? count : nil
+    }
+
     private func releaseGrid(_ releases: [PlexMetadata]) -> some View {
         LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
             ForEach(releases) { album in
@@ -272,16 +278,16 @@ struct ArtistDetailView: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text(Self.releaseDateText(for: latestAlbum))
-                                .font(.subheadline)
+                                .font(.footnote)
                                 .foregroundStyle(.secondary)
 
                             Text(latestAlbum.title)
                                 .font(.headline)
                                 .lineLimit(2)
 
-                            if let count = latestAlbum.leafCount {
+                            if let count = latestAlbum.leafCount ?? songCount(in: latestAlbum) {
                                 Text("\(count) \(count == 1 ? "Song" : "Songs")")
-                                    .font(.subheadline)
+                                    .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -742,7 +748,7 @@ private struct ArtistHeroHeaderView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(width: geo.size.width, height: 240)
+                .frame(width: geo.size.width, height: 204)
             }
             .background(alignment: .top) {
                 // Backdrop does not affect layout: it keeps its top pinned to the top of
@@ -782,8 +788,8 @@ private struct ArtistHeroHeaderView: View {
                     .overlay {
                         LinearGradient(
                             stops: [
-                                .init(color: backdropColor.opacity(0), location: 0.5),
-                                .init(color: backdropColor.opacity(0.9), location: 0.85),
+                                .init(color: backdropColor.opacity(0), location: 0.575),
+                                .init(color: backdropColor.opacity(0.9), location: 0.88),
                                 .init(color: backdropColor, location: 1)
                             ],
                             startPoint: .top,
