@@ -747,7 +747,7 @@ private struct ArtistHeroHeaderView: View {
                                 .fill(.quaternary)
                         }
                     }
-                    .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
+                    .frame(width: geo.size.width, height: photoHeight, alignment: .top)
                     .blur(radius: scrollBlur, opaque: true)
                     .clipped()
                     .overlay {
@@ -756,7 +756,7 @@ private struct ArtistHeroHeaderView: View {
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
-                                .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
+                                .frame(width: geo.size.width, height: photoHeight, alignment: .top)
                                 .clipped()
                                 .blur(radius: 24)
                                 .mask(
@@ -779,6 +779,8 @@ private struct ArtistHeroHeaderView: View {
                             endPoint: .bottom
                         )
                     }
+                    // Zoom from the first point of overscroll, pinned to the top edge.
+                    .scaleEffect(1 + stretch / max(photoHeight, 1), anchor: .top)
                 }
                 .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
                 .offset(y: -stretch + parallax)
