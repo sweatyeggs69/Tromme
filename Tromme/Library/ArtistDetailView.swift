@@ -685,12 +685,26 @@ private struct ArtistHeroHeaderView: View {
     private var heroContent: some View {
         GeometryReader { geo in
             let minY = geo.frame(in: .global).minY
-            let isOverscrolling = minY > 0
-            let stretch = isOverscrolling ? minY : 0
+            let stretch = max(minY, 0)
 
-            ZStack(alignment: .bottom) {
-                // The backdrop grows upward into the overscroll gap while the title and
-                // controls stay anchored to the bottom of the photo.
+            // Title and controls are laid out against the bottom edge of the row, so they
+            // travel with it when the list is pulled down.
+            VStack(spacing: 20) {
+                Text(artist.title)
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(backdropColor.contrastForeground)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.7)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+
+                controls
+            }
+            .padding(.bottom, 12)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+            .background(alignment: .top) {
+                // Backdrop does not affect layout: it keeps its top pinned to the top of
+                // the screen and grows downward with the row on overscroll.
                 ZStack(alignment: .top) {
                     Group {
                         if let image {
@@ -717,19 +731,7 @@ private struct ArtistHeroHeaderView: View {
                     )
                 }
                 .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
-
-                VStack(spacing: 20) {
-                    Text(artist.title)
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(backdropColor.contrastForeground)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-
-                    controls
-                }
-                .padding(.bottom, 12)
+                .offset(y: -stretch)
             }
         }
         .frame(height: heroHeight)
