@@ -81,7 +81,7 @@ struct NowPlayingView: View {
     private var isCompact: Bool { showLyrics || showQueue }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb) ?? .gray
+        ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark) ?? .gray
     }
 
     private var isFavorited: Bool {
@@ -143,7 +143,7 @@ struct NowPlayingView: View {
                                 Spacer(minLength: 0)
 
                                 ArtworkView(
-                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
+                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark),
                                     size: landscapeArtworkSize,
                                     cornerRadius: 8
                                 )
@@ -245,7 +245,7 @@ struct NowPlayingView: View {
                             }()
 
                             ArtworkView(
-                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
+                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark),
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )

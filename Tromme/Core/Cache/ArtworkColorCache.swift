@@ -24,9 +24,9 @@ final class ArtworkColorCache {
         Task { await loadFromDisk() }
     }
 
-    func color(for thumbPath: String?) -> Color? {
-        guard let thumbPath else { return nil }
-        return cache[thumbPath]
+    func color(for thumbPath: String?, colorScheme: ColorScheme) -> Color? {
+        guard let thumbPath, let source = cache[thumbPath] else { return nil }
+        return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme)
     }
 
     func resolveColor(for thumbPath: String?, using client: PlexAPIClient, server: PlexServer) async {
@@ -56,7 +56,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v3.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v4.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -73,7 +73,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v3.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v4.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -160,13 +160,29 @@ private extension UIImage {
         }
         guard n > 0 else { return .gray }
 
-        let lab = Lab(r: sumR / n / 255, g: sumG / n / 255, b: sumB / n / 255)
-        return Lab.rgb(lightness: min(max(lab.l, Self.backdropLightnessRange.lowerBound), Self.backdropLightnessRange.upperBound), chroma: lab.chroma, hue: lab.hue)
+        return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
     }
+}
 
-    /// CIE L* range of the Apple Music backdrop. Light and mid covers all land at 18.5;
-    /// dark covers keep their own lightness down to a floor of about 8.5.
-    private static let backdropLightnessRange = 8.5...18.5
+/// Re-lights an artwork's dominant color into the Apple Music style backdrop tint.
+///
+/// Dark appearance: L* clamped to 8.5...18.5 (light and mid covers sit at 18.5, dark covers
+/// stay darker), chroma and hue kept. Light appearance: L* about 53.5 with chroma at about
+/// 0.65x (measured from a few covers; dark covers in light mode are not yet measured).
+enum ArtworkBackdrop {
+    static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        source.getRed(&r, green: &g, blue: &b, alpha: nil)
+        let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
+        let ui: UIColor
+        switch colorScheme {
+        case .light:
+            ui = Lab.rgb(lightness: 53.5, chroma: lab.chroma * 0.65, hue: lab.hue)
+        default:
+            ui = Lab.rgb(lightness: min(max(lab.l, 8.5), 18.5), chroma: lab.chroma, hue: lab.hue)
+        }
+        return Color(ui)
+    }
 }
 
 private struct Lab {

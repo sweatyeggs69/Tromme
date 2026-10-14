@@ -8,6 +8,7 @@ struct AlbumDetailView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(NetworkStatus.self) private var network
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     let album: PlexMetadata
     let sourceArtistRatingKey: String?
@@ -35,7 +36,7 @@ struct AlbumDetailView: View {
     }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: thumbPath) ?? .gray
+        ArtworkColorCache.shared.color(for: thumbPath, colorScheme: colorScheme) ?? .gray
     }
 
     private var titleColor: Color {
