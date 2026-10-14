@@ -23,12 +23,19 @@ struct ArtistDetailView: View {
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
     @State private var contentReady = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Page backdrop, derived from the artist photo through the same
+    /// Apple Music tint algorithm the album page uses.
+    private var backdropColor: Color {
+        ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme) ?? Color(.systemBackground)
+    }
 
     private var displayArtist: PlexMetadata {
         resolvedArtist ?? artist
     }
 
-    private let heroHeight: CGFloat = 400
+    private let heroHeight: CGFloat = 540
     private let previewData: PreviewData?
 
     struct PreviewData {
@@ -204,13 +211,25 @@ struct ArtistDetailView: View {
 
     var body: some View {
         List {
-            ArtistHeroHeaderView(artist: displayArtist, heroHeight: heroHeight, isHidden: $heroIsHidden) {
+            ArtistHeroHeaderView(
+                artist: displayArtist,
+                heroHeight: heroHeight,
+                backdropColor: backdropColor,
+                isHidden: $heroIsHidden,
+                hasBio: !(displayArtist.summary ?? "").isEmpty,
+                onInfo: { showsBioSheet = true },
+                onPlay: {
+                    guard !allTracks.isEmpty else { return }
+                    player.play(tracks: allTracks)
+                },
+                onShuffle: {
                     guard !allTracks.isEmpty else { return }
                     player.play(tracks: allTracks)
                     if !player.isShuffled {
                         player.toggleShuffle()
                     }
                 }
+            )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
@@ -332,8 +351,15 @@ struct ArtistDetailView: View {
             ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(backdropColor.ignoresSafeArea())
+        .foregroundStyle(backdropColor.contrastForeground)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
+        .task(id: displayArtist.thumb) {
+            guard previewData == nil, let server = serverConnection.currentServer else { return }
+            await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server)
+        }
         .task(id: artist.ratingKey) {
             guard previewData == nil else { return }
 
@@ -612,21 +638,33 @@ private struct ArtistHeroHeaderView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(NetworkStatus.self) private var network
-    @Environment(\.appAccentColor) private var appAccentColor
-    @Environment(\.colorScheme) private var colorScheme
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
+    let backdropColor: Color
     @Binding var isHidden: Bool
+    var hasBio = false
+    var onInfo: (() -> Void)?
+    var onPlay: (() -> Void)?
     var onShuffle: (() -> Void)?
 
     @State private var image: UIImage?
 
+    private let photoHeight: CGFloat = 470
+
     var body: some View {
         Group {
             if isHidden {
-                Color.clear
-                    .frame(height: 0)
+                VStack(spacing: 20) {
+                    Text(artist.title)
+                        .font(.largeTitle.weight(.bold))
+                        .foregroundStyle(backdropColor.contrastForeground)
+                        .multilineTextAlignment(.center)
+                    controls
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 80)
+                .padding(.bottom, 12)
             } else {
                 heroContent
             }
@@ -640,10 +678,9 @@ private struct ArtistHeroHeaderView: View {
         GeometryReader { geo in
             let minY = geo.frame(in: .global).minY
             let isOverscrolling = minY > 0
-            let stretchHeight = isOverscrolling ? heroHeight + minY : heroHeight
-            let stretchOffset = isOverscrolling ? -minY : 0
+            let stretch = isOverscrolling ? minY : 0
 
-            ZStack(alignment: .bottomLeading) {
+            ZStack(alignment: .bottom) {
                 Group {
                     if let image {
                         Image(uiImage: image)
@@ -654,42 +691,81 @@ private struct ArtistHeroHeaderView: View {
                             .fill(.quaternary)
                     }
                 }
-                .frame(width: geo.size.width, height: stretchHeight, alignment: .top)
+                .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
                 .clipped()
+                .frame(maxHeight: .infinity, alignment: .top)
 
+                // Fade the photo into the page backdrop.
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.45)],
-                    startPoint: .center,
+                    stops: [
+                        .init(color: backdropColor.opacity(0), location: 0.45),
+                        .init(color: backdropColor.opacity(0.85), location: 0.8),
+                        .init(color: backdropColor, location: 0.92)
+                    ],
+                    startPoint: .top,
                     endPoint: .bottom
                 )
 
-                HStack(alignment: .bottom) {
+                VStack(spacing: 20) {
                     Text(artist.title)
                         .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(backdropColor.contrastForeground)
                         .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
-                    Spacer()
-
-                    if let onShuffle {
-                        Button {
-                            onShuffle()
-                        } label: {
-                            Image(systemName: "shuffle")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(appAccentColor.isLightColor(in: colorScheme) ? .black : .white)
-                                .frame(width: 40, height: 40)
-                                .background(appAccentColor, in: Circle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    controls
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.bottom, 12)
             }
-            .offset(y: stretchOffset)
+            .offset(y: -stretch)
         }
         .frame(height: heroHeight)
+    }
+
+    private var controls: some View {
+        HStack(spacing: 20) {
+            Button {
+                onInfo?()
+            } label: {
+                Image(systemName: "info")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(backdropColor.contrastForeground)
+                    .frame(width: 52, height: 52)
+                    .background(backdropColor.contrastCircleBackground, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hasBio ? 1 : 0.4)
+            .disabled(!hasBio)
+            .accessibilityLabel("About")
+
+            Button {
+                onPlay?()
+            } label: {
+                Image(systemName: "play.fill")
+                    .font(.title.weight(.semibold))
+                    .foregroundStyle(backdropColor.contrastControlForeground)
+                    .frame(width: 76, height: 76)
+                    .background(backdropColor.contrastForeground, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play")
+
+            Button {
+                onShuffle?()
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(backdropColor.contrastForeground)
+                    .frame(width: 52, height: 52)
+                    .background(backdropColor.contrastCircleBackground, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Shuffle")
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 4)
     }
 
     private func loadImage() async {
