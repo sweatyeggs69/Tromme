@@ -283,7 +283,15 @@ struct AlbumDetailView: View {
 
     private var albumHeader: some View {
         VStack {
-            ArtworkView(thumbPath: thumbPath, size: headerWidth, cornerRadius: 0)
+            ArtworkView(
+                thumbPath: thumbPath,
+                size: max(headerWidth - AppStyle.Spacing.pageHorizontal * 2, 1),
+                cornerRadius: 8
+            )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
+                )
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .padding(.top, 12)
 
