@@ -56,7 +56,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v2.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v3.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -73,7 +73,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v2.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v3.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -108,7 +108,7 @@ private extension UIImage {
     /// Measured from Apple Music album-detail screenshots: the page tint is the artwork's
     /// dominant color (the most common color, not the most vivid accent, so small bright
     /// accents on a mostly black/white cover are ignored and neutral covers stay neutral),
-    /// re-lit to a fixed dark CIELAB lightness (L* about 18.5) while keeping its hue and
+    /// clamped to a dark CIELAB lightness (L* 8.5 to 18.5, so light and mid covers sit at 18.5 and dark covers stay darker) while keeping its hue and
     /// chroma. Low-chroma pale colors therefore become a visibly tinted dark color.
     var dominantColor: UIColor {
         guard let cgImage else { return .gray }
@@ -126,14 +126,14 @@ private extension UIImage {
         ) else { return .gray }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size, height: size))
 
-        // Histogram on an 8x8x8 grid, then take the densest bin plus its neighbours so a
+        // Histogram on an 16x16x16 grid, then take the densest bin plus its neighbours so a
         // gradient-y region (sky, paper) counts as one color instead of splitting.
-        let levels = 8
+        let levels = 16
         var counts = [Int](repeating: 0, count: levels * levels * levels)
         @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
         for i in 0..<(size * size) {
             let o = i * 4
-            counts[bin(Int(pixelData[o]) >> 5, Int(pixelData[o + 1]) >> 5, Int(pixelData[o + 2]) >> 5)] += 1
+            counts[bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)] += 1
         }
 
         var bestBin = 0
@@ -154,18 +154,19 @@ private extension UIImage {
         var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
         for i in 0..<(size * size) {
             let o = i * 4
-            let r = Int(pixelData[o]) >> 5, g = Int(pixelData[o + 1]) >> 5, b = Int(pixelData[o + 2]) >> 5
+            let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
             guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
             sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
         }
         guard n > 0 else { return .gray }
 
         let lab = Lab(r: sumR / n / 255, g: sumG / n / 255, b: sumB / n / 255)
-        return Lab.rgb(lightness: Self.backdropLightness, chroma: lab.chroma, hue: lab.hue)
+        return Lab.rgb(lightness: min(max(lab.l, Self.backdropLightnessRange.lowerBound), Self.backdropLightnessRange.upperBound), chroma: lab.chroma, hue: lab.hue)
     }
 
-    /// CIE L* of the Apple Music backdrop (measured 18.2 to 19.2 across eight covers).
-    private static let backdropLightness = 18.5
+    /// CIE L* range of the Apple Music backdrop. Light and mid covers all land at 18.5;
+    /// dark covers keep their own lightness down to a floor of about 8.5.
+    private static let backdropLightnessRange = 8.5...18.5
 }
 
 private struct Lab {
