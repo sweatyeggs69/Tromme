@@ -168,8 +168,7 @@ private extension UIImage {
 ///
 /// Dark appearance: L* = source L* + 0.5 capped at 18.5, chroma and hue kept (near-black
 /// covers stay near black). Light appearance: L* is roughly the source L* minus 7 for mid
-/// covers and 100 for white covers; chroma is kept for saturated colors and about 0.65x for
-/// muted ones. Fitted to screenshots of about 25 covers; dark covers in light mode are not
+/// covers and 100 for white covers; chroma and hue are kept (same as dark). Fitted to screenshots of about 25 covers; dark covers in light mode are not
 /// yet measured.
 enum ArtworkBackdrop {
     static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
@@ -179,7 +178,7 @@ enum ArtworkBackdrop {
         let ui: UIColor
         switch colorScheme {
         case .light:
-            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma * min(1, max(0.65, 0.65 + (lab.chroma - 10) / 10 * 0.35)), hue: lab.hue)
+            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma, hue: lab.hue)
         default:
             ui = Lab.rgb(lightness: min(lab.l + 0.5, 18.5), chroma: lab.chroma, hue: lab.hue)
         }
