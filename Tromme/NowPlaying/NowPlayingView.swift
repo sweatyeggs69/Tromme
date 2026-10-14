@@ -145,7 +145,7 @@ struct NowPlayingView: View {
                                 Spacer(minLength: 0)
 
                                 ArtworkView(
-                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark),
+                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
                                     size: landscapeArtworkSize,
                                     cornerRadius: 8
                                 )
@@ -247,7 +247,7 @@ struct NowPlayingView: View {
                             }()
 
                             ArtworkView(
-                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark),
+                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )
