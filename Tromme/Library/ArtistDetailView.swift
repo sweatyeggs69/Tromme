@@ -718,7 +718,7 @@ private struct ArtistHeroHeaderView: View {
             // Photo scrolls at half speed so the title and controls glide over it.
             let parallax = max(-minY, 0) * 0.5
             // Photo blurs out as the title nears the top safe area.
-            let blurProgress = min(max((-minY - heroHeight * 0.5) / (heroHeight * 0.3), 0), 1)
+            let blurProgress = min(max((-minY - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
             let scrollBlur = blurProgress * 30
 
             // Title and controls are laid out against the bottom edge of the row, so they
