@@ -168,8 +168,8 @@ private extension UIImage {
 ///
 /// Dark appearance: L* = source L* + 0.5 capped at 18.5, chroma and hue kept (near-black
 /// covers stay near black). Light appearance: L* is roughly the source L* minus 7 for mid
-/// covers and 100 for white covers; chroma and hue are kept (same as dark). Fitted to screenshots of about 25 covers; dark covers in light mode are not
-/// yet measured.
+/// covers and 100 for white covers; chroma and hue are kept (same as dark). Dark covers in light mode follow the dark-mode
+/// values (assumed, not yet measured).
 enum ArtworkBackdrop {
     static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
@@ -189,7 +189,7 @@ enum ArtworkBackdrop {
     /// map to a white page.
     private static func lightBackdropLightness(forSource l: Double) -> Double {
         let anchors: [(src: Double, out: Double)] = [
-            (0, 15), (50, 43), (85, 78), (99.3, 100), (100, 100)
+            (0, 0.5), (18, 18.5), (50, 43), (85, 78), (99.3, 100), (100, 100)
         ]
         for (a, b) in zip(anchors, anchors.dropFirst()) where l <= b.src {
             let t = (l - a.src) / (b.src - a.src)
