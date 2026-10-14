@@ -166,10 +166,11 @@ private extension UIImage {
 
 /// Re-lights an artwork's dominant color into the Apple Music style backdrop tint.
 ///
-/// Dark appearance: L* = source L* + 0.5 capped at 18.5 (light and mid covers sit at 18.5,
-/// dark covers stay as dark as the cover, near-black covers stay near black), chroma and hue kept. Light appearance: L* interpolated from measured pairs (about 52 to 58 for
-/// mid covers, 100 for white covers) with chroma at about 0.85x. Fitted to four covers; dark covers in
-/// light mode are not yet measured.
+/// Dark appearance: L* = source L* + 0.5 capped at 18.5, chroma and hue kept (near-black
+/// covers stay near black). Light appearance: L* is roughly the source L* minus 7 for mid
+/// covers and 100 for white covers; chroma is kept for saturated colors and about 0.65x for
+/// muted ones. Fitted to screenshots of about 25 covers; dark covers in light mode are not
+/// yet measured.
 enum ArtworkBackdrop {
     static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
@@ -178,7 +179,7 @@ enum ArtworkBackdrop {
         let ui: UIColor
         switch colorScheme {
         case .light:
-            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma * 0.85, hue: lab.hue)
+            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma * min(1, max(0.65, 0.65 + (lab.chroma - 10) / 10 * 0.35)), hue: lab.hue)
         default:
             ui = Lab.rgb(lightness: min(lab.l + 0.5, 18.5), chroma: lab.chroma, hue: lab.hue)
         }
@@ -189,7 +190,7 @@ enum ArtworkBackdrop {
     /// map to a white page.
     private static func lightBackdropLightness(forSource l: Double) -> Double {
         let anchors: [(src: Double, out: Double)] = [
-            (0, 22), (59.4, 52.5), (64.8, 54.5), (69.8, 57.5), (99.3, 100), (100, 100)
+            (0, 15), (50, 43), (85, 78), (99.3, 100), (100, 100)
         ]
         for (a, b) in zip(anchors, anchors.dropFirst()) where l <= b.src {
             let t = (l - a.src) / (b.src - a.src)
