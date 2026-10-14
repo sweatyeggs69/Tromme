@@ -691,6 +691,8 @@ private struct ArtistHeroHeaderView: View {
         GeometryReader { geo in
             let minY = geo.frame(in: .global).minY
             let stretch = max(minY, 0)
+            // Photo scrolls at half speed so the title and controls glide over it.
+            let parallax = max(-minY, 0) * 0.5
 
             // Title and controls are laid out against the bottom edge of the row, so they
             // travel with it when the list is pulled down.
@@ -736,7 +738,7 @@ private struct ArtistHeroHeaderView: View {
                     )
                 }
                 .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
-                .offset(y: -stretch)
+                .offset(y: -stretch + parallax)
             }
         }
         .frame(height: heroHeight)
