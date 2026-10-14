@@ -81,7 +81,9 @@ struct NowPlayingView: View {
     private var isCompact: Bool { showLyrics || showQueue }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: player.currentTrack?.parentThumb ?? player.currentTrack?.thumb, colorScheme: .dark) ?? .gray
+        let thumbPath: String? = player.currentTrack?.parentThumb ?? player.currentTrack?.thumb
+        let scheme: ColorScheme = .dark
+        return ArtworkColorCache.shared.color(for: thumbPath, colorScheme: scheme) ?? Color.gray
     }
 
     private var isFavorited: Bool {
