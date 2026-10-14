@@ -36,8 +36,8 @@ struct ArtistDetailView: View {
         resolvedArtist ?? artist
     }
 
-    /// The photo takes half of the screen height; the extra room holds the title and controls over the fade.
-    private var photoHeight: CGFloat { viewHeight * 0.5 }
+    /// The photo takes 60% of the screen height; the extra room holds the title and controls over the fade.
+    private var photoHeight: CGFloat { viewHeight * 0.6 }
     private var heroHeight: CGFloat { photoHeight + 110 }
     private let previewData: PreviewData?
 
