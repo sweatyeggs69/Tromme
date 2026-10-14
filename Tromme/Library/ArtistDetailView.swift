@@ -35,7 +35,9 @@ struct ArtistDetailView: View {
         resolvedArtist ?? artist
     }
 
-    private let heroHeight: CGFloat = 540
+    /// The photo takes half of the screen height; the extra room holds the title and controls over the fade.
+    private var photoHeight: CGFloat { UIScreen.main.bounds.height * 0.5 }
+    private var heroHeight: CGFloat { photoHeight + 110 }
     private let previewData: PreviewData?
 
     struct PreviewData {
@@ -88,6 +90,7 @@ struct ArtistDetailView: View {
                                 size: geo.size.width,
                                 cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
                             )
+                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
                         }
                         .aspectRatio(1, contentMode: .fit)
 
@@ -121,6 +124,7 @@ struct ArtistDetailView: View {
                                 size: geo.size.width,
                                 cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
                             )
+                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
                         }
                         .aspectRatio(1, contentMode: .fit)
 
@@ -218,6 +222,7 @@ struct ArtistDetailView: View {
             ArtistHeroHeaderView(
                 artist: displayArtist,
                 heroHeight: heroHeight,
+                photoHeight: photoHeight,
                 backdropColor: backdropColor,
                 isHidden: $heroIsHidden,
                 hasBio: !(displayArtist.summary ?? "").isEmpty,
@@ -250,6 +255,7 @@ struct ArtistDetailView: View {
                             size: 120,
                             cornerRadius: AppStyle.Radius.card
                         )
+                        .artworkBorder(cornerRadius: AppStyle.Radius.card)
 
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(spacing: 4) {
@@ -649,6 +655,7 @@ private struct ArtistHeroHeaderView: View {
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
+    let photoHeight: CGFloat
     let backdropColor: Color
     @Binding var isHidden: Bool
     var hasBio = false
@@ -657,8 +664,6 @@ private struct ArtistHeroHeaderView: View {
     var onShuffle: (() -> Void)?
 
     @State private var image: UIImage?
-
-    private let photoHeight: CGFloat = 470
 
     var body: some View {
         Group {
@@ -797,6 +802,16 @@ private struct ArtistHeroHeaderView: View {
         guard !Task.isCancelled else { return }
         image = resolvedImage?.squareCropped()
         isHidden = image == nil && !network.isConnected
+    }
+}
+
+private extension View {
+    /// Hairline border matching the album details artwork (no shadow).
+    func artworkBorder(cornerRadius: CGFloat) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.5)
+        )
     }
 }
 
