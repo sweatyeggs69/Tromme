@@ -77,6 +77,21 @@ struct ArtistDetailView: View {
         artistAlbums.filter { $0.isSingleOrEP }
     }
 
+    private static let isoDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    /// Full release date ("Jul 31, 2026"), falling back to the year.
+    private static func releaseDateText(for album: PlexMetadata) -> String {
+        if let raw = album.originallyAvailableAt, let date = isoDateFormatter.date(from: String(raw.prefix(10))) {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        return album.releaseYear
+    }
+
     private func releaseGrid(_ releases: [PlexMetadata]) -> some View {
         LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
             ForEach(releases) { album in
@@ -244,44 +259,47 @@ struct ArtistDetailView: View {
                 .listRowBackground(backdropColor)
 
             if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
-                sectionHeader("Latest")
-
                 Button {
                     selectedAlbum = latestAlbum
                 } label: {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 16) {
                         ArtworkView(
                             thumbPath: latestAlbum.thumb,
-                            size: 120,
-                            cornerRadius: AppStyle.Radius.card
+                            size: 100,
+                            cornerRadius: 10
                         )
-                        .artworkBorder(cornerRadius: AppStyle.Radius.card)
+                        .artworkBorder(cornerRadius: 10)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 4) {
-                                Text(latestAlbum.releaseYear)
-                                if let format = latestAlbum.formatLabel {
-                                    Text("·")
-                                    Text(format)
-                                }
-                            }
-                            .appItemSubtitleStyle()
+                            Text(Self.releaseDateText(for: latestAlbum))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
 
                             Text(latestAlbum.title)
-                                .appItemTitleStyle()
+                                .font(.headline)
                                 .lineLimit(2)
 
                             if let count = latestAlbum.leafCount {
-                                Text("\(count) \(count == 1 ? "song" : "songs")")
-                                    .appItemSubtitleStyle()
+                                Text("\(count) \(count == 1 ? "Song" : "Songs")")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
-                        Spacer()
+                        Spacer(minLength: 0)
                     }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .fill(backdropColor.contrastForeground.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(backdropColor.contrastForeground.opacity(0.12), lineWidth: 0.5)
+                    )
                 }
                 .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
+                .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
                 .listRowSeparator(.hidden)
                 .listRowBackground(backdropColor)
             }
@@ -693,6 +711,9 @@ private struct ArtistHeroHeaderView: View {
             let stretch = max(minY, 0)
             // Photo scrolls at half speed so the title and controls glide over it.
             let parallax = max(-minY, 0) * 0.5
+            // Photo blurs out as the title nears the top safe area.
+            let blurProgress = min(max((-minY - heroHeight * 0.3) / (heroHeight * 0.4), 0), 1)
+            let scrollBlur = blurProgress * 30
 
             // Title and controls are laid out against the bottom edge of the row, so they
             // travel with it when the list is pulled down.
@@ -738,6 +759,7 @@ private struct ArtistHeroHeaderView: View {
                         }
                     }
                     .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
+                    .blur(radius: scrollBlur, opaque: true)
                     .clipped()
                     .overlay {
                         // Blur the lower part of the photo, then melt it into the backdrop.
