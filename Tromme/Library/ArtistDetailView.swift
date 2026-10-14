@@ -105,6 +105,7 @@ struct ArtistDetailView: View {
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
         .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
     }
 
     private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
@@ -139,6 +140,7 @@ struct ArtistDetailView: View {
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
         .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
     }
 
     @ViewBuilder
@@ -156,6 +158,7 @@ struct ArtistDetailView: View {
         }
         .listRowInsets(EdgeInsets(top: 16, leading: AppStyle.Spacing.pageHorizontal, bottom: 4, trailing: AppStyle.Spacing.pageHorizontal))
         .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
     }
 
     private func sectionHeaderRow(_ title: String, showsChevron: Bool) -> some View {
@@ -207,6 +210,7 @@ struct ArtistDetailView: View {
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
     }
 
     var body: some View {
@@ -232,7 +236,7 @@ struct ArtistDetailView: View {
             )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+                .listRowBackground(backdropColor)
 
             if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
                 sectionHeader("Latest")
@@ -273,6 +277,7 @@ struct ArtistDetailView: View {
                 .buttonStyle(.plain)
                 .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
                 .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
             }
 
             if !topTracks.isEmpty {
@@ -291,6 +296,7 @@ struct ArtistDetailView: View {
                 )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
             }
 
             if !artistAlbums.isEmpty {
@@ -320,6 +326,7 @@ struct ArtistDetailView: View {
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))
                     .listRowSeparator(.hidden)
+                .listRowBackground(backdropColor)
                 }
 
                 if !similarArtists.isEmpty {
