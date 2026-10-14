@@ -831,9 +831,9 @@ private struct ArtistHeroHeaderView: View {
                 onPlay?()
             } label: {
                 Image(systemName: "play.fill")
-                    .font(.title.weight(.semibold))
+                    .font(.system(size: 36, weight: .semibold))
                     .foregroundStyle(backdropColor.contrastControlForeground)
-                    .frame(width: 76, height: 76)
+                    .frame(width: 68, height: 68)
                     .background(backdropColor.contrastForeground, in: Circle())
             }
             .buttonStyle(.plain)
