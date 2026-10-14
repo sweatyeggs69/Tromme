@@ -166,8 +166,8 @@ private extension UIImage {
 
 /// Re-lights an artwork's dominant color into the Apple Music style backdrop tint.
 ///
-/// Dark appearance: L* clamped to 8.5...18.5 (light and mid covers sit at 18.5, dark covers
-/// stay darker), chroma and hue kept. Light appearance: L* = 22 + 0.5 * source L* (about 52 to 58 for
+/// Dark appearance: L* = source L* + 0.5 capped at 18.5 (light and mid covers sit at 18.5,
+/// dark covers stay as dark as the cover, near-black covers stay near black), chroma and hue kept. Light appearance: L* = 22 + 0.5 * source L* (about 52 to 58 for
 /// mid and light covers) with chroma at about 0.85x. Fitted to three covers; dark covers in
 /// light mode are not yet measured.
 enum ArtworkBackdrop {
@@ -180,7 +180,7 @@ enum ArtworkBackdrop {
         case .light:
             ui = Lab.rgb(lightness: 22 + 0.5 * lab.l, chroma: lab.chroma * 0.85, hue: lab.hue)
         default:
-            ui = Lab.rgb(lightness: min(max(lab.l, 8.5), 18.5), chroma: lab.chroma, hue: lab.hue)
+            ui = Lab.rgb(lightness: min(lab.l + 0.5, 18.5), chroma: lab.chroma, hue: lab.hue)
         }
         return Color(ui)
     }
