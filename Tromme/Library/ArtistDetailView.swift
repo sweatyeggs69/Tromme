@@ -339,26 +339,7 @@ struct ArtistDetailView: View {
                 appearsOnGrid(appearsOnAlbums)
             }
 
-            let hasBio = !(displayArtist.summary ?? "").isEmpty
-            if contentReady && (hasBio || !similarArtists.isEmpty) {
-                if let summary = displayArtist.summary, !summary.isEmpty {
-                    sectionHeader("About \(displayArtist.title)")
-
-                    Button {
-                        showsBioSheet = true
-                    } label: {
-                        Text(summary)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 16, trailing: AppStyle.Spacing.pageHorizontal))
-                    .listRowSeparator(.hidden)
-                .listRowBackground(backdropColor)
-                }
-
+            if contentReady && !similarArtists.isEmpty {
                 if !similarArtists.isEmpty {
                     sectionHeader(
                         "Similar Artists",
@@ -831,9 +812,9 @@ private struct ArtistHeroHeaderView: View {
                 onPlay?()
             } label: {
                 Image(systemName: "play.fill")
-                    .font(.system(size: 36, weight: .semibold))
+                    .font(.system(size: 32, weight: .semibold))
                     .foregroundStyle(backdropColor.contrastControlForeground)
-                    .frame(width: 68, height: 68)
+                    .frame(width: 62, height: 62)
                     .background(backdropColor.contrastForeground, in: Circle())
             }
             .buttonStyle(.plain)
