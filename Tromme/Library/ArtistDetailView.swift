@@ -361,6 +361,7 @@ struct ArtistDetailView: View {
         .scrollContentBackground(.hidden)
         .background(backdropColor.ignoresSafeArea())
         .foregroundStyle(backdropColor.contrastForeground)
+        .environment(\.colorScheme, backdropColor.isLightColor() ? .light : .dark)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
         .task(id: displayArtist.thumb) {
@@ -688,30 +689,34 @@ private struct ArtistHeroHeaderView: View {
             let stretch = isOverscrolling ? minY : 0
 
             ZStack(alignment: .bottom) {
-                Group {
-                    if let image {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Rectangle()
-                            .fill(.quaternary)
+                // The backdrop grows upward into the overscroll gap while the title and
+                // controls stay anchored to the bottom of the photo.
+                ZStack(alignment: .top) {
+                    Group {
+                        if let image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            Rectangle()
+                                .fill(.quaternary)
+                        }
                     }
-                }
-                .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
-                .clipped()
-                .frame(maxHeight: .infinity, alignment: .top)
+                    .frame(width: geo.size.width, height: photoHeight + stretch, alignment: .top)
+                    .clipped()
 
-                // Fade the photo into the page backdrop.
-                LinearGradient(
-                    stops: [
-                        .init(color: backdropColor.opacity(0), location: 0.45),
-                        .init(color: backdropColor.opacity(0.85), location: 0.8),
-                        .init(color: backdropColor, location: 0.92)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                    // Fade the photo into the page backdrop.
+                    LinearGradient(
+                        stops: [
+                            .init(color: backdropColor.opacity(0), location: 0.45),
+                            .init(color: backdropColor.opacity(0.85), location: 0.8),
+                            .init(color: backdropColor, location: 0.92)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
 
                 VStack(spacing: 20) {
                     Text(artist.title)
@@ -726,7 +731,6 @@ private struct ArtistHeroHeaderView: View {
                 }
                 .padding(.bottom, 12)
             }
-            .offset(y: -stretch)
         }
         .frame(height: heroHeight)
     }
