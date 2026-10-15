@@ -15,7 +15,7 @@ enum AnimatedArtworkEntitlement {
     static let settingKey = "animatedArtworkEnabled"
 
     /// Tromme+ and the user's toggle both allow it. When false, nothing is looked
-    /// up or played and album pages show static artwork only.
+    /// up or played and only static artwork shows.
     static var isEnabled: Bool {
         isUnlocked && (UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true)
     }

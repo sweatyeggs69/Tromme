@@ -37,7 +37,7 @@ struct HomeSettingsView: View {
                 Text("Albums")
             } footer: {
                 if AnimatedArtworkEntitlement.isUnlocked {
-                    Text("Track popularity data is sourced from Last.fm. Animated artwork plays on album pages when an album has it and requires an internet connection.")
+                    Text("Track popularity data is sourced from Last.fm. Animated artwork plays on album pages and in Now Playing when an album has it, and requires an internet connection.")
                 } else {
                     Text("Track popularity data is sourced from Last.fm.")
                 }

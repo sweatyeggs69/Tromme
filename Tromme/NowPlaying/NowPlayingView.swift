@@ -23,6 +23,9 @@ struct NowPlayingView: View {
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var isRating = false
+    /// Square Tromme+ animated artwork for the current album, when it has one.
+    @State private var animatedArtworkURL: URL?
+    @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
     // Caches the last valid geometry to recover from the transient invalid
     // dimensions GeometryReader reports during CarPlay + app-switch transitions.
     @State private var geoSize: CGSize = {
@@ -123,6 +126,9 @@ struct NowPlayingView: View {
                                     size: landscapeArtworkSize,
                                     cornerRadius: AppStyle.Radius.card
                                 )
+                                .overlay {
+                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card)
+                                }
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
@@ -257,6 +263,17 @@ struct NowPlayingView: View {
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .position(x: targetRect.midX, y: targetRect.midY)
                             .allowsHitTesting(false)
+
+                            // Animated artwork stays in the full-size spot and never moves or
+                            // resizes: it fades out in place before the static artwork shrinks to
+                            // the Lyrics/Queue slot, and fades back in once it has returned.
+                            AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6)
+                                .frame(width: fullRect.width, height: fullRect.height)
+                                .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                                .opacity(isCompact ? 0 : 1)
+                                .animation(isCompact ? .easeOut(duration: 0.12) : .easeIn(duration: 0.25).delay(0.35), value: isCompact)
+                                .position(x: fullRect.midX, y: fullRect.midY)
                         }
                     }
                 }
@@ -280,6 +297,15 @@ struct NowPlayingView: View {
                 .opacity(0.01)
         }
         .preferredColorScheme(.dark)
+        .task(id: "\(player.currentTrack?.grandparentTitle ?? "")|\(player.currentTrack?.parentTitle ?? "")|\(animatedArtworkEnabled)") {
+            animatedArtworkURL = nil
+            guard animatedArtworkEnabled,
+                  let artist = player.currentTrack?.grandparentTitle, !artist.isEmpty,
+                  let album = player.currentTrack?.parentTitle, !album.isEmpty else { return }
+            let artwork = await AnimatedArtworkService.artwork(artist: artist, album: album)
+            guard !Task.isCancelled else { return }
+            animatedArtworkURL = artwork?.square
+        }
         .gesture(
             DragGesture()
                 .onEnded { value in
