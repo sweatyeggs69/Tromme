@@ -28,10 +28,6 @@ struct SettingsView: View {
                 } else {
                     Button("Get Tromme Plus") { showPaywall = true }
                 }
-            } footer: {
-                if !plus.isPlus {
-                    Text("Unlock animated artwork and the Premium Icon Pack.")
-                }
             }
 
             Section {

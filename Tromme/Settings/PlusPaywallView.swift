@@ -13,7 +13,7 @@ struct PlusPaywallView: View {
                     .foregroundStyle(.tint)
                 Text("Tromme Plus")
                     .font(.largeTitle.bold())
-                Text("Animated album artwork and the Premium Icon Pack.")
+                Text("Get access to the premium icons, Apple Music animated artwork and support ongoing development of Tromme.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
