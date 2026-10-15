@@ -19,7 +19,7 @@ enum LrcRedLyricsProvider {
     }
 
     /// Returns every distinct timed LRC among the matching releases. Word-synced ones are
-    /// preferred over everything; line-synced ones only back up LRCLIB's synced lyrics.
+    /// preferred, then line-synced, both ahead of LRCLIB.
     static func timedLyrics(title: String, artist: String, duration: TimeInterval?) async -> TimedLyrics {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
         guard !candidates.isEmpty else { return TimedLyrics() }

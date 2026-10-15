@@ -92,8 +92,8 @@ final class LyricsService {
         isLoading = false
     }
 
-    // Preference order: word-synced from lrc.red, synced from LRCLIB, line-synced from lrc.red
-    // (it sometimes has timing LRCLIB lacks), then plain from LRCLIB. Both sources are queried
+    // Preference order: lrc.red (word-synced, then line-synced), then LRCLIB (synced, then
+    // plain). Both sources are queried
     // at once so a miss on lrc.red doesn't add its wait on top of LRCLIB's. Candidates the user
     // blocked are skipped, so the next match in this order is used instead.
     private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
@@ -120,14 +120,12 @@ final class LyricsService {
         }
 
         let candidates: [ResolvedLyrics] = timed.wordSynced.map(lrcRedLyrics)
-            + lrclibResults.filter(\.hasSynced)
             + timed.lineSynced.map(lrcRedLyrics)
-            + lrclibResults.filter { !$0.hasSynced }
+            + lrclibResults
         guard let lyrics = candidates.first(where: { isAllowed($0, blocked: blocked) }) else { return nil }
-        // Word-synced lyrics are the best possible result. Anything else reached while either
-        // source timed out may be beaten next time, so it isn't final.
-        let isWordSynced = lyrics.syncedLyrics.map { timed.wordSynced.contains($0) } ?? false
-        return (lyrics, isWordSynced || (!red.timedOut && !lib.timedOut))
+        // lrc.red results come first, so they're final. An LRCLIB fallback reached only because
+        // lrc.red timed out may be beaten next time, so it isn't.
+        return (lyrics, lyrics.source == .lrcRed || !red.timedOut)
     }
 
     /// Blocked timed lyrics are matched exactly, so other timings of the same words stay
