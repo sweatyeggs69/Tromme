@@ -1,43 +1,53 @@
 import Foundation
 import Observation
 
-/// Lyrics the user marked as wrong or out of sync, per song. Each entry is the
-/// fingerprint of a rejected LRC/plain text, so the resolver skips it and falls
-/// through to the next match. Persisted as JSON in Application Support.
+/// Lyrics the user marked as wrong or out of sync, per song. Each block keeps the
+/// rejected lyrics' exact fingerprint and its words-only fingerprint, so the resolver
+/// skips that version and the same words as plain text, then falls through to the
+/// next match. Persisted as JSON in Application Support.
 @MainActor
 @Observable
 final class BlockedLyricsStore {
     static let shared = BlockedLyricsStore()
 
-    /// Song key (artist + title) to blocked lyrics fingerprints.
-    private var blocked: [String: [String]]
+    private struct Block: Codable, Equatable {
+        let fingerprint: String
+        let textFingerprint: String
+    }
+
+    /// Song key (artist + title) to its blocks, oldest first.
+    private var blocked: [String: [Block]]
 
     private let fileURL: URL
 
     private init() {
         let dir = URL.applicationSupportDirectory.appending(path: "TrommeLyrics", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        fileURL = dir.appending(path: "blockedLyrics.json")
+        fileURL = dir.appending(path: "blockedLyrics-v2.json")
+        try? FileManager.default.removeItem(at: dir.appending(path: "blockedLyrics.json"))
         blocked = (try? Data(contentsOf: fileURL))
-            .flatMap { try? JSONDecoder().decode([String: [String]].self, from: $0) } ?? [:]
+            .flatMap { try? JSONDecoder().decode([String: [Block]].self, from: $0) } ?? [:]
     }
 
     static func songKey(title: String, artist: String) -> String {
         "\(artist.lowercased())\u{1F}\(title.lowercased())"
     }
 
+    /// Every fingerprint a candidate must not match for this song.
     func fingerprints(forSong key: String) -> Set<String> {
-        Set(blocked[key] ?? [])
+        Set((blocked[key] ?? []).flatMap { [$0.fingerprint, $0.textFingerprint] })
     }
 
-    func hasBlocks(forSong key: String) -> Bool {
-        blocked[key]?.isEmpty == false
+    func blockCount(forSong key: String) -> Int {
+        blocked[key]?.count ?? 0
     }
 
-    func block(_ fingerprint: String, forSong key: String) {
+    func block(_ lyrics: ResolvedLyrics, forSong key: String) {
+        guard let fingerprint = lyrics.fingerprint, let textFingerprint = lyrics.textFingerprint else { return }
+        let block = Block(fingerprint: fingerprint, textFingerprint: textFingerprint)
         var list = blocked[key] ?? []
-        guard !list.contains(fingerprint) else { return }
-        list.append(fingerprint)
+        guard !list.contains(block) else { return }
+        list.append(block)
         blocked[key] = list
         persist()
     }

@@ -304,6 +304,8 @@ struct NowPlayingView: View {
                 await lyricsService.fetch(track: track)
             }
         }
+        // Confirms a Wrong Lyrics block took effect.
+        .sensoryFeedback(.success, trigger: lyricsService.blockedCount) { old, new in new > old }
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
@@ -337,8 +339,13 @@ struct NowPlayingView: View {
                             )
                             .transition(.opacity)
                     } else {
-                        NowPlayingEmptyState(message: "No Lyrics Available", systemImage: "quote.bubble")
-                            .transition(.opacity)
+                        NowPlayingEmptyState(
+                            message: lyricsService.blockedCount > 0
+                                ? "No Other Lyrics Found (\(lyricsService.blockedCount) Blocked)"
+                                : "No Lyrics Available",
+                            systemImage: "quote.bubble"
+                        )
+                        .transition(.opacity)
                     }
 
                 }
@@ -540,11 +547,11 @@ struct NowPlayingView: View {
                     }
                     .disabled(lyricsService.isLoading)
                 }
-                if lyricsService.hasBlockedLyrics(track: track) {
+                if lyricsService.blockedCount > 0 {
                     Button {
                         Task { await lyricsService.unblockAll(track: track) }
                     } label: {
-                        Label("Restore Blocked Lyrics", systemImage: "arrow.uturn.backward")
+                        Label("Restore Blocked Lyrics (\(lyricsService.blockedCount))", systemImage: "arrow.uturn.backward")
                     }
                     .disabled(lyricsService.isLoading)
                 }

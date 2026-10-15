@@ -11,6 +11,8 @@ final class LyricsService {
     private(set) var hasLyrics = false
     /// The lyrics currently shown, so the user can mark them as wrong.
     private(set) var current: ResolvedLyrics?
+    /// How many lyrics the user has blocked for the current song.
+    private(set) var blockedCount = 0
 
     private var activeRequestID: UUID?
     private var inFlightTrackKey: String?
@@ -31,14 +33,9 @@ final class LyricsService {
 
     /// Blocks the lyrics currently shown for this song and resolves the next match.
     func blockCurrent(track: PlexMetadata) async {
-        guard let fingerprint = current?.fingerprint else { return }
-        BlockedLyricsStore.shared.block(fingerprint, forSong: Self.songKey(track))
+        guard let current else { return }
+        BlockedLyricsStore.shared.block(current, forSong: Self.songKey(track))
         await refresh(track: track)
-    }
-
-    /// Whether any lyrics are blocked for this song.
-    func hasBlockedLyrics(track: PlexMetadata) -> Bool {
-        BlockedLyricsStore.shared.hasBlocks(forSong: Self.songKey(track))
     }
 
     /// Forgets every block for this song and resolves its lyrics again.
@@ -63,6 +60,7 @@ final class LyricsService {
         hasSynced = false
         hasLyrics = false
         current = nil
+        blockedCount = BlockedLyricsStore.shared.blockCount(forSong: Self.songKey(track))
 
         // Use track-level artist so compilations match by performer, not "Various Artists"
         let trackArtist = track.artistDisplayName
@@ -73,7 +71,7 @@ final class LyricsService {
         // Only synced results are cached. Plain-only results may just mean a lookup failed or
         // a provider hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
         if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
-           cached.value.hasSynced, !blocked.contains(cached.value.fingerprint ?? "") {
+           cached.value.hasSynced, Self.isAllowed(cached.value, blocked: blocked) {
             result = cached.value
         } else if let fetched = await Self.resolve(track: track, artist: trackArtist, blocked: blocked) {
             // A fallback reached only because lrc.red timed out isn't cached, so the
@@ -105,17 +103,26 @@ final class LyricsService {
         async let lrclib = withDeadline(sourceTimeout) {
             await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
         }
-        let isAllowed = { (lyrics: ResolvedLyrics) in !blocked.contains(lyrics.fingerprint ?? "") }
+        let isAllowed = { (lyrics: ResolvedLyrics) in Self.isAllowed(lyrics, blocked: blocked) }
 
         let wordSynced = await lrcRed
         let wordSyncedCandidates = (wordSynced.value ?? []).map {
-            ResolvedLyrics(syncedLyrics: $0, plainLyrics: nil, duration: nil)
+            ResolvedLyrics(syncedLyrics: $0, plainLyrics: nil, duration: nil, source: .lrcRed)
         }
         if let lyrics = wordSyncedCandidates.first(where: isAllowed) {
             return (lyrics, true)
         }
-        guard let lyrics = (await lrclib.value ?? []).first(where: isAllowed) else { return nil }
+        guard var lyrics = (await lrclib.value ?? []).first(where: isAllowed) else { return nil }
+        lyrics.source = .lrclib
         return (lyrics, !wordSynced.timedOut)
+    }
+
+    /// Blocked timed lyrics are matched exactly, so other timings of the same words stay
+    /// available; plain text is also matched against blocked words.
+    private nonisolated static func isAllowed(_ lyrics: ResolvedLyrics, blocked: Set<String>) -> Bool {
+        if let fingerprint = lyrics.fingerprint, blocked.contains(fingerprint) { return false }
+        if !lyrics.hasSynced, let textFingerprint = lyrics.textFingerprint, blocked.contains(textFingerprint) { return false }
+        return true
     }
 
     /// How long each source gets before the next one is tried.
@@ -168,7 +175,7 @@ final class LyricsService {
         var seenPlain = Set<String>()
         let plain = ordered.compactMap { result -> ResolvedLyrics? in
             guard let text = result.plainLyrics, !text.isEmpty, seenPlain.insert(text).inserted else { return nil }
-            return ResolvedLyrics(syncedLyrics: nil, plainLyrics: text, duration: result.duration)
+            return ResolvedLyrics(syncedLyrics: nil, plainLyrics: text, duration: result.duration, source: .lrclib)
         }
         return synced + plain
     }

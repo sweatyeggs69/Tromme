@@ -73,6 +73,8 @@ struct LyricsScrollView: View {
                                     }
                             }
 
+                            sourceFooter
+
                             Color.clear.frame(height: bufferHeight)
                         }
                         .padding(.horizontal, leftAlignLyrics ? 0 : 20)
@@ -148,6 +150,10 @@ struct LyricsScrollView: View {
                             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
                             .padding(.horizontal, leftAlignLyrics ? 0 : 20)
 
+                        sourceFooter
+                            .padding(.top, 24)
+                            .padding(.horizontal, leftAlignLyrics ? 0 : 20)
+
                         Color.clear.frame(height: Self.edgeFadeHeight)
                     }
                 }
@@ -218,6 +224,22 @@ struct LyricsScrollView: View {
             .contentShape(Rectangle())
             .scaleEffect(isActive ? (leftAlignLyrics ? 1.0 : 1.08) : 0.90, anchor: leftAlignLyrics ? .leading : .center)
             .animation(.spring(duration: 0.7, bounce: 0.2), value: isActive)
+    }
+
+    /// Names the source of the lyrics on screen and how many were blocked for this song,
+    /// so a block visibly moves on to a different match.
+    @ViewBuilder
+    private var sourceFooter: some View {
+        let parts = [
+            lyricsService.current?.source.map { "Lyrics from \($0.displayName)" },
+            lyricsService.blockedCount > 0 ? "\(lyricsService.blockedCount) blocked" : nil
+        ].compactMap { $0 }
+        if !parts.isEmpty {
+            Text(parts.joined(separator: " · "))
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
+        }
     }
 
     private func lyricsNotice(_ text: String) -> some View {
