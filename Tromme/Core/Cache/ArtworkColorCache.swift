@@ -247,8 +247,6 @@ private extension UIImage {
         let levels = 16
         let minChroma = 8.0
         let rows = Int(Double(size) * visibleFraction)
-        // Orange, yellow and olive turn brown once re-lit to a dark backdrop, so they only count
-        // when nothing else is colorful; then the result is pushed toward a warm neutral.
         func pick() -> UIColor? {
             var count = [Double](repeating: 0, count: levels * levels * levels)
             var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
