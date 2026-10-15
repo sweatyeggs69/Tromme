@@ -381,7 +381,6 @@ struct ArtistDetailView: View {
                 ArtistHeroPhotoView(
                     artist: displayArtist,
                     heroHeight: heroHeight,
-                    photoHeight: photoHeight,
                     backdropColor: backdropColor,
                     scrollOffset: scrollOffset,
                     isHidden: $heroIsHidden
@@ -722,8 +721,8 @@ private struct ArtistHeroHeaderView: View {
                 LinearGradient(
                     stops: [
                         .init(color: backdropColor.opacity(0), location: 0),
-                        .init(color: backdropColor.opacity(0.75), location: 0.5),
-                        .init(color: backdropColor, location: 1)
+                        .init(color: backdropColor.opacity(0.4), location: 0.5),
+                        .init(color: backdropColor.opacity(0.85), location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -787,7 +786,6 @@ private struct ArtistHeroPhotoView: View {
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
-    let photoHeight: CGFloat
     let backdropColor: Color
     let scrollOffset: CGFloat
     @Binding var isHidden: Bool
@@ -807,7 +805,7 @@ private struct ArtistHeroPhotoView: View {
             if !isHidden {
                 photo(width: geo.size.width, blur: scrollBlur)
                     // Zoom from the first point of overscroll, pinned to the top edge.
-                    .scaleEffect(1 + stretch / max(photoHeight, 1), anchor: .top)
+                    .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
                     .offset(y: -parallax)
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                     // Never paint below the hero row's current bottom edge.
@@ -822,8 +820,16 @@ private struct ArtistHeroPhotoView: View {
         }
     }
 
+    /// Where the fade and blur begin, as a fraction of the hero height: they sit only behind
+    /// the artist name and buttons so most of the hero shows the photo.
+    private var fadeStart: CGFloat {
+        min(max((heroHeight - 230) / max(heroHeight, 1), 0), 1)
+    }
+
     private func photo(width: CGFloat, blur: CGFloat) -> some View {
-        Group {
+        let start = fadeStart
+        let span = 1 - start
+        return Group {
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -833,25 +839,25 @@ private struct ArtistHeroPhotoView: View {
                     .fill(.quaternary)
             }
         }
-        .frame(width: width, height: photoHeight, alignment: .top)
+        .frame(width: width, height: heroHeight, alignment: .top)
         .blur(radius: blur, opaque: true)
         .clipped()
         .overlay {
-            // Blur the lower part of the photo, then melt it into the backdrop.
+            // Blur the photo behind the title and controls, then melt it into the backdrop.
             if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: width, height: photoHeight, alignment: .top)
+                    .frame(width: width, height: heroHeight, alignment: .top)
                     .clipped()
                     .blur(radius: 30, opaque: true)
                     .clipped()
                     .mask(
                         LinearGradient(
                             stops: [
-                                .init(color: .clear, location: 0.35),
-                                .init(color: .black.opacity(0.6), location: 0.6),
-                                .init(color: .black, location: 0.85)
+                                .init(color: .clear, location: start),
+                                .init(color: .black.opacity(0.7), location: start + span * 0.35),
+                                .init(color: .black, location: start + span * 0.6)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -862,10 +868,10 @@ private struct ArtistHeroPhotoView: View {
         .overlay {
             LinearGradient(
                 stops: [
-                    .init(color: backdropColor.opacity(0), location: 0.3),
-                    .init(color: backdropColor.opacity(0.25), location: 0.55),
-                    .init(color: backdropColor.opacity(0.65), location: 0.78),
-                    .init(color: backdropColor.opacity(0.92), location: 0.93),
+                    .init(color: backdropColor.opacity(0), location: start),
+                    .init(color: backdropColor.opacity(0.3), location: start + span * 0.3),
+                    .init(color: backdropColor.opacity(0.7), location: start + span * 0.6),
+                    .init(color: backdropColor.opacity(0.92), location: start + span * 0.85),
                     .init(color: backdropColor, location: 1)
                 ],
                 startPoint: .top,
