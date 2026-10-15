@@ -20,6 +20,10 @@ final class PlusStore {
     }
 
     private(set) var isPlus = PlusStore.cachedIsPlus
+    /// True once entitlements have been read this launch.
+    private(set) var hasLoaded = false
+    /// Plus comes only from an old Premium Icon Pack purchase, not a subscription.
+    private(set) var isGrandfathered = false
 
     private var started = false
 
@@ -35,13 +39,18 @@ final class PlusStore {
 
     func refresh() async {
         var entitled = false
+        var subscribed = false
+        var legacy = false
         let ids = Set(Self.subscriptionProductIDs + Self.legacyProductIDs)
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   ids.contains(transaction.productID),
                   transaction.revocationDate == nil else { continue }
             entitled = true
+            if Self.legacyProductIDs.contains(transaction.productID) { legacy = true } else { subscribed = true }
         }
+        isGrandfathered = legacy && !subscribed
+        hasLoaded = true
         setPlus(entitled)
     }
 

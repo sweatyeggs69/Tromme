@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var artistsPath = NavigationPath()
     @State private var albumsPath = NavigationPath()
     @State private var pendingNavigation: PlexMetadata?
+    @State private var plus = PlusStore.shared
+    @AppStorage("hasSeenPlusGrandfatherNotice") private var hasSeenPlusNotice = false
 
     var body: some View {
         Group {
@@ -37,10 +39,23 @@ struct ContentView: View {
                 mainTabView
             }
         }
+        .alert("Tromme Plus", isPresented: plusNoticeBinding) {
+            Button("OK") { hasSeenPlusNotice = true }
+        } message: {
+            Text("Tromme is now free, with animated artwork and the Premium Icon Pack included in Tromme Plus. Because you bought the Premium Icon Pack, you have Tromme Plus for free.")
+        }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
             refreshAuthTokenFromKeychainIfNeeded()
         }
+    }
+
+    /// One-time notice for icon pack owners, shown once signed in and entitlements are read.
+    private var plusNoticeBinding: Binding<Bool> {
+        Binding(
+            get: { hasAuthenticatedContext && plus.hasLoaded && plus.isGrandfathered && !hasSeenPlusNotice },
+            set: { if !$0 { hasSeenPlusNotice = true } }
+        )
     }
 
     @ViewBuilder
