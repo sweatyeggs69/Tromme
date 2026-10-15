@@ -4,6 +4,9 @@ import MediaPlayer
 import UIKit
 
 struct NowPlayingBackground: View {
+    /// A still from the animated artwork; crossfades in over the static artwork.
+    var animatedBackdrop: UIImage?
+
     @Environment(AudioPlayerService.self) private var player
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -41,21 +44,30 @@ struct NowPlayingBackground: View {
         ZStack {
             Color.black
             if let resolvedImage {
-                Image(uiImage: resolvedImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .blur(radius: 60)
-                    .scaleEffect(1.3)
+                blurred(resolvedImage)
+            }
+            if let animatedBackdrop {
+                blurred(animatedBackdrop)
+                    .transition(.opacity)
             }
             Color.black.opacity(0.4)
         }
         .clipped()
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.6), value: backgroundImage)
+        .animation(.easeInOut(duration: 0.6), value: animatedBackdrop)
         .task(id: thumbPath) {
             guard let server = serverConnection.currentServer else { return }
             await loadBackgroundImage(server: server)
         }
+    }
+
+    private func blurred(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .blur(radius: 60)
+            .scaleEffect(1.3)
     }
 
     private func loadBackgroundImage(server: PlexServer) async {

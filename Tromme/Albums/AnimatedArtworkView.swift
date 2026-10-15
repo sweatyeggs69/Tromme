@@ -7,6 +7,8 @@ import SwiftUI
 struct AnimatedArtworkView: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
+    /// Gets a small still of the video once it starts playing.
+    var onFrame: ((UIImage) -> Void)?
 
     @Environment(NetworkStatus.self) private var network
     @Environment(\.scenePhase) private var scenePhase
@@ -18,7 +20,7 @@ struct AnimatedArtworkView: View {
     var body: some View {
         Group {
             if let videoURL {
-                LoopingVideoView(url: videoURL, isPlaying: isOnScreen && scenePhase == .active, isReady: $isReady)
+                LoopingVideoView(url: videoURL, isPlaying: isOnScreen && scenePhase == .active, isReady: $isReady, onFrame: onFrame)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .opacity(isReady ? 1 : 0)
             }

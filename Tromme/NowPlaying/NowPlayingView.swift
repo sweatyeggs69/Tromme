@@ -25,6 +25,8 @@ struct NowPlayingView: View {
     @State private var isRating = false
     /// Square Tromme+ animated artwork for the current album, when it has one.
     @State private var animatedArtworkURL: URL?
+    /// A still from the animated artwork, which takes over the blurred background.
+    @State private var animatedBackdrop: UIImage?
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
     // Caches the last valid geometry to recover from the transient invalid
     // dimensions GeometryReader reports during CarPlay + app-switch transitions.
@@ -130,7 +132,7 @@ struct NowPlayingView: View {
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 // After the shadows, so the video doesn't cast a second one.
                                 .overlay {
-                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card)
+                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card) { animatedBackdrop = $0 }
                                 }
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
@@ -268,7 +270,7 @@ struct NowPlayingView: View {
                             // Animated artwork stays in the full-size spot and never moves or
                             // resizes: it fades out in place before the static artwork shrinks to
                             // the Lyrics/Queue slot, and fades back in once it has returned.
-                            AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6)
+                            AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6) { animatedBackdrop = $0 }
                                 .frame(width: fullRect.width, height: fullRect.height)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
@@ -290,7 +292,7 @@ struct NowPlayingView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { NowPlayingBackground() }
+        .background { NowPlayingBackground(animatedBackdrop: animatedBackdrop) }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
                 .frame(width: 1, height: 1)
@@ -300,6 +302,7 @@ struct NowPlayingView: View {
         .preferredColorScheme(.dark)
         .task(id: "\(player.currentTrack?.grandparentTitle ?? "")|\(player.currentTrack?.parentTitle ?? "")|\(animatedArtworkEnabled)") {
             animatedArtworkURL = nil
+            animatedBackdrop = nil
             guard animatedArtworkEnabled,
                   let artist = player.currentTrack?.grandparentTitle, !artist.isEmpty,
                   let album = player.currentTrack?.parentTitle, !album.isEmpty else { return }
