@@ -1,3 +1,4 @@
+import AVFoundation
 import MediaPlayer
 import UIKit
 
@@ -44,16 +45,27 @@ final class NowPlayingAnimatedArtwork {
         lookupTask = Task {
             guard let artwork = await AnimatedArtworkService.artwork(artist: artist, album: album),
                   !Task.isCancelled, generation == self.generation else { return }
+            // The system wants preview images quickly, so the static artwork is loaded up front.
+            let staticPreview = await previewImage(.zero)
+            guard !Task.isCancelled, generation == self.generation else { return }
+            let supportedKeys = MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys
+            #if DEBUG
+            print("[AnimatedArtwork] lock screen keys supported: \(supportedKeys), square: \(artwork.square != nil), tall: \(artwork.tall != nil)")
+            #endif
             var newEntries: [String: Any] = [:]
-            if let square = artwork.square {
+            if let square = artwork.square, supportedKeys.contains(MPNowPlayingInfoProperty1x1AnimatedArtwork) {
                 newEntries[MPNowPlayingInfoProperty1x1AnimatedArtwork] = makeArtwork(
-                    id: "\(key)|1x1", stream: square, generation: generation, previewImage: previewImage
-                )
+                    id: "\(key)|1x1", stream: square, generation: generation
+                ) { _ in staticPreview }
             }
-            if let tall = artwork.tall {
+            // The preview must match the video's 3:4 shape or the system ignores the
+            // artwork, so the tall one previews with the clip's own first frame.
+            if let tall = artwork.tall, supportedKeys.contains(MPNowPlayingInfoProperty3x4AnimatedArtwork) {
                 newEntries[MPNowPlayingInfoProperty3x4AnimatedArtwork] = makeArtwork(
-                    id: "\(key)|3x4", stream: tall, generation: generation, previewImage: previewImage
-                )
+                    id: "\(key)|3x4", stream: tall, generation: generation
+                ) { _ in
+                    await NowPlayingAnimatedArtwork.shared.firstFrame(of: tall, generation: generation)
+                }
             }
             entries = newEntries
             if !newEntries.isEmpty { apply(newEntries) }
@@ -79,8 +91,20 @@ final class NowPlayingAnimatedArtwork {
         previewImage: @escaping @Sendable (CGSize) async -> UIImage?
     ) -> MPMediaItemAnimatedArtwork {
         MPMediaItemAnimatedArtwork(artworkID: id, previewImageRequestHandler: previewImage) { _ in
-            await NowPlayingAnimatedArtwork.shared.clipFile(for: stream, generation: generation)
+            #if DEBUG
+            print("[AnimatedArtwork] system requested clip \(id)")
+            #endif
+            return await NowPlayingAnimatedArtwork.shared.clipFile(for: stream, generation: generation)
         }
+    }
+
+    /// The first frame of a clip, downloading the clip if needed.
+    private func firstFrame(of stream: URL, generation: Int) async -> UIImage? {
+        guard let file = await clipFile(for: stream, generation: generation) else { return nil }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
+        generator.appliesPreferredTrackTransform = true
+        guard let frame = try? await generator.image(at: .zero).image else { return nil }
+        return UIImage(cgImage: frame)
     }
 
     /// Downloads the clip the first time the system asks for it.
@@ -102,6 +126,9 @@ final class NowPlayingAnimatedArtwork {
         }
         downloads[stream] = download
         let result = await download.value
+        #if DEBUG
+        print("[AnimatedArtwork] clip download \(result == nil ? "failed" : "finished"): \(stream.lastPathComponent)")
+        #endif
         // The album changed mid-download: don't leave its clip behind.
         guard generation == self.generation else {
             if let result { try? FileManager.default.removeItem(at: result) }

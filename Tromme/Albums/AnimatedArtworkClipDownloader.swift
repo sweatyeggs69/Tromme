@@ -10,6 +10,9 @@ enum AnimatedArtworkClipDownloader {
         do {
             let playlistURL = try await mediaPlaylistURL(from: streamURL)
             let parts = try await partURLs(in: playlistURL)
+            #if DEBUG
+            print("[AnimatedArtwork] clip parts: \(parts.map(\.lastPathComponent))")
+            #endif
             // MPEG-TS segments can't be joined into an MP4 by concatenation.
             guard !parts.isEmpty, !parts.contains(where: { $0.pathExtension.lowercased() == "ts" }) else { return nil }
             var data = Data()
