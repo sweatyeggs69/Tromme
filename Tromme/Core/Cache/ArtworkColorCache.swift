@@ -121,6 +121,7 @@ private extension UIImage {
     /// `visibleFraction`; artist photos fade out at the bottom), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
     /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
     /// (black and white, or white walls and black clothing only) fall back to `dominantColor`.
+    /// Warm hues are skipped when anything else is colorful (see `pick`).
     func vividPhotoColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
 
@@ -140,57 +141,70 @@ private extension UIImage {
         let levels = 16
         let minChroma = 8.0
         let rows = Int(Double(size) * visibleFraction)
-        var count = [Double](repeating: 0, count: levels * levels * levels)
-        var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
-        @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
+        // Orange, yellow and olive turn brown once re-lit to a dark backdrop, so they only count
+        // when nothing else is colorful; then the result is pushed toward a warm neutral.
+        func pick(excludeWarm: Bool) -> UIColor? {
+            var count = [Double](repeating: 0, count: levels * levels * levels)
+            var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
+            @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
 
-        var chromaticPixels = 0
-        for y in 0..<rows {
-            for x in 0..<size {
-                let o = (y * size + x) * 4
-                let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                guard lab.chroma >= minChroma else { continue }
-                chromaticPixels += 1
-                let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
-                count[i] += 1
-                chromaSum[i] += lab.chroma
+            var chromaticPixels = 0
+            for y in 0..<rows {
+                for x in 0..<size {
+                    let o = (y * size + x) * 4
+                    let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
+                    guard lab.chroma >= minChroma, !(excludeWarm && lab.isWarm) else { continue }
+                    chromaticPixels += 1
+                    let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
+                    count[i] += 1
+                    chromaSum[i] += lab.chroma
+                }
             }
-        }
 
-        // Too little color to call it a colorful photo.
-        guard chromaticPixels > rows * size / 20 else { return dominantColor }
+            // Too little color to call it a colorful photo.
+            guard chromaticPixels > rows * size / 20 else { return nil }
 
-        var bestBin = 0
-        var bestScore = -1.0
-        for r in 0..<levels { for g in 0..<levels { for b in 0..<levels {
-            var n = 0.0, c = 0.0
-            for dr in -1...1 { for dg in -1...1 { for db in -1...1 {
-                let rr = r + dr, gg = g + dg, bb = b + db
-                guard (0..<levels).contains(rr), (0..<levels).contains(gg), (0..<levels).contains(bb) else { continue }
-                n += count[bin(rr, gg, bb)]
-                c += chromaSum[bin(rr, gg, bb)]
+            var bestBin = 0
+            var bestScore = -1.0
+            for r in 0..<levels { for g in 0..<levels { for b in 0..<levels {
+                var n = 0.0, c = 0.0
+                for dr in -1...1 { for dg in -1...1 { for db in -1...1 {
+                    let rr = r + dr, gg = g + dg, bb = b + db
+                    guard (0..<levels).contains(rr), (0..<levels).contains(gg), (0..<levels).contains(bb) else { continue }
+                    n += count[bin(rr, gg, bb)]
+                    c += chromaSum[bin(rr, gg, bb)]
+                } } }
+                guard n > 0 else { continue }
+                let score = n * (c / n)
+                if score > bestScore { bestScore = score; bestBin = bin(r, g, b) }
             } } }
-            guard n > 0 else { continue }
-            let score = n * (c / n)
-            if score > bestScore { bestScore = score; bestBin = bin(r, g, b) }
-        } } }
-        let bestR = bestBin / (levels * levels)
-        let bestG = (bestBin / levels) % levels
-        let bestB = bestBin % levels
+            let bestR = bestBin / (levels * levels)
+            let bestG = (bestBin / levels) % levels
+            let bestB = bestBin % levels
 
-        var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
-        for y in 0..<rows {
-            for x in 0..<size {
-                let o = (y * size + x) * 4
-                let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
-                guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
-                let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                guard lab.chroma >= minChroma else { continue }
-                sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
+            var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
+            for y in 0..<rows {
+                for x in 0..<size {
+                    let o = (y * size + x) * 4
+                    let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
+                    guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
+                    let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
+                    guard lab.chroma >= minChroma, !(excludeWarm && lab.isWarm) else { continue }
+                    sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
+                }
             }
+            guard n > 0 else { return nil }
+            return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
         }
-        guard n > 0 else { return dominantColor }
-        return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
+
+        if let color = pick(excludeWarm: true) { return color }
+        if let warm = pick(excludeWarm: false) {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+            warm.getRed(&r, green: &g, blue: &b, alpha: nil)
+            let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
+            return Lab.rgb(lightness: lab.l, chroma: min(lab.chroma, 6), hue: lab.hue)
+        }
+        return dominantColor
     }
 
 
@@ -340,6 +354,13 @@ private struct Lab {
 
     var chroma: Double { (a * a + b * b).squareRoot() }
     var hue: Double { atan2(b, a) }
+
+    /// Orange, yellow and olive hues (about 35 to 115 degrees in CIELAB).
+    var isWarm: Bool {
+        var degrees = hue * 180 / .pi
+        if degrees < 0 { degrees += 360 }
+        return degrees >= 35 && degrees <= 115
+    }
 
     private static let white = (x: 0.95047, y: 1.0, z: 1.08883)
 
