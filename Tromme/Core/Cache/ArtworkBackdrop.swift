@@ -2,7 +2,11 @@ import SwiftUI
 import UIKit
 import CryptoKit
 
-/// Re-lights an artwork's accent (or average) color into the Apple Music style backdrop tint.
+/// Turns an artwork's accent (or average) color into the page backdrop.
+///
+/// Strong accents (chroma 25 or more, the same bar the pick uses) are used as is, in both
+/// appearances, so the page matches the accent on the cover. Only the text-contrast guard
+/// may nudge their lightness. Muted colors are re-lit into the Apple Music style tint.
 ///
 /// Dark appearance: colorful sources go to L* 26 to 40 at about 0.8x chroma; neutral ones
 /// to source L* + 0.5, capped at L* 42.3 (measured from Apple Music artist pages). Light
@@ -10,18 +14,23 @@ import CryptoKit
 /// chroma and hue are kept.
 enum ArtworkBackdrop {
     enum Style {
-        /// Artist pages: average of the visible photo.
+        /// Artist pages: accent or average of the visible photo.
         case artist
-        /// Album and playlist pages: average of the whole cover.
+        /// Album and playlist pages: accent or average of the whole cover.
         case cover
     }
 
     private static let darkLightnessCap = 42.3
+    /// Matches `minimumAccentChroma` in the color pick.
+    private static let accentChroma = 25.0
 
     static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
+        if lab.chroma >= accentChroma {
+            return Color(relit(lightness: lab.l, chroma: lab.chroma, hue: lab.hue))
+        }
         let ui: UIColor
         switch colorScheme {
         case .light:
