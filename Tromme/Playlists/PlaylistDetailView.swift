@@ -130,9 +130,13 @@ struct PlaylistDetailView: View {
         )
     }
 
-    private var playlistHeader: some View {
+    private func playlistHeader(width: CGFloat) -> some View {
         VStack {
-            ArtworkView(thumbPath: artworkPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+            ArtworkView(
+                thumbPath: artworkPath,
+                size: AppStyle.Artwork.portraitHeader(forWidth: width),
+                cornerRadius: AppStyle.Radius.card
+            )
                 .headerArtworkStyle()
                 .padding(.top, 12)
 
@@ -253,7 +257,7 @@ struct PlaylistDetailView: View {
                 } else {
                     List {
                         Section {
-                            playlistHeader
+                            playlistHeader(width: geo.size.width)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                                 .listRowSeparator(.hidden, edges: .top)
                                 .listRowSeparator(.visible, edges: .bottom)

@@ -285,7 +285,7 @@ struct AlbumDetailView: View {
         VStack {
             ArtworkView(
                 thumbPath: thumbPath,
-                size: max(width - AppStyle.Spacing.pageHorizontal * 2, 1),
+                size: AppStyle.Artwork.portraitHeader(forWidth: width),
                 cornerRadius: AppStyle.Radius.card
             )
                 .headerArtworkStyle()

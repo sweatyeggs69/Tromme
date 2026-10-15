@@ -24,6 +24,10 @@ enum AppStyle {
     enum Artwork {
         /// Album and playlist header artwork in landscape.
         static let header: CGFloat = 300
+        /// Album and playlist header artwork in portrait: full width inside the page padding.
+        static func portraitHeader(forWidth width: CGFloat) -> CGFloat {
+            max(width - Spacing.pageHorizontal * 2, 1)
+        }
         /// Album and playlist cards in horizontal rails (Home, More by).
         static let card: CGFloat = 170
         /// Thumbnails in search results and pickers.
