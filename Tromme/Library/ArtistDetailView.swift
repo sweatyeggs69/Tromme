@@ -754,7 +754,7 @@ private struct ArtistHeroHeaderView: View {
             } label: {
                 Image(systemName: "play.fill")
                     .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(backdropColor.contrastControlForeground)
+                    .foregroundStyle(backdropColor)
                     .frame(width: 62, height: 62)
                     .background(backdropColor.contrastForeground, in: Circle())
             }
