@@ -44,6 +44,7 @@
 		3EB05A4C7AF8B5ED1E7644D2 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD02991E2EF1D25E465FAA5E /* SearchView.swift */; };
 		430DFB356E617473516BD8A3 /* PlaylistDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA7883CADF67B162FB14F053 /* PlaylistDetailView.swift */; };
 		4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */; };
+		A1B2C3D4E5F60718293A4B01 /* PlexHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B02 /* PlexHub.swift */; };
 		4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2EB138EDD82605DC91055038 /* MiniPlayerView.swift */; };
 		608A51EB1C84A6D4D7A7CF03 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B253DB5DE822A11676ACFE3B /* SettingsView.swift */; };
 		616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 866C87D0462783ACE391CDD2 /* QueueView.swift */; };
@@ -77,6 +78,7 @@
 		F2219C95C94B579CB35E6EA1 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36555852E06D7A32A2B7E0B6 /* PlaylistsView.swift */; };
 		F2DDE2E2C0CD183FD5A9EAD4 /* LibrarySyncRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D862074EECF70C3B28A5D49 /* LibrarySyncRecord.swift */; };
 		FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */; };
+		A1B2C3D4E5F60718293A4B03 /* PlexHubCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B04 /* PlexHubCache.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +88,7 @@
 		5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LrcRedLyricsProvider.swift; sourceTree = "<group>"; };
 		7945B8C5E5FE980C4D6D97FA /* LRCParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LRCParser.swift; sourceTree = "<group>"; };
 		038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalContentCache.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B04 /* PlexHubCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexHubCache.swift; sourceTree = "<group>"; };
 		054C6484A1EF992893BB5FB9 /* PlexAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexAuthService.swift; sourceTree = "<group>"; };
 		089047732CAA2781E1129B48 /* LibrarySyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncService.swift; sourceTree = "<group>"; };
 		09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -152,6 +155,7 @@
 		EA7883CADF67B162FB14F053 /* PlaylistDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistDetailView.swift; sourceTree = "<group>"; };
 		F61E387C500D85211FFA7DA2 /* PlaylistItemsRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistItemsRecord.swift; sourceTree = "<group>"; };
 		FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexModels.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B02 /* PlexHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexHub.swift; sourceTree = "<group>"; };
 		FDBB42B4774E4A3CCABE886B /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -208,6 +212,7 @@
 				A73935816F396307CD214867 /* CachedAPIClient.swift */,
 				1C2FC699685A8C436EF372D6 /* ImageCache.swift */,
 				038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */,
+				A1B2C3D4E5F60718293A4B04 /* PlexHubCache.swift */,
 			);
 			path = Cache;
 			sourceTree = "<group>";
@@ -361,6 +366,7 @@
 			isa = PBXGroup;
 			children = (
 				FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */,
+				A1B2C3D4E5F60718293A4B02 /* PlexHub.swift */,
 				0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */,
 			);
 			path = Models;
@@ -461,6 +467,7 @@
 				F1A2B3C4D5E6071829304152 /* HorizontalTrackGrid.swift in Sources */,
 				0603E2752890285A43E43246 /* ImageCache.swift in Sources */,
 				FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */,
+				A1B2C3D4E5F60718293A4B03 /* PlexHubCache.swift in Sources */,
 				02EFFE2FF9FE8142805B0263 /* LibraryMemory.swift in Sources */,
 				A761BCD907F4E3100D5688EA /* ServerRecord.swift in Sources */,
 				659E76A81EB2956C50B28314 /* PlaylistItemsRecord.swift in Sources */,
@@ -496,6 +503,7 @@
 				0E7B80FF2FF2275F0071F0F3 /* FavoritesView.swift in Sources */,
 				3CE78F6374401BF3A5C4801B /* PlexAuthService.swift in Sources */,
 				4389614F7E57149D5C739EDE /* PlexModels.swift in Sources */,
+				A1B2C3D4E5F60718293A4B01 /* PlexHub.swift in Sources */,
 				616B6F47ECF417A6EA54AAA2 /* QueueView.swift in Sources */,
 				0E10DE3A30112F3B0045130C /* DownloadManager.swift in Sources */,
 				0E5213343040F41C00583BF3 /* PlaybackSettingsView.swift in Sources */,
