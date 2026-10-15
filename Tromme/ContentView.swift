@@ -214,6 +214,7 @@ struct ContentView: View {
                     pendingNavigation = target
                 }
                 .environment(player)
+                .environment(network)
                 .onDisappear {
                     nowPlayingStartPanel = .none
                 }
