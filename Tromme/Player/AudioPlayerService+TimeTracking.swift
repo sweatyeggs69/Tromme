@@ -48,7 +48,6 @@ extension AudioPlayerService {
                     self.currentTime = self.duration > 0 ? min(absoluteSeconds, self.duration) : absoluteSeconds
                 }
 
-                self.maybeReportScrobble()
                 self.maybePingTimeline()
                 self.maybePreloadNextTrack()
             }

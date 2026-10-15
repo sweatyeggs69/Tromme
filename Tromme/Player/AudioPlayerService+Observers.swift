@@ -130,7 +130,7 @@ extension AudioPlayerService {
         let reconnected = !oldConnected && newConnected
         guard interfaceChanged || reconnected || lostConnection else { return }
         if newConnected, let server, let client {
-            Task { await ScrobbleOutbox.shared.flush(server: server, client: client) }
+            Task { await TimelineOutbox.shared.flush(server: server, client: client) }
         }
         revalidatePreloadedNext(networkChanged: true)
         guard isPlaying, currentTrack != nil else { return }

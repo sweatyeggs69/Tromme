@@ -72,7 +72,6 @@ final class AudioPlayerService: Sendable {
     var playbackIntent: Bool = false
     var lastPublishedNowPlayingTrackKey: String?
     let maxRecoveryAttemptsPerTrack = 2
-    let scrobbleThreshold: Double = 0.75
     var recoveryTrackRatingKey: String?
     var recoveryAttemptsForTrack = 0
     var server: PlexServer?
@@ -120,10 +119,8 @@ final class AudioPlayerService: Sendable {
     var heldSeekTargetTime: TimeInterval = 0
     var lastSavedQueueHash: Int?
     var lastSavedOriginalQueueHash: Int?
-    var scrobbledTrackRatingKey: String?
-    /// Last time a timeline update went to the server; drives the periodic keep-alive ping.
+    /// Last time a timeline update went to the server; drives the periodic timeline report.
     var lastTimelineReport: Date = .distantPast
-    let timelinePingInterval: TimeInterval = 15
 
     /// Infinite Mode continuously appends fresh tracks but nothing ever removed the
     /// played ones, so a long listening session grew `queue` without bound. Keep a
@@ -267,7 +264,7 @@ final class AudioPlayerService: Sendable {
     func configure(server: PlexServer, client: PlexAPIClient) {
         self.server = server
         self.client = client
-        Task { await ScrobbleOutbox.shared.flush(server: server, client: client) }
+        Task { await TimelineOutbox.shared.flush(server: server, client: client) }
         if isInfiniteModeActive {
             maybeRefillInfiniteQueueIfNeeded(trigger: "configure")
         }
@@ -788,9 +785,6 @@ final class AudioPlayerService: Sendable {
         if recoveryTrackRatingKey != track.ratingKey {
             recoveryTrackRatingKey = track.ratingKey
             recoveryAttemptsForTrack = 0
-        }
-        if scrobbledTrackRatingKey != track.ratingKey {
-            scrobbledTrackRatingKey = nil
         }
         playbackGeneration += 1
         isReadyToPlay = false

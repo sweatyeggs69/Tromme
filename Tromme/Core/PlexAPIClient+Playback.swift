@@ -1,6 +1,6 @@
 import Foundation
 
-// Timeline, rating, scrobble and stream URL endpoints.
+// Timeline, rating and stream URL endpoints.
 extension PlexAPIClient {
     // MARK: - Playback
 
@@ -15,7 +15,9 @@ extension PlexAPIClient {
         timeMs: Int,
         durationMs: Int,
         sessionID: String?,
-        continuing: Bool = false
+        continuing: Bool = false,
+        offline: Bool = false,
+        updated: Int? = nil
     ) async throws {
         guard let baseURL = server.baseURL,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -25,13 +27,18 @@ extension PlexAPIClient {
         var items: [URLQueryItem] = [
             URLQueryItem(name: "ratingKey", value: ratingKey),
             URLQueryItem(name: "key", value: key),
-            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "time", value: "\(timeMs)"),
             URLQueryItem(name: "duration", value: "\(durationMs)"),
         ]
         if state == "stopped" {
             items.append(URLQueryItem(name: "continuing", value: continuing ? "1" : "0"))
+        }
+        if offline {
+            items.append(URLQueryItem(name: "offline", value: "1"))
+        }
+        if let updated {
+            items.append(URLQueryItem(name: "updated", value: "\(updated)"))
         }
         components.queryItems = items
 
@@ -75,33 +82,6 @@ extension PlexAPIClient {
         guard (200...299).contains(statusCode) else {
             if statusCode == 401 { throw PlexAPIError.unauthorized }
             throw PlexAPIError.serverError(statusCode)
-        }
-    }
-
-    /// Mark an item as played in Plex history.
-    /// Endpoint: /:/scrobble
-    func reportScrobble(server: PlexServer, ratingKey: String) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/:/scrobble"
-        components.queryItems = [
-            URLQueryItem(name: "key", value: ratingKey),
-            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
-        ]
-
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        if statusCode >= 400 {
-            #if DEBUG
-            print("[AudioPlayer] Scrobble failed: status \(statusCode)")
-            #endif
         }
     }
 

@@ -116,7 +116,7 @@ extension CarPlaySceneDelegate {
 
     /// Builds the "Recently Played" home row from a fresh server fetch. Shared by
     /// the initial home load and by the live `.recentlyPlayedDidChange` refresh so
-    /// CarPlay mirrors the same scrobble-driven state as the in-app Home screen.
+    /// CarPlay mirrors the same timeline-driven state as the in-app Home screen.
     func loadRecentlyPlayedSection(server: PlexServer, sectionId: String) async -> CPListSection? {
         guard let recentlyPlayed = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
               !recentlyPlayed.isEmpty else { return nil }
@@ -142,7 +142,7 @@ extension CarPlaySceneDelegate {
 
     /// Keeps the CarPlay "Recently Played" row in sync with the same
     /// `.recentlyPlayedDidChange` signal that drives the in-app Home screen,
-    /// so both surfaces reflect the same server-confirmed scrobbles.
+    /// so both surfaces reflect the same server-confirmed plays.
     func startObservingRecentlyPlayed() {
         recentlyPlayedObservationTask?.cancel()
         recentlyPlayedObservationTask = Task { [weak self] in

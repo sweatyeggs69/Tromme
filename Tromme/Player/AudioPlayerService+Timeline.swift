@@ -3,7 +3,7 @@ import MediaPlayer
 import Network
 import Observation
 
-// Timeline and scrobble reporting.
+// Timeline reporting.
 extension AudioPlayerService {
     // MARK: - Timeline Reporting
 
@@ -11,64 +11,51 @@ extension AudioPlayerService {
     /// iOS may not deliver this on force-quit, but when it does we report stopped.
     func reportStoppedForAppTermination() {
         guard currentTrack != nil else { return }
-        maybeReportScrobble()
         reportTimelineState("stopped", continuing: false)
     }
 
-    /// Keeps the server's session (and other clients' "now playing") fresh on long tracks.
+    /// The spec asks for a timeline report every 10 s on LAN/WAN and every 20 s over
+    /// cellular when the play state hasn't changed. PMS builds play history and the
+    /// played state from these reports, so the app sends no separate scrobble.
     func maybePingTimeline() {
+        let interval: TimeInterval = NetworkStatus.shared.isCellular ? 20 : 10
         guard isPlaying, NetworkStatus.shared.isConnected,
-              Date().timeIntervalSince(lastTimelineReport) >= timelinePingInterval else { return }
+              Date().timeIntervalSince(lastTimelineReport) >= interval else { return }
         reportTimelineState("playing")
     }
 
     func reportTimelineState(_ state: String, continuing: Bool = false) {
         guard let currentTrack, let client, let server else { return }
         lastTimelineReport = Date()
-        let key = currentTrack.key ?? "/library/metadata/\(currentTrack.ratingKey)"
+        let ratingKey = currentTrack.ratingKey
+        let key = currentTrack.key ?? "/library/metadata/\(ratingKey)"
         let timeMs = Int(currentTime * 1000)
         let durationMs = Int(duration * 1000)
         let sessionID = currentSessionID
         Task {
-            try? await client.reportTimeline(
-                server: server,
-                ratingKey: currentTrack.ratingKey,
-                key: key,
-                state: state,
-                timeMs: timeMs,
-                durationMs: durationMs,
-                sessionID: sessionID,
-                continuing: continuing
-            )
-        }
-    }
-
-    func maybeReportScrobble(force: Bool = false) {
-        guard let currentTrack, let client, let server else { return }
-        guard scrobbledTrackRatingKey != currentTrack.ratingKey else { return }
-
-        let shouldScrobble: Bool
-        if force {
-            shouldScrobble = true
-        } else if duration > 0 {
-            shouldScrobble = (currentTime / duration) >= scrobbleThreshold
-        } else {
-            shouldScrobble = false
-        }
-
-        guard shouldScrobble else { return }
-        scrobbledTrackRatingKey = currentTrack.ratingKey
-        logPlayback("scrobble", "time=\(Int(currentTime)) duration=\(Int(duration))")
-        let capturedServer = server
-        let capturedRatingKey = currentTrack.ratingKey
-        Task {
             do {
-                try await client.reportScrobble(server: capturedServer, ratingKey: capturedRatingKey)
+                try await client.reportTimeline(
+                    server: server,
+                    ratingKey: ratingKey,
+                    key: key,
+                    state: state,
+                    timeMs: timeMs,
+                    durationMs: durationMs,
+                    sessionID: sessionID,
+                    continuing: continuing
+                )
             } catch {
-                // Unreachable server (e.g. offline playback): keep the play and retry later.
-                await ScrobbleOutbox.shared.enqueue(ratingKey: capturedRatingKey, server: capturedServer)
+                // Server unreachable (e.g. offline playback): keep the finished play and
+                // replay it later as an offline timeline, as the spec describes for sync clients.
+                if state == "stopped" {
+                    await TimelineOutbox.shared.enqueue(
+                        ratingKey: ratingKey, key: key, timeMs: timeMs, durationMs: durationMs, server: server
+                    )
+                }
+                return
             }
-            await client.refreshItem(server: capturedServer, ratingKey: capturedRatingKey)
+            guard state == "stopped" else { return }
+            await client.refreshItem(server: server, ratingKey: ratingKey)
             NotificationCenter.default.post(name: .recentlyPlayedDidChange, object: nil)
         }
     }

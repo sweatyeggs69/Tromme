@@ -124,7 +124,6 @@ extension AudioPlayerService {
             currentTime = playerTime
         }
         let hasNext = currentIndex < queue.count - 1 || repeatMode != .off || isInfiniteModeActive
-        maybeReportScrobble(force: true)
         logPlayback("track_end", "has_next=\(hasNext)")
         reportTimelineState("stopped", continuing: hasNext)
         advanceAfterTrackEnd()
@@ -141,7 +140,6 @@ extension AudioPlayerService {
             return
         }
 
-        maybeReportScrobble(force: true)
         reportTimelineState("stopped", continuing: true)
         tearDownObservers()
 
@@ -154,7 +152,6 @@ extension AudioPlayerService {
         currentTrack = track
         recoveryTrackRatingKey = track.ratingKey
         recoveryAttemptsForTrack = 0
-        scrobbledTrackRatingKey = nil
         playbackGeneration += 1
         pendingInitialSeekTime = nil
         streamTimeOffset = 0

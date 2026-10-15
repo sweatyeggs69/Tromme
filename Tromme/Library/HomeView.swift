@@ -110,7 +110,7 @@ struct HomeView: View {
                 guard !Task.isCancelled,
                       let server = serverConnection.currentServer,
                       let sectionId = serverConnection.currentLibrarySectionId else { continue }
-                // The player already wrote the scrobble into the store; just re-read it.
+                // The player already refreshed the played item in the store; just re-read it.
                 guard let fresh = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId) else { continue }
                 withAnimation(.easeIn(duration: 0.25)) {
                     recentTracks = Array(fresh.prefix(10))
