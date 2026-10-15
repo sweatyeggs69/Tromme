@@ -16,7 +16,6 @@ struct ArtistDetailView: View {
     @State private var showsAllTracks = false
     @State private var heroIsHidden = false
     @State private var showsBioSheet = false
-    @State private var contentReady = false
     @State private var viewHeight: CGFloat = 800
     /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
     @State private var scrollOffset: CGFloat = 0
