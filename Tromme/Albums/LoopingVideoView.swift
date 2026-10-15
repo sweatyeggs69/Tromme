@@ -83,16 +83,16 @@ struct LoopingVideoView: UIViewRepresentable {
         /// items asynchronously, so they don't exist yet when the video is configured.
         private func captureFrame() {
             guard frameTask == nil, onFrame != nil, let item = player?.currentItem else { return }
-            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: CVPixelBufferAttributes(rawAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-            ])
+            ]))
             item.add(output)
             frameTask = Task { [weak self] in
                 defer { item.remove(output) }
                 for _ in 0..<40 {
                     let time = output.itemTime(forHostTime: CACurrentMediaTime())
-                    if let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil),
-                       let image = Self.smallImage(from: buffer) {
+                    if let buffer = output.pixelBufferAndDisplayTime(forItemTime: time).pixelBuffer,
+                       let image = buffer.withUnsafeBuffer({ Self.smallImage(from: $0) }) {
                         guard !Task.isCancelled else { return }
                         self?.onFrame?(image)
                         return
