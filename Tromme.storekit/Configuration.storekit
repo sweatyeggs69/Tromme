@@ -53,44 +53,23 @@
           "codeOffers": [],
           "displayPrice": "1.99",
           "familyShareable": false,
-          "groupNumber": 2,
+          "groupNumber": 1,
           "internalID": "7C2D9A12",
           "introductoryOffer": null,
           "localizations": [
             {
               "description": "Animated artwork and premium app icons",
-              "displayName": "Tromme Plus Monthly",
+              "displayName": "Tromme Plus",
               "locale": "en_US"
             }
           ],
-          "productID": "app.tromme.plus.monthly",
+          "productID": "TPLUS",
           "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "Tromme Plus Monthly",
+          "referenceName": "Tromme Plus",
           "subscriptionGroupID": "7C2D9A11",
           "type": "RecurringSubscription",
-          "winbackOffers": []
-        },
-        {
-          "adHocOffers": [],
-          "codeOffers": [],
-          "displayPrice": "14.99",
-          "familyShareable": false,
-          "groupNumber": 1,
-          "internalID": "7C2D9A13",
-          "introductoryOffer": null,
-          "localizations": [
-            {
-              "description": "Animated artwork and premium app icons",
-              "displayName": "Tromme Plus Yearly",
-              "locale": "en_US"
-            }
-          ],
-          "productID": "app.tromme.plus.yearly",
-          "recurringSubscriptionPeriod": "P1Y",
-          "referenceName": "Tromme Plus Yearly",
-          "subscriptionGroupID": "7C2D9A11",
-          "type": "RecurringSubscription",
-          "winbackOffers": []
+          "winbackOffers": [],
+          "displayName": "Tromme Plus"
         }
       ]
     }
