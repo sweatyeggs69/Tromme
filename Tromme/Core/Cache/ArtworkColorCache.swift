@@ -35,7 +35,7 @@ final class ArtworkColorCache {
 
     /// Artist photos are keyed separately because they use a different color pick.
     private static func key(_ thumbPath: String, _ style: ArtworkBackdrop.Style) -> String {
-        style == .artist ? "artist:" + thumbPath : thumbPath
+        style == .artist ? "artist:" + thumbPath : "vivid:" + thumbPath
     }
 
     func resolveColor(
@@ -50,7 +50,7 @@ final class ArtworkColorCache {
         // fetching a separate low-res thumbnail.
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 512, height: 512) else { return }
         guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 512) else { return }
-        let dominant = style == .artist ? image.vividPhotoColor : image.dominantColor
+        let dominant = image.vividPhotoColor(visibleFraction: style == .artist ? 0.6 : 1.0)
         store(Color(dominant), forKey: Self.key(thumbPath, style))
         scheduleSave()
     }
@@ -117,11 +117,11 @@ private actor ArtworkColorPersistence {
 }
 
 private extension UIImage {
-    /// Color for an artist photo backdrop: the most colorful large area of the visible hero
-    /// (top 60%), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
+    /// Backdrop color: the most colorful large area of the visible part of the image (the top
+    /// `visibleFraction`; artist photos fade out at the bottom), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
     /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
     /// (black and white, or white walls and black clothing only) fall back to `dominantColor`.
-    var vividPhotoColor: UIColor {
+    func vividPhotoColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
 
         let size = 64
@@ -139,7 +139,7 @@ private extension UIImage {
 
         let levels = 16
         let minChroma = 8.0
-        let rows = Int(Double(size) * 0.6)
+        let rows = Int(Double(size) * visibleFraction)
         var count = [Double](repeating: 0, count: levels * levels * levels)
         var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
         @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
@@ -280,13 +280,14 @@ enum ArtworkBackdrop {
         let ui: UIColor
         switch colorScheme {
         case .light:
-            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma, hue: lab.hue)
+            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
         default:
-            if style == .artist && lab.chroma >= 8 {
-                // Colorful artist photo: mid-dark tint at about 0.8x chroma.
-                ui = Lab.rgb(lightness: min(max(lab.l, 26), 40), chroma: lab.chroma * 0.8, hue: lab.hue)
+            let colorful = lab.chroma >= 8
+            let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
+            if style == .artist && colorful {
+                ui = Lab.rgb(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
             } else {
-                ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: lab.chroma, hue: lab.hue)
+                ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: chroma, hue: lab.hue)
             }
         }
         return Color(ui)
