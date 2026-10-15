@@ -16,19 +16,6 @@ struct MarqueeText: View {
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
 
     var body: some View {
-        #if targetEnvironment(macCatalyst)
-        // Plain truncating text on the Mac; the scrolling version is untested there.
-        Text(text)
-            .font(font)
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        #else
-        marquee
-        #endif
-    }
-
-    private var marquee: some View {
         // Hidden text gives the row its height and the container its width.
         Text(text)
             .font(font)
