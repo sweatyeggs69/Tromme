@@ -23,10 +23,18 @@ struct SettingsView: View {
             }
 
             Section {
-                if plus.isPlus {
+                if plus.isGrandfathered {
+                    Button("Support Tromme with a Subscription") { showPaywall = true }
+                } else if plus.isPlus {
                     Button("Manage Tromme Plus") { showManageSubscription = true }
                 } else {
                     Button("Get Tromme Plus") { showPaywall = true }
+                }
+            } footer: {
+                if plus.isGrandfathered {
+                    Text("You have Tromme Plus for free as a Premium Icon Pack owner. A subscription is optional.")
+                } else if !plus.isPlus {
+                    Text("Unlock animated artwork and the Premium Icon Pack.")
                 }
             }
 
