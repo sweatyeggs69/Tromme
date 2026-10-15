@@ -248,7 +248,15 @@ extension PlexAPIClient {
             queryItems: [URLQueryItem(name: "count", value: "\(limit)")]
         )
         let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
-        let hub = response.mediaContainer.hub?.first { $0.hubIdentifier?.hasSuffix("recent.played") == true }
+        let hubs = response.mediaContainer.hub ?? []
+        #if DEBUG
+        print("[Hubs] section \(sectionId):", hubs.map { "\($0.hubIdentifier ?? "?") / \($0.title ?? "?") / \($0.type ?? "?") (\($0.metadata?.count ?? 0))" })
+        #endif
+        // Plex names it "music.recent.played" with the title "Recently Played"; match either.
+        let hub = hubs.first {
+            let id = $0.hubIdentifier?.lowercased() ?? ""
+            return id.contains("recent") && (id.contains("played") || id.contains("viewed"))
+        } ?? hubs.first { $0.title?.caseInsensitiveCompare("Recently Played") == .orderedSame }
         return hub.map { $0.metadata ?? [] }
     }
 
