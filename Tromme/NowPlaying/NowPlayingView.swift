@@ -248,7 +248,10 @@ struct NowPlayingView: View {
                             ArtworkView(
                                 thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
                                 size: targetRect.width,
-                                cornerRadius: isCompact ? 4 : 6
+                                cornerRadius: isCompact ? 4 : 6,
+                                // Keep requesting the full-size image in the compact slot too, so
+                                // shrinking never swaps to a different size that may not be loaded yet.
+                                minimumTranscodePx: ArtworkView.maxTranscodePx
                             )
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
