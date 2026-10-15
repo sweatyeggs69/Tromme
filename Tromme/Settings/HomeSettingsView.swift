@@ -40,7 +40,7 @@ struct HomeSettingsView: View {
                 Text("Albums")
             } footer: {
                 if plus.isPlus {
-                    Text("Track popularity data is sourced from Last.fm. Animated artwork plays on album pages and in Now Playing when an album has it, and requires an internet connection.")
+                    Text("Track popularity data is sourced from Last.fm. Animated artwork requires an internet connection.")
                 } else {
                     Text("Track popularity data is sourced from Last.fm. Animated artwork is part of Tromme Plus.")
                 }
