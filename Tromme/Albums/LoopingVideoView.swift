@@ -82,6 +82,11 @@ struct LoopingVideoView: UIViewRepresentable {
         /// output is attached to the item that's playing now: the looper creates its
         /// items asynchronously, so they don't exist yet when the video is configured.
         private func captureFrame() {
+            // AVPlayerItemVideoOutput on the looper's items crashes Mac Catalyst when Now
+            // Playing opens, so the backdrop stays on the static artwork there.
+            #if targetEnvironment(macCatalyst)
+            return
+            #else
             guard frameTask == nil, onFrame != nil, let item = player?.currentItem else { return }
             let output = AVPlayerItemVideoOutput(pixelBufferAttributes: CVPixelBufferAttributes(rawAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -104,6 +109,7 @@ struct LoopingVideoView: UIViewRepresentable {
                 print("[AnimatedArtwork] no video frame for the backdrop")
                 #endif
             }
+            #endif
         }
 
         /// Downscaled, since it's only used blurred.
