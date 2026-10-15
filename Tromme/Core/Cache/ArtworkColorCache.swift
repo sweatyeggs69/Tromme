@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v8.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v9.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v8.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v9.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -149,6 +149,9 @@ private extension UIImage {
     /// artist photos fade out at the bottom). Favors a strong accent: when vivid pixels of
     /// one hue family cover at least `minimumAccentShare` of the image (the red grenade on
     /// American Idiot, the gold logo on Dookie), returns their chroma-weighted average.
+    /// Otherwise, when muted but tinted pixels of one hue family cover at least
+    /// `minimumTintShare` (the dark green wall behind Weezer's white jumpsuits), returns
+    /// their average, so a colored background isn't washed out to gray by bright subjects.
     /// Otherwise returns the plain average color. The backdrop re-lights it later.
     func accentColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
@@ -169,6 +172,8 @@ private extension UIImage {
         let hueBins = 24
         let minimumAccentChroma = 25.0
         let minimumAccentShare = 0.04
+        let minimumTintChroma = 4.0
+        let minimumTintShare = 0.2
 
         let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
@@ -177,6 +182,10 @@ private extension UIImage {
         var binR = [Double](repeating: 0, count: hueBins)
         var binG = [Double](repeating: 0, count: hueBins)
         var binB = [Double](repeating: 0, count: hueBins)
+        var tintCount = [Double](repeating: 0, count: hueBins)
+        var tintR = [Double](repeating: 0, count: hueBins)
+        var tintG = [Double](repeating: 0, count: hueBins)
+        var tintB = [Double](repeating: 0, count: hueBins)
 
         for i in 0..<pixelCount {
             let r = Double(pixelData[i * 4]) / 255
@@ -184,11 +193,18 @@ private extension UIImage {
             let b = Double(pixelData[i * 4 + 2]) / 255
             sumR += r; sumG += g; sumB += b
 
-            // Vivid pixels only: skip grays, near-black and near-white.
             let lab = Lab(r: r, g: g, b: b)
             let chroma = lab.chroma
-            guard chroma >= minimumAccentChroma, (15...95).contains(lab.l) else { continue }
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
+
+            // Tinted pixels: any visible hue, skipping grays, near-black and highlights.
+            if chroma >= minimumTintChroma, (8...85).contains(lab.l) {
+                tintCount[bin] += 1
+                tintR[bin] += r; tintG[bin] += g; tintB[bin] += b
+            }
+
+            // Vivid pixels only: skip grays, near-black and near-white.
+            guard chroma >= minimumAccentChroma, (15...95).contains(lab.l) else { continue }
             binWeight[bin] += chroma
             binCount[bin] += 1
             binR[bin] += r * chroma; binG[bin] += g * chroma; binB[bin] += b * chroma
@@ -205,14 +221,28 @@ private extension UIImage {
             for bin in bins { sum += values[bin] }
             return sum
         }
-        var best = 0
-        for bin in 1..<hueBins where total(binWeight, over: family(bin)) > total(binWeight, over: family(best)) {
-            best = bin
+        func bestFamily(by values: [Double]) -> [Int] {
+            var best = 0
+            for bin in 1..<hueBins where total(values, over: family(bin)) > total(values, over: family(best)) {
+                best = bin
+            }
+            return family(best)
         }
-        let bins = family(best)
+
+        let bins = bestFamily(by: binWeight)
         let weight = total(binWeight, over: bins)
         let share = total(binCount.map(Double.init), over: bins) / n
-        guard weight > 0, share >= minimumAccentShare else { return average }
+        guard weight > 0, share >= minimumAccentShare else {
+            let tintBins = bestFamily(by: tintCount)
+            let tintTotal = total(tintCount, over: tintBins)
+            guard tintTotal / n >= minimumTintShare else { return average }
+            return UIColor(
+                red: total(tintR, over: tintBins) / tintTotal,
+                green: total(tintG, over: tintBins) / tintTotal,
+                blue: total(tintB, over: tintBins) / tintTotal,
+                alpha: 1
+            )
+        }
         return UIColor(
             red: total(binR, over: bins) / weight,
             green: total(binG, over: bins) / weight,
