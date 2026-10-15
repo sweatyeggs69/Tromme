@@ -194,43 +194,39 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
-                albumCardsRow(recentAlbums)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(recentAlbums) { album in
+                            NavigationLink(value: album) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ArtworkView(
+                                        thumbPath: album.thumb,
+                                        size: AppStyle.Artwork.card,
+                                        cornerRadius: AppStyle.Radius.card
+                                    )
+
+                                    Text(album.title)
+                                        .appItemTitleStyle()
+
+                                    Text(album.parentTitle ?? "")
+                                        .appItemSubtitleStyle()
+                                }
+                                .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                albumContextMenu(for: album)
+                            }
+                        }
+                    }
+                    .scrollTargetLayout()
+                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                }
+                .scrollTargetBehavior(.viewAligned)
             }
         }
     }
     
-    private func albumCardsRow(_ albums: [PlexMetadata]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 12) {
-                ForEach(albums) { album in
-                    NavigationLink(value: album) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ArtworkView(
-                                thumbPath: album.thumb,
-                                size: AppStyle.Artwork.card,
-                                cornerRadius: AppStyle.Radius.card
-                            )
-
-                            Text(album.title)
-                                .appItemTitleStyle()
-
-                            Text(album.parentTitle ?? "")
-                                .appItemSubtitleStyle()
-                        }
-                        .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        albumContextMenu(for: album)
-                    }
-                }
-            }
-            .scrollTargetLayout()
-            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-        }
-        .scrollTargetBehavior(.viewAligned)
-    }
-
     private var recentlyPlayedSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
             Text("Recently Played")
@@ -247,11 +243,7 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
-                if recentTracks.allSatisfy({ $0.type == "track" }) {
-                    tracksHorizontalRow(tracks: recentTracks)
-                } else {
-                    albumCardsRow(recentTracks)
-                }
+                tracksHorizontalRow(tracks: recentTracks)
             }
         }
     }

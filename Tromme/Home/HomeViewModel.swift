@@ -80,7 +80,7 @@ final class HomeViewModel {
               let server = context.server,
               let sectionId = context.sectionId else { return }
         // The player already refreshed the played item in the store; just re-read it.
-        guard let fresh = try? await context.client.recentlyPlayedForHome(server: server, sectionId: sectionId) else { return }
+        guard let fresh = try? await context.client.cachedRecentlyPlayed(server: server, sectionId: sectionId) else { return }
         withAnimation(.easeIn(duration: 0.25)) {
             recentTracks = Array(fresh.prefix(10))
         }
@@ -165,7 +165,7 @@ final class HomeViewModel {
             }
             group.addTask {
                 let value = await Self.fetchWithRetryOnFailure {
-                    try await client.recentlyPlayedForHome(server: server, sectionId: sectionId)
+                    try await client.cachedRecentlyPlayed(server: server, sectionId: sectionId)
                 }
                 return .recentlyPlayed(value)
             }

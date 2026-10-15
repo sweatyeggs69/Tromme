@@ -236,22 +236,6 @@ extension PlexAPIClient {
     }
 
 
-    // MARK: - Section Hubs
-
-    /// The server's own "Recently Played" hub for a music section, the same list Plex shows.
-    /// Endpoint: GET /hubs/sections/{sectionId}. Nil when the section has no such hub.
-    func getRecentlyPlayedHub(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata]? {
-        let data = try await rawServerRequest(
-            server: server,
-            path: "/hubs/sections/\(sectionId)",
-            method: "GET",
-            queryItems: [URLQueryItem(name: "count", value: "\(limit)")]
-        )
-        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
-        let hub = response.mediaContainer.hub?.first { $0.hubIdentifier?.hasSuffix("recent.played") == true }
-        return hub.map { $0.metadata ?? [] }
-    }
-
     // MARK: - Related Hubs
 
     /// Returns the "You May Also Like" and other related hubs for a given metadata item.
