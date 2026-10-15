@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v11.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v12.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v11.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v12.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -150,9 +150,11 @@ private extension UIImage {
     /// one hue family cover at least `minimumAccentShare` of the image (the red grenade on
     /// American Idiot, the gold logo on Dookie), returns their chroma-weighted average.
     /// Otherwise, when muted but tinted pixels of one hue family cover at least
-    /// `minimumTintShare` (the dark green wall behind Weezer's white jumpsuits), returns
-    /// their average, so a colored background isn't washed out to gray by bright subjects,
-    /// and dark tinted clothing on a white backdrop gives a deep color (The 1975).
+    /// `minimumTintShare` of the non-white pixels (the dark green wall behind Weezer's white
+    /// jumpsuits, The 1975's dark suits), returns their average, so a colored area isn't
+    /// washed out to gray by bright subjects or a white studio backdrop. Otherwise, when dark
+    /// pixels cover at least `minimumDarkShare` of the non-white pixels, returns their
+    /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music).
     /// Otherwise returns the plain average color. The backdrop re-lights it later.
     func accentColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
@@ -175,6 +177,8 @@ private extension UIImage {
         let minimumAccentShare = 0.04
         let minimumTintChroma = 4.0
         let minimumTintShare = 0.15
+        let darkLightness = 25.0
+        let minimumDarkShare = 0.25
 
         let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
@@ -184,6 +188,8 @@ private extension UIImage {
         var binG = [Double](repeating: 0, count: hueBins)
         var binB = [Double](repeating: 0, count: hueBins)
         var tintCount = [Double](repeating: 0, count: hueBins)
+        var nonWhiteCount = 0.0
+        var darkCount = 0.0, darkR = 0.0, darkG = 0.0, darkB = 0.0
         var tintR = [Double](repeating: 0, count: hueBins)
         var tintG = [Double](repeating: 0, count: hueBins)
         var tintB = [Double](repeating: 0, count: hueBins)
@@ -197,6 +203,13 @@ private extension UIImage {
             let lab = Lab(r: r, g: g, b: b)
             let chroma = lab.chroma
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
+
+            // A white studio backdrop or blown highlights shouldn't dilute the colors below.
+            if lab.l <= 85 { nonWhiteCount += 1 }
+            if lab.l < darkLightness {
+                darkCount += 1
+                darkR += r; darkG += g; darkB += b
+            }
 
             // Tinted pixels: any visible hue, dark ones included (black suits read as a deep
             // navy, as on Apple Music), skipping grays, pure black and highlights. Skin tones
@@ -241,7 +254,11 @@ private extension UIImage {
         guard weight > 0, share >= minimumAccentShare else {
             let tintBins = bestFamily(by: tintCount)
             let tintTotal = total(tintCount, over: tintBins)
-            guard tintTotal / n >= minimumTintShare else { return average }
+            let nonWhite = max(nonWhiteCount, 1)
+            guard tintTotal / nonWhite >= minimumTintShare else {
+                guard darkCount / nonWhite >= minimumDarkShare else { return average }
+                return UIColor(red: darkR / darkCount, green: darkG / darkCount, blue: darkB / darkCount, alpha: 1)
+            }
             return UIColor(
                 red: total(tintR, over: tintBins) / tintTotal,
                 green: total(tintG, over: tintBins) / tintTotal,
