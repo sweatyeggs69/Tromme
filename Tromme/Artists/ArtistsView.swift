@@ -174,20 +174,13 @@ struct ArtistsView: View {
     }
 
     private func loadArtistsOffline() async {
-        // Prefer full disk-cached library (correct artist photos, complete list).
+        // Offline shows only artists with downloaded songs, using cached library entries for their photos.
+        var cachedByKey: [String: PlexMetadata] = [:]
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
             let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
             let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope)
-            if !cached.isEmpty {
-                var sorted = cached
-                sorted.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
-                withAnimation(.easeIn(duration: 0.25)) {
-                    artists = sorted
-                    isLoading = false
-                }
-                return
-            }
+            cachedByKey = Dictionary(cached.map { ($0.ratingKey, $0) }, uniquingKeysWith: { first, _ in first })
         }
         // Fall back to artists inferred from downloaded tracks.
         var seen = Set<String>()
@@ -195,6 +188,10 @@ struct ArtistsView: View {
         for record in downloadManager.downloadedTracksSorted {
             let key = record.artistRatingKey ?? record.artistName
             guard seen.insert(key).inserted else { continue }
+            if let ratingKey = record.artistRatingKey, let cached = cachedByKey[ratingKey] {
+                result.append(cached)
+                continue
+            }
             result.append(PlexMetadata(
                 ratingKey: record.artistRatingKey ?? "offline:\(record.artistName)",
                 title: record.artistName,

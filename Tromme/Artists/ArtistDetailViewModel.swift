@@ -45,9 +45,7 @@ final class ArtistDetailViewModel {
         guard !isPreviewMode else { return }
 
         if !context.isConnected {
-            // Prefer disk-cached data so non-downloaded albums and all tracks appear.
-            let didLoadFromCache = await loadFromDiskCache(context)
-            if !didLoadFromCache { loadOfflineContent(context) }
+            loadOfflineContent(context)
             return
         }
 
@@ -97,33 +95,6 @@ final class ArtistDetailViewModel {
 
     /// Reads artist data from disk cache without any network calls.
     /// Returns true if enough data was found to populate the view.
-    private func loadFromDiskCache(_ context: Context) async -> Bool {
-        guard let server = context.server,
-              let sectionId = context.sectionId else { return false }
-        let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
-        let artistKey = artist.ratingKey
-
-        async let storedMetadata = LibraryStore.shared.anyMetadata(ratingKey: artistKey, serverId: server.machineIdentifier)
-        async let storedAlbums = LibraryStore.shared.children(of: artistKey, scope: scope)
-        async let storedTracks = LibraryStore.shared.tracks(byArtist: artistKey, scope: scope)
-
-        let (metadata, albums, tracks) = await (storedMetadata, storedAlbums, storedTracks)
-
-        guard !tracks.isEmpty else { return false }
-
-        withAnimation(.easeIn(duration: 0.25)) {
-            resolvedArtist = metadata
-            artistTracks = tracks
-            allTracks = tracks
-            artistAlbums = albums
-            topTracks = Self.topTracks(from: tracks)
-            appearsOnAlbums = []
-            similarArtists = []
-            contentReady = true
-        }
-        return true
-    }
-
     private func loadOfflineContent(_ context: Context) {
         let artistKey = artist.ratingKey
         let artistTitle = artist.title

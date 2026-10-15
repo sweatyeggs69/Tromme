@@ -140,14 +140,16 @@ struct ContentView: View {
 
     private var mainTabView: some View {
         let tabs = TabView(selection: $selectedTab) {
-            Tab(value: "home") {
-                NavigationStack {
-                    HomeView(onSignOut: signOut)
-                        .navigationDestinations()
-                        .settingsToolbar(alwaysVisible: true)
+            if network.isConnected {
+                Tab(value: "home") {
+                    NavigationStack {
+                        HomeView(onSignOut: signOut)
+                            .navigationDestinations()
+                            .settingsToolbar(alwaysVisible: true)
+                    }
+                } label: {
+                    tabLabel("Home", systemImage: "house.fill")
                 }
-            } label: {
-                tabLabel("Home", systemImage: "house.fill")
             }
 
             Tab(value: "artists") {
@@ -180,18 +182,21 @@ struct ContentView: View {
                 tabLabel("Songs", systemImage: "music.note")
             }
 
-            if UIDevice.current.userInterfaceIdiom == .pad {
-                Tab("Search", systemImage: "magnifyingglass", value: "search") {
-                    NavigationStack {
-                        SearchView()
-                            .navigationDestinations()
+            // Offline: only Artists, Albums and Songs (downloads) remain.
+            if network.isConnected {
+                if UIDevice.current.userInterfaceIdiom == .pad {
+                    Tab("Search", systemImage: "magnifyingglass", value: "search") {
+                        NavigationStack {
+                            SearchView()
+                                .navigationDestinations()
+                        }
                     }
-                }
-            } else {
-                Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
-                    NavigationStack {
-                        SearchView()
-                            .navigationDestinations()
+                } else {
+                    Tab("Search", systemImage: "magnifyingglass", value: "search", role: .search) {
+                        NavigationStack {
+                            SearchView()
+                                .navigationDestinations()
+                        }
                     }
                 }
             }
@@ -215,8 +220,8 @@ struct ContentView: View {
             }
 
         return base
-            .onChange(of: network.isConnected) { _, isConnected in
-                if !isConnected && selectedTab == "home" {
+            .onChange(of: network.isConnected, initial: true) { _, isConnected in
+                if !isConnected && (selectedTab == "home" || selectedTab == "search") {
                     selectedTab = "artists"
                 }
             }

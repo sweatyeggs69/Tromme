@@ -382,19 +382,13 @@ struct AllAlbumsView: View {
     }
 
     private func loadAlbumsOffline() async {
-        // Prefer full disk-cached library (complete list, correct artwork).
+        // Offline shows only albums with downloaded songs, using cached library entries for their artwork.
+        var cachedByKey: [String: PlexMetadata] = [:]
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
             let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
             let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.album, scope: scope)
-            if !cached.isEmpty {
-                var sorted = cached
-                sorted.sort { ($0.titleSort ?? $0.title).localizedStandardCompare($1.titleSort ?? $1.title) == .orderedAscending }
-                albums = sorted
-                await applyDisplayState()
-                withAnimation(.easeIn(duration: 0.25)) { isLoading = false }
-                return
-            }
+            cachedByKey = Dictionary(cached.map { ($0.ratingKey, $0) }, uniquingKeysWith: { first, _ in first })
         }
         // Fall back to albums inferred from downloaded tracks.
         var seen = Set<String>()
@@ -402,6 +396,10 @@ struct AllAlbumsView: View {
         for record in downloadManager.downloadedTracksSorted {
             let key = record.albumRatingKey ?? record.albumName
             guard seen.insert(key).inserted else { continue }
+            if let ratingKey = record.albumRatingKey, let cached = cachedByKey[ratingKey] {
+                result.append(cached)
+                continue
+            }
             result.append(PlexMetadata(
                 ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
                 title: record.albumName,

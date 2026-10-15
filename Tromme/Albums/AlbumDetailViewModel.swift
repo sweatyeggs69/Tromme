@@ -104,18 +104,6 @@ final class AlbumDetailViewModel {
 
     private func loadTracks(_ context: Context) async {
         guard context.isConnected else {
-            // Prefer disk-cached track list so non-downloaded albums still show tracks.
-            if let server = context.server {
-                let cached = await LibraryStore.shared.children(
-                    of: album.ratingKey,
-                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: context.sectionId ?? "")
-                )
-                if !cached.isEmpty {
-                    tracks = cached
-                    isLoadingTracks = false
-                    return
-                }
-            }
             let albumKey = album.ratingKey
             let albumTitle = album.title
             let downloaded = context.downloadManager.downloadedTracksSorted.filter { record in
@@ -150,17 +138,6 @@ final class AlbumDetailViewModel {
         guard let artist = artistNavigationTarget else { return }
 
         guard context.isConnected else {
-            // Prefer disk-cached artist releases so all albums show, not just downloaded ones.
-            if let server = context.server {
-                let cached = await LibraryStore.shared.children(
-                    of: artist.ratingKey,
-                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: context.sectionId ?? "")
-                )
-                if !cached.isEmpty {
-                    artistAlbums = cached
-                    return
-                }
-            }
             var seenAlbums = Set<String>()
             artistAlbums = context.downloadManager.downloadedTracksSorted
                 .filter { $0.artistRatingKey == artist.ratingKey || $0.artistName == artist.title }
