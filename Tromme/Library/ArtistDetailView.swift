@@ -727,7 +727,7 @@ private struct ArtistHeroHeaderView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(height: 204)
+                .frame(height: 160)
             }
         }
     }
@@ -823,7 +823,7 @@ private struct ArtistHeroPhotoView: View {
     /// Where the fade and blur begin, as a fraction of the hero height: they sit only behind
     /// the artist name and buttons so most of the hero shows the photo.
     private var fadeStart: CGFloat {
-        min(max((heroHeight - 230) / max(heroHeight, 1), 0), 1)
+        min(max((heroHeight - 160) / max(heroHeight, 1), 0), 1)
     }
 
     private func photo(width: CGFloat, blur: CGFloat) -> some View {
