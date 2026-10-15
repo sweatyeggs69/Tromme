@@ -47,7 +47,8 @@ struct MarqueeText: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
-            .task(id: "\(text)|\(textWidth)|\(containerWidth)") { await run() }
+            // Keyed on overflow, not container width, so resizing mid-scroll doesn't restart the loop.
+            .task(id: "\(text)|\(overflows)") { await run() }
     }
 
     private var label: some View {
