@@ -38,8 +38,8 @@ struct ArtistDetailView: View {
         resolvedArtist ?? artist
     }
 
-    /// The photo takes 60% of the screen height; the extra room holds the title and controls over the fade.
-    private var photoHeight: CGFloat { viewHeight * 0.6 }
+    /// The photo area takes about 46% of the screen height; the extra room holds the title and controls over the fade.
+    private var photoHeight: CGFloat { viewHeight * 0.46 }
     private var heroHeight: CGFloat { photoHeight + 110 }
     private let previewData: PreviewData?
 
@@ -721,20 +721,6 @@ private struct ArtistHeroHeaderView: View {
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity)
             .frame(height: heroHeight, alignment: .bottom)
-            .background(alignment: .bottom) {
-                // Scrim that travels with the title and controls, so they stay legible
-                // while the photo parallaxes behind them.
-                LinearGradient(
-                    stops: [
-                        .init(color: backdropColor.opacity(0), location: 0),
-                        .init(color: backdropColor.opacity(0.4), location: 0.5),
-                        .init(color: backdropColor.opacity(0.85), location: 1)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 160)
-            }
         }
     }
 
@@ -798,6 +784,11 @@ private struct ArtistHeroPhotoView: View {
 
     @State private var image: UIImage?
 
+    /// Height of the fade/blur band. It is anchored to the bottom edge of the hero row (where the
+    /// artist name and buttons sit), not to the photo, so it stays behind them while the photo
+    /// parallaxes.
+    private let bandHeight: CGFloat = 190
+
     var body: some View {
         GeometryReader { geo in
             let stretch = max(-scrollOffset, 0)
@@ -807,18 +798,51 @@ private struct ArtistHeroPhotoView: View {
             // Photo blurs out as the title nears the top safe area.
             let blurProgress = min(max((scrolled - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
             let scrollBlur = blurProgress * 30
+            // On-screen bottom edge of the hero row.
+            let rowBottom = max(heroHeight - scrollOffset, 0)
+            let width = geo.size.width
 
             if !isHidden {
-                photo(width: geo.size.width, blur: scrollBlur)
-                    // Zoom from the first point of overscroll, pinned to the top edge.
-                    .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
-                    .offset(y: -parallax)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-                    // Never paint below the hero row's current bottom edge.
-                    .mask(alignment: .top) {
-                        Rectangle()
-                            .frame(height: max(heroHeight - scrollOffset, 0))
+                ZStack(alignment: .top) {
+                    transformedPhoto(width: width, blur: scrollBlur, stretch: stretch, parallax: parallax)
+
+                    // Progressive blur behind the title and controls.
+                    transformedPhoto(width: width, blur: 30, stretch: stretch, parallax: parallax)
+                        .mask(alignment: .top) {
+                            band(rowBottom: rowBottom) {
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .clear, location: 0),
+                                        .init(color: .black.opacity(0.7), location: 0.35),
+                                        .init(color: .black, location: 0.6)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            }
+                        }
+
+                    // Melt into the backdrop color.
+                    band(rowBottom: rowBottom) {
+                        LinearGradient(
+                            stops: [
+                                .init(color: backdropColor.opacity(0), location: 0),
+                                .init(color: backdropColor.opacity(0.3), location: 0.3),
+                                .init(color: backdropColor.opacity(0.7), location: 0.6),
+                                .init(color: backdropColor.opacity(0.92), location: 0.85),
+                                .init(color: backdropColor, location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     }
+                }
+                .frame(width: width, height: geo.size.height, alignment: .top)
+                // Never paint below the hero row's current bottom edge.
+                .mask(alignment: .top) {
+                    Rectangle()
+                        .frame(height: rowBottom)
+                }
             }
         }
         .task(id: artist.thumb) {
@@ -826,16 +850,16 @@ private struct ArtistHeroPhotoView: View {
         }
     }
 
-    /// Where the fade and blur begin, as a fraction of the hero height: they sit only behind
-    /// the artist name and buttons so most of the hero shows the photo.
-    private var fadeStart: CGFloat {
-        min(max((heroHeight - 160) / max(heroHeight, 1), 0), 1)
+    /// Places `content` in a band of `bandHeight` that ends at the hero row's bottom edge.
+    private func band(rowBottom: CGFloat, @ViewBuilder content: () -> some View) -> some View {
+        content()
+            .frame(height: bandHeight)
+            .offset(y: rowBottom - bandHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    private func photo(width: CGFloat, blur: CGFloat) -> some View {
-        let start = fadeStart
-        let span = 1 - start
-        return Group {
+    private func transformedPhoto(width: CGFloat, blur: CGFloat, stretch: CGFloat, parallax: CGFloat) -> some View {
+        Group {
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -848,42 +872,10 @@ private struct ArtistHeroPhotoView: View {
         .frame(width: width, height: heroHeight, alignment: .top)
         .blur(radius: blur, opaque: true)
         .clipped()
-        .overlay {
-            // Blur the photo behind the title and controls, then melt it into the backdrop.
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: width, height: heroHeight, alignment: .top)
-                    .clipped()
-                    .blur(radius: 30, opaque: true)
-                    .clipped()
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: start),
-                                .init(color: .black.opacity(0.7), location: start + span * 0.35),
-                                .init(color: .black, location: start + span * 0.6)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-        }
-        .overlay {
-            LinearGradient(
-                stops: [
-                    .init(color: backdropColor.opacity(0), location: start),
-                    .init(color: backdropColor.opacity(0.3), location: start + span * 0.3),
-                    .init(color: backdropColor.opacity(0.7), location: start + span * 0.6),
-                    .init(color: backdropColor.opacity(0.92), location: start + span * 0.85),
-                    .init(color: backdropColor, location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        // Zoom from the first point of overscroll, pinned to the top edge.
+        .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
+        .offset(y: -parallax)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func loadImage() async {
