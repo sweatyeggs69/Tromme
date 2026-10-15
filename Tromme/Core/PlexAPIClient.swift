@@ -114,7 +114,7 @@ final class PlexAPIClient: Sendable {
     func getLibrarySections(server: PlexServer) async throws -> [LibrarySection] {
         let response: PlexResponse<PlexMetadata> = try await serverRequest(
             server: server,
-            path: "/library/sections"
+            path: "/library/sections/all"
         )
         return response.mediaContainer.directory ?? []
     }
