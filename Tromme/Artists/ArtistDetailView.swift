@@ -15,6 +15,9 @@ struct ArtistDetailView: View {
     @State private var showsAllSimilarArtists = false
     @State private var showsAllTracks = false
     @State private var heroIsHidden = false
+    /// Set once the backdrop color lookup has finished, found or not, so the loading
+    /// spinner never outlives a failed or offline fetch.
+    @State private var backdropLookupFinished = false
     @State private var showsBioSheet = false
     @State private var viewHeight: CGFloat = 800
     /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
@@ -24,12 +27,21 @@ struct ArtistDetailView: View {
     /// Page backdrop, derived from the artist photo through the Apple Music
     /// tint algorithm with the artist-page lightness cap.
     private var backdropColor: Color {
+        cachedBackdropColor ?? Color(.systemBackground)
+    }
+
+    private var cachedBackdropColor: Color? {
         let colors = ArtworkColorCache.shared
         // Keep the color of the photo we navigated in with while a refreshed thumb resolves,
         // so the page doesn't flash to the system background.
         return colors.color(for: displayArtist.thumb, colorScheme: colorScheme, style: .artist)
             ?? colors.color(for: artist.thumb, colorScheme: colorScheme, style: .artist)
-            ?? Color(.systemBackground)
+    }
+
+    /// True only while the backdrop color still has to be computed from the photo.
+    /// Artists with a saved color skip this and open instantly.
+    private var isAwaitingBackdrop: Bool {
+        previewData == nil && displayArtist.thumb != nil && cachedBackdropColor == nil && !backdropLookupFinished
     }
 
     // Read-only views of the view model's state, so the body reads as before.
@@ -411,9 +423,28 @@ struct ArtistDetailView: View {
         } action: { newHeight in
             if abs(newHeight - viewHeight) > 1 { viewHeight = newHeight }
         }
+        .overlay {
+            if isAwaitingBackdrop {
+                ZStack {
+                    Color(.systemBackground)
+                    ProgressView()
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: isAwaitingBackdrop)
         .task(id: displayArtist.thumb) {
-            guard previewData == nil, let server = serverConnection.currentServer else { return }
-            await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server, style: .artist)
+            if let server = serverConnection.currentServer, previewData == nil {
+                await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server, style: .artist)
+            }
+            // A newer thumb's lookup has taken over; let it decide when loading ends.
+            if !Task.isCancelled { backdropLookupFinished = true }
+        }
+        .task(id: artist.ratingKey) {
+            // Never hold the page behind the spinner on a slow network.
+            try? await Task.sleep(for: .seconds(3))
+            backdropLookupFinished = true
         }
         .task(id: artist.ratingKey) {
             await viewModel.load(loadContext)
