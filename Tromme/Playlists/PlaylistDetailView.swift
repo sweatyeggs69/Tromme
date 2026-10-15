@@ -4,7 +4,6 @@ struct PlaylistDetailView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.displayScale) private var displayScale
     @Environment(AudioPlayerService.self) private var player
     @Environment(DownloadManager.self) private var downloadManager
@@ -32,7 +31,7 @@ struct PlaylistDetailView: View {
     }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: artworkPath, colorScheme: colorScheme) ?? .gray
+        ArtworkColorCache.shared.color(for: artworkPath) ?? .gray
     }
 
     private var titleColor: Color {

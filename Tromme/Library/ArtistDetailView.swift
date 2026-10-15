@@ -31,7 +31,7 @@ struct ArtistDetailView: View {
     /// Page backdrop, derived from the artist photo through the same
     /// Apple Music tint algorithm the album page uses.
     private var backdropColor: Color {
-        ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme) ?? Color(.systemBackground)
+        ArtworkColorCache.shared.color(for: displayArtist.thumb) ?? Color(.systemBackground)
     }
 
     private var displayArtist: PlexMetadata {
