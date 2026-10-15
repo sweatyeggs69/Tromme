@@ -15,12 +15,13 @@ import CryptoKit
 /// Music artist pages).
 enum ArtworkBackdrop {
     enum Style {
-        /// Playlist pages and Now Playing: the original hue-bucket pick, used as is.
+        /// The original hue-bucket pick, used as is. No page uses it right now; kept while
+        /// the cover style is being tried on album and playlist pages.
         case original
         /// Artist pages: average of the visible photo, re-lit.
         case artist
-        /// Album pages: average of the whole cover, re-lit the same way as artist photos.
-        case album
+        /// Album and playlist pages: average of the whole cover, re-lit the same way as artist photos.
+        case cover
 
         var darkLightnessCap: Double { self == .original ? 18.5 : 42.3 }
     }

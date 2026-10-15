@@ -32,7 +32,7 @@ struct PlaylistDetailView: View {
     }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: artworkPath, colorScheme: colorScheme) ?? .gray
+        ArtworkColorCache.shared.color(for: artworkPath, colorScheme: colorScheme, style: .cover) ?? .gray
     }
 
     private var titleColor: Color {
@@ -334,7 +334,8 @@ struct PlaylistDetailView: View {
             await ArtworkColorCache.shared.resolveColor(
                 for: artworkPath,
                 using: client,
-                server: server
+                server: server,
+                style: .cover
             )
         }
         .task {

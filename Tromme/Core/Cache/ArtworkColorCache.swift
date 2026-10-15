@@ -38,7 +38,7 @@ final class ArtworkColorCache {
         switch style {
         case .original: "orig:" + thumbPath
         case .artist: "artist:" + thumbPath
-        case .album: "album:" + thumbPath
+        case .cover: "cover:" + thumbPath
         }
     }
 
@@ -94,7 +94,7 @@ final class ArtworkColorCache {
         switch style {
         case .original: image.originalDominantColor
         case .artist: image.averageColor(visibleFraction: 0.6)
-        case .album: image.averageColor(visibleFraction: 1)
+        case .cover: image.averageColor(visibleFraction: 1)
         }
     }
 

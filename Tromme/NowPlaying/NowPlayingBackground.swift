@@ -54,11 +54,6 @@ struct NowPlayingBackground: View {
         .animation(.easeInOut(duration: 0.6), value: backgroundImage)
         .task(id: thumbPath) {
             guard let server = serverConnection.currentServer else { return }
-            async let _: Void = ArtworkColorCache.shared.resolveColor(
-                for: thumbPath,
-                using: client,
-                server: server
-            )
             await loadBackgroundImage(server: server)
         }
     }
