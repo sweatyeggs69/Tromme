@@ -143,7 +143,6 @@ extension AudioPlayerService {
 
         maybeReportScrobble(force: true)
         reportTimelineState("stopped", continuing: true)
-        stopActiveTranscodeSession()
         tearDownObservers()
 
         preloadedNext = nil

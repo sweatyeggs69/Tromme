@@ -83,7 +83,6 @@ extension AudioPlayerService {
         duration = 0
         magicMixSeedArtistKey = nil
         isReadyToPlay = false
-        stopActiveTranscodeSession()
         currentSessionID = nil
         pendingInitialSeekTime = nil
         streamTimeOffset = 0

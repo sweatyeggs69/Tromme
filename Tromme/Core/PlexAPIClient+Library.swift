@@ -120,11 +120,19 @@ extension PlexAPIClient {
         return response.mediaContainer.metadata ?? []
     }
 
-    func getMetadataChildren(server: PlexServer, ratingKey: String) async throws -> [PlexMetadata] {
+    /// Tracks of an album. Endpoint: GET /library/metadata/{ids}/allLeaves.
+    func getAlbumTracks(server: PlexServer, ratingKey: String) async throws -> [PlexMetadata] {
         let response: PlexResponse<PlexMetadata> = try await serverRequest(
             server: server,
-            path: "/library/metadata/\(ratingKey)/children"
+            path: "/library/metadata/\(ratingKey)/allLeaves"
         )
+        return response.mediaContainer.metadata ?? []
+    }
+
+    /// Albums of an artist. Endpoint: GET /library/sections/{sectionId}/all?type=9&artist.id=.
+    func getArtistAlbums(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
+        let path = "/library/sections/\(sectionId)/all?type=9&artist.id=\(artistRatingKey)"
+        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
         return response.mediaContainer.metadata ?? []
     }
 

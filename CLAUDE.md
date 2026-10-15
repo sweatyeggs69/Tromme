@@ -52,11 +52,8 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - Build target: "Tromme" iOS
 
 ## Testing
-- Use Swift Testing framework -- NOT XCTest
-- Test functions use @Test attribute, not func textXYZ()
-- Use #expect() for assertions - not XCTAssertEqual
-- Test target: TrommeTests
-- Run with RunAllTests or RunSomeTests MCP tools
+- No automated test target; changes are verified manually on hardware
+- Do not add test targets or test files unless asked
 
 ## Documentation & APIs
 - Use DocumentationSearch for Apple API questions

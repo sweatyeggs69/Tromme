@@ -237,7 +237,7 @@ final class PlexAPIClient: Sendable {
         if path.hasPrefix("/library/sections/"), path.contains("/all") {
             return true
         }
-        if path.hasPrefix("/library/metadata/"), path.hasSuffix("/children") {
+        if path.hasPrefix("/library/metadata/"), path.hasSuffix("/allLeaves") {
             return true
         }
         if path.hasPrefix("/hubs/search") {

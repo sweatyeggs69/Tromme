@@ -13,20 +13,6 @@ extension AudioPlayerService {
         guard currentTrack != nil else { return }
         maybeReportScrobble()
         reportTimelineState("stopped", continuing: false)
-        stopActiveTranscodeSession()
-    }
-
-    /// Fire-and-forget call to PMS to release the active transcode session.
-    /// Without this, sessions accumulate on the server until its GC runs (~5 min),
-    /// and Plex hits its concurrent-session limit after ~15 quick track advances.
-    func stopActiveTranscodeSession() {
-        guard let sessionID = currentSessionID,
-              let server,
-              let client else { return }
-        logPlayback("transcode_stop", "session=\(sessionID)")
-        Task.detached { [client, server, sessionID] in
-            await client.universalTranscodeStop(server: server, sessionID: sessionID)
-        }
     }
 
     /// Keeps the server's session (and other clients' "now playing") fresh on long tracks.

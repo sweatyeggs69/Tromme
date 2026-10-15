@@ -59,7 +59,7 @@ extension PlexAPIClient {
     }
 
     func cachedArtistReleases(server: PlexServer, sectionId: String, artist: PlexMetadata) async throws -> [PlexMetadata] {
-        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey, sectionId: sectionId)
+        var releases = try await cachedChildren(server: server, ratingKey: artist.ratingKey, sectionId: sectionId, kind: .artistAlbums)
         let releaseKeys = Set(releases.map(\.ratingKey))
         let artistTracks = try await cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
         let missingReleaseKeys = Set(artistTracks.compactMap(\.parentRatingKey)).subtracting(releaseKeys)
@@ -196,11 +196,34 @@ extension PlexAPIClient {
 
     // MARK: - Children (albums for artist, tracks for album)
 
+    /// What `cachedChildren` returns for the item, which also picks the documented
+    /// server endpoint used if the local mirror can't answer.
+    enum ChildrenKind {
+        case albumTracks
+        case artistAlbums
+    }
+
+    private func fetchChildren(server: PlexServer, ratingKey: String, sectionId: String?, kind: ChildrenKind) async throws -> [PlexMetadata] {
+        switch kind {
+        case .albumTracks:
+            return try await getAlbumTracks(server: server, ratingKey: ratingKey)
+        case .artistAlbums:
+            guard let sectionId else { return [] }
+            return try await getArtistAlbums(server: server, sectionId: sectionId, artistRatingKey: ratingKey)
+        }
+    }
+
     /// Local lookup by parent key. If the library hasn't mirrored the item yet (first sync
     /// still running, or an item added since the last sync) it falls back to one network
     /// fetch so the screen is never empty. `updatedAt` is accepted for source compatibility;
     /// the store is kept current by the sync, so it no longer versions anything.
-    func cachedChildren(server: PlexServer, ratingKey: String, updatedAt: Int? = nil, sectionId: String? = nil) async throws -> [PlexMetadata] {
+    func cachedChildren(
+        server: PlexServer,
+        ratingKey: String,
+        updatedAt: Int? = nil,
+        sectionId: String? = nil,
+        kind: ChildrenKind = .albumTracks
+    ) async throws -> [PlexMetadata] {
         let serverId = server.machineIdentifier
         let resolvedSection: String?
         if let sectionId {
@@ -209,7 +232,7 @@ extension PlexAPIClient {
             resolvedSection = await LibraryStore.shared.sectionId(ofRatingKey: ratingKey, serverId: serverId)
         }
         guard let resolvedSection else {
-            return try await getMetadataChildren(server: server, ratingKey: ratingKey)
+            return try await fetchChildren(server: server, ratingKey: ratingKey, sectionId: nil, kind: kind)
         }
 
         let scope = scope(server, resolvedSection)
@@ -219,7 +242,7 @@ extension PlexAPIClient {
             items = await LibraryStore.shared.children(of: ratingKey, scope: scope)
         }
         if items.isEmpty {
-            return try await getMetadataChildren(server: server, ratingKey: ratingKey)
+            return try await fetchChildren(server: server, ratingKey: ratingKey, sectionId: resolvedSection, kind: kind)
         }
         return items
     }

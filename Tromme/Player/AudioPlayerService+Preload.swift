@@ -110,10 +110,7 @@ extension AudioPlayerService {
             return
         }
         let resolvedURL = await client.resolveUniversalVariantURL(masterURL: masterURL) ?? masterURL
-        guard !Task.isCancelled else {
-            Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
-            return
-        }
+        guard !Task.isCancelled else { return }
 
         enqueuePreloaded(
             track,
@@ -132,9 +129,6 @@ extension AudioPlayerService {
         guard let player, let currentItem = player.currentItem,
               nextAutoAdvanceTarget()?.track.ratingKey == track.ratingKey,
               player.canInsert(item, after: currentItem) else {
-            if case .hls(_, let sessionID, _) = source, let server, let client {
-                Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
-            }
             logPlayback("preload_dropped", "track=\(track.ratingKey)")
             return
         }
@@ -180,9 +174,6 @@ extension AudioPlayerService {
         if let preloaded = preloadedNext {
             if let player, player.currentItem !== preloaded.item {
                 player.remove(preloaded.item)
-            }
-            if let sessionID = preloaded.hlsSessionID, let server, let client {
-                Task.detached { await client.universalTranscodeStop(server: server, sessionID: sessionID) }
             }
         }
         preloadedNext = nil

@@ -800,7 +800,6 @@ final class AudioPlayerService: Sendable {
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
-        stopActiveTranscodeSession()
         currentSessionID = UUID().uuidString
         isConstrainedPlaybackPath = false
         isPlayingLocalFile = false
@@ -866,9 +865,7 @@ final class AudioPlayerService: Sendable {
         isDirectStreamAttempt = false
 
         // A preloaded session always starts at 0, so it can't serve a mid-track resume.
-        var preloadedSessionToStop: String?
         if boundedResume != nil {
-            preloadedSessionToStop = preloadedNext?.hlsSessionID
             discardPreloadedNext()
         }
 
@@ -930,12 +927,6 @@ final class AudioPlayerService: Sendable {
 
         playbackLoadTask?.cancel()
         playbackLoadTask = Task {
-            // Ensure the old preloaded transcode session is torn down before
-            // starting a new one to avoid hitting PMS concurrent session limits.
-            if let staleSession = preloadedSessionToStop {
-                await capturedClient.universalTranscodeStop(server: capturedServer, sessionID: staleSession)
-            }
-
             // Step 1: Authorize transcode session and fetch detailed metadata (for gain) in parallel.
             async let decisionResult: Void = capturedClient.universalDecision(
                 server: capturedServer,
