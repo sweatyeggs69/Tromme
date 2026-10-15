@@ -228,7 +228,6 @@ private extension UIImage {
     /// `visibleFraction`; artist photos fade out at the bottom), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
     /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
     /// (black and white, or white walls and black clothing only) fall back to `dominantColor`.
-    /// Warm hues are skipped when anything else is colorful (see `pick`).
     func vividPhotoColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
 
@@ -250,7 +249,7 @@ private extension UIImage {
         let rows = Int(Double(size) * visibleFraction)
         // Orange, yellow and olive turn brown once re-lit to a dark backdrop, so they only count
         // when nothing else is colorful; then the result is pushed toward a warm neutral.
-        func pick(excludeWarm: Bool) -> UIColor? {
+        func pick() -> UIColor? {
             var count = [Double](repeating: 0, count: levels * levels * levels)
             var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
             @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
@@ -260,7 +259,7 @@ private extension UIImage {
                 for x in 0..<size {
                     let o = (y * size + x) * 4
                     let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                    guard lab.chroma >= minChroma, !(excludeWarm && lab.isWarm) else { continue }
+                    guard lab.chroma >= minChroma else { continue }
                     chromaticPixels += 1
                     let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
                     count[i] += 1
@@ -296,7 +295,7 @@ private extension UIImage {
                     let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
                     guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
                     let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                    guard lab.chroma >= minChroma, !(excludeWarm && lab.isWarm) else { continue }
+                    guard lab.chroma >= minChroma else { continue }
                     sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
                 }
             }
@@ -304,13 +303,7 @@ private extension UIImage {
             return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
         }
 
-        if let color = pick(excludeWarm: true) { return color }
-        if let warm = pick(excludeWarm: false) {
-            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
-            warm.getRed(&r, green: &g, blue: &b, alpha: nil)
-            let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
-            return Lab.rgb(lightness: lab.l, chroma: min(lab.chroma, 6), hue: lab.hue)
-        }
+        if let color = pick() { return color }
         return dominantColor
     }
 

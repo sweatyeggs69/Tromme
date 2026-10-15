@@ -8,13 +8,6 @@ struct Lab {
     var chroma: Double { (a * a + b * b).squareRoot() }
     var hue: Double { atan2(b, a) }
 
-    /// Orange, yellow and olive hues (about 35 to 115 degrees in CIELAB).
-    var isWarm: Bool {
-        var degrees = hue * 180 / .pi
-        if degrees < 0 { degrees += 360 }
-        return degrees >= 35 && degrees <= 115
-    }
-
     private static let white = (x: 0.95047, y: 1.0, z: 1.08883)
 
     /// From gamma-encoded sRGB in 0...1.
