@@ -2,34 +2,25 @@ import SwiftUI
 import UIKit
 import CryptoKit
 
-/// Re-lights an artwork's dominant color into the Apple Music style backdrop tint.
+/// Re-lights an artwork's average color into the Apple Music style backdrop tint.
 ///
-/// Dark appearance: L* = source L* + 0.5 capped at 18.5, chroma and hue kept (near-black
-/// covers stay near black). Light appearance: L* is roughly the source L* minus 7 for mid
-/// covers and 100 for white covers; chroma and hue are kept (same as dark). Dark covers in light mode follow the dark-mode
-/// values (assumed, not yet measured).
-///
-/// The artist page uses the average color of the photo (see
-/// `averageColor`) and re-lights it to L* 26 to 40 at about 0.8x chroma; neutral photos
-/// fall back to the album recipe with a higher dark-mode cap (L* 42.3, measured from Apple
-/// Music artist pages).
+/// Dark appearance: colorful sources go to L* 26 to 40 at about 0.8x chroma; neutral ones
+/// to source L* + 0.5, capped at L* 42.3 (measured from Apple Music artist pages). Light
+/// appearance: L* is roughly the source L* minus 7 for mid tones and 100 for white;
+/// chroma and hue are kept.
 enum ArtworkBackdrop {
     enum Style {
-        /// The original hue-bucket pick, used as is. No page uses it right now; kept while
-        /// the cover style is being tried on album and playlist pages.
-        case original
-        /// Artist pages: average of the visible photo, re-lit.
+        /// Artist pages: average of the visible photo.
         case artist
-        /// Album and playlist pages: average of the whole cover, re-lit the same way as artist photos.
+        /// Album and playlist pages: average of the whole cover.
         case cover
-
-        var darkLightnessCap: Double { self == .original ? 18.5 : 42.3 }
     }
 
-    static func color(from source: UIColor, colorScheme: ColorScheme, style: Style = .original) -> Color {
+    private static let darkLightnessCap = 42.3
+
+    static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
-        if style == .original { return Color(source) }
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
         let ui: UIColor
         switch colorScheme {
@@ -38,10 +29,10 @@ enum ArtworkBackdrop {
         default:
             let colorful = lab.chroma >= 8
             let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
-            if style != .original && colorful {
+            if colorful {
                 ui = relit(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
             } else {
-                ui = relit(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: chroma, hue: lab.hue)
+                ui = relit(lightness: min(lab.l + 0.5, darkLightnessCap), chroma: chroma, hue: lab.hue)
             }
         }
         return Color(ui)
