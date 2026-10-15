@@ -51,7 +51,7 @@ struct AlbumDetailView: View {
     }
 
     private var artworkColor: Color {
-        ArtworkColorCache.shared.color(for: thumbPath, colorScheme: colorScheme) ?? .gray
+        ArtworkColorCache.shared.color(for: thumbPath, colorScheme: colorScheme, style: .album) ?? .gray
     }
 
     private var titleColor: Color {
@@ -773,7 +773,8 @@ struct AlbumDetailView: View {
             await ArtworkColorCache.shared.resolveColor(
                 for: thumbPath,
                 using: client,
-                server: server
+                server: server,
+                style: .album
             )
         }
         .task(id: album.ratingKey) {

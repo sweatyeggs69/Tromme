@@ -33,9 +33,13 @@ final class ArtworkColorCache {
         return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme, style: style)
     }
 
-    /// Artist photos are keyed separately because they use a different color pick.
+    /// Each style is keyed separately because each uses a different color pick.
     private static func key(_ thumbPath: String, _ style: ArtworkBackdrop.Style) -> String {
-        style == .artist ? "artist:" + thumbPath : "orig:" + thumbPath
+        switch style {
+        case .original: "orig:" + thumbPath
+        case .artist: "artist:" + thumbPath
+        case .album: "album:" + thumbPath
+        }
     }
 
     func resolveColor(
@@ -87,7 +91,11 @@ final class ArtworkColorCache {
 
     /// The color pick for each style. Pure pixel math, so it can run on any thread.
     private nonisolated static func pick(from image: UIImage, style: ArtworkBackdrop.Style) -> UIColor {
-        style == .artist ? image.averageColor(visibleFraction: 0.6) : image.originalDominantColor
+        switch style {
+        case .original: image.originalDominantColor
+        case .artist: image.averageColor(visibleFraction: 0.6)
+        case .album: image.averageColor(visibleFraction: 1)
+        }
     }
 
     /// Inserts a color and evicts the oldest entry once the cap is exceeded.

@@ -15,10 +15,14 @@ import CryptoKit
 /// Music artist pages).
 enum ArtworkBackdrop {
     enum Style {
-        /// Album and playlist pages: the original hue-bucket pick, used as is.
-        case original, artist
+        /// Playlist pages and Now Playing: the original hue-bucket pick, used as is.
+        case original
+        /// Artist pages: average of the visible photo, re-lit.
+        case artist
+        /// Album pages: average of the whole cover, re-lit the same way as artist photos.
+        case album
 
-        var darkLightnessCap: Double { self == .artist ? 42.3 : 18.5 }
+        var darkLightnessCap: Double { self == .original ? 18.5 : 42.3 }
     }
 
     static func color(from source: UIColor, colorScheme: ColorScheme, style: Style = .original) -> Color {
@@ -33,7 +37,7 @@ enum ArtworkBackdrop {
         default:
             let colorful = lab.chroma >= 8
             let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
-            if style == .artist && colorful {
+            if style != .original && colorful {
                 ui = relit(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
             } else {
                 ui = relit(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: chroma, hue: lab.hue)
