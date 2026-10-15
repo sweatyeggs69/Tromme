@@ -319,11 +319,11 @@ struct ArtistDetailView: View {
                     .padding(12)
                     .background(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(backdropColor.contrastForeground.opacity(0.1))
+                            .fill(Color.white.opacity(0.1))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(backdropColor.contrastForeground.opacity(0.12), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
                     )
                 }
                 .buttonStyle(.plain)
@@ -412,8 +412,9 @@ struct ArtistDetailView: View {
         } action: { _, newValue in
             scrollOffset = newValue
         }
-        .foregroundStyle(backdropColor.contrastForeground)
-        .environment(\.colorScheme, backdropColor.isLightColor() ? .light : .dark)
+        // Artist pages always use white text; the backdrop is kept dark enough for it.
+        .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
         // Measure the full container height including safe areas, so the hero doesn't resize

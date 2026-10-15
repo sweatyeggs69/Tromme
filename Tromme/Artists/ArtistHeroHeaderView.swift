@@ -15,7 +15,7 @@ struct ArtistHeroHeaderView: View {
             VStack(spacing: 20) {
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(backdropColor.contrastForeground)
+                    .foregroundStyle(Color.white)
                     .multilineTextAlignment(.center)
                 controls
             }
@@ -28,7 +28,7 @@ struct ArtistHeroHeaderView: View {
             VStack(spacing: 20) {
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(backdropColor.contrastForeground)
+                    .foregroundStyle(Color.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center)
@@ -49,9 +49,9 @@ struct ArtistHeroHeaderView: View {
             } label: {
                 Image(systemName: "info")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(backdropColor.contrastForeground)
+                    .foregroundStyle(Color.white)
                     .frame(width: 52, height: 52)
-                    .background(backdropColor.contrastCircleBackground, in: Circle())
+                    .background(Color.white.opacity(0.15), in: Circle())
             }
             .buttonStyle(.plain)
             .opacity(hasBio ? 1 : 0.4)
@@ -65,7 +65,7 @@ struct ArtistHeroHeaderView: View {
                     .font(.system(size: 32, weight: .semibold))
                     .foregroundStyle(backdropColor)
                     .frame(width: 62, height: 62)
-                    .background(backdropColor.contrastForeground, in: Circle())
+                    .background(Color.white, in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Play")
@@ -75,9 +75,9 @@ struct ArtistHeroHeaderView: View {
             } label: {
                 Image(systemName: "shuffle")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(backdropColor.contrastForeground)
+                    .foregroundStyle(Color.white)
                     .frame(width: 52, height: 52)
-                    .background(backdropColor.contrastCircleBackground, in: Circle())
+                    .background(Color.white.opacity(0.15), in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Shuffle")

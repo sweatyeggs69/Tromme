@@ -30,6 +30,8 @@ final class ArtworkColorCache {
         style: ArtworkBackdrop.Style
     ) -> Color? {
         guard let thumbPath, let source = cache[Self.key(thumbPath, style)] else { return nil }
+        // Artist pages always carry white text, so their backdrop ignores the appearance.
+        if style == .artist { return ArtworkBackdrop.whiteTextColor(from: UIColor(source)) }
         return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme)
     }
 

@@ -37,15 +37,35 @@ enum ArtworkBackdrop {
         case .light:
             ui = relit(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
         default:
-            let colorful = lab.chroma >= 8
-            let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
-            if colorful {
-                ui = relit(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
-            } else {
-                ui = relit(lightness: min(lab.l + 0.5, darkLightnessCap), chroma: chroma, hue: lab.hue)
-            }
+            let tint = darkTint(for: lab)
+            ui = relit(lightness: tint.lightness, chroma: tint.chroma, hue: lab.hue)
         }
         return Color(ui)
+    }
+
+    /// Backdrop that always carries white text (artist pages), in either appearance: the
+    /// dark-appearance tint, darkened further if white text would fall below the contrast floor.
+    static func whiteTextColor(from source: UIColor) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        source.getRed(&r, green: &g, blue: &b, alpha: nil)
+        let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
+        let tint = darkTint(for: lab)
+        var lightness = tint.lightness
+        var color = Lab.rgb(lightness: lightness, chroma: tint.chroma, hue: lab.hue)
+        while lightness > 0, whiteTextContrast(on: color) < minimumTextContrast {
+            lightness -= 0.5
+            color = Lab.rgb(lightness: lightness, chroma: tint.chroma, hue: lab.hue)
+        }
+        return Color(color)
+    }
+
+    /// Dark-appearance target: colorful sources at L* 26 to 40 and about 0.8x chroma,
+    /// neutral ones just above their own L*, capped.
+    private static func darkTint(for lab: Lab) -> (lightness: Double, chroma: Double) {
+        let colorful = lab.chroma >= 8
+        let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
+        let lightness = colorful ? min(max(lab.l, 26), 40) : min(lab.l + 0.5, darkLightnessCap)
+        return (lightness, chroma)
     }
 
     /// Smallest contrast ratio the page may offer: backdrops where neither white nor black
@@ -66,14 +86,23 @@ enum ArtworkBackdrop {
 
     /// Higher of the WCAG contrast ratios of white and black text on the color.
     private static func bestTextContrast(on color: UIColor) -> Double {
+        let luminance = relativeLuminance(of: color)
+        return max(1.05 / (luminance + 0.05), (luminance + 0.05) / 0.05)
+    }
+
+    /// WCAG contrast ratio of white text on the color.
+    private static func whiteTextContrast(on color: UIColor) -> Double {
+        1.05 / (relativeLuminance(of: color) + 0.05)
+    }
+
+    private static func relativeLuminance(of color: UIColor) -> Double {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         color.getRed(&r, green: &g, blue: &b, alpha: nil)
         func linear(_ c: CGFloat) -> Double {
             let c = Double(c)
             return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }
-        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
-        return max(1.05 / (luminance + 0.05), (luminance + 0.05) / 0.05)
+        return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
     }
 
     /// Piecewise-linear fit through measured (source L*, backdrop L*) pairs; white covers
