@@ -28,7 +28,6 @@ struct AlbumDetailView: View {
     @State private var albumDeleteErrorMessage: String?
     @State private var isDeletingAlbum = false
     @State private var showingChangeArtworkSheet = false
-    @State private var headerWidth: CGFloat = 300
     @AppStorage("showPopularTracks") private var showPopularTracks = true
     @State private var popularTrackTitles: Set<String> = []
 
@@ -281,11 +280,11 @@ struct AlbumDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var albumHeader: some View {
+    private func albumHeader(width: CGFloat) -> some View {
         VStack {
             ArtworkView(
                 thumbPath: thumbPath,
-                size: max(headerWidth - AppStyle.Spacing.pageHorizontal * 2, 1),
+                size: max(width - AppStyle.Spacing.pageHorizontal * 2, 1),
                 cornerRadius: 8
             )
                 .overlay(
@@ -336,7 +335,6 @@ struct AlbumDetailView: View {
                 .padding(.horizontal, 20)
         }
         .frame(maxWidth: .infinity)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { headerWidth = $0 }
     }
 
     private func albumActionButtons(bottomPadding: CGFloat = 20) -> some View {
@@ -816,7 +814,7 @@ struct AlbumDetailView: View {
                 } else {
                     List {
                         Section {
-                            albumHeader
+                            albumHeader(width: geo.size.width)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                                 .listRowSeparator(.hidden, edges: .top)
                                 .listRowSeparator(.visible, edges: .bottom)
