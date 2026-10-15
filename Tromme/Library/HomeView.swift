@@ -16,7 +16,6 @@ struct HomeView: View {
     @State private var showingLibrarySwitcher = false
     @State private var showingSignOutConfirmation = false
     @State private var featuredAlbums: [PlexMetadata]
-    @State private var serverHubs: [PlexHub] = []
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("featuredAlbumRatingKeys") private var featuredAlbumRatingKeys: String = ""
@@ -60,9 +59,6 @@ struct HomeView: View {
                 if !hideEmptySections || isLoading || !playlists.isEmpty {
                     playlistsSection
                 }
-                ForEach(serverHubs) { hub in
-                    hubSection(hub)
-                }
             }
             .padding(.bottom, 8)
             .padding(.top, 8)
@@ -81,7 +77,6 @@ struct HomeView: View {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await loadHomeContent() }
                 group.addTask { await loadFeaturedAlbum(forced: false) }
-                group.addTask { await loadServerHubs() }
             }
         }
         .task(id: loadTaskID) {
@@ -89,7 +84,6 @@ struct HomeView: View {
             await withTaskGroup(of: Void.self) { group in
                 group.addTask { await loadHomeContent() }
                 group.addTask { await loadFeaturedAlbum(forced: false) }
-                group.addTask { await loadServerHubs() }
             }
         }
         .task {
@@ -260,78 +254,6 @@ struct HomeView: View {
         }
     }
     
-    /// Hub types shown on Home. Stations/mixed hubs and rows Tromme already has are skipped.
-    private func isDisplayableHub(_ hub: PlexHub) -> Bool {
-        guard ["album", "artist", "track"].contains(hub.type), !hub.items.isEmpty else { return false }
-        let id = hub.hubIdentifier?.lowercased() ?? ""
-        return !id.contains("recentlyadded") && !id.contains("recentlyplayed") && !id.contains("station")
-    }
-
-    @ViewBuilder
-    private func hubSection(_ hub: PlexHub) -> some View {
-        VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-            Text(hub.title)
-                .appSectionTitleStyle()
-
-            if hub.type == "track" {
-                tracksHorizontalRow(tracks: hub.items)
-            } else {
-                let isArtist = hub.type == "artist"
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(hub.items) { item in
-                            NavigationLink(value: item) {
-                                VStack(alignment: isArtist ? .center : .leading, spacing: 4) {
-                                    ArtworkView(
-                                        thumbPath: item.thumb,
-                                        size: 170,
-                                        cornerRadius: isArtist ? 85 : AppStyle.Radius.card
-                                    )
-
-                                    Text(item.title)
-                                        .appItemTitleStyle()
-
-                                    if !isArtist {
-                                        Text(item.parentTitle ?? "")
-                                            .appItemSubtitleStyle()
-                                    }
-                                }
-                                .frame(width: 170, alignment: isArtist ? .top : .topLeading)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                if !isArtist { albumContextMenu(for: item) }
-                            }
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-                }
-                .scrollTargetBehavior(.viewAligned)
-            }
-        }
-    }
-
-    private func loadServerHubs() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else {
-            serverHubs = []
-            return
-        }
-        // Show the last fetch immediately, then replace it once the fresh rows arrive.
-        if serverHubs.isEmpty {
-            let cached = PlexHubCache.load(serverURI: server.uri, sectionId: sectionId)
-            serverHubs = cached.filter(isDisplayableHub)
-        }
-        guard let hubs = await fetchWithRetryOnFailure({
-            try await client.getSectionHubs(server: server, sectionId: sectionId)
-        }), !Task.isCancelled else { return }
-        PlexHubCache.save(hubs, serverURI: server.uri, sectionId: sectionId)
-        withAnimation(.easeIn(duration: 0.25)) {
-            serverHubs = hubs.filter(isDisplayableHub)
-        }
-    }
-
     private var recentlyPlayedSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
             Text("Recently Played")

@@ -221,15 +221,6 @@ final class PlexAPIClient: Sendable {
         return response.mediaContainer.metadata ?? []
     }
 
-    /// Server-curated rows for a music section (`/hubs/sections/{sectionId}`).
-    func getSectionHubs(server: PlexServer, sectionId: String, count: Int = 12) async throws -> [PlexHub] {
-        let response: PlexHubsResponse = try await serverRequest(
-            server: server,
-            path: "/hubs/sections/\(sectionId)?count=\(count)"
-        )
-        return response.mediaContainer.hubs ?? []
-    }
-
     func getRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
         let path = "/library/sections/\(sectionId)/all?type=10&sort=lastViewedAt:desc&lastViewedAt>=1&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
         let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
