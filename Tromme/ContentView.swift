@@ -40,9 +40,9 @@ struct ContentView: View {
             }
         }
         .alert("Tromme Plus", isPresented: plusNoticeBinding) {
-            Button("OK") { hasSeenPlusNotice = true }
+            Button("Sounds Good") { hasSeenPlusNotice = true }
         } message: {
-            Text("Tromme is now free, with animated artwork and the Premium Icon Pack included in Tromme Plus. Because you bought the Premium Icon Pack, you have Tromme Plus for free.")
+            Text("Thank you so much for purchasing Tromme, it seriously means the world to me. Tromme now has a subscription option to support ongoing development and hosting the animated artwork service. Because you bought the Premium Icon Pack, you have Tromme Plus for free.")
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
