@@ -1013,6 +1013,7 @@ struct AlbumDetailView: View {
     }
 }
 
+#if DEBUG
 #Preview("iPad Landscape", traits: .landscapeLeft) {
     let album = DevelopmentMockData.artistAlbums[0]
     NavigationStack {

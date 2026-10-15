@@ -50,5 +50,3 @@ struct AlbumRecommendationGridView: View {
         }
     }
 }
-
-#if DEBUG
