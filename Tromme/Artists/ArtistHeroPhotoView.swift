@@ -15,10 +15,13 @@ struct ArtistHeroPhotoView: View {
 
     @State private var image: UIImage?
 
-    /// Height of the fade/blur band. It is anchored to the bottom edge of the hero row (where the
-    /// artist name and buttons sit), not to the photo, so it stays behind them while the photo
-    /// parallaxes.
-    private let bandHeight: CGFloat = 190
+    /// Heights of the blur and color-fade bands. Both are anchored to the bottom edge of the hero
+    /// row (where the artist name and buttons sit), not to the photo, so they stay behind them
+    /// while the photo parallaxes.
+    private let blurBandHeight: CGFloat = 260
+    /// Reaches from the row's bottom edge to just above the top of the artist name
+    /// (bottom padding, buttons and the large-title name).
+    private let fadeBandHeight: CGFloat = 150
 
     var body: some View {
         GeometryReader { geo in
@@ -40,7 +43,7 @@ struct ArtistHeroPhotoView: View {
                     // Progressive blur behind the title and controls.
                     transformedPhoto(width: width, blur: 30, stretch: stretch, parallax: parallax)
                         .mask(alignment: .top) {
-                            band(rowBottom: rowBottom) {
+                            band(rowBottom: rowBottom, height: blurBandHeight) {
                                 LinearGradient(
                                     stops: [
                                         .init(color: .clear, location: 0),
@@ -54,13 +57,13 @@ struct ArtistHeroPhotoView: View {
                         }
 
                     // Melt into the backdrop color.
-                    band(rowBottom: rowBottom) {
+                    band(rowBottom: rowBottom, height: fadeBandHeight) {
                         LinearGradient(
                             stops: [
                                 .init(color: backdropColor.opacity(0), location: 0),
-                                .init(color: backdropColor.opacity(0.3), location: 0.3),
-                                .init(color: backdropColor.opacity(0.7), location: 0.6),
-                                .init(color: backdropColor.opacity(0.92), location: 0.85),
+                                .init(color: backdropColor.opacity(0.15), location: 0.3),
+                                .init(color: backdropColor.opacity(0.45), location: 0.6),
+                                .init(color: backdropColor.opacity(0.8), location: 0.85),
                                 .init(color: backdropColor, location: 1)
                             ],
                             startPoint: .top,
@@ -81,11 +84,11 @@ struct ArtistHeroPhotoView: View {
         }
     }
 
-    /// Places `content` in a band of `bandHeight` that ends at the hero row's bottom edge.
-    private func band(rowBottom: CGFloat, @ViewBuilder content: () -> some View) -> some View {
+    /// Places `content` in a band of `height` that ends at the hero row's bottom edge.
+    private func band(rowBottom: CGFloat, height: CGFloat, @ViewBuilder content: () -> some View) -> some View {
         content()
-            .frame(height: bandHeight)
-            .offset(y: rowBottom - bandHeight)
+            .frame(height: height)
+            .offset(y: rowBottom - height)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
