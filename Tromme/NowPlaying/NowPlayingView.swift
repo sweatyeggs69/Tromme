@@ -343,11 +343,14 @@ struct NowPlayingView: View {
     // MARK: - Track Info
 
     private func trackInfo(showsCompactArtwork: Bool = false) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            if showsCompactArtwork && isCompact {
+        HStack(alignment: .center, spacing: 0) {
+            if showsCompactArtwork {
+                // Always present so the text block shifts as one unit while the slot's width animates.
+                let slotOpen = isCompact
                 Color.clear
-                    .frame(width: 44, height: 44)
+                    .frame(width: slotOpen ? 44 : 0, height: 44)
                     .anchorPreference(key: ArtworkSlotAnchorsKey.self, value: .bounds) { [.compact: $0] }
+                Color.clear.frame(width: slotOpen ? 12 : 0, height: 0)
             }
 
             VStack(alignment: .leading) {
@@ -365,8 +368,8 @@ struct NowPlayingView: View {
                 }
                 .buttonStyle(.plain)
             }
-
-            Spacer(minLength: 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 12)
 
             HStack(spacing: 10) {
                 Button {
