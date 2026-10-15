@@ -529,6 +529,22 @@ struct NowPlayingView: View {
                     Label("Refresh Lyrics", systemImage: "arrow.clockwise")
                 }
                 .disabled(lyricsService.isLoading)
+                if lyricsService.current != nil {
+                    Button {
+                        Task { await lyricsService.blockCurrent(track: track) }
+                    } label: {
+                        Label("Wrong Lyrics", systemImage: "hand.thumbsdown")
+                    }
+                    .disabled(lyricsService.isLoading)
+                }
+                if lyricsService.hasBlockedLyrics(track: track) {
+                    Button {
+                        Task { await lyricsService.unblockAll(track: track) }
+                    } label: {
+                        Label("Restore Blocked Lyrics", systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(lyricsService.isLoading)
+                }
             }
         }
     }

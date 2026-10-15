@@ -9,6 +9,8 @@ final class LyricsService {
     private(set) var isLoading = false
     private(set) var hasSynced = false
     private(set) var hasLyrics = false
+    /// The lyrics currently shown, so the user can mark them as wrong.
+    private(set) var current: ResolvedLyrics?
 
     private var activeRequestID: UUID?
     private var inFlightTrackKey: String?
@@ -27,6 +29,28 @@ final class LyricsService {
         await fetch(track: track)
     }
 
+    /// Blocks the lyrics currently shown for this song and resolves the next match.
+    func blockCurrent(track: PlexMetadata) async {
+        guard let fingerprint = current?.fingerprint else { return }
+        BlockedLyricsStore.shared.block(fingerprint, forSong: Self.songKey(track))
+        await refresh(track: track)
+    }
+
+    /// Whether any lyrics are blocked for this song.
+    func hasBlockedLyrics(track: PlexMetadata) -> Bool {
+        BlockedLyricsStore.shared.hasBlocks(forSong: Self.songKey(track))
+    }
+
+    /// Forgets every block for this song and resolves its lyrics again.
+    func unblockAll(track: PlexMetadata) async {
+        BlockedLyricsStore.shared.clear(forSong: Self.songKey(track))
+        await refresh(track: track)
+    }
+
+    private static func songKey(_ track: PlexMetadata) -> String {
+        BlockedLyricsStore.songKey(title: track.title, artist: track.artistDisplayName)
+    }
+
     func fetch(track: PlexMetadata) async {
         if isLoading, inFlightTrackKey == track.ratingKey { return }
 
@@ -38,18 +62,20 @@ final class LyricsService {
         plainLyrics = nil
         hasSynced = false
         hasLyrics = false
+        current = nil
 
         // Use track-level artist so compilations match by performer, not "Various Artists"
         let trackArtist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
+        let blocked = BlockedLyricsStore.shared.fingerprints(forSong: Self.songKey(track))
 
         let result: ResolvedLyrics?
         // Only synced results are cached. Plain-only results may just mean a lookup failed or
         // a provider hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
         if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
-           cached.value.hasSynced {
+           cached.value.hasSynced, !blocked.contains(cached.value.fingerprint ?? "") {
             result = cached.value
-        } else if let fetched = await Self.resolve(track: track, artist: trackArtist) {
+        } else if let fetched = await Self.resolve(track: track, artist: trackArtist, blocked: blocked) {
             // A fallback reached only because lrc.red timed out isn't cached, so the
             // next play can still find the word-synced version.
             if fetched.lyrics.hasSynced, fetched.isFinal {
@@ -67,8 +93,9 @@ final class LyricsService {
 
     // Word-synced lyrics come only from lrc.red; everything else (line-synced, then plain)
     // comes from LRCLIB. Both sources are queried at once so a miss on lrc.red doesn't add
-    // its wait on top of LRCLIB's.
-    private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
+    // its wait on top of LRCLIB's. Candidates the user blocked are skipped, so the next
+    // match in this order is used instead.
+    private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
 
@@ -78,12 +105,16 @@ final class LyricsService {
         async let lrclib = withDeadline(sourceTimeout) {
             await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
         }
+        let isAllowed = { (lyrics: ResolvedLyrics) in !blocked.contains(lyrics.fingerprint ?? "") }
 
         let wordSynced = await lrcRed
-        if let lrc = wordSynced.value {
-            return (ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil), true)
+        let wordSyncedCandidates = (wordSynced.value ?? []).map {
+            ResolvedLyrics(syncedLyrics: $0, plainLyrics: nil, duration: nil)
         }
-        guard let lyrics = await lrclib.value else { return nil }
+        if let lyrics = wordSyncedCandidates.first(where: isAllowed) {
+            return (lyrics, true)
+        }
+        guard let lyrics = (await lrclib.value ?? []).first(where: isAllowed) else { return nil }
         return (lyrics, !wordSynced.timedOut)
     }
 
@@ -112,28 +143,34 @@ final class LyricsService {
     /// Matches the tolerance LRCLIB's own /api/get uses.
     nonisolated static let syncedDurationTolerance: TimeInterval = 2
 
-    // Fetches every LRCLIB match for the track and prefers synced lyrics within the duration
-    // tolerance, choosing the closest duration among them. Otherwise falls back to the closest
-    // match's plain lyrics, since untimed text doesn't depend on the recording.
+    // Fetches every LRCLIB match for the track and returns its candidates in preference order:
+    // synced lyrics within the duration tolerance (closest duration first), then each distinct
+    // plain text (closest duration first), since untimed text doesn't depend on the recording.
     // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
-    private nonisolated static func resolveLRCLIB(title: String, artist: String, seconds: Double?) async -> ResolvedLyrics? {
+    private nonisolated static func resolveLRCLIB(title: String, artist: String, seconds: Double?) async -> [ResolvedLyrics] {
         var results = await search([.init(name: "track_name", value: title),
                                     .init(name: "artist_name", value: artist)])
         if results.isEmpty {
             results = await search([.init(name: "q", value: "\(artist) \(title)")])
         }
 
-        guard let seconds else {
-            return results.first(where: \.hasSynced) ?? results.first
+        let ordered: [ResolvedLyrics]
+        let synced: [ResolvedLyrics]
+        if let seconds {
+            let offset = { (result: ResolvedLyrics) in abs((result.duration ?? seconds) - seconds) }
+            ordered = results.sorted { offset($0) < offset($1) }
+            synced = ordered.filter { $0.hasSynced && offset($0) <= syncedDurationTolerance }
+        } else {
+            ordered = results
+            synced = results.filter(\.hasSynced)
         }
-        let offset = { (result: ResolvedLyrics) in abs((result.duration ?? seconds) - seconds) }
-        let byDuration = results.sorted { offset($0) < offset($1) }
 
-        if let synced = byDuration.first(where: { $0.hasSynced && offset($0) <= syncedDurationTolerance }) {
-            return synced
+        var seenPlain = Set<String>()
+        let plain = ordered.compactMap { result -> ResolvedLyrics? in
+            guard let text = result.plainLyrics, !text.isEmpty, seenPlain.insert(text).inserted else { return nil }
+            return ResolvedLyrics(syncedLyrics: nil, plainLyrics: text, duration: result.duration)
         }
-        guard let closest = byDuration.first(where: { $0.plainLyrics?.isEmpty == false }) else { return nil }
-        return ResolvedLyrics(syncedLyrics: nil, plainLyrics: closest.plainLyrics, duration: closest.duration)
+        return synced + plain
     }
 
     private nonisolated static func search(_ query: [URLQueryItem]) async -> [ResolvedLyrics] {
@@ -161,6 +198,7 @@ final class LyricsService {
     }
 
     private func apply(_ response: ResolvedLyrics) {
+        current = response
         if let synced = response.syncedLyrics, !synced.isEmpty {
             lines = LRCParser.parse(synced)
             hasSynced = !lines.isEmpty

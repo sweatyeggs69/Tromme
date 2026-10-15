@@ -178,6 +178,7 @@
 		877A020DD3AE9A7D9B7C8806 /* AppIconPreviewImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C2EBF46C491F8C1C265BFD /* AppIconPreviewImage.swift */; };
 		09BFAEE6F8EF0FE4ACB49AA2 /* SettingsToolbarModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0BDC3AB77B10D9FDF0A82AD /* SettingsToolbarModifier.swift */; };
 		CF686C054592B8945030835C /* NowPlayingEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */; };
+		05C9DBE7CE5D1203024CEA46 /* BlockedLyricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -356,6 +357,7 @@
 		E6C2EBF46C491F8C1C265BFD /* AppIconPreviewImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconPreviewImage.swift; sourceTree = "<group>"; };
 		E0BDC3AB77B10D9FDF0A82AD /* SettingsToolbarModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsToolbarModifier.swift; sourceTree = "<group>"; };
 		94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingEmptyState.swift; sourceTree = "<group>"; };
+		89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BlockedLyricsStore.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -370,6 +372,7 @@
 		02783B91F27C725E7443599C /* NowPlaying */ = {
 			isa = PBXGroup;
 			children = (
+				89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */,
 				94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */,
 				58109A662AD5416E7849A5F6 /* VolumeHUDSuppressor.swift */,
 				1CF83A37981CCC81A5D1A148 /* ResolvedLyrics.swift */,
@@ -782,6 +785,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				05C9DBE7CE5D1203024CEA46 /* BlockedLyricsStore.swift in Sources */,
 				CF686C054592B8945030835C /* NowPlayingEmptyState.swift in Sources */,
 				09BFAEE6F8EF0FE4ACB49AA2 /* SettingsToolbarModifier.swift in Sources */,
 				877A020DD3AE9A7D9B7C8806 /* AppIconPreviewImage.swift in Sources */,
