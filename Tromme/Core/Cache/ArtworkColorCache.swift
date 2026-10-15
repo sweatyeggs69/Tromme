@@ -29,19 +29,29 @@ final class ArtworkColorCache {
         colorScheme: ColorScheme,
         style: ArtworkBackdrop.Style = .album
     ) -> Color? {
-        guard let thumbPath, let source = cache[thumbPath] else { return nil }
+        guard let thumbPath, let source = cache[Self.key(thumbPath, style)] else { return nil }
         return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme, style: style)
     }
 
-    func resolveColor(for thumbPath: String?, using client: PlexAPIClient, server: PlexServer) async {
-        guard let thumbPath, cache[thumbPath] == nil else { return }
+    /// Artist photos are keyed separately because they use a different color pick.
+    private static func key(_ thumbPath: String, _ style: ArtworkBackdrop.Style) -> String {
+        style == .artist ? "artist:" + thumbPath : thumbPath
+    }
+
+    func resolveColor(
+        for thumbPath: String?,
+        using client: PlexAPIClient,
+        server: PlexServer,
+        style: ArtworkBackdrop.Style = .album
+    ) async {
+        guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
         // 512 matches the card bucket in ArtworkView.recommendedTranscodeSize, so this
         // reuses the image already cached for Home cards / Now Playing instead of
         // fetching a separate low-res thumbnail.
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 512, height: 512) else { return }
         guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 512) else { return }
-        let dominant = image.dominantColor
-        store(Color(dominant), forKey: thumbPath)
+        let dominant = style == .artist ? image.vividPhotoColor : image.dominantColor
+        store(Color(dominant), forKey: Self.key(thumbPath, style))
         scheduleSave()
     }
 
@@ -107,6 +117,83 @@ private actor ArtworkColorPersistence {
 }
 
 private extension UIImage {
+    /// Color for an artist photo backdrop: the most colorful large area of the visible hero
+    /// (top 60%), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
+    /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
+    /// (black and white, or white walls and black clothing only) fall back to `dominantColor`.
+    var vividPhotoColor: UIColor {
+        guard let cgImage else { return .gray }
+
+        let size = 64
+        var pixelData = [UInt8](repeating: 0, count: size * size * 4)
+        guard let context = CGContext(
+            data: &pixelData,
+            width: size,
+            height: size,
+            bitsPerComponent: 8,
+            bytesPerRow: size * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return .gray }
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size, height: size))
+
+        let levels = 16
+        let minChroma = 8.0
+        let rows = Int(Double(size) * 0.6)
+        var count = [Double](repeating: 0, count: levels * levels * levels)
+        var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
+        @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
+
+        var chromaticPixels = 0
+        for y in 0..<rows {
+            for x in 0..<size {
+                let o = (y * size + x) * 4
+                let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
+                guard lab.chroma >= minChroma else { continue }
+                chromaticPixels += 1
+                let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
+                count[i] += 1
+                chromaSum[i] += lab.chroma
+            }
+        }
+
+        // Too little color to call it a colorful photo.
+        guard chromaticPixels > rows * size / 20 else { return dominantColor }
+
+        var bestBin = 0
+        var bestScore = -1.0
+        for r in 0..<levels { for g in 0..<levels { for b in 0..<levels {
+            var n = 0.0, c = 0.0
+            for dr in -1...1 { for dg in -1...1 { for db in -1...1 {
+                let rr = r + dr, gg = g + dg, bb = b + db
+                guard (0..<levels).contains(rr), (0..<levels).contains(gg), (0..<levels).contains(bb) else { continue }
+                n += count[bin(rr, gg, bb)]
+                c += chromaSum[bin(rr, gg, bb)]
+            } } }
+            guard n > 0 else { continue }
+            let score = n * (c / n)
+            if score > bestScore { bestScore = score; bestBin = bin(r, g, b) }
+        } } }
+        let bestR = bestBin / (levels * levels)
+        let bestG = (bestBin / levels) % levels
+        let bestB = bestBin % levels
+
+        var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
+        for y in 0..<rows {
+            for x in 0..<size {
+                let o = (y * size + x) * 4
+                let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
+                guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
+                let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
+                guard lab.chroma >= minChroma else { continue }
+                sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
+            }
+        }
+        guard n > 0 else { return dominantColor }
+        return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
+    }
+
+
     /// Apple Music style album backdrop color.
     ///
     /// Measured from Apple Music album-detail screenshots: the page tint is the artwork's
@@ -175,8 +262,10 @@ private extension UIImage {
 /// covers and 100 for white covers; chroma and hue are kept (same as dark). Dark covers in light mode follow the dark-mode
 /// values (assumed, not yet measured).
 ///
-/// The artist page uses the same recipe with a much higher dark-mode lightness cap
-/// (L* about 42 instead of 18.5), measured from Apple Music artist pages.
+/// The artist page picks the most colorful large area of the photo (see
+/// `vividPhotoColor`) and re-lights it to L* 26 to 40 at about 0.8x chroma; neutral photos
+/// fall back to the album recipe with a higher dark-mode cap (L* 42.3, measured from Apple
+/// Music artist pages).
 enum ArtworkBackdrop {
     enum Style {
         case album, artist
@@ -193,7 +282,12 @@ enum ArtworkBackdrop {
         case .light:
             ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma, hue: lab.hue)
         default:
-            ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: lab.chroma, hue: lab.hue)
+            if style == .artist && lab.chroma >= 8 {
+                // Colorful artist photo: mid-dark tint at about 0.8x chroma.
+                ui = Lab.rgb(lightness: min(max(lab.l, 26), 40), chroma: lab.chroma * 0.8, hue: lab.hue)
+            } else {
+                ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: lab.chroma, hue: lab.hue)
+            }
         }
         return Color(ui)
     }

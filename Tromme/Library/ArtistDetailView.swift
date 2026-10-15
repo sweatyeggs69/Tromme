@@ -406,7 +406,7 @@ struct ArtistDetailView: View {
         }
         .task(id: displayArtist.thumb) {
             guard previewData == nil, let server = serverConnection.currentServer else { return }
-            await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server)
+            await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server, style: .artist)
         }
         .task(id: artist.ratingKey) {
             guard previewData == nil else { return }
