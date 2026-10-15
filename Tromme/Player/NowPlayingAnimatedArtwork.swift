@@ -119,6 +119,9 @@ final class NowPlayingAnimatedArtwork {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 try data.write(to: file, options: .atomic)
+                #if DEBUG
+                print("[AnimatedArtwork] saved temp clip \(file.lastPathComponent) (\(data.count / 1024) KB)")
+                #endif
                 return file
             } catch {
                 return nil
@@ -138,6 +141,10 @@ final class NowPlayingAnimatedArtwork {
     }
 
     private func removeFiles() {
+        #if DEBUG
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        if !files.isEmpty { print("[AnimatedArtwork] deleting temp clips: \(files)") }
+        #endif
         try? FileManager.default.removeItem(at: directory)
     }
 
