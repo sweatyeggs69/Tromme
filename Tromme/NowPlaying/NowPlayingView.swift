@@ -305,7 +305,7 @@ struct NowPlayingView: View {
             }
         }
         // Confirms a Wrong Lyrics block took effect.
-        .sensoryFeedback(.success, trigger: lyricsService.blockedCount) { old, new in new > old }
+        .sensoryFeedback(.success, trigger: lyricsService.blockConfirmations)
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }

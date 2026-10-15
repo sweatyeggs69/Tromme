@@ -13,6 +13,8 @@ final class LyricsService {
     private(set) var current: ResolvedLyrics?
     /// How many lyrics the user has blocked for the current song.
     private(set) var blockedCount = 0
+    /// Bumped each time the user blocks lyrics, to drive the confirmation haptic.
+    private(set) var blockConfirmations = 0
 
     private var activeRequestID: UUID?
     private var inFlightTrackKey: String?
@@ -35,6 +37,7 @@ final class LyricsService {
     func blockCurrent(track: PlexMetadata) async {
         guard let current else { return }
         BlockedLyricsStore.shared.block(current, forSong: Self.songKey(track))
+        blockConfirmations += 1
         await refresh(track: track)
     }
 
