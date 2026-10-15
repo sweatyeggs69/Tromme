@@ -904,7 +904,9 @@ struct AlbumDetailView: View {
         }
         .task(id: album.ratingKey) {
             guard !isPreviewMode else { return }
-            isLoadingTracks = true
+            // .task restarts when popping back to this view; showing the spinner again would
+            // collapse the track list and jump the scroll position.
+            if tracks.isEmpty { isLoadingTracks = true }
             async let detailsTask: Void = loadAlbumDetails()
             async let tracksTask: Void = loadTracks()
             _ = await (detailsTask, tracksTask)
