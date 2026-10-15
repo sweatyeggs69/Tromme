@@ -1,104 +1,150 @@
 {
-  "appPolicies": {
-    "eula": "",
-    "policies": [
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
       {
-        "locale": "en_US",
-        "policyText": "",
-        "policyURL": ""
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
       }
     ]
   },
-  "identifier": "E3A47C91-2B58-4F6D-A0C3-17D8E5B92F4A",
-  "nonConsumableIAP": [],
-  "nonRenewingSubscriptions": [],
-  "products": [
+  "identifier" : "E3A47C91-2B58-4F6D-A0C3-17D8E5B92F4A",
+  "nonConsumableIAP" : [
+
+  ],
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
     {
-      "displayPrice": "0.99",
-      "familyShareable": false,
-      "internalID": "B4E247F5",
-      "localizations": [
+      "displayPrice" : "0.99",
+      "familyShareable" : false,
+      "internalID" : "B4E247F5",
+      "localizations" : [
         {
-          "description": "",
-          "displayName": "",
-          "locale": "en_US"
+          "description" : "",
+          "displayName" : "",
+          "locale" : "en_US"
         }
       ],
-      "productID": "PremiumIP",
-      "promotionalImageID": "BCBDE72A",
-      "referenceName": "Premium Icon Pack",
-      "type": "NonConsumable"
+      "productID" : "PremiumIP",
+      "promotionalImageID" : "BCBDE72A",
+      "referenceName" : "Premium Icon Pack",
+      "type" : "NonConsumable"
     }
   ],
-  "settings": {
-    "_askToBuyEnabled": false,
-    "_billingGracePeriodEnabled": false,
-    "_billingIssuesEnabled": false,
-    "_disableDialogs": false,
-    "_failTransactionsEnabled": false,
-    "_locale": "en_US",
-    "_renewalBillingIssuesEnabled": false,
-    "_storefront": "USA",
-    "_storeKitErrors": [],
-    "_timeRate": 0
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
   },
-  "subscriptionGroups": [
+  "subscriptionBundleGroups" : [
+
+  ],
+  "subscriptionGroups" : [
     {
-      "id": "7C2D9A11",
-      "localizations": [],
-      "name": "Tromme Plus",
-      "subscriptions": [
+      "id" : "7C2D9A11",
+      "localizations" : [
+
+      ],
+      "name" : "Tromme Plus",
+      "subscriptions" : [
         {
-          "adHocOffers": [],
-          "codeOffers": [],
-          "displayPrice": "1.99",
-          "familyShareable": false,
-          "groupNumber": 2,
-          "internalID": "7C2D9A12",
-          "introductoryOffer": null,
-          "localizations": [
+          "adHocOffers" : [
+
+          ],
+          "billingPlans" : [
             {
-              "description": "Animated artwork and premium app icons",
-              "displayName": "Tromme Plus",
-              "locale": "en_US"
+              "billingPlanType" : "BILLED_UPFRONT",
+              "commitmentDisplayPrice" : "1.99",
+              "displayPrice" : "1.99",
+              "internalID" : "32FB050F",
+              "isEnabled" : true
             }
           ],
-          "productID": "TPLUS",
-          "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "Tromme Plus",
-          "subscriptionGroupID": "7C2D9A11",
-          "type": "RecurringSubscription",
-          "winbackOffers": [],
-          "displayName": "Tromme Plus"
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "7C2D9A12",
+          "introductoryOffers" : [
+
+          ],
+          "localizations" : [
+            {
+              "description" : "Animated artwork and premium app icons",
+              "displayName" : "Tromme Plus",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "TPLUS",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Tromme Plus - Monthly",
+          "subscriptionGroupID" : "7C2D9A11",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
         },
         {
-          "adHocOffers": [],
-          "codeOffers": [],
-          "displayPrice": "14.99",
-          "familyShareable": false,
-          "groupNumber": 1,
-          "internalID": "7C2D9A13",
-          "introductoryOffer": null,
-          "localizations": [
+          "adHocOffers" : [
+
+          ],
+          "billingPlans" : [
             {
-              "description": "Animated artwork and premium app icons",
-              "displayName": "Tromme Plus Yearly",
-              "locale": "en_US"
+              "billingPlanType" : "BILLED_UPFRONT",
+              "commitmentDisplayPrice" : "14.99",
+              "displayPrice" : "14.99",
+              "internalID" : "8E71F5D2",
+              "isEnabled" : true
             }
           ],
-          "productID": "TPLUSYEAR",
-          "recurringSubscriptionPeriod": "P1Y",
-          "referenceName": "Tromme Plus Yearly",
-          "subscriptionGroupID": "7C2D9A11",
-          "type": "RecurringSubscription",
-          "winbackOffers": [],
-          "displayName": "Tromme Plus Yearly"
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "14.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "7C2D9A13",
+          "introductoryOffers" : [
+
+          ],
+          "localizations" : [
+            {
+              "description" : "Animated artwork and premium app icons",
+              "displayName" : "Tromme Plus Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "TPLUSYEAR",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Tromme Plus - Yearly",
+          "subscriptionGroupID" : "7C2D9A11",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
         }
       ]
     }
   ],
-  "version": {
-    "major": 5,
-    "minor": 0
+  "subscriptionSuiteGroups" : [
+
+  ],
+  "version" : {
+    "major" : 6,
+    "minor" : 3
   }
 }
