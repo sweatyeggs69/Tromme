@@ -12,24 +12,39 @@ struct AlbumDetailView: View {
 
     let album: PlexMetadata
     let sourceArtistRatingKey: String?
-    @State private var albumDetails: PlexMetadata
-    @State private var tracks: [PlexMetadata]
-    @State private var firstTrackDetails: PlexMetadata?
-    @State private var isLoadingTracks: Bool
+    @State private var viewModel: AlbumDetailViewModel
     @State private var selectedArtist: PlexMetadata?
     @State private var selectedMoreByAlbum: PlexMetadata?
-    @State private var artistAlbums: [PlexMetadata]
-    @State private var recommendedAlbums: [PlexMetadata]
     @State private var showsAllRecommendedAlbums = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var addToPlaylistResultMessage: String?
     @State private var showsAlbumInfoSheet = false
     @State private var showDeleteAlbumConfirmation = false
-    @State private var albumDeleteErrorMessage: String?
-    @State private var isDeletingAlbum = false
     @State private var showingChangeArtworkSheet = false
     @AppStorage("showPopularTracks") private var showPopularTracks = true
-    @State private var popularTrackTitles: Set<String> = []
+
+    // Read-only views of the view model's state, so the body reads as before.
+    private var albumDetails: PlexMetadata { viewModel.albumDetails }
+    private var tracks: [PlexMetadata] { viewModel.tracks }
+    private var firstTrackDetails: PlexMetadata? { viewModel.firstTrackDetails }
+    private var isLoadingTracks: Bool { viewModel.isLoadingTracks }
+    private var artistAlbums: [PlexMetadata] { viewModel.artistAlbums }
+    private var recommendedAlbums: [PlexMetadata] { viewModel.recommendedAlbums }
+    private var popularTrackTitles: Set<String> { viewModel.popularTrackTitles }
+    private var isDeletingAlbum: Bool { viewModel.isDeletingAlbum }
+    private var isPreviewMode: Bool { viewModel.isPreviewMode }
+    private var artistNavigationTarget: PlexMetadata? { viewModel.artistNavigationTarget }
+
+    private var loadContext: AlbumDetailViewModel.Context {
+        AlbumDetailViewModel.Context(
+            server: serverConnection.currentServer,
+            sectionId: serverConnection.currentLibrarySectionId,
+            client: client,
+            isConnected: network.isConnected,
+            downloadManager: downloadManager,
+            showPopularTracks: showPopularTracks
+        )
+    }
 
     private var thumbPath: String? {
         albumDetails.thumb ?? album.thumb
@@ -216,20 +231,6 @@ struct AlbumDetailView: View {
         }
     }
 
-    private var artistNavigationTarget: PlexMetadata? {
-        let artistTitle = albumDetails.parentTitle ?? album.parentTitle
-        let artistRatingKey = albumDetails.parentRatingKey ?? album.parentRatingKey
-        guard let artistTitle, !artistTitle.isEmpty,
-              let artistRatingKey, !artistRatingKey.isEmpty else { return nil }
-
-        return PlexMetadata(
-            ratingKey: artistRatingKey,
-            title: artistTitle,
-            type: "artist",
-            thumb: albumDetails.parentThumb ?? album.parentThumb
-        )
-    }
-
     private var shouldPopToSourceArtist: Bool {
         guard let sourceArtistRatingKey, let artistTarget = artistNavigationTarget else { return false }
         return sourceArtistRatingKey == artistTarget.ratingKey
@@ -366,7 +367,6 @@ struct AlbumDetailView: View {
         )
     }
 
-    private let isPreviewMode: Bool
 
     init(
         album: PlexMetadata,
@@ -377,130 +377,12 @@ struct AlbumDetailView: View {
     ) {
         self.album = album
         self.sourceArtistRatingKey = sourceArtistRatingKey
-        _albumDetails = State(initialValue: album)
-        _tracks = State(initialValue: previewTracks ?? [])
-        _artistAlbums = State(initialValue: previewArtistAlbums)
-        _recommendedAlbums = State(initialValue: previewRecommendedAlbums)
-        _isLoadingTracks = State(initialValue: previewTracks == nil)
-        self.isPreviewMode = previewTracks != nil
-    }
-
-    @MainActor
-    private func loadAlbumDetails() async {
-        guard let server = serverConnection.currentServer else { return }
-        do {
-            albumDetails = try await client.cachedAlbumMetadata(server: server, ratingKey: album.ratingKey) ?? album
-        } catch {
-            albumDetails = album
-        }
-    }
-
-    @MainActor
-    private func loadRecommendedAlbums() async {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId,
-              let artistKey = albumDetails.parentRatingKey ?? album.parentRatingKey else { return }
-        recommendedAlbums = (try? await client.albumsFromSimilarArtists(
-            server: server, sectionId: sectionId, artistRatingKey: artistKey
-        )) ?? []
-    }
-
-    @MainActor
-    private func loadTracks() async {
-        guard network.isConnected else {
-            // Prefer disk-cached track list so non-downloaded albums still show tracks.
-            if let server = serverConnection.currentServer {
-                let cached = await LibraryStore.shared.children(
-                    of: album.ratingKey,
-                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: serverConnection.currentLibrarySectionId ?? "")
-                )
-                if !cached.isEmpty {
-                    tracks = cached
-                    isLoadingTracks = false
-                    return
-                }
-            }
-            let albumKey = album.ratingKey
-            let albumTitle = album.title
-            let downloaded = downloadManager.downloadedTracksSorted.filter { record in
-                record.albumRatingKey == albumKey || record.albumName == albumTitle
-            }
-            tracks = downloaded.map { $0.asPlexMetadata() }
-            isLoadingTracks = false
-            return
-        }
-        guard let server = serverConnection.currentServer else {
-            isLoadingTracks = false
-            return
-        }
-
-        do {
-            tracks = try await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt)
-            if let firstTrack = tracks.first {
-                firstTrackDetails = try await client.cachedMetadata(server: server, ratingKey: firstTrack.ratingKey)
-            } else {
-                firstTrackDetails = nil
-            }
-        } catch {
-            if tracks.isEmpty {
-                tracks = []
-                firstTrackDetails = nil
-            }
-        }
-        isLoadingTracks = false
-    }
-
-    @MainActor
-    private func loadArtistAlbums() async {
-        guard let artist = artistNavigationTarget else { return }
-
-        guard network.isConnected else {
-            // Prefer disk-cached artist releases so all albums show, not just downloaded ones.
-            if let server = serverConnection.currentServer {
-                let cached = await LibraryStore.shared.children(
-                    of: artist.ratingKey,
-                    scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: serverConnection.currentLibrarySectionId ?? "")
-                )
-                if !cached.isEmpty {
-                    artistAlbums = cached
-                    return
-                }
-            }
-            var seenAlbums = Set<String>()
-            artistAlbums = downloadManager.downloadedTracksSorted
-                .filter { $0.artistRatingKey == artist.ratingKey || $0.artistName == artist.title }
-                .compactMap { record -> PlexMetadata? in
-                    let key = record.albumRatingKey ?? record.albumName
-                    guard seenAlbums.insert(key).inserted else { return nil }
-                    return PlexMetadata(
-                        ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
-                        title: record.albumName,
-                        type: "album",
-                        parentTitle: record.artistName,
-                        thumb: record.thumbPath
-                    )
-                }
-            return
-        }
-
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return }
-        do {
-            artistAlbums = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
-        } catch {
-            artistAlbums = []
-        }
-    }
-
-    @MainActor
-    private func loadLastFMPopularity() async {
-        guard network.isConnected, showPopularTracks else { return }
-        guard let artistName = albumDetails.parentTitle ?? album.parentTitle,
-              !artistName.isEmpty, !tracks.isEmpty else { return }
-        popularTrackTitles = await LastFMService.fetchPopularTracks(
-            artist: artistName,
-            albumTrackTitles: tracks.map(\.title)
-        )
+        _viewModel = State(initialValue: AlbumDetailViewModel(
+            album: album,
+            previewTracks: previewTracks,
+            previewArtistAlbums: previewArtistAlbums,
+            previewRecommendedAlbums: previewRecommendedAlbums
+        ))
     }
 
     private func playAlbumNext() {
@@ -565,7 +447,7 @@ struct AlbumDetailView: View {
                 presentAddToPlaylist(for: [track.ratingKey])
             },
             onDelete: { deletedTrack in
-                tracks.removeAll { $0.ratingKey == deletedTrack.ratingKey }
+                viewModel.removeTrack(deletedTrack)
             }
         )
         .listRowBackground(artworkColor)
@@ -903,18 +785,7 @@ struct AlbumDetailView: View {
             )
         }
         .task(id: album.ratingKey) {
-            guard !isPreviewMode else { return }
-            // .task restarts when popping back to this view; showing the spinner again would
-            // collapse the track list and jump the scroll position.
-            if tracks.isEmpty { isLoadingTracks = true }
-            async let detailsTask: Void = loadAlbumDetails()
-            async let tracksTask: Void = loadTracks()
-            _ = await (detailsTask, tracksTask)
-            guard !Task.isCancelled else { return }
-            async let artistAlbumsTask: Void = loadArtistAlbums()
-            async let recommendationsTask: Void = loadRecommendedAlbums()
-            async let lastFMTask: Void = loadLastFMPopularity()
-            _ = await (artistAlbumsTask, recommendationsTask, lastFMTask)
+            await viewModel.load(loadContext)
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {
@@ -940,7 +811,7 @@ struct AlbumDetailView: View {
             ChangeAlbumArtworkSheet(
                 albumRatingKey: album.ratingKey
             ) {
-                await loadAlbumDetails()
+                await viewModel.loadAlbumDetails(loadContext)
                 player.updateAlbumThumb(albumRatingKey: album.ratingKey, newThumb: albumDetails.thumb)
             }
         }
@@ -954,19 +825,21 @@ struct AlbumDetailView: View {
         }
         .alert("Delete Album?", isPresented: $showDeleteAlbumConfirmation) {
             Button("Delete Album", role: .destructive) {
-                Task { await deleteAlbum() }
+                Task {
+                    if await viewModel.deleteAlbum(loadContext) { dismiss() }
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will permanently remove \"\(album.title)\".")
         }
         .alert("Unable to Delete Album", isPresented: .init(
-            get: { albumDeleteErrorMessage != nil },
-            set: { if !$0 { albumDeleteErrorMessage = nil } }
+            get: { viewModel.albumDeleteErrorMessage != nil },
+            set: { if !$0 { viewModel.albumDeleteErrorMessage = nil } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(albumDeleteErrorMessage ?? "")
+            Text(viewModel.albumDeleteErrorMessage ?? "")
         }
     }
 
@@ -987,30 +860,6 @@ struct AlbumDetailView: View {
         return result
     }
 
-    @MainActor
-    private func deleteAlbum() async {
-        guard !isPreviewMode else { return }
-        guard let server = serverConnection.currentServer else { return }
-        guard !isDeletingAlbum else { return }
-
-        isDeletingAlbum = true
-        defer { isDeletingAlbum = false }
-
-        do {
-            try await client.deleteLibraryItem(server: server, ratingKey: album.ratingKey)
-            for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
-            await LibraryStore.shared.remove(ratingKey: album.ratingKey, serverId: server.machineIdentifier)
-            for track in tracks {
-                await LibraryStore.shared.remove(ratingKey: track.ratingKey, serverId: server.machineIdentifier)
-            }
-            if let sectionId = serverConnection.currentLibrarySectionId {
-                Task { await client.smartRefresh(server: server, sectionId: sectionId) }
-            }
-            dismiss()
-        } catch {
-            albumDeleteErrorMessage = error.localizedDescription
-        }
-    }
 }
 
 #if DEBUG

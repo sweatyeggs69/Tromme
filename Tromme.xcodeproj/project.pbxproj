@@ -106,6 +106,7 @@
 		1B26D78BBDA250ED14861296 /* CarPlaySceneDelegate+NowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7AC00A246F85737CD6ED27F /* CarPlaySceneDelegate+NowPlaying.swift */; };
 		95C238731138005D31A1EAA1 /* CarPlaySceneDelegate+Playlists.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4FCA7B3627000E4000E49C /* CarPlaySceneDelegate+Playlists.swift */; };
 		F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18BD457F7B7DE8A280528206 /* CarPlaySceneDelegate+Rows.swift */; };
+		92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -212,6 +213,7 @@
 		F7AC00A246F85737CD6ED27F /* CarPlaySceneDelegate+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate+NowPlaying.swift; sourceTree = "<group>"; };
 		ED4FCA7B3627000E4000E49C /* CarPlaySceneDelegate+Playlists.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate+Playlists.swift; sourceTree = "<group>"; };
 		18BD457F7B7DE8A280528206 /* CarPlaySceneDelegate+Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate+Rows.swift; sourceTree = "<group>"; };
+		1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumDetailViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -379,6 +381,7 @@
 		98A459E4DCE9C4222C4676D4 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */,
 				027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */,
 				D8231E3A3CBD690029DAC154 /* AlbumTrackRow.swift */,
 				3BE54BE32E8EC9FD004BAD4F /* AlbumDetailView.swift */,
@@ -526,6 +529,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */,
 				F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */,
 				95C238731138005D31A1EAA1 /* CarPlaySceneDelegate+Playlists.swift in Sources */,
 				1B26D78BBDA250ED14861296 /* CarPlaySceneDelegate+NowPlaying.swift in Sources */,
