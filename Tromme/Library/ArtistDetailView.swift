@@ -28,10 +28,10 @@ struct ArtistDetailView: View {
     @State private var scrollOffset: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Page backdrop, derived from the artist photo through the same
-    /// Apple Music tint algorithm the album page uses.
+    /// Page backdrop, derived from the artist photo through the Apple Music
+    /// tint algorithm with the artist-page lightness cap.
     private var backdropColor: Color {
-        ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme) ?? Color(.systemBackground)
+        ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme, style: .artist) ?? Color(.systemBackground)
     }
 
     private var displayArtist: PlexMetadata {

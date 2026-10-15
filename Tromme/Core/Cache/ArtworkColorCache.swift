@@ -24,9 +24,13 @@ final class ArtworkColorCache {
         Task { await loadFromDisk() }
     }
 
-    func color(for thumbPath: String?, colorScheme: ColorScheme) -> Color? {
+    func color(
+        for thumbPath: String?,
+        colorScheme: ColorScheme,
+        style: ArtworkBackdrop.Style = .album
+    ) -> Color? {
         guard let thumbPath, let source = cache[thumbPath] else { return nil }
-        return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme)
+        return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme, style: style)
     }
 
     func resolveColor(for thumbPath: String?, using client: PlexAPIClient, server: PlexServer) async {
@@ -170,8 +174,17 @@ private extension UIImage {
 /// covers stay near black). Light appearance: L* is roughly the source L* minus 7 for mid
 /// covers and 100 for white covers; chroma and hue are kept (same as dark). Dark covers in light mode follow the dark-mode
 /// values (assumed, not yet measured).
+///
+/// The artist page uses the same recipe with a much higher dark-mode lightness cap
+/// (L* about 42 instead of 18.5), measured from Apple Music artist pages.
 enum ArtworkBackdrop {
-    static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
+    enum Style {
+        case album, artist
+
+        var darkLightnessCap: Double { self == .artist ? 42.3 : 18.5 }
+    }
+
+    static func color(from source: UIColor, colorScheme: ColorScheme, style: Style = .album) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
@@ -180,7 +193,7 @@ enum ArtworkBackdrop {
         case .light:
             ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma, hue: lab.hue)
         default:
-            ui = Lab.rgb(lightness: min(lab.l + 0.5, 18.5), chroma: lab.chroma, hue: lab.hue)
+            ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: lab.chroma, hue: lab.hue)
         }
         return Color(ui)
     }
