@@ -8,7 +8,7 @@ final class PlusStore {
     static let shared = PlusStore()
 
     /// Auto-renewable subscription products, in the order the paywall lists them.
-    nonisolated static let subscriptionProductIDs = ["TPLUS"]
+    nonisolated static let subscriptionProductIDs = ["TPLUS", "TPLUSYEAR"]
     /// Old one-time Premium Icon Pack purchase. Owners are grandfathered into Plus.
     nonisolated static let legacyProductIDs = ["PremiumIP"]
 

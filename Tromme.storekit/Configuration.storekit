@@ -53,7 +53,7 @@
           "codeOffers": [],
           "displayPrice": "1.99",
           "familyShareable": false,
-          "groupNumber": 1,
+          "groupNumber": 2,
           "internalID": "7C2D9A12",
           "introductoryOffer": null,
           "localizations": [
@@ -70,6 +70,29 @@
           "type": "RecurringSubscription",
           "winbackOffers": [],
           "displayName": "Tromme Plus"
+        },
+        {
+          "adHocOffers": [],
+          "codeOffers": [],
+          "displayPrice": "14.99",
+          "familyShareable": false,
+          "groupNumber": 1,
+          "internalID": "7C2D9A13",
+          "introductoryOffer": null,
+          "localizations": [
+            {
+              "description": "Animated artwork and premium app icons",
+              "displayName": "Tromme Plus Yearly",
+              "locale": "en_US"
+            }
+          ],
+          "productID": "TPLUSYEAR",
+          "recurringSubscriptionPeriod": "P1Y",
+          "referenceName": "Tromme Plus Yearly",
+          "subscriptionGroupID": "7C2D9A11",
+          "type": "RecurringSubscription",
+          "winbackOffers": [],
+          "displayName": "Tromme Plus Yearly"
         }
       ]
     }
