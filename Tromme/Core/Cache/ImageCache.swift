@@ -456,9 +456,26 @@ actor ImageCache {
         return max(width, height)
     }
 
+    /// Moves Plex auth params from the query string into headers (the spec's preferred
+    /// form) so the token doesn't land in server or proxy access logs.
+    private static func artworkRequest(for url: URL) -> URLRequest {
+        let headerParams: Set<String> = ["X-Plex-Token", "X-Plex-Client-Identifier"]
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let items = components.queryItems,
+              items.contains(where: { headerParams.contains($0.name) }) else {
+            return URLRequest(url: url)
+        }
+        components.queryItems = items.filter { !headerParams.contains($0.name) }
+        var request = URLRequest(url: components.url ?? url)
+        for item in items where headerParams.contains(item.name) {
+            request.setValue(item.value, forHTTPHeaderField: item.name)
+        }
+        return request
+    }
+
     @concurrent
     private static func fetchData(_ url: URL) async -> Data? {
-        guard let (data, response) = try? await downloadSession.data(from: url),
+        guard let (data, response) = try? await downloadSession.data(for: artworkRequest(for: url)),
               let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode),
               !data.isEmpty else { return nil }
@@ -467,7 +484,7 @@ actor ImageCache {
 
     @concurrent
     private static func fetchAndDecode(_ url: URL, targetPixelSize: Int?) async -> (Data, UIImage)? {
-        guard let (data, response) = try? await downloadSession.data(from: url),
+        guard let (data, response) = try? await downloadSession.data(for: artworkRequest(for: url)),
               let http = response as? HTTPURLResponse,
               (200...299).contains(http.statusCode),
               let image = decodeImage(from: data, targetPixelSize: targetPixelSize) else { return nil }
