@@ -280,17 +280,45 @@ enum ArtworkBackdrop {
         let ui: UIColor
         switch colorScheme {
         case .light:
-            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
+            ui = relit(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
         default:
             let colorful = lab.chroma >= 8
             let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
             if style == .artist && colorful {
-                ui = Lab.rgb(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
+                ui = relit(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
             } else {
-                ui = Lab.rgb(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: chroma, hue: lab.hue)
+                ui = relit(lightness: min(lab.l + 0.5, style.darkLightnessCap), chroma: chroma, hue: lab.hue)
             }
         }
         return Color(ui)
+    }
+
+    /// Smallest contrast ratio the page may offer: backdrops where neither white nor black
+    /// text reaches this (roughly L* 44 to 55) are nudged to the nearest lightness that does.
+    private static let minimumTextContrast = 5.5
+
+    private static func relit(lightness: Double, chroma: Double, hue: Double) -> UIColor {
+        var step = 0.0
+        while step <= 30 {
+            for candidate in [lightness - step, lightness + step] where (0...100).contains(candidate) {
+                let color = Lab.rgb(lightness: candidate, chroma: chroma, hue: hue)
+                if bestTextContrast(on: color) >= minimumTextContrast { return color }
+            }
+            step += 0.5
+        }
+        return Lab.rgb(lightness: lightness, chroma: chroma, hue: hue)
+    }
+
+    /// Higher of the WCAG contrast ratios of white and black text on the color.
+    private static func bestTextContrast(on color: UIColor) -> Double {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: nil)
+        func linear(_ c: CGFloat) -> Double {
+            let c = Double(c)
+            return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        return max(1.05 / (luminance + 0.05), (luminance + 0.05) / 0.05)
     }
 
     /// Piecewise-linear fit through measured (source L*, backdrop L*) pairs; white covers
