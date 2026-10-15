@@ -3,50 +3,50 @@ import UIKit
 
 @MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
-    private var interfaceController: CPInterfaceController?
+    var interfaceController: CPInterfaceController?
 
-    private var server: PlexServer? { AppContext.shared.serverConnection.currentServer }
-    private var sectionId: String? { AppContext.shared.serverConnection.currentLibrarySectionId }
-    private var client: PlexAPIClient { AppContext.shared.plexClient }
-    private var player: AudioPlayerService { AppContext.shared.audioPlayer }
+    var server: PlexServer? { AppContext.shared.serverConnection.currentServer }
+    var sectionId: String? { AppContext.shared.serverConnection.currentLibrarySectionId }
+    var client: PlexAPIClient { AppContext.shared.plexClient }
+    var player: AudioPlayerService { AppContext.shared.audioPlayer }
 
-    private var shuffleNPButton: CPNowPlayingShuffleButton?
-    private var repeatNPButton: CPNowPlayingRepeatButton?
-    private var magicMixButton: CPNowPlayingImageButton?
-    private var favFilledButton: CPNowPlayingImageButton?
-    private var favOutlineButton: CPNowPlayingImageButton?
-    private var currentTrackFavorited = false
+    var shuffleNPButton: CPNowPlayingShuffleButton?
+    var repeatNPButton: CPNowPlayingRepeatButton?
+    var magicMixButton: CPNowPlayingImageButton?
+    var favFilledButton: CPNowPlayingImageButton?
+    var favOutlineButton: CPNowPlayingImageButton?
+    var currentTrackFavorited = false
     /// Last favorited state actually pushed to `CPNowPlayingTemplate`. Several
     /// listeners (pushNowPlaying, the player-state observation loop) react to
     /// the same track-change event and each call rebuildNowPlayingButtons();
     /// without this guard they redundantly re-call updateNowPlayingButtons()
     /// with an unchanged value, and each call flashes the whole button row
     /// (shuffle included) as CarPlay redraws it.
-    private var lastPublishedFavoriteState: Bool?
+    var lastPublishedFavoriteState: Bool?
     /// Last Magic Mix state actually pushed to `magicMixButton.isSelected`.
     /// `syncMixButtons()` runs on every track change (currentTrack is one of
     /// the tracked properties in the player observation loop), and `isSelected`
     /// is a remote property on a CarPlay-rendered button — setting it, even to
     /// its current value, is a real round-trip that visibly redraws the whole
     /// button row (shuffle included), same as the unguarded favorite rebuild.
-    private var lastPublishedMagicMixState: Bool?
-    private var observationTask: Task<Void, Never>?
-    private var connectionObservationTask: Task<Void, Never>?
-    private var recentlyPlayedObservationTask: Task<Void, Never>?
-    private var favoritesObservationTask: Task<Void, Never>?
+    var lastPublishedMagicMixState: Bool?
+    var observationTask: Task<Void, Never>?
+    var connectionObservationTask: Task<Void, Never>?
+    var recentlyPlayedObservationTask: Task<Void, Never>?
+    var favoritesObservationTask: Task<Void, Never>?
     /// Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played.
     /// Persisted so the favorites/recently-played observers can each patch
     /// their own slot without losing the other sections already on screen.
-    private var homeSections: [CPListSection?] = [nil, nil, nil]
-    private var lastRootSignature: String?
-    private var lastServerURI: String?
-    private var homeTemplate: CPListTemplate?
-    private var artistsTemplate: CPListTemplate?
-    private var albumsTemplate: CPListTemplate?
-    private var playlistsTemplate: CPListTemplate?
+    var homeSections: [CPListSection?] = [nil, nil, nil]
+    var lastRootSignature: String?
+    var lastServerURI: String?
+    var homeTemplate: CPListTemplate?
+    var artistsTemplate: CPListTemplate?
+    var albumsTemplate: CPListTemplate?
+    var playlistsTemplate: CPListTemplate?
     /// Bumped whenever tab content is (re)loaded so an in-flight load against a
     /// stale connection can't overwrite sections loaded after a reprobe.
-    private var contentGeneration = 0
+    var contentGeneration = 0
 
     // MARK: - Scene Lifecycle
 
@@ -93,7 +93,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         playlistsTemplate = nil
     }
 
-    private func updateRootTemplate() {
+    func updateRootTemplate() {
         guard let interfaceController else { return }
         let signature = rootSignature()
         let uri = server?.uri
@@ -147,7 +147,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// Re-fetches the content of all four tabs against the current server
     /// connection without replacing the root template (which would pop any
     /// pushed templates, including Now Playing).
-    private func reloadTabContent() {
+    func reloadTabContent() {
         contentGeneration += 1
         if let homeTemplate { loadHomeContent(into: homeTemplate) }
         if let artistsTemplate { loadArtists(into: artistsTemplate) }
@@ -155,13 +155,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if let playlistsTemplate { loadPlaylists(into: playlistsTemplate) }
     }
 
-    private func rootSignature() -> String {
+    func rootSignature() -> String {
         let machine = server?.machineIdentifier ?? "none"
         let library = sectionId ?? "none"
         return "\(machine)|\(library)"
     }
 
-    private func startObservingConnection() {
+    func startObservingConnection() {
         connectionObservationTask?.cancel()
         connectionObservationTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -188,879 +188,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     // MARK: - Sign In
 
-    private func makeSignInTemplate() -> CPListTemplate {
+    func makeSignInTemplate() -> CPListTemplate {
         let item = CPListItem(text: "Sign In to Plex to Start Listening", detailText: "Open Tromme on your iPhone to sign in")
         item.isEnabled = false
         return CPListTemplate(title: "Tromme", sections: [CPListSection(items: [item])])
     }
 
-    // MARK: - Home
-
-    private func makeHomeList() -> CPListTemplate {
-        let template = CPListTemplate(title: "Home", sections: [])
-        loadHomeContent(into: template)
-        return template
-    }
-
-    private func loadHomeContent(into template: CPListTemplate) {
-        guard let server, let sectionId else { return }
-        let generation = contentGeneration
-
-        homeSections = [nil, nil, nil]
-        var completedCount = 0
-
-        func rebuildSections() {
-            completedCount += 1
-            guard completedCount == 3 else { return }
-            guard generation == self.contentGeneration else { return }
-            var sections = self.homeSections.compactMap { $0 }
-            if sections.isEmpty {
-                let retry = makeRetryItem(into: template) { [weak self] in
-                    self?.loadHomeContent(into: template)
-                }
-                sections.append(CPListSection(items: [retry]))
-            }
-            template.updateSections(sections)
-        }
-
-        // Favorites
-        Task {
-            self.homeSections[0] = await loadFavoritesSection(server: server, sectionId: sectionId)
-            rebuildSections()
-        }
-
-        // Recently Added
-        Task {
-            if let recentlyAdded = try? await client.cachedRecentlyAdded(server: server, sectionId: sectionId, limit: 10),
-               !recentlyAdded.isEmpty {
-                let limited = Array(recentlyAdded.prefix(10))
-                let imageRow = await makeImageRow(
-                    title: "Recently Added",
-                    items: limited,
-                    server: server,
-                    client: client,
-                    onImageSelect: { [weak self = self] index in
-                        let album = limited[index]
-                        self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title, artistName: album.parentTitle, albumThumb: album.thumb)
-                    },
-                    onRowSelect: { [weak self = self] in
-                        self?.showRecentlyAddedList(limited)
-                    }
-                )
-                self.homeSections[1] = CPListSection(items: [imageRow])
-            }
-            rebuildSections()
-        }
-
-        // Recently Played
-        Task {
-            self.homeSections[2] = await loadRecentlyPlayedSection(server: server, sectionId: sectionId)
-            rebuildSections()
-        }
-    }
-
-    /// Builds the "Favorites" home row from a fresh server fetch. Shared by the
-    /// initial home load and by the live `.favoritesDidChange` refresh so
-    /// CarPlay mirrors the same rating state as the in-app Home screen.
-    private func loadFavoritesSection(server: PlexServer, sectionId: String) async -> CPListSection? {
-        guard let favorites = try? await client.cachedFavoriteTracks(server: server, sectionId: sectionId),
-              !favorites.isEmpty else { return nil }
-        let sorted = favorites.sorted { ($0.userRating ?? 0) > ($1.userRating ?? 0) }
-        let preview = Array(sorted.prefix(4))
-        let full = Array(sorted.prefix(10))
-        let row = await makeCondensedImageRow(
-            title: "Favorites",
-            items: preview,
-            server: server,
-            client: client,
-            elementTitle: { $0.title },
-            elementSubtitle: { $0.artistDisplayName },
-            onElementSelect: { [weak self = self] index in
-                self?.player.play(tracks: preview, startingAt: index)
-                self?.pushNowPlaying()
-            },
-            onHeaderSelect: { [weak self = self] in
-                self?.showTrackList(title: "Favorites", tracks: full)
-            }
-        )
-        return CPListSection(items: [row])
-    }
-
-    /// Keeps the CarPlay "Favorites" row in sync with the same
-    /// `.favoritesDidChange` signal that drives the in-app Home/Favorites
-    /// screens, so all surfaces reflect the same server-confirmed ratings.
-    private func startObservingFavorites() {
-        favoritesObservationTask?.cancel()
-        favoritesObservationTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
-                guard !Task.isCancelled, let self else { return }
-                guard let homeTemplate = self.homeTemplate,
-                      let server = self.server, let sectionId = self.sectionId else { continue }
-                self.homeSections[0] = await self.loadFavoritesSection(server: server, sectionId: sectionId)
-                let sections = self.homeSections.compactMap { $0 }
-                guard !sections.isEmpty else { continue }
-                homeTemplate.updateSections(sections)
-            }
-        }
-    }
-
-    /// Builds the "Recently Played" home row from a fresh server fetch. Shared by
-    /// the initial home load and by the live `.recentlyPlayedDidChange` refresh so
-    /// CarPlay mirrors the same scrobble-driven state as the in-app Home screen.
-    private func loadRecentlyPlayedSection(server: PlexServer, sectionId: String) async -> CPListSection? {
-        guard let recentlyPlayed = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
-              !recentlyPlayed.isEmpty else { return nil }
-        let preview = Array(recentlyPlayed.prefix(4))
-        let full = Array(recentlyPlayed.prefix(10))
-        let row = await makeCondensedImageRow(
-            title: "Recently Played",
-            items: preview,
-            server: server,
-            client: client,
-            elementTitle: { $0.title },
-            elementSubtitle: { $0.artistDisplayName },
-            onElementSelect: { [weak self = self] index in
-                self?.player.play(tracks: preview, startingAt: index)
-                self?.pushNowPlaying()
-            },
-            onHeaderSelect: { [weak self = self] in
-                self?.showTrackList(title: "Recently Played", tracks: full, showActions: false)
-            }
-        )
-        return CPListSection(items: [row])
-    }
-
-    /// Keeps the CarPlay "Recently Played" row in sync with the same
-    /// `.recentlyPlayedDidChange` signal that drives the in-app Home screen,
-    /// so both surfaces reflect the same server-confirmed scrobbles.
-    private func startObservingRecentlyPlayed() {
-        recentlyPlayedObservationTask?.cancel()
-        recentlyPlayedObservationTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: .recentlyPlayedDidChange) {
-                guard !Task.isCancelled, let self else { return }
-                guard let homeTemplate = self.homeTemplate,
-                      let server = self.server, let sectionId = self.sectionId else { continue }
-                self.homeSections[2] = await self.loadRecentlyPlayedSection(server: server, sectionId: sectionId)
-                let sections = self.homeSections.compactMap { $0 }
-                guard !sections.isEmpty else { continue }
-                homeTemplate.updateSections(sections)
-            }
-        }
-    }
-
-    // MARK: - Artists (A-Z Index)
-
-    private func makeArtistsList() -> CPListTemplate {
-        let template = CPListTemplate(title: "Artists", sections: [])
-        loadArtists(into: template)
-        return template
-    }
-
-    private func loadArtists(into template: CPListTemplate) {
-        guard let server, let sectionId else { return }
-        let generation = contentGeneration
-        Task {
-            let artists: [PlexMetadata]
-            do {
-                artists = try await client.cachedArtists(server: server, sectionId: sectionId)
-            } catch {
-                guard generation == contentGeneration else { return }
-                let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadArtists(into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            guard generation == contentGeneration else { return }
-            populateArtists(artists, into: template)
-        }
-    }
-
-    private func populateArtists(_ artists: [PlexMetadata], into template: CPListTemplate) {
-        let grouped = Dictionary(grouping: artists) { firstLetter(of: $0.titleSort ?? $0.title) }
-        let sortedKeys = grouped.keys.sorted { a, b in
-            if a == "#" { return false }
-            if b == "#" { return true }
-            return a < b
-        }
-
-        let maxItems = CPListTemplate.maximumItemCount
-        var totalItems = 0
-        var sections: [CPListSection] = []
-
-        for letter in sortedKeys {
-            guard totalItems < maxItems, let letterArtists = grouped[letter] else { break }
-            let sorted = letterArtists.sorted {
-                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
-            }
-            var items: [CPListItem] = []
-            for artist in sorted {
-                guard totalItems < maxItems else { break }
-                let item = CPListItem(text: artist.title, detailText: nil)
-                item.accessoryType = .disclosureIndicator
-                item.handler = { [weak self] _, completion in
-                    self?.showArtistAlbums(artist: artist)
-                    completion()
-                }
-                items.append(item)
-                totalItems += 1
-            }
-            if !items.isEmpty {
-                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
-            }
-        }
-
-        template.updateSections(sections)
-    }
-
-    private func showArtistAlbums(artist: PlexMetadata) {
-        guard let server, let sectionId else { return }
-        let template = CPListTemplate(title: artist.title, sections: [])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-        loadArtistAlbums(artist: artist, server: server, sectionId: sectionId, client: client, into: template)
-    }
-
-    private func loadArtistAlbums(artist: PlexMetadata, server: PlexServer, sectionId: String, client: PlexAPIClient, into template: CPListTemplate) {
-        let artistName = artist.title
-        Task {
-            // Uses the same release-reconciliation as ArtistDetailView/AlbumDetailView:
-            // the artist's plain children listing can omit releases (e.g. singles)
-            // whose tracks still point back at the artist via parentRatingKey.
-            let releases: [PlexMetadata]
-            do {
-                releases = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
-            } catch {
-                let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadArtistAlbums(artist: artist, server: server, sectionId: sectionId, client: client, into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            let albums = releases.filter { $0.type == "album" }
-            guard !albums.isEmpty else {
-                template.updateSections([])
-                return
-            }
-
-            let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(albums.count) albums", image: UIImage(systemName: "shuffle"))
-            shuffleItem.handler = { [weak self = self] _, completion in
-                Task {
-                    let allTracks = await withTaskGroup(of: [PlexMetadata].self) { group in
-                        for album in albums {
-                            let key = album.ratingKey
-                            let updatedAt = album.updatedAt
-                            group.addTask {
-                                do {
-                                    return try await client.cachedChildren(server: server, ratingKey: key, updatedAt: updatedAt)
-                                } catch {
-                                    #if DEBUG
-                                    print("[CarPlay] Failed to load tracks for album \(key): \(error)")
-                                    #endif
-                                    return []
-                                }
-                            }
-                        }
-                        var result: [PlexMetadata] = []
-                        for await tracks in group {
-                            result.append(contentsOf: tracks.filter { $0.type == "track" })
-                        }
-                        return result
-                    }
-                    guard !allTracks.isEmpty, let self else {
-                        completion()
-                        return
-                    }
-                    if !self.player.isShuffled { self.player.toggleShuffle() }
-                    self.player.play(tracks: allTracks, startingAt: 0)
-                    self.pushNowPlaying()
-                    completion()
-                }
-            }
-
-            let albumItems: [CPListTemplateItem] = albums.prefix(CPListTemplate.maximumItemCount - 1).map { album -> CPListItem in
-                let item = CPListItem(text: album.title, detailText: album.releaseYear)
-                item.accessoryType = .disclosureIndicator
-                loadArtwork(path: album.thumb, into: item, server: server, client: client)
-                let ratingKey = album.ratingKey
-                let albumTitle = album.title
-                let albumThumb = album.thumb
-                let albumYear = album.releaseYear
-                item.handler = { [weak self = self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
-                    completion()
-                }
-                return item
-            }
-
-            var allItems: [CPListTemplateItem] = [shuffleItem]
-            allItems.append(contentsOf: albumItems)
-            template.updateSections([CPListSection(items: allItems)])
-        }
-    }
-
-    // MARK: - Albums (A-Z Index)
-
-    private func makeAlbumsList() -> CPListTemplate {
-        let template = CPListTemplate(title: "Albums", sections: [])
-        loadAlbums(into: template)
-        return template
-    }
-
-    private func loadAlbums(into template: CPListTemplate) {
-        guard let server, let sectionId else { return }
-        let generation = contentGeneration
-        Task {
-            let albums: [PlexMetadata]
-            do {
-                albums = try await client.cachedAlbums(server: server, sectionId: sectionId)
-            } catch {
-                guard generation == contentGeneration else { return }
-                let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadAlbums(into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            guard generation == contentGeneration else { return }
-            populateAlbums(albums, into: template)
-        }
-    }
-
-    private func populateAlbums(_ albums: [PlexMetadata], into template: CPListTemplate) {
-        let grouped = Dictionary(grouping: albums) { firstLetter(of: $0.titleSort ?? $0.title) }
-        let sortedKeys = grouped.keys.sorted { a, b in
-            if a == "#" { return false }
-            if b == "#" { return true }
-            return a < b
-        }
-
-        let maxItems = CPListTemplate.maximumItemCount
-        var totalItems = 0
-        var sections: [CPListSection] = []
-
-        for letter in sortedKeys {
-            guard totalItems < maxItems, let letterAlbums = grouped[letter] else { break }
-            let sorted = letterAlbums.sorted {
-                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
-            }
-            var items: [CPListItem] = []
-            for album in sorted {
-                guard totalItems < maxItems else { break }
-                let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
-                item.accessoryType = .disclosureIndicator
-                let ratingKey = album.ratingKey
-                let albumTitle = album.title
-                let artistName = album.parentTitle
-                let albumThumb = album.thumb
-                let albumYear = album.releaseYear
-                item.handler = { [weak self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
-                    completion()
-                }
-                items.append(item)
-                totalItems += 1
-            }
-            if !items.isEmpty {
-                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
-            }
-        }
-
-        template.updateSections(sections)
-    }
-
-    // MARK: - Playlists
-
-    private func makePlaylistsList() -> CPListTemplate {
-        let template = CPListTemplate(title: "Playlists", sections: [])
-        loadPlaylists(into: template)
-        return template
-    }
-
-    private func loadPlaylists(into template: CPListTemplate) {
-        guard let server else { return }
-        let generation = contentGeneration
-        Task {
-            let playlists: [PlexPlaylist]
-            do {
-                playlists = try await client.cachedPlaylists(server: server)
-            } catch {
-                guard generation == contentGeneration else { return }
-                let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadPlaylists(into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            guard generation == contentGeneration else { return }
-            let musicPlaylists = playlists.filter { $0.isMusicPlaylist }
-            let items = musicPlaylists.prefix(CPListTemplate.maximumItemCount).map { playlist -> CPListItem in
-                let songCount = playlist.leafCount.map { "\($0) songs" }
-                let item = CPListItem(text: playlist.title, detailText: songCount)
-                item.accessoryType = .disclosureIndicator
-                loadArtwork(path: playlist.thumb ?? playlist.composite, into: item, server: server, client: client)
-                let key = playlist.key ?? playlist.ratingKey
-                let title = playlist.title
-                item.handler = { [weak self = self] _, completion in
-                    self?.showPlaylistTracks(playlistKey: key, playlistTitle: title)
-                    completion()
-                }
-                return item
-            }
-            template.updateSections([CPListSection(items: items)])
-        }
-    }
-
-    private func showPlaylistTracks(playlistKey: String, playlistTitle: String) {
-        guard let server else { return }
-        let template = CPListTemplate(title: playlistTitle, sections: [])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-        loadPlaylistTracks(playlistKey: playlistKey, server: server, client: client, into: template)
-    }
-
-    private func loadPlaylistTracks(playlistKey: String, server: PlexServer, client: PlexAPIClient, into template: CPListTemplate) {
-        Task {
-            let tracks: [PlexMetadata]
-            do {
-                tracks = try await client.cachedPlaylistItems(server: server, playlistKey: playlistKey)
-            } catch {
-                let retry = makeRetryItem(into: template) { [weak self = self] in
-                    self?.loadPlaylistTracks(playlistKey: playlistKey, server: server, client: client, into: template)
-                }
-                template.updateSections([CPListSection(items: [retry])])
-                return
-            }
-            guard !tracks.isEmpty else { return }
-
-            let shuffleItem = CPListItem(text: "Shuffle", detailText: "\(tracks.count) songs", image: UIImage(systemName: "shuffle"))
-            shuffleItem.handler = { [weak self = self] _, completion in
-                guard let self else { completion(); return }
-                if !self.player.isShuffled { self.player.toggleShuffle() }
-                self.player.play(tracks: tracks, startingAt: 0)
-                self.pushNowPlaying()
-                completion()
-            }
-
-            let trackItems: [CPListTemplateItem] = tracks.prefix(CPListTemplate.maximumItemCount - 1).enumerated().map { index, track -> CPListItem in
-                let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
-                loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
-                item.handler = { [weak self = self] _, completion in
-                    self?.player.play(tracks: tracks, startingAt: index)
-                    self?.pushNowPlaying()
-                    completion()
-                }
-                return item
-            }
-
-            var allItems: [CPListTemplateItem] = [shuffleItem]
-            allItems.append(contentsOf: trackItems)
-            template.updateSections([CPListSection(items: allItems)])
-        }
-    }
-
-    // MARK: - Alphabet Helpers
-
-    private func firstLetter(of title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let first = trimmed.unicodeScalars.first else { return "#" }
-        if CharacterSet.letters.contains(first) {
-            return String(trimmed.prefix(1)).uppercased()
-        }
-        return "#"
-    }
-
-    // MARK: - Track List (with Shuffle)
-
-    private func showTrackList(title: String, tracks: [PlexMetadata], startAt: Int? = nil, showActions: Bool = true) {
-        let capturedTracks = tracks
-
-        var actionRow: CPListImageRowItem?
-        if showActions {
-            let playElement = CPListImageRowItemCondensedElement(
-                image: (UIImage(systemName: "play.fill") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
-                imageShape: .roundedRectangle,
-                title: "Play",
-                subtitle: nil,
-                accessorySymbolName: nil
-            )
-            let shuffleElement = CPListImageRowItemCondensedElement(
-                image: (UIImage(systemName: "shuffle") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
-                imageShape: .roundedRectangle,
-                title: "Shuffle",
-                subtitle: nil,
-                accessorySymbolName: nil
-            )
-            let row = CPListImageRowItem(text: nil, condensedElements: [playElement, shuffleElement], allowsMultipleLines: false)
-            row.listImageRowHandler = { [weak self] _, index, completion in
-                guard let self else { completion(); return }
-                if index == 0 {
-                    if self.player.isShuffled { self.player.toggleShuffle() }
-                } else {
-                    if !self.player.isShuffled { self.player.toggleShuffle() }
-                }
-                self.player.play(tracks: capturedTracks, startingAt: 0)
-                self.pushNowPlaying()
-                completion()
-            }
-            actionRow = row
-        }
-
-        let maxTrackItems = CPListTemplate.maximumItemCount - (showActions ? 1 : 0)
-        let trackItems: [CPListTemplateItem] = tracks.prefix(maxTrackItems).enumerated().map { index, track -> CPListItem in
-            let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
-            if let server {
-                loadArtwork(path: track.thumb ?? track.parentThumb, into: item, server: server, client: client)
-            }
-            item.handler = { [weak self] _, completion in
-                self?.player.play(tracks: capturedTracks, startingAt: index)
-                self?.pushNowPlaying()
-                completion()
-            }
-            return item
-        }
-
-        var allItems: [CPListTemplateItem] = actionRow.map { [$0] } ?? []
-        allItems.append(contentsOf: trackItems)
-        let template = CPListTemplate(title: title, sections: [CPListSection(items: allItems)])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-
-        // If called from an image row tap, auto-play that track
-        if let startAt {
-            player.play(tracks: tracks, startingAt: startAt)
-            pushNowPlaying()
-        }
-    }
-
-    // MARK: - Recently Added List
-
-    private func showRecentlyAddedList(_ albums: [PlexMetadata]) {
-        guard let server else { return }
-        let items = albums.map { album -> CPListItem in
-            let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
-            item.accessoryType = .disclosureIndicator
-            loadArtwork(path: album.thumb, into: item, server: server, client: client)
-            let ratingKey = album.ratingKey
-            let albumTitle = album.title
-            let artistName = album.parentTitle
-            let albumThumb = album.thumb
-            let albumYear = album.releaseYear
-            item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
-                completion()
-            }
-            return item
-        }
-        let template = CPListTemplate(title: "Recently Added", sections: [CPListSection(items: items)])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-    }
-
-    // MARK: - Image Row
-
-    private func makeImageRow(
-        title: String,
-        items: [PlexMetadata],
-        server: PlexServer,
-        client: PlexAPIClient,
-        elementTitle: ((PlexMetadata) -> String?)? = nil,
-        elementSubtitle: ((PlexMetadata) -> String?)? = nil,
-        onImageSelect: @escaping @MainActor (Int) -> Void,
-        onRowSelect: @escaping @MainActor () -> Void
-    ) async -> CPListImageRowItem {
-        let maxImages = CPMaximumNumberOfGridImages
-        let limited = Array(items.prefix(maxImages))
-        let placeholder = UIImage(systemName: "music.note") ?? UIImage()
-
-        // Load artwork in parallel
-        var loadedImages: [Int: UIImage] = [:]
-        await withTaskGroup(of: (Int, UIImage?).self) { group in
-            for (i, metadata) in limited.enumerated() {
-                let thumbPath = metadata.thumb ?? metadata.parentThumb
-                group.addTask {
-                    guard let url = client.artworkURL(server: server, path: thumbPath, width: 300, height: 300) else {
-                        return (i, nil)
-                    }
-                    return (i, await ImageCache.shared.image(for: url, targetPixelSize: 300))
-                }
-            }
-            for await (i, img) in group {
-                if let img { loadedImages[i] = img }
-            }
-        }
-
-        let elements = limited.enumerated().map { i, metadata -> CPListImageRowItemRowElement in
-            CPListImageRowItemRowElement(
-                image: loadedImages[i] ?? placeholder,
-                title: elementTitle?(metadata),
-                subtitle: elementSubtitle?(metadata)
-            )
-        }
-
-        let row = CPListImageRowItem(text: title, elements: elements, allowsMultipleLines: false)
-        row.listImageRowHandler = { _, index, completion in
-            onImageSelect(index)
-            completion()
-        }
-        row.handler = { _, completion in
-            onRowSelect()
-            completion()
-        }
-
-        return row
-    }
-
-    // MARK: - Condensed Image Row (artwork left, title/artist right, 2-wide grid)
-
-    private func makeCondensedImageRow(
-        title: String,
-        items: [PlexMetadata],
-        server: PlexServer,
-        client: PlexAPIClient,
-        elementTitle: (PlexMetadata) -> String?,
-        elementSubtitle: (PlexMetadata) -> String?,
-        onElementSelect: @escaping @MainActor (Int) -> Void,
-        onHeaderSelect: @escaping @MainActor () -> Void
-    ) async -> CPListImageRowItem {
-        let placeholder = UIImage(systemName: "music.note") ?? UIImage()
-
-        var loadedImages: [Int: UIImage] = [:]
-        await withTaskGroup(of: (Int, UIImage?).self) { group in
-            for (i, metadata) in items.enumerated() {
-                let thumbPath = metadata.thumb ?? metadata.parentThumb
-                group.addTask {
-                    guard let url = client.artworkURL(server: server, path: thumbPath, width: 300, height: 300) else {
-                        return (i, nil)
-                    }
-                    return (i, await ImageCache.shared.image(for: url, targetPixelSize: 300))
-                }
-            }
-            for await (i, img) in group {
-                if let img { loadedImages[i] = img }
-            }
-        }
-
-        let elements = items.enumerated().map { i, metadata -> CPListImageRowItemCondensedElement in
-            CPListImageRowItemCondensedElement(
-                image: loadedImages[i] ?? placeholder,
-                imageShape: .roundedRectangle,
-                title: elementTitle(metadata) ?? "",
-                subtitle: elementSubtitle(metadata),
-                accessorySymbolName: nil
-            )
-        }
-
-        let row = CPListImageRowItem(text: title, condensedElements: elements, allowsMultipleLines: true)
-        row.listImageRowHandler = { _, index, completion in
-            onElementSelect(index)
-            completion()
-        }
-        row.handler = { _, completion in
-            onHeaderSelect()
-            completion()
-        }
-        return row
-    }
-
-    // MARK: - Album Tracks
-
-    private func showAlbumTracks(albumRatingKey: String, albumTitle: String, artistName: String? = nil, albumThumb: String? = nil, releaseYear: String? = nil) {
-        guard let server else { return }
-        let loadingTemplate = CPListTemplate(title: albumTitle, sections: [])
-        interfaceController?.pushTemplate(loadingTemplate, animated: true, completion: nil)
-        Task {
-            let children: [PlexMetadata]
-            do {
-                children = try await client.cachedChildren(server: server, ratingKey: albumRatingKey)
-            } catch {
-                let errItem = CPListItem(text: "Couldn't Load", detailText: "Go back and try again")
-                errItem.isEnabled = false
-                loadingTemplate.updateSections([CPListSection(items: [errItem])])
-                return
-            }
-
-            let playableTracks = Array(children.filter { $0.type == "track" })
-            guard !playableTracks.isEmpty else { return }
-
-            var artworkImage = UIImage(systemName: "square.stack") ?? UIImage()
-            if let albumThumb, let url = client.artworkURL(server: server, path: albumThumb, width: 300, height: 300),
-               let loadedImage = await ImageCache.shared.image(for: url, targetPixelSize: 300) {
-                artworkImage = loadedImage
-            }
-
-            let headerText = artistName.map { "\(albumTitle) • \($0)" } ?? albumTitle
-            let headerItem = CPListItem(text: headerText, detailText: nil, image: artworkImage)
-            headerItem.handler = { _, completion in completion() }
-
-            let playElement = CPListImageRowItemCondensedElement(
-                image: (UIImage(systemName: "play.fill") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
-                imageShape: .roundedRectangle,
-                title: "Play",
-                subtitle: nil,
-                accessorySymbolName: nil
-            )
-            let shuffleElement = CPListImageRowItemCondensedElement(
-                image: (UIImage(systemName: "shuffle") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
-                imageShape: .roundedRectangle,
-                title: "Shuffle",
-                subtitle: nil,
-                accessorySymbolName: nil
-            )
-            let actionRow = CPListImageRowItem(text: nil, condensedElements: [playElement, shuffleElement], allowsMultipleLines: false)
-            actionRow.listImageRowHandler = { [weak self = self] _, index, completion in
-                guard let self else { completion(); return }
-                if index == 0 {
-                    if self.player.isShuffled { self.player.toggleShuffle() }
-                } else {
-                    if !self.player.isShuffled { self.player.toggleShuffle() }
-                }
-                self.player.play(tracks: playableTracks, startingAt: 0)
-                self.pushNowPlaying()
-                completion()
-            }
-
-            let trackItems: [CPListTemplateItem] = playableTracks
-                .prefix(CPListTemplate.maximumItemCount - 1)
-                .enumerated()
-                .map { index, track -> CPListItem in
-                    let isFavorited = (track.userRating ?? 0) >= 10
-                    let numPrefix = track.index.map { "\($0)  " } ?? ""
-                    let starPrefix = isFavorited ? "★ " : ""
-                    let item = CPListItem(text: "\(numPrefix)\(starPrefix)\(track.title)", detailText: nil)
-                    let capturedTracks = playableTracks
-                    item.handler = { [weak self = self] _, completion in
-                        self?.player.play(tracks: capturedTracks, startingAt: index)
-                        self?.pushNowPlaying()
-                        completion()
-                    }
-                    return item
-                }
-
-            let template = CPListTemplate(title: "", sections: [
-                CPListSection(items: [headerItem, actionRow]),
-                CPListSection(items: trackItems)
-            ])
-            interfaceController?.popTemplate(animated: false, completion: nil)
-            interfaceController?.pushTemplate(template, animated: false, completion: nil)
-        }
-    }
-
-    // MARK: - Now Playing
-
-    private func configureNowPlaying() {
-        let nowPlaying = CPNowPlayingTemplate.shared
-        nowPlaying.add(self)
-        nowPlaying.isUpNextButtonEnabled = true
-        nowPlaying.upNextTitle = "Queue"
-        nowPlaying.isAlbumArtistButtonEnabled = true
-
-        let shuffleButton = CPNowPlayingShuffleButton { [weak self] _ in
-            self?.player.toggleShuffle()
-        }
-        self.shuffleNPButton = shuffleButton
-
-        let repeatButton = CPNowPlayingRepeatButton { [weak self] _ in
-            self?.player.cycleRepeatMode()
-        }
-        self.repeatNPButton = repeatButton
-
-        let magicMixImage = UIImage(systemName: "wand.and.stars") ?? UIImage()
-        let mixBtn = CPNowPlayingImageButton(image: magicMixImage) { [weak self] _ in
-            self?.player.requestMagicMixRefill(freshMix: true)
-            self?.syncMixButtons()
-        }
-        self.magicMixButton = mixBtn
-
-        let filled = CPNowPlayingImageButton(image: UIImage(systemName: "star.fill") ?? UIImage()) { [weak self] _ in
-            self?.toggleFavorite()
-        }
-        self.favFilledButton = filled
-
-        let outline = CPNowPlayingImageButton(image: UIImage(systemName: "star") ?? UIImage()) { [weak self] _ in
-            self?.toggleFavorite()
-        }
-        self.favOutlineButton = outline
-
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, mixBtn])
-        lastPublishedFavoriteState = false
-        syncMixButtons()
-    }
-
-    private func syncMixButtons() {
-        let isMagicMixActive = player.isMagicMixActive
-        if lastPublishedMagicMixState != isMagicMixActive {
-            lastPublishedMagicMixState = isMagicMixActive
-            magicMixButton?.isSelected = isMagicMixActive
-        }
-        syncFavoriteButton()
-    }
-
-    private func syncFavoriteButton() {
-        currentTrackFavorited = (player.currentTrack?.userRating ?? 0) >= 10
-        rebuildNowPlayingButtons()
-    }
-
-    private func rebuildNowPlayingButtons() {
-        guard let s = shuffleNPButton, let r = repeatNPButton,
-              let mix = magicMixButton,
-              let filled = favFilledButton, let outline = favOutlineButton else { return }
-        guard lastPublishedFavoriteState != currentTrackFavorited else { return }
-        lastPublishedFavoriteState = currentTrackFavorited
-        let fav = currentTrackFavorited ? filled : outline
-        CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, mix])
-    }
-
-    private func toggleFavorite() {
-        guard let track = player.currentTrack,
-              let server else { return }
-        let wasFavorited = currentTrackFavorited
-        currentTrackFavorited.toggle()
-        rebuildNowPlayingButtons()
-        Task {
-            let success = await player.setFavorited(!wasFavorited, for: track, server: server, client: client, sectionId: sectionId)
-            if !success {
-                currentTrackFavorited = wasFavorited
-                rebuildNowPlayingButtons()
-            }
-        }
-    }
-
-    private func startObservingPlayer() {
-        observationTask?.cancel()
-        observationTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                let p = self.player
-                // Read the properties we want to track — withObservationTracking
-                // will call onChange when any of them mutate.
-                await withCheckedContinuation { continuation in
-                    withObservationTracking {
-                        _ = p.isShuffled
-                        _ = p.repeatMode
-                        _ = p.isMagicMixActive
-                        _ = p.currentTrack
-                    } onChange: {
-                        continuation.resume()
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                self.syncMixButtons()
-            }
-        }
-    }
-
-    private func pushNowPlaying() {
-        syncMixButtons()
-        let nowPlaying = CPNowPlayingTemplate.shared
-        guard interfaceController?.topTemplate !== nowPlaying else { return }
-        // Pop to Now Playing if it's already in the stack; otherwise push it fresh.
-        interfaceController?.pop(to: nowPlaying, animated: true) { [weak self] success, _ in
-            if !success {
-                self?.interfaceController?.pushTemplate(nowPlaying, animated: true, completion: nil)
-            }
-        }
-    }
-
     // MARK: - Error Helpers
 
-    private func makeRetryItem(into template: CPListTemplate, action: @escaping @MainActor () -> Void) -> CPListItem {
+    func makeRetryItem(into template: CPListTemplate, action: @escaping @MainActor () -> Void) -> CPListItem {
         let item = CPListItem(text: "Couldn't Load", detailText: "Tap to retry")
         item.handler = { _, completion in
             action()
@@ -1071,37 +207,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     // MARK: - Artwork Loading
 
-    private func loadArtwork(path: String?, into item: CPListItem, server: PlexServer, client: PlexAPIClient) {
+    func loadArtwork(path: String?, into item: CPListItem, server: PlexServer, client: PlexAPIClient) {
         guard let url = client.artworkURL(server: server, path: path, width: 300, height: 300) else { return }
         Task {
             guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 300) else { return }
             item.setImage(image)
         }
-    }
-
-}
-
-// MARK: - CPNowPlayingTemplateObserver
-
-extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
-    func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
-        guard !player.upcomingTracks.isEmpty else { return }
-        let tracks = player.upcomingTracks
-        let items = tracks.prefix(CPListTemplate.maximumItemCount).enumerated().map { index, track -> CPListItem in
-            let item = CPListItem(text: track.title, detailText: track.artistDisplayName)
-            item.handler = { [weak self] _, completion in
-                self?.player.skipToUpcoming(at: index)
-                completion()
-            }
-            return item
-        }
-        let template = CPListTemplate(title: "Up Next", sections: [CPListSection(items: items)])
-        interfaceController?.pushTemplate(template, animated: true, completion: nil)
-    }
-
-    func nowPlayingTemplateAlbumArtistButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
-        guard let track = player.currentTrack,
-              let albumRatingKey = track.parentRatingKey else { return }
-        showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName, artistName: track.artistDisplayName, albumThumb: track.parentThumb)
     }
 }
