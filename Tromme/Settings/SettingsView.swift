@@ -8,6 +8,9 @@ struct SettingsView: View {
     @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
     @State private var showReviewPrompt = false
     @State private var sections: [LibrarySection] = []
+    @State private var plus = PlusStore.shared
+    @State private var showPaywall = false
+    @State private var showManageSubscription = false
 
     var body: some View {
         Form {
@@ -16,6 +19,18 @@ struct SettingsView: View {
                     Button("Leave a Review") {
                         showReviewPrompt = true
                     }
+                }
+            }
+
+            Section {
+                if plus.isPlus {
+                    Button("Manage Tromme Plus") { showManageSubscription = true }
+                } else {
+                    Button("Get Tromme Plus") { showPaywall = true }
+                }
+            } footer: {
+                if !plus.isPlus {
+                    Text("Unlock animated artwork and the Premium Icon Pack.")
                 }
             }
 
@@ -61,6 +76,8 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .task { await loadSections() }
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
+        .manageSubscriptionsSheet(isPresented: $showManageSubscription)
         .alert("Leave a Review?", isPresented: $showReviewPrompt) {
             Button("No Thanks", role: .cancel) {
                 hasRequestedAppReview = true

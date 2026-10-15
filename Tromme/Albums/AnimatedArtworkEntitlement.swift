@@ -1,14 +1,10 @@
 import Foundation
 
 /// Gate for animated artwork, a Tromme+ subscription feature.
-/// Wire `isUnlocked` to the Tromme+ entitlement once the purchase flow exists.
+/// Unlocked by the Tromme Plus subscription (see `PlusStore`).
 enum AnimatedArtworkEntitlement {
     static var isUnlocked: Bool {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
+        PlusStore.cachedIsPlus
     }
 
     /// `@AppStorage` key for the Settings > Interface toggle (default on).

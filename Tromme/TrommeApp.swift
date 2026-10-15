@@ -33,6 +33,7 @@ struct TrommeApp: App {
         let storedId = UserDefaults.standard.string(forKey: "selectedAppIconId") ?? "default"
         let accentColor = UIColor(AppIconOption.accentColor(for: storedId))
         Self.applyTabBarAppearance(accentColor: accentColor)
+        PlusStore.shared.start()
     }
 
     private static func applyTabBarAppearance(accentColor: UIColor) {

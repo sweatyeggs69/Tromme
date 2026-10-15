@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */; };
 		968A04EA82EB775A94CD755D /* NowPlayingAnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */; };
 		D26938AB2FE71854B2E1E20D /* AnimatedArtworkClipDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */; };
 		7CC494AF88590F8464CA7DC9 /* AnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */; };
@@ -44,7 +45,7 @@
 		0E91C64F2F91B03000775275 /* AppContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E91C64E2F91B03000775275 /* AppContext.swift */; };
 		0EC94E603066D6A100B13937 /* ArtworkActionButtonsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EC94E5F3066D6A100B13937 /* ArtworkActionButtonsRow.swift */; };
 		0ECF063B3059F62F00650724 /* InlineMoreText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECF063A3059F62F00650724 /* InlineMoreText.swift */; };
-		0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07403048CA9B00ACE377 /* IconPackStore.swift */; };
+		0EEC07413048CA9B00ACE377 /* PlusStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07403048CA9B00ACE377 /* PlusStore.swift */; };
 		17011EBA4376470FF844A359 /* PlaylistRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0CCB8AF72F235EAFE1C57D /* PlaylistRecord.swift */; };
 		25E7CE0BA0CED8FB9F43332B /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB6B7139BCB32BF5F17D78 /* LoginView.swift */; };
 		277F53ED9EB6AF4188D15B0A /* AudioPlayerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */; };
@@ -192,6 +193,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusPaywallView.swift; sourceTree = "<group>"; };
 		92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingAnimatedArtwork.swift; sourceTree = "<group>"; };
 		019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkClipDownloader.swift; sourceTree = "<group>"; };
 		78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtwork.swift; sourceTree = "<group>"; };
@@ -231,7 +233,7 @@
 		0E91C64E2F91B03000775275 /* AppContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContext.swift; sourceTree = "<group>"; };
 		0EC94E5F3066D6A100B13937 /* ArtworkActionButtonsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkActionButtonsRow.swift; sourceTree = "<group>"; };
 		0ECF063A3059F62F00650724 /* InlineMoreText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineMoreText.swift; sourceTree = "<group>"; };
-		0EEC07403048CA9B00ACE377 /* IconPackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconPackStore.swift; sourceTree = "<group>"; };
+		0EEC07403048CA9B00ACE377 /* PlusStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusStore.swift; sourceTree = "<group>"; };
 		0EEC07423048CA9E00ACE377 /* Tromme.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Tromme.storekit; sourceTree = "<group>"; };
 		198E310192207773F55E967F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1C2FC699685A8C436EF372D6 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
@@ -636,7 +638,8 @@
 				0E5213333040F41C00583BF3 /* PlaybackSettingsView.swift */,
 				0E5213353040F42900583BF3 /* OfflineSettingsView.swift */,
 				0E723B1E304880390059BF86 /* AppIconPickerView.swift */,
-				0EEC07403048CA9B00ACE377 /* IconPackStore.swift */,
+				0EEC07403048CA9B00ACE377 /* PlusStore.swift */,
+				0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -926,7 +929,8 @@
 				C1C0AFF81F4E17E993368EDC /* AirPlayButton.swift in Sources */,
 				6DB38D100CC35E6D9F76D821 /* TimelineSlider.swift in Sources */,
 				17833B3C843EDF0C4DED9DD4 /* TimelineOutbox.swift in Sources */,
-				0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */,
+				0EEC07413048CA9B00ACE377 /* PlusStore.swift in Sources */,
+				0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,

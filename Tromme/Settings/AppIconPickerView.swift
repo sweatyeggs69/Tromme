@@ -4,7 +4,8 @@ import StoreKit
 struct AppIconPickerView: View {
     @State private var currentIconName: String? = UIApplication.shared.alternateIconName
     @State private var applyError: String?
-    @State private var iconPackStore = IconPackStore(productID: "PremiumIP")
+    @State private var plus = PlusStore.shared
+    @State private var showPaywall = false
     @AppStorage("selectedAppIconId") private var selectedAppIconId: String = "default"
 
     var body: some View {
@@ -17,7 +18,7 @@ struct AppIconPickerView: View {
                 Text("Accent color takes effect after restarting the app.")
             }
 
-            packSection(title: "Premium Icon Pack", options: AppIconOption.premiumIconPack, store: iconPackStore)
+            packSection(title: "Premium Icon Pack", options: AppIconOption.premiumIconPack)
         }
         .navigationTitle("App Icon")
         .alert("Couldn't Change Icon", isPresented: Binding(get: { applyError != nil }, set: { if !$0 { applyError = nil } })) {
@@ -25,86 +26,49 @@ struct AppIconPickerView: View {
         } message: {
             Text(applyError ?? "")
         }
-        .alert("Purchase Failed", isPresented: Binding(get: { iconPackStore.purchaseError != nil }, set: { if !$0 { iconPackStore.purchaseError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(iconPackStore.purchaseError ?? "")
-        }
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
     }
 
     @ViewBuilder
-    private func packSection(title: String, options: [AppIconOption], store: IconPackStore) -> some View {
+    private func packSection(title: String, options: [AppIconOption]) -> some View {
         Section {
-            if store.isPurchased {
+            if plus.isPlus {
                 ForEach(options) { option in
                     iconRow(option)
                 }
             } else {
-                purchaseRow(title: title, store: store)
+                Button {
+                    showPaywall = true
+                } label: {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
+                                .fill(.quaternary)
+                            Image(systemName: "lock.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(width: 60, height: 60)
+
+                        Text("Unlock with Tromme Plus")
+                            .foregroundStyle(.primary)
+                            .fontWeight(.medium)
+
+                        Spacer()
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
 
                 ForEach(options) { option in
                     lockedIconRow(option)
                 }
-
-                Button {
-                    Task { await store.restore() }
-                } label: {
-                    Text("Restore Purchases")
-                        .font(.footnote)
-                        .foregroundStyle(.tint)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .center)
             }
         } header: {
             Text(title)
         } footer: {
-            Text("One-time purchase. Icon packs may grow over time and new additions are always free for existing purchasers!")
+            Text("Included with Tromme Plus. New icons are added over time.")
         }
-    }
-
-    @ViewBuilder
-    private func purchaseRow(title: String, store: IconPackStore) -> some View {
-        Button {
-            Task { await store.purchase() }
-        } label: {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
-                        .fill(.quaternary)
-                    Image(systemName: "lock.fill")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(width: 60, height: 60)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .foregroundStyle(.primary)
-                        .fontWeight(.medium)
-                }
-
-                Spacer()
-
-                if store.isPurchasing {
-                    ProgressView()
-                } else if store.isLoadingProduct {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                } else if let product = store.product {
-                    Text(product.displayPrice)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.tint)
-                } else {
-                    Text("Buy")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.tint)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(store.isPurchasing || store.isLoadingProduct)
     }
 
     @ViewBuilder
