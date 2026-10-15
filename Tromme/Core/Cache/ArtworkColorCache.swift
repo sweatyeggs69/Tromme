@@ -151,9 +151,11 @@ private extension UIImage {
                 let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
                 guard lab.chroma >= minChroma else { continue }
                 chromaticPixels += 1
+                // Muddy warm tones (skin, cardboard) count for little so a real color wins.
+                let weight = lab.isMuddy ? 0.15 : 1.0
                 let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
-                count[i] += 1
-                chromaSum[i] += lab.chroma
+                count[i] += weight
+                chromaSum[i] += lab.chroma * weight
             }
         }
 
@@ -280,10 +282,11 @@ enum ArtworkBackdrop {
         let ui: UIColor
         switch colorScheme {
         case .light:
-            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
+            ui = Lab.rgb(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * (lab.isMuddy ? 0.35 : 0.8) : lab.chroma, hue: lab.hue)
         default:
             let colorful = lab.chroma >= 8
-            let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
+            // A muddy warm pick (nothing better in the image) is pushed toward neutral.
+            let chroma = colorful ? lab.chroma * (lab.isMuddy ? 0.35 : 0.8) : lab.chroma
             if style == .artist && colorful {
                 ui = Lab.rgb(lightness: min(max(lab.l, 26), 40), chroma: chroma, hue: lab.hue)
             } else {
@@ -312,6 +315,13 @@ private struct Lab {
 
     var chroma: Double { (a * a + b * b).squareRoot() }
     var hue: Double { atan2(b, a) }
+
+    /// Skin, tan and cardboard tones: warm orange to yellow hues with modest chroma.
+    var isMuddy: Bool {
+        var degrees = hue * 180 / .pi
+        if degrees < 0 { degrees += 360 }
+        return degrees >= 35 && degrees <= 90 && chroma < 40
+    }
 
     private static let white = (x: 0.95047, y: 1.0, z: 1.08883)
 
