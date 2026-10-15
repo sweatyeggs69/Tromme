@@ -56,7 +56,7 @@ final class PlexAPIClient: Sendable {
     static let defaultContainerStart = "0"
     static let defaultContainerSize = "200"
 
-    private let session: URLSession
+    let session: URLSession
 
     /// Default session configured for reliability on all network types.
     /// `waitsForConnectivity` ensures requests don't fail instantly on cellular
@@ -75,7 +75,7 @@ final class PlexAPIClient: Sendable {
 
     /// Applies the full set of X-Plex-* identification headers to a request.
     /// Per the API spec, these headers should be included on all requests.
-    private func applyPlexHeaders(to request: inout URLRequest, token: String? = nil) {
+    func applyPlexHeaders(to request: inout URLRequest, token: String? = nil) {
         request.setValue(Self.clientIdentifier, forHTTPHeaderField: "X-Plex-Client-Identifier")
         request.setValue(Self.product, forHTTPHeaderField: "X-Plex-Product")
         request.setValue(Self.version, forHTTPHeaderField: "X-Plex-Version")
@@ -109,969 +109,12 @@ final class PlexAPIClient: Sendable {
         return try await perform(request)
     }
 
-    // MARK: - Library Endpoints
-
-    func getLibrarySections(server: PlexServer) async throws -> [LibrarySection] {
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(
-            server: server,
-            path: "/library/sections/all"
-        )
-        return response.mediaContainer.directory ?? []
-    }
-
-    func getLibraryContents(server: PlexServer, sectionId: String, type: Int? = nil) async throws -> [PlexMetadata] {
-        var allItems: [PlexMetadata] = []
-        try await streamLibraryContents(server: server, sectionId: sectionId, type: type) { page in
-            allItems.append(contentsOf: page)
-        }
-        return allItems
-    }
-
-    /// Pages through `/library/sections/{id}/all`, handing each page to `onPage` in order
-    /// as it arrives so callers (the library sync) can persist incrementally instead of
-    /// holding an entire library in memory.
-    func streamLibraryContents(
-        server: PlexServer,
-        sectionId: String,
-        type: Int? = nil,
-        onPage: (_ page: [PlexMetadata]) async throws -> Void
-    ) async throws {
-        let pageSize = 1000
-        let typeParam = type.map { "&type=\($0)" } ?? ""
-
-        func fetchPage(start: Int) async throws -> PlexResponse<PlexMetadata> {
-            let path = "/library/sections/\(sectionId)/all?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)\(typeParam)"
-            #if DEBUG
-            let began = ContinuousClock.now
-            print("[LibraryFetch] type \(type ?? 0) start \(start): requesting from \(server.baseURL?.host() ?? "?")")
-            defer { print("[LibraryFetch] type \(type ?? 0) start \(start): returned after \(ContinuousClock.now - began)") }
-            #endif
-            return try await retryingRequest {
-                try await self.serverRequest(server: server, path: path)
-            }
-        }
-
-        // Fetch first page to discover the total item count
-        let firstResponse = try await fetchPage(start: 0)
-        let firstPage = firstResponse.mediaContainer.metadata ?? []
-        try await onPage(firstPage)
-        let total = firstResponse.mediaContainer.totalSize ?? firstPage.count
-        guard total > firstPage.count else { return }
-
-        // Remaining pages: at most 10 in flight, each handed to `onPage` the moment it
-        // arrives (page order doesn't matter to the store) so progress is steady and only
-        // a few pages are ever held in memory.
-        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
-        try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
-            var iterator = pageStarts.makeIterator()
-            func addNext() {
-                guard let start = iterator.next() else { return }
-                group.addTask {
-                    try await fetchPage(start: start).mediaContainer.metadata ?? []
-                }
-            }
-            for _ in 0..<10 { addNext() }
-            while let page = try await group.next() {
-                try await onPage(page)
-                addNext()
-            }
-        }
-    }
-
-    /// Fetch tracks considered favorites by Plex (typically user-rated 4+ stars).
-    func getFavoriteTracks(server: PlexServer, sectionId: String, minUserRating: Int = 4) async throws -> [PlexMetadata] {
-        let path = "/library/sections/\(sectionId)/all?type=10&track.userRating>=\(minUserRating)"
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-        return response.mediaContainer.metadata ?? []
-    }
-
-    /// Fetch all tracks for a specific artist using server-side filtering.
-    /// Avoids loading the full library just to filter by artist.
-    func getArtistTracks(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
-        let pageSize = 1000
-        let firstPath = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)"
-        let firstResponse: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: firstPath)
-        var allItems = firstResponse.mediaContainer.metadata ?? []
-        let total = firstResponse.mediaContainer.totalSize ?? allItems.count
-        guard total > allItems.count else { return allItems }
-
-        let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
-        for batchOffset in stride(from: 0, to: pageStarts.count, by: 10) {
-            let batch = pageStarts[batchOffset..<min(batchOffset + 10, pageStarts.count)]
-            let batchItems = try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
-                for start in batch {
-                    let path = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
-                    group.addTask {
-                        let response: PlexResponse<PlexMetadata> = try await self.serverRequest(server: server, path: path)
-                        return response.mediaContainer.metadata ?? []
-                    }
-                }
-                var results: [PlexMetadata] = []
-                for try await items in group { results.append(contentsOf: items) }
-                return results
-            }
-            allItems.append(contentsOf: batchItems)
-        }
-        return allItems
-    }
-
-    func getRecentlyAdded(server: PlexServer, sectionId: String, type: Int = 9, limit: Int = 10) async throws -> [PlexMetadata] {
-        let path = "/library/sections/\(sectionId)/all?type=\(type)&sort=addedAt:desc&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-        return response.mediaContainer.metadata ?? []
-    }
-
-    func getRecentlyPlayed(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
-        let path = "/library/sections/\(sectionId)/all?type=10&sort=lastViewedAt:desc&lastViewedAt>=1&X-Plex-Container-Start=0&X-Plex-Container-Size=\(limit)"
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-        return response.mediaContainer.metadata ?? []
-    }
-
-    func getMetadataChildren(server: PlexServer, ratingKey: String) async throws -> [PlexMetadata] {
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(
-            server: server,
-            path: "/library/metadata/\(ratingKey)/children"
-        )
-        return response.mediaContainer.metadata ?? []
-    }
-
-    func getMetadata(server: PlexServer, ratingKey: String) async throws -> PlexMetadata? {
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(
-            server: server,
-            path: "/library/metadata/\(ratingKey)"
-        )
-        return response.mediaContainer.metadata?.first
-    }
-
-    /// One request for several items: the path takes a comma-separated list of ids.
-    func getMetadata(server: PlexServer, ratingKeys: [String]) async throws -> [PlexMetadata] {
-        guard !ratingKeys.isEmpty else { return [] }
-        let response: PlexResponse<PlexMetadata> = try await serverRequest(
-            server: server,
-            path: "/library/metadata/\(ratingKeys.joined(separator: ","))"
-        )
-        return response.mediaContainer.metadata ?? []
-    }
-
-    func getMetadataArtworkOptions(server: PlexServer, ratingKey: String) async throws -> [PlexImageResource] {
-        let response: PlexMetadataImageResponse = try await serverRequest(
-            server: server,
-            path: "/library/metadata/\(ratingKey)"
-        )
-        let metadataImages = response.mediaContainer.metadata?.first?.image ?? []
-        let posterLike = metadataImages.filter { image in
-            guard let type = image.type?.lowercased() else { return false }
-            return type == "coverposter" || type == "poster"
-        }
-        return posterLike.isEmpty ? metadataImages : posterLike
-    }
-
-    func getArtworkResources(server: PlexServer, ratingKey: String, element: String = "posters") async throws -> [PlexImageResource] {
-        let path = "/library/metadata/\(ratingKey)/\(element)"
-        let queryItems = [URLQueryItem(name: "includeExternalMedia", value: "1")]
-        let data = try await rawServerRequest(server: server, path: path, method: "GET", queryItems: queryItems)
-
-        do {
-            let response = try JSONDecoder().decode(PlexArtworkResourceResponse.self, from: data)
-            if let directImages = response.mediaContainer.image, !directImages.isEmpty {
-                return directImages
-            }
-
-            if let metadataItems = response.mediaContainer.metadata, !metadataItems.isEmpty {
-                return metadataItems.map(\.asImageResource)
-            }
-
-            return []
-        } catch {
-            // Some PMS versions still return XML for this endpoint.
-            let xmlImages = parseArtworkResourcesXML(data)
-            if !xmlImages.isEmpty {
-                return xmlImages
-            }
-            throw PlexAPIError.decodingError(error, path: path)
-        }
-    }
-
-    func setArtworkResource(server: PlexServer, ratingKey: String, element: String = "poster", artworkURL: String) async throws {
-        let candidateElements: [String]
-        if element == "poster" {
-            candidateElements = ["poster", "thumb", "posters", "thumbs", "art", "arts"]
-        } else {
-            candidateElements = [element, "poster", "thumb", "posters", "thumbs", "art", "arts"]
-        }
-        let candidateMethods = ["PUT", "POST"]
-        var lastError: Error?
-
-        for candidateElement in candidateElements {
-            for method in candidateMethods {
-                do {
-                    try await setArtworkResource(
-                        server: server,
-                        ratingKey: ratingKey,
-                        element: candidateElement,
-                        artworkURL: artworkURL,
-                        method: method
-                    )
-                    return
-                } catch let error as PlexAPIError {
-                    switch error {
-                    case .serverError(400), .serverError(404), .serverError(406):
-                        lastError = error
-                        continue
-                    default:
-                        throw error
-                    }
-                } catch {
-                    throw error
-                }
-            }
-        }
-
-        if let lastError {
-            throw lastError
-        } else {
-            throw PlexAPIError.serverError(404)
-        }
-    }
-
-
-    // MARK: - Related Hubs
-
-    /// Returns the "You May Also Like" and other related hubs for a given metadata item.
-    func getRelatedHubs(server: PlexServer, ratingKey: String) async throws -> [Hub] {
-        let data = try await rawServerRequest(
-            server: server,
-            path: "/hubs/metadata/\(ratingKey)/related",
-            method: "GET",
-            queryItems: []
-        )
-        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
-        return response.mediaContainer.hub ?? []
-    }
-
-    // MARK: - Search
-
-    func search(server: PlexServer, query: String, sectionId: String? = nil, limit: Int = 20) async throws -> [Hub] {
-        var queryItems: [URLQueryItem] = [
-            URLQueryItem(name: "query", value: query),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-        ]
-        if let sectionId {
-            queryItems.append(URLQueryItem(name: "sectionId", value: sectionId))
-        }
-
-        let data = try await rawServerRequest(
-            server: server,
-            path: "/hubs/search",
-            method: "GET",
-            queryItems: queryItems
-        )
-        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
-        return response.mediaContainer.hub ?? []
-    }
-
-    // MARK: - Playlists
-
-    func getPlaylists(server: PlexServer) async throws -> [PlexPlaylist] {
-        // Page through the full list; a single request is capped by the container size,
-        // which silently dropped every playlist past the first page.
-        let pageSize = 1000
-        var allPlaylists: [PlexPlaylist] = []
-        var start = 0
-        while true {
-            let path = "/playlists?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
-            let response: PlexResponse<PlexPlaylist> = try await serverRequest(server: server, path: path)
-            let playlists = response.mediaContainer.metadata ?? []
-            allPlaylists.append(contentsOf: playlists)
-            start += playlists.count
-            if let total = response.mediaContainer.totalSize {
-                guard start < total, !playlists.isEmpty else { break }
-            } else {
-                guard playlists.count == pageSize else { break }
-            }
-        }
-        return allPlaylists
-    }
-
-    func getPlaylistItems(server: PlexServer, playlistKey: String) async throws -> [PlexMetadata] {
-        let basePath: String
-        if playlistKey.hasPrefix("/playlists/") {
-            basePath = playlistKey.hasSuffix("/items") ? playlistKey : "\(playlistKey)/items"
-        } else {
-            basePath = "/playlists/\(playlistKey)/items"
-        }
-
-        // The playlist items endpoint doesn't reliably return totalSize, so page
-        // sequentially until a page comes back shorter than requested instead of
-        // trusting the container's reported total.
-        let pageSize = 1000
-        var allItems: [PlexMetadata] = []
-        var start = 0
-        while true {
-            let path = "\(basePath)?X-Plex-Container-Start=\(start)&X-Plex-Container-Size=\(pageSize)"
-            let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
-            let items = response.mediaContainer.metadata ?? []
-            allItems.append(contentsOf: items)
-            guard items.count == pageSize else { break }
-            start += pageSize
-        }
-
-        return allItems
-    }
-
-    func addItemsToPlaylist(server: PlexServer, playlistId: String, itemRatingKeys: [String]) async throws {
-        let normalizedItemKeys = orderedUniqueItemKeys(from: itemRatingKeys)
-        guard !normalizedItemKeys.isEmpty else { return }
-
-        let uri = playlistMetadataURI(server: server, itemRatingKeys: normalizedItemKeys)
-        let queryItems = [URLQueryItem(name: "uri", value: uri)]
-        _ = try await rawServerRequest(
-            server: server,
-            path: "/playlists/\(playlistId)/items",
-            method: "PUT",
-            queryItems: queryItems
-        )
-    }
-
-    func createPlaylist(
-        server: PlexServer,
-        title: String,
-        playlistType: String = "audio",
-        itemRatingKeys: [String]
-    ) async throws -> PlexPlaylist {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedItemKeys = orderedUniqueItemKeys(from: itemRatingKeys)
-        guard !normalizedItemKeys.isEmpty else { throw PlexAPIError.invalidURL }
-        let uri = playlistMetadataURI(server: server, itemRatingKeys: normalizedItemKeys)
-        let queryItems = [
-            URLQueryItem(name: "uri", value: uri),
-            URLQueryItem(name: "title", value: trimmedTitle),
-            URLQueryItem(name: "type", value: playlistType),
-            URLQueryItem(name: "smart", value: "0"),
-        ]
-        let data = try await rawServerRequest(
-            server: server,
-            path: "/playlists",
-            method: "POST",
-            queryItems: queryItems
-        )
-        do {
-            let decoded = try JSONDecoder().decode(PlexResponse<PlexPlaylist>.self, from: data)
-            if let playlist = decoded.mediaContainer.metadata?.first {
-                return playlist
-            }
-            throw PlexAPIError.decodingError(
-                DecodingError.valueNotFound(
-                    PlexPlaylist.self,
-                    .init(codingPath: [], debugDescription: "No playlist returned from create endpoint.")
-                ),
-                path: "/playlists"
-            )
-        } catch let error as PlexAPIError {
-            throw error
-        } catch {
-            throw PlexAPIError.decodingError(error, path: "/playlists")
-        }
-    }
-
-    func deletePlaylist(server: PlexServer, playlistId: String) async throws {
-        _ = try await rawServerRequest(
-            server: server,
-            path: "/playlists/\(playlistId)",
-            method: "DELETE"
-        )
-    }
-
-    func renamePlaylist(server: PlexServer, playlistId: String, newTitle: String) async throws {
-        let trimmed = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        _ = try await rawServerRequest(
-            server: server,
-            path: "/playlists/\(playlistId)",
-            method: "PUT",
-            queryItems: [URLQueryItem(name: "title", value: trimmed)]
-        )
-    }
-
-    /// Repositions a playlist item after another item, or to the front when `afterPlaylistItemID` is nil.
-    func movePlaylistItem(
-        server: PlexServer,
-        playlistId: String,
-        playlistItemID: Int,
-        afterPlaylistItemID: Int?
-    ) async throws {
-        let path = "/playlists/\(playlistId)/items/\(playlistItemID)/move"
-        if let afterPlaylistItemID {
-            _ = try await rawServerRequest(
-                server: server,
-                path: path,
-                method: "PUT",
-                queryItems: [URLQueryItem(name: "after", value: String(afterPlaylistItemID))]
-            )
-        } else {
-            _ = try await rawServerRequest(server: server, path: path, method: "PUT")
-        }
-    }
-
-    func deleteLibraryItem(server: PlexServer, ratingKey: String) async throws {
-        _ = try await rawServerRequest(
-            server: server,
-            path: "/library/metadata/\(ratingKey)",
-            method: "DELETE"
-        )
-    }
-
-    // MARK: - Playback
-
-    /// Report playback state to PMS so it appears in the dashboard.
-    /// Per API spec: POST /:/timeline with state, time, duration, key, ratingKey.
-    /// Requires X-Plex-Session-Identifier header to associate with the playback session.
-    func reportTimeline(
-        server: PlexServer,
-        ratingKey: String,
-        key: String,
-        state: String,
-        timeMs: Int,
-        durationMs: Int,
-        sessionID: String?,
-        continuing: Bool = false
-    ) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/:/timeline"
-        var items: [URLQueryItem] = [
-            URLQueryItem(name: "ratingKey", value: ratingKey),
-            URLQueryItem(name: "key", value: key),
-            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
-            URLQueryItem(name: "state", value: state),
-            URLQueryItem(name: "time", value: "\(timeMs)"),
-            URLQueryItem(name: "duration", value: "\(durationMs)"),
-        ]
-        if state == "stopped" {
-            items.append(URLQueryItem(name: "continuing", value: continuing ? "1" : "0"))
-        }
-        components.queryItems = items
-
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-        if let sessionID {
-            request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
-        }
-
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        if statusCode >= 400 {
-            #if DEBUG
-            print("[AudioPlayer] Timeline report failed: status \(statusCode)")
-            #endif
-        }
-    }
-
-    /// Rate a library item. rating=10 means 5 stars (favorited), rating=0 clears the rating.
-    /// Endpoint: PUT /:/rate
-    func rateItem(server: PlexServer, ratingKey: String, rating: Int) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/:/rate"
-        components.queryItems = [
-            URLQueryItem(name: "key", value: ratingKey),
-            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
-            URLQueryItem(name: "rating", value: "\(rating)"),
-        ]
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        guard (200...299).contains(statusCode) else {
-            if statusCode == 401 { throw PlexAPIError.unauthorized }
-            throw PlexAPIError.serverError(statusCode)
-        }
-    }
-
-    /// Mark an item as played in Plex history.
-    /// Endpoint: /:/scrobble
-    func reportScrobble(server: PlexServer, ratingKey: String) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/:/scrobble"
-        components.queryItems = [
-            URLQueryItem(name: "key", value: ratingKey),
-            URLQueryItem(name: "identifier", value: "com.plexapp.plugins.library"),
-        ]
-
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-
-        let (_, response) = try await session.data(for: request)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-        if statusCode >= 400 {
-            #if DEBUG
-            print("[AudioPlayer] Scrobble failed: status \(statusCode)")
-            #endif
-        }
-    }
-
-    /// Build a direct download URL for a part file with the original format preserved.
-    func downloadURL(server: PlexServer, partKey: String) -> URL? {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
-        components.path = partKey
-        components.queryItems = [
-            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
-            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
-            URLQueryItem(name: "X-Plex-Product", value: Self.product),
-            URLQueryItem(name: "X-Plex-Platform", value: Self.platform),
-            URLQueryItem(name: "download", value: "1"),
-        ]
-        return components.url
-    }
-
-    /// Build a direct stream URL with full Plex identification query params.
-    func streamURL(server: PlexServer, partKey: String) -> URL? {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
-        components.path = partKey
-        components.queryItems = [
-            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
-            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
-            URLQueryItem(name: "X-Plex-Product", value: Self.product),
-            URLQueryItem(name: "X-Plex-Platform", value: Self.platform),
-        ]
-        return components.url
-    }
-
-    /// Common query items shared between the decision and start endpoints.
-    private func universalQueryItems(
-        server: PlexServer,
-        metadataPath: String,
-        sessionID: String,
-        location: String = "lan",
-        streamProtocol: String = "hls",
-        allowDirectStream: Bool = true,
-        constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320,
-        offsetSeconds: Int = 0
-    ) -> [URLQueryItem] {
-        let musicBitrate = constrainAudioBitrate ? "\(cellularTranscodeBitrate)" : "40000"
-        let directStream = allowDirectStream ? "1" : "0"
-        return [
-            URLQueryItem(name: "path", value: metadataPath),
-            URLQueryItem(name: "mediaIndex", value: "0"),
-            URLQueryItem(name: "partIndex", value: "0"),
-            URLQueryItem(name: "offset", value: "\(max(offsetSeconds, 0))"),
-            URLQueryItem(name: "protocol", value: streamProtocol),
-            URLQueryItem(name: "directPlay", value: "0"),
-            URLQueryItem(name: "directStream", value: directStream),
-            URLQueryItem(name: "directStreamAudio", value: directStream),
-            URLQueryItem(name: "musicBitrate", value: musicBitrate),
-            URLQueryItem(name: "mediaBufferSize", value: "102400"),
-            URLQueryItem(name: "location", value: location),
-            URLQueryItem(name: "session", value: sessionID),
-            URLQueryItem(name: "transcodeSessionId", value: sessionID),
-            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
-            URLQueryItem(name: "X-Plex-Product", value: Self.product),
-            URLQueryItem(name: "X-Plex-Platform", value: Self.platform),
-            URLQueryItem(name: "X-Plex-Version", value: Self.version),
-            URLQueryItem(name: "X-Plex-Session-Identifier", value: sessionID),
-            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
-        ]
-    }
-
-    /// Call the decision endpoint to authorize the transcode session before streaming.
-    /// PMS requires this before the start endpoint will serve content.
-    func universalDecision(
-        server: PlexServer,
-        metadataPath: String,
-        sessionID: String,
-        headers: [String: String],
-        location: String = "lan",
-        streamProtocol: String = "hls",
-        allowDirectStream: Bool = true,
-        constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320,
-        offsetSeconds: Int = 0
-    ) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/music/:/transcode/universal/decision"
-        components.queryItems = universalQueryItems(
-            server: server,
-            metadataPath: metadataPath,
-            sessionID: sessionID,
-            location: location,
-            streamProtocol: streamProtocol,
-            allowDirectStream: allowDirectStream,
-            constrainAudioBitrate: constrainAudioBitrate,
-            cellularTranscodeBitrate: cellularTranscodeBitrate,
-            offsetSeconds: offsetSeconds
-        )
-
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        for (field, value) in headers {
-            request.setValue(value, forHTTPHeaderField: field)
-        }
-
-        try await retryingRequest {
-            let (_, response): (Data, URLResponse)
-            do {
-                ( _, response) = try await self.session.data(for: request)
-            } catch {
-                throw PlexAPIError.networkError(error)
-            }
-
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            if statusCode >= 400 {
-                #if DEBUG
-                print("[AudioPlayer] Decision failed with status \(statusCode)")
-                #endif
-                throw PlexAPIError.serverError(statusCode)
-            }
-        }
-    }
-
-    /// Tell PMS to release the transcode session associated with `sessionID`.
-    /// Best-effort cleanup; never throws — failures are swallowed because the
-    /// caller has already moved on, and PMS will GC stale sessions on its own.
-    func universalTranscodeStop(server: PlexServer, sessionID: String) async {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return }
-        components.path = "/music/:/transcode/universal/stop"
-        components.queryItems = [
-            URLQueryItem(name: "session", value: sessionID),
-            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
-            URLQueryItem(name: "X-Plex-Session-Identifier", value: sessionID),
-            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
-        ]
-
-        guard let url = components.url else { return }
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-        request.setValue(sessionID, forHTTPHeaderField: "X-Plex-Session-Identifier")
-
-        do {
-            let (_, response) = try await session.data(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
-            if statusCode >= 400 {
-                #if DEBUG
-                print("[AudioPlayer] Transcode stop failed: status \(statusCode) session=\(sessionID)")
-                #endif
-            }
-        } catch {
-            #if DEBUG
-            print("[AudioPlayer] Transcode stop error: \(error.localizedDescription) session=\(sessionID)")
-            #endif
-        }
-    }
-
-    /// Build the universal transcode HLS master playlist URL.
-    func universalStreamURLCandidates(
-        server: PlexServer,
-        mediaPathCandidates: [String],
-        sessionID: String,
-        location: String = "lan",
-        constrainAudioBitrate: Bool = false,
-        cellularTranscodeBitrate: Int = 320,
-        offsetSeconds: Int = 0
-    ) -> [URL] {
-        let path = mediaPathCandidates.first ?? "/library/metadata/0"
-        let normalizedPath = path.hasPrefix("/") ? path : "/\(path)"
-
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return [] }
-        components.path = "/music/:/transcode/universal/start.m3u8"
-        components.queryItems = universalQueryItems(
-            server: server,
-            metadataPath: normalizedPath,
-            sessionID: sessionID,
-            location: location,
-            constrainAudioBitrate: constrainAudioBitrate,
-            cellularTranscodeBitrate: cellularTranscodeBitrate,
-            offsetSeconds: offsetSeconds
-        )
-
-        guard let url = components.url else { return [] }
-        return [url]
-    }
-
-    /// Builds a direct-stream URL from a media part's key, serving the raw file
-    /// with byte-range support and no PMS transcode/remux involved. Used for
-    /// non-FLAC content so playback doesn't depend on PMS's HLS remuxer, which
-    /// can fail outright on source files with malformed VBR/Xing headers.
-    func directStreamURL(server: PlexServer, partKey: String) -> URL? {
-        let normalizedPath = partKey.hasPrefix("/") ? partKey : "/\(partKey)"
-        guard var partComponents = URLComponents(string: normalizedPath),
-              let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
-
-        var queryItems = partComponents.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "X-Plex-Token", value: server.accessToken))
-        queryItems.append(URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier))
-        partComponents.queryItems = queryItems
-
-        components.path = partComponents.path
-        components.queryItems = partComponents.queryItems
-        return components.url
-    }
-
-    /// Fetches the universal transcode master playlist and resolves the actual
-    /// variant playlist URL. PMS's master playlist can declare a BANDWIDTH that
-    /// doesn't match the variant it serves, which confuses AVPlayer's ABR
-    /// selection and produces sporadic CoreMediaErrorDomain failures (-16170).
-    /// Playing the resolved variant directly sidesteps AVPlayer's bandwidth-based
-    /// variant selection entirely. Returns nil if the playlist can't be fetched
-    /// or parsed, so the caller can fall back to the master URL.
-    func resolveUniversalVariantURL(masterURL: URL) async -> URL? {
-        guard let (data, response) = try? await session.data(from: masterURL),
-              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
-              let text = String(data: data, encoding: .utf8) else { return nil }
-
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true).map(String.init)
-        for (index, line) in lines.enumerated() {
-            guard line.hasPrefix("#EXT-X-STREAM-INF"), index + 1 < lines.count else { continue }
-            let uri = lines[index + 1].trimmingCharacters(in: .whitespaces)
-            if !uri.isEmpty, !uri.hasPrefix("#") {
-                return URL(string: uri, relativeTo: masterURL)?.absoluteURL
-            }
-        }
-        // Fallback: first non-comment, non-empty line, in case the playlist
-        // omits EXT-X-STREAM-INF but still points straight at a variant.
-        for line in lines where !line.hasPrefix("#") {
-            return URL(string: line, relativeTo: masterURL)?.absoluteURL
-        }
-        return nil
-    }
-
-    // MARK: - Download Queue
-
-    /// Get or create this client's download queue. PMS scopes exactly one
-    /// queue per client identifier + token, so this is safe to call before
-    /// every download — it returns the existing queue id when one is
-    /// already open. Endpoint: POST /downloadQueue.
-    func getOrCreateDownloadQueue(server: PlexServer) async throws -> Int {
-        guard let baseURL = server.baseURL,
-              let url = URL(string: "/downloadQueue", relativeTo: baseURL) else {
-            throw PlexAPIError.invalidURL
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-
-        let response: DownloadQueueResponse = try await perform(request)
-        guard let queueId = response.mediaContainer.downloadQueue?.first?.id else {
-            throw PlexAPIError.serverError(-1)
-        }
-        return queueId
-    }
-
-    /// Adds a track to the download queue, requesting the MP3 conversion via
-    /// the same `X-Plex-Client-Profile-Extra` directive used for streaming
-    /// profile augmentation. Returns the queue item id used to poll status
-    /// and fetch the resulting file. Endpoint: POST /downloadQueue/{queueId}/add.
-    func addToDownloadQueue(
-        server: PlexServer,
-        queueId: Int,
-        metadataPath: String,
-        headers: [String: String],
-        musicBitrate: Int
-    ) async throws -> Int {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/downloadQueue/\(queueId)/add"
-        components.queryItems = [
-            URLQueryItem(name: "keys", value: metadataPath),
-            URLQueryItem(name: "mediaIndex", value: "0"),
-            URLQueryItem(name: "partIndex", value: "0"),
-            URLQueryItem(name: "protocol", value: "http"),
-            URLQueryItem(name: "directPlay", value: "0"),
-            URLQueryItem(name: "directStream", value: "0"),
-            URLQueryItem(name: "directStreamAudio", value: "0"),
-            URLQueryItem(name: "musicBitrate", value: "\(musicBitrate)"),
-        ]
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        for (field, value) in headers {
-            request.setValue(value, forHTTPHeaderField: field)
-        }
-        request.setValue(server.accessToken, forHTTPHeaderField: "X-Plex-Token")
-        // playbackHeaders() (used to build `headers`) doesn't set Accept, and PMS
-        // defaults to XML without it — which then fails to decode as JSON here.
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let response: DownloadQueueAddResponse = try await perform(request)
-        guard let itemId = response.mediaContainer.addedQueueItems?.first?.id else {
-            throw PlexAPIError.serverError(-1)
-        }
-        return itemId
-    }
-
-    /// Polls the current state of a queued download item.
-    /// Endpoint: GET /downloadQueue/{queueId}/items/{itemId}.
-    func downloadQueueItemStatus(server: PlexServer, queueId: Int, itemId: Int) async throws -> DownloadQueueItemStatus {
-        guard let baseURL = server.baseURL,
-              let url = URL(string: "/downloadQueue/\(queueId)/items/\(itemId)", relativeTo: baseURL) else {
-            throw PlexAPIError.invalidURL
-        }
-        var request = URLRequest(url: url)
-        applyPlexHeaders(to: &request, token: server.accessToken)
-
-        let response: DownloadQueueItemsResponse = try await perform(request)
-        guard let item = response.mediaContainer.items?.first else {
-            throw PlexAPIError.serverError(-1)
-        }
-        return item.status
-    }
-
-    /// Builds the request to fetch the finished file for a queue item once
-    /// its status is `available`. Endpoint: GET /downloadQueue/{queueId}/item/{itemId}/media
-    /// (note: singular "item", unlike the plural "items" used for status/delete).
-    func downloadQueueMediaRequest(server: PlexServer, queueId: Int, itemId: Int) -> URLRequest? {
-        guard let baseURL = server.baseURL,
-              let url = URL(string: "/downloadQueue/\(queueId)/item/\(itemId)/media", relativeTo: baseURL) else {
-            return nil
-        }
-        var request = URLRequest(url: url)
-        applyPlexHeaders(to: &request, token: server.accessToken)
-        return request
-    }
-
-    /// Removes a finished/failed item from the download queue.
-    /// Best-effort cleanup; never throws — PMS will expire stale items on its own.
-    /// Endpoint: DELETE /downloadQueue/{queueId}/items/{itemId}.
-    func deleteDownloadQueueItem(server: PlexServer, queueId: Int, itemId: Int) async {
-        guard let baseURL = server.baseURL,
-              let url = URL(string: "/downloadQueue/\(queueId)/items/\(itemId)", relativeTo: baseURL) else {
-            return
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-        _ = try? await session.data(for: request)
-    }
-
-    /// Transcode-target profile for converted offline downloads.
-    /// Must be context=static: the Download Queue's decision engine evaluates
-    /// a one-shot, non-realtime conversion — context=streaming here yields
-    /// "decisionError" and PMS never transcodes at all. `replace=true` is
-    /// required so this target overrides the Generic profile's existing one.
-    /// Only MP3 works here — PMS's progressive http muxer produces zero bytes
-    /// for AAC (ADTS) and MP4 output.
-    static func profileExtraDownload(container: String, codec: String) -> String {
-        "add-transcode-target(type=musicProfile&context=static&protocol=http&container=\(container)&audioCodec=\(codec)&replace=true)"
-    }
-
-    func downloadTranscodeHeaders(
-        server: PlexServer,
-        sessionID: String,
-        container: String,
-        codec: String
-    ) -> [String: String] {
-        var headers = playbackHeaders(server: server, sessionID: sessionID)
-        headers["X-Plex-Client-Profile-Extra"] = Self.profileExtraDownload(container: container, codec: codec)
-        return headers
-    }
-
-    /// ALAC profile for LAN — lossless, no quality loss. Only appropriate when
-    /// the source is FLAC; using it for already-compatible codecs (e.g. AAC)
-    /// would make PMS re-encode lossy audio into a bloated lossless container
-    /// for no quality gain.
-    static let profileExtraLAN: String =
-        "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=alac)"
-
-    /// AAC profile for cellular — lossy but bandwidth-friendly.
-    static let profileExtraCellular: String =
-        "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=aac)"
-
-    /// Targets the source's own audio codec so PMS remuxes into HLS instead
-    /// of re-encoding audio that's already compatible (e.g. AAC, MP3).
-    static func profileExtraPassthrough(codec: String) -> String {
-        "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=\(codec))"
-    }
-
-    func playbackHeaders(
-        server: PlexServer,
-        sessionID: String?,
-        preferAACTranscode: Bool = false,
-        avoidAudioTranscode: Bool = false,
-        sourceCodec: String? = nil
-    ) -> [String: String] {
-        let profileExtra: String
-        if avoidAudioTranscode {
-            switch sourceCodec?.lowercased() {
-            case "flac", nil:
-                profileExtra = Self.profileExtraLAN
-            case .some(let codec):
-                profileExtra = Self.profileExtraPassthrough(codec: codec)
-            }
-        } else if preferAACTranscode {
-            profileExtra = Self.profileExtraCellular
-        } else {
-            profileExtra = Self.profileExtraLAN
-        }
-        var headers: [String: String] = [
-            "X-Plex-Token": server.accessToken,
-            "X-Plex-Client-Identifier": Self.clientIdentifier,
-            "X-Plex-Product": Self.product,
-            "X-Plex-Version": Self.version,
-            "X-Plex-Platform": Self.platform,
-            "X-Plex-Platform-Version": Self.platformVersion,
-            "X-Plex-Device": Self.device,
-            "X-Plex-Device-Name": Self.deviceName,
-            "X-Plex-Provides": "player",
-            "X-Plex-Client-Profile-Name": "Generic",
-            "X-Plex-Client-Profile-Extra": profileExtra,
-        ]
-        if let sessionID {
-            headers["X-Plex-Session-Identifier"] = sessionID
-        }
-        return headers
-    }
-
-    /// Build a transcoded artwork URL with Plex identification.
-    func artworkURL(server: PlexServer, path: String?, width: Int = 400, height: Int = 400) -> URL? {
-        guard let path, !path.isEmpty else { return nil }
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
-        components.path = "/photo/:/transcode"
-        components.queryItems = [
-            URLQueryItem(name: "width", value: "\(width)"),
-            URLQueryItem(name: "height", value: "\(height)"),
-            URLQueryItem(name: "minSize", value: "1"),
-            URLQueryItem(name: "upscale", value: "1"),
-            URLQueryItem(name: "url", value: path),
-            URLQueryItem(name: "X-Plex-Token", value: server.accessToken),
-            URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
-        ]
-        return components.url
-    }
-
     // MARK: - Private Helpers
 
     /// Retry a request up to `maxRetries` times for transient network errors.
     /// Only retries on network errors (timeout, connection lost) — not on
     /// server errors (4xx/5xx) or decoding failures.
-    private func retryingRequest<T>(maxRetries: Int = 2, _ operation: () async throws -> T) async throws -> T {
+    func retryingRequest<T>(maxRetries: Int = 2, _ operation: () async throws -> T) async throws -> T {
         var lastError: Error?
         for attempt in 0...maxRetries {
             do {
@@ -1100,7 +143,7 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Build a request to plex.tv with all required identification headers.
-    private func plexTVRequest(path: String, method: String) throws -> URLRequest {
+    func plexTVRequest(path: String, method: String) throws -> URLRequest {
         guard let url = URL(string: "https://plex.tv\(path)") else {
             throw PlexAPIError.invalidURL
         }
@@ -1111,7 +154,7 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Execute a typed JSON request against a Plex Media Server.
-    private func serverRequest<T: Decodable>(server: PlexServer, path: String, method: String = "GET") async throws -> T {
+    func serverRequest<T: Decodable>(server: PlexServer, path: String, method: String = "GET") async throws -> T {
         let data = try await rawServerRequest(server: server, path: path, method: method)
         do {
             return try JSONDecoder().decode(T.self, from: data)
@@ -1122,7 +165,7 @@ final class PlexAPIClient: Sendable {
 
     /// Execute a raw request against a Plex Media Server with all required headers.
     @discardableResult
-    private func rawServerRequest(server: PlexServer, path: String, method: String = "GET") async throws -> Data {
+    func rawServerRequest(server: PlexServer, path: String, method: String = "GET") async throws -> Data {
         guard let baseURL = server.baseURL,
               let url = URL(string: path, relativeTo: baseURL) else {
             throw PlexAPIError.invalidURL
@@ -1155,7 +198,7 @@ final class PlexAPIClient: Sendable {
 
     /// Execute a raw request against a Plex Media Server with URL-encoded query items.
     @discardableResult
-    private func rawServerRequest(
+    func rawServerRequest(
         server: PlexServer,
         path: String,
         method: String,
@@ -1190,7 +233,7 @@ final class PlexAPIClient: Sendable {
         return data
     }
 
-    private func shouldIncludeContainerHeaders(for path: String) -> Bool {
+    func shouldIncludeContainerHeaders(for path: String) -> Bool {
         if path.hasPrefix("/library/sections/"), path.contains("/all") {
             return true
         }
@@ -1209,12 +252,12 @@ final class PlexAPIClient: Sendable {
         return false
     }
 
-    private func playlistMetadataURI(server: PlexServer, itemRatingKeys: [String]) -> String {
+    func playlistMetadataURI(server: PlexServer, itemRatingKeys: [String]) -> String {
         let joinedKeys = itemRatingKeys.joined(separator: ",")
         return "server://\(server.machineIdentifier)/com.plexapp.plugins.library/library/metadata/\(joinedKeys)"
     }
 
-    private func orderedUniqueItemKeys(from itemRatingKeys: [String]) -> [String] {
+    func orderedUniqueItemKeys(from itemRatingKeys: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
         for key in itemRatingKeys where !key.isEmpty {
@@ -1225,7 +268,7 @@ final class PlexAPIClient: Sendable {
         return result
     }
 
-    private func parseArtworkResourcesXML(_ data: Data) -> [PlexImageResource] {
+    func parseArtworkResourcesXML(_ data: Data) -> [PlexImageResource] {
         let parserDelegate = ArtworkXMLParserDelegate()
         let parser = XMLParser(data: data)
         parser.delegate = parserDelegate
@@ -1234,7 +277,7 @@ final class PlexAPIClient: Sendable {
         return parserDelegate.images
     }
 
-    private func setArtworkResource(
+    func setArtworkResource(
         server: PlexServer,
         ratingKey: String,
         element: String,
@@ -1270,7 +313,7 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Execute a typed request against plex.tv.
-    private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+    func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
@@ -1291,7 +334,7 @@ final class PlexAPIClient: Sendable {
     }
 }
 
-private struct PlexMetadataImageResponse: Decodable, Sendable {
+struct PlexMetadataImageResponse: Decodable, Sendable {
     let mediaContainer: PlexMetadataImageContainer
 
     enum CodingKeys: String, CodingKey {
@@ -1299,7 +342,7 @@ private struct PlexMetadataImageResponse: Decodable, Sendable {
     }
 }
 
-private struct PlexMetadataImageContainer: Decodable, Sendable {
+struct PlexMetadataImageContainer: Decodable, Sendable {
     let metadata: [PlexMetadataImageItem]?
 
     enum CodingKeys: String, CodingKey {
@@ -1307,7 +350,7 @@ private struct PlexMetadataImageContainer: Decodable, Sendable {
     }
 }
 
-private struct PlexMetadataImageItem: Decodable, Sendable {
+struct PlexMetadataImageItem: Decodable, Sendable {
     let image: [PlexImageResource]?
 
     enum CodingKeys: String, CodingKey {
@@ -1315,7 +358,7 @@ private struct PlexMetadataImageItem: Decodable, Sendable {
     }
 }
 
-private struct PlexArtworkResourceResponse: Decodable, Sendable {
+struct PlexArtworkResourceResponse: Decodable, Sendable {
     let mediaContainer: PlexArtworkResourceContainer
 
     enum CodingKeys: String, CodingKey {
@@ -1323,7 +366,7 @@ private struct PlexArtworkResourceResponse: Decodable, Sendable {
     }
 }
 
-private struct PlexArtworkResourceContainer: Decodable, Sendable {
+struct PlexArtworkResourceContainer: Decodable, Sendable {
     let image: [PlexImageResource]?
     let metadata: [PlexArtworkResourceMetadata]?
 
@@ -1333,7 +376,7 @@ private struct PlexArtworkResourceContainer: Decodable, Sendable {
     }
 }
 
-private struct PlexArtworkResourceMetadata: Decodable, Sendable {
+struct PlexArtworkResourceMetadata: Decodable, Sendable {
     let key: String?
     let url: String?
     let thumb: String?
@@ -1425,7 +468,7 @@ private final class ArtworkXMLParserDelegate: NSObject, XMLParserDelegate {
     }
 }
 
-private struct DownloadQueueResponse: Decodable, Sendable {
+struct DownloadQueueResponse: Decodable, Sendable {
     struct Container: Decodable, Sendable {
         struct Entry: Decodable, Sendable { let id: Int }
         let downloadQueue: [Entry]?
@@ -1435,7 +478,7 @@ private struct DownloadQueueResponse: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
 }
 
-private struct DownloadQueueAddResponse: Decodable, Sendable {
+struct DownloadQueueAddResponse: Decodable, Sendable {
     struct Container: Decodable, Sendable {
         struct AddedItem: Decodable, Sendable { let id: Int }
         let addedQueueItems: [AddedItem]?
@@ -1445,7 +488,7 @@ private struct DownloadQueueAddResponse: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
 }
 
-private struct DownloadQueueItemsResponse: Decodable, Sendable {
+struct DownloadQueueItemsResponse: Decodable, Sendable {
     struct Container: Decodable, Sendable {
         struct Item: Decodable, Sendable {
             let status: DownloadQueueItemStatus
