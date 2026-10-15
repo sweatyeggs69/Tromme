@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v10.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v11.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v10.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v11.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -199,8 +199,12 @@ private extension UIImage {
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
 
             // Tinted pixels: any visible hue, dark ones included (black suits read as a deep
-            // navy, as on Apple Music), skipping grays, pure black and highlights.
-            if chroma >= minimumTintChroma, (3...85).contains(lab.l) {
+            // navy, as on Apple Music), skipping grays, pure black and highlights. Skin tones
+            // are skipped too: faces are the subject, not the backdrop, and would otherwise
+            // turn band photos brown.
+            let hueDegrees = lab.hue * 180 / .pi
+            let looksLikeSkin = (20...80).contains(hueDegrees) && lab.l >= 25
+            if chroma >= minimumTintChroma, (3...85).contains(lab.l), !looksLikeSkin {
                 tintCount[bin] += 1
                 tintR[bin] += r; tintG[bin] += g; tintB[bin] += b
             }
