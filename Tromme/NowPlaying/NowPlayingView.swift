@@ -354,10 +354,7 @@ struct NowPlayingView: View {
             }
 
             VStack(alignment: .leading) {
-                Text(player.currentTrack?.title ?? "Not Playing")
-                    .font(.title3.bold())
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
+                MarqueeText(text: player.currentTrack?.title ?? "Not Playing")
                 Button {
                     goToArtist()
                 } label: {
