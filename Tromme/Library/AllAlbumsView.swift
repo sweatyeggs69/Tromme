@@ -14,7 +14,6 @@ struct AllAlbumsView: View {
     @AppStorage("allAlbumsViewMode") private var viewMode: AlbumViewMode = .grid
     @AppStorage("allAlbumsSortOrder") private var sortOrder: AlbumSortOrder = .titleAscending
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
-    @State private var selectedAlbum: PlexMetadata?
 
     // Sorted/sectioned results, computed off the main actor by applyDisplayState().
     @State private var displayAlbums: [PlexMetadata] = []
@@ -229,9 +228,6 @@ struct AllAlbumsView: View {
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
-        .navigationDestination(item: $selectedAlbum) { album in
-            AlbumDetailView(album: album)
-        }
     }
 
     @ViewBuilder
@@ -253,9 +249,7 @@ struct AllAlbumsView: View {
 
                         LazyVGrid(columns: columns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
                             ForEach(section.items) { album in
-                                Button {
-                                    selectedAlbum = album
-                                } label: {
+                                NavigationLink(value: album) {
                                     VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
                                         GeometryReader { geo in
                                             ArtworkView(
@@ -317,9 +311,7 @@ struct AllAlbumsView: View {
                 ForEach(displaySections, id: \.title) { section in
                     Section(section.title) {
                         ForEach(section.items) { album in
-                            Button {
-                                selectedAlbum = album
-                            } label: {
+                            NavigationLink(value: album) {
                                 HStack(spacing: 10) {
                                     ArtworkView(
                                         thumbPath: album.thumb,
