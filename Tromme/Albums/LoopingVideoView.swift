@@ -40,7 +40,6 @@ struct LoopingVideoView: UIViewRepresentable {
         private var player: AVQueuePlayer?
         private var looper: AVPlayerLooper?
         private var statusObservation: NSKeyValueObservation?
-        private var frameOutput: AVPlayerItemVideoOutput?
         private var frameTask: Task<Void, Never>?
         var onFrame: ((UIImage) -> Void)?
         private var isPlaying = false
@@ -55,12 +54,7 @@ struct LoopingVideoView: UIViewRepresentable {
             player.isMuted = true
             player.preventsDisplaySleepDuringVideoPlayback = false
             let looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: url))
-            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-            ])
-            looper.loopingPlayerItems.first?.add(output)
             self.looper = looper
-            frameOutput = output
             self.player = player
             layerView.playerLayer.player = player
             statusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self, isReady] player, _ in
@@ -84,11 +78,18 @@ struct LoopingVideoView: UIViewRepresentable {
             }
         }
 
-        /// Grabs one frame per video, retrying briefly until the output has one.
+        /// Grabs one frame per video, retrying briefly until the output has one. The
+        /// output is attached to the item that's playing now: the looper creates its
+        /// items asynchronously, so they don't exist yet when the video is configured.
         private func captureFrame() {
-            guard frameTask == nil, onFrame != nil, let output = frameOutput else { return }
+            guard frameTask == nil, onFrame != nil, let item = player?.currentItem else { return }
+            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ])
+            item.add(output)
             frameTask = Task { [weak self] in
-                for _ in 0..<20 {
+                defer { item.remove(output) }
+                for _ in 0..<40 {
                     let time = output.itemTime(forHostTime: CACurrentMediaTime())
                     if let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil),
                        let image = Self.smallImage(from: buffer) {
@@ -99,6 +100,9 @@ struct LoopingVideoView: UIViewRepresentable {
                     try? await Task.sleep(for: .milliseconds(100))
                     guard !Task.isCancelled else { return }
                 }
+                #if DEBUG
+                print("[AnimatedArtwork] no video frame for the backdrop")
+                #endif
             }
         }
 
@@ -114,7 +118,6 @@ struct LoopingVideoView: UIViewRepresentable {
         func tearDown() {
             frameTask?.cancel()
             frameTask = nil
-            frameOutput = nil
             statusObservation = nil
             player?.pause()
             looper?.disableLooping()
