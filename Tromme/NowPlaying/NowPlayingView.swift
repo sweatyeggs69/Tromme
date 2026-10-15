@@ -210,8 +210,8 @@ struct NowPlayingView: View {
                     .padding(.bottom, bottomScreenPadding)
                 }
                 // Shadow lives behind the content so it never draws over the track and artist text.
-                // The shadow box follows the artwork's slot (instead of disappearing) so it never
-                // lingers as a black square while the artwork animates to the compact slot.
+                // The shadow box follows the artwork's slot and fades out/in during the move, so its
+                // black box never shows as a square while the artwork animates to the compact slot.
                 .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
@@ -228,6 +228,7 @@ struct NowPlayingView: View {
                                 .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                                 .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                                .opacity(isCompact ? 0 : 1)
                                 .position(x: rect.midX, y: rect.midY)
                                 .allowsHitTesting(false)
                         }
