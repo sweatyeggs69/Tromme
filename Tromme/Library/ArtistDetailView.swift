@@ -297,11 +297,11 @@ struct ArtistDetailView: View {
                     }
                     .padding(12)
                     .background(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .fill(backdropColor.contrastForeground.opacity(0.1))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(backdropColor.contrastForeground.opacity(0.12), lineWidth: 0.5)
                     )
                 }
