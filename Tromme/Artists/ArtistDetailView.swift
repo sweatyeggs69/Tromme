@@ -19,7 +19,7 @@ struct ArtistDetailView: View {
     /// spinner never outlives a failed or offline fetch.
     @State private var backdropLookupFinished = false
     @State private var showsBioSheet = false
-    @State private var viewHeight: CGFloat = 800
+    @State private var viewWidth: CGFloat = 393
     /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
     @State private var scrollOffset: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
@@ -63,9 +63,9 @@ struct ArtistDetailView: View {
         )
     }
 
-    /// The photo area takes about 46% of the screen height; the extra room holds the title and controls over the fade.
-    private var photoHeight: CGFloat { viewHeight * 0.46 }
-    private var heroHeight: CGFloat { photoHeight + 110 }
+    /// Plex artist photos are almost always square, so the hero is a full-width square; the title and
+    /// controls sit over the fade at its bottom edge.
+    private var heroHeight: CGFloat { viewWidth }
     private let previewData: PreviewData?
 
     struct PreviewData {
@@ -417,12 +417,11 @@ struct ArtistDetailView: View {
         .environment(\.colorScheme, .dark)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
-        // Measure the full container height including safe areas, so the hero doesn't resize
-        // (and re-crop the photo) when the tab bar minimizes or the bottom inset changes on scroll.
+        // Measure the full container width including safe areas, so the square hero spans the screen.
         .onGeometryChange(for: CGFloat.self) { proxy in
-            (proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom).rounded()
-        } action: { newHeight in
-            if abs(newHeight - viewHeight) > 1 { viewHeight = newHeight }
+            (proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing).rounded()
+        } action: { newWidth in
+            if abs(newWidth - viewWidth) > 1 { viewWidth = newWidth }
         }
         .overlay {
             if isAwaitingBackdrop {
