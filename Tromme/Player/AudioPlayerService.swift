@@ -121,6 +121,9 @@ final class AudioPlayerService: Sendable {
     private var lastSavedQueueHash: Int?
     private var lastSavedOriginalQueueHash: Int?
     private var scrobbledTrackRatingKey: String?
+    /// Last time a timeline update went to the server; drives the periodic keep-alive ping.
+    private var lastTimelineReport: Date = .distantPast
+    private let timelinePingInterval: TimeInterval = 15
     private var gainPrefetchTask: Task<Void, Never>?
     private var playbackLoadTask: Task<Void, Never>?
     private var nowPlayingArtworkTask: Task<Void, Never>?
@@ -253,6 +256,7 @@ final class AudioPlayerService: Sendable {
     func configure(server: PlexServer, client: PlexAPIClient) {
         self.server = server
         self.client = client
+        Task { await ScrobbleOutbox.shared.flush(server: server, client: client) }
         if isInfiniteModeActive {
             maybeRefillInfiniteQueueIfNeeded(trigger: "configure")
         }
@@ -1646,6 +1650,9 @@ final class AudioPlayerService: Sendable {
         let lostConnection = oldConnected && !newConnected
         let reconnected = !oldConnected && newConnected
         guard interfaceChanged || reconnected || lostConnection else { return }
+        if newConnected, let server, let client {
+            Task { await ScrobbleOutbox.shared.flush(server: server, client: client) }
+        }
         revalidatePreloadedNext(networkChanged: true)
         guard isPlaying, currentTrack != nil else { return }
 
@@ -2171,6 +2178,7 @@ final class AudioPlayerService: Sendable {
                 }
 
                 self.maybeReportScrobble()
+                self.maybePingTimeline()
                 self.maybePreloadNextTrack()
             }
         }
@@ -2407,8 +2415,16 @@ final class AudioPlayerService: Sendable {
         }
     }
 
+    /// Keeps the server's session (and other clients' "now playing") fresh on long tracks.
+    private func maybePingTimeline() {
+        guard isPlaying, NetworkStatus.shared.isConnected,
+              Date().timeIntervalSince(lastTimelineReport) >= timelinePingInterval else { return }
+        reportTimelineState("playing")
+    }
+
     private func reportTimelineState(_ state: String, continuing: Bool = false) {
         guard let currentTrack, let client, let server else { return }
+        lastTimelineReport = Date()
         let key = currentTrack.key ?? "/library/metadata/\(currentTrack.ratingKey)"
         let timeMs = Int(currentTime * 1000)
         let durationMs = Int(duration * 1000)
@@ -2446,7 +2462,12 @@ final class AudioPlayerService: Sendable {
         let capturedServer = server
         let capturedRatingKey = currentTrack.ratingKey
         Task {
-            try? await client.reportScrobble(server: capturedServer, ratingKey: capturedRatingKey)
+            do {
+                try await client.reportScrobble(server: capturedServer, ratingKey: capturedRatingKey)
+            } catch {
+                // Unreachable server (e.g. offline playback): keep the play and retry later.
+                await ScrobbleOutbox.shared.enqueue(ratingKey: capturedRatingKey, server: capturedServer)
+            }
             await client.refreshItem(server: capturedServer, ratingKey: capturedRatingKey)
             NotificationCenter.default.post(name: .recentlyPlayedDidChange, object: nil)
         }
@@ -2476,10 +2497,24 @@ final class AudioPlayerService: Sendable {
     private static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
     private static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
+    /// Application Support, not Caches: iOS may purge Caches under storage pressure, which
+    /// would leave a restored track with an empty queue.
+    nonisolated private static var stateDirectoryURL: URL {
+        let dir = URL.applicationSupportDirectory.appending(path: "TrommePlaybackState", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
     nonisolated private static var queueFileURL: URL {
-        URL.cachesDirectory.appending(path: "playbackQueue.json")
+        stateDirectoryURL.appending(path: "playbackQueue.json")
     }
     nonisolated private static var originalQueueFileURL: URL {
+        stateDirectoryURL.appending(path: "playbackOriginalQueue.json")
+    }
+    /// Pre-migration location, read once as a fallback.
+    nonisolated private static var legacyQueueFileURL: URL {
+        URL.cachesDirectory.appending(path: "playbackQueue.json")
+    }
+    nonisolated private static var legacyOriginalQueueFileURL: URL {
         URL.cachesDirectory.appending(path: "playbackOriginalQueue.json")
     }
 
@@ -2557,7 +2592,7 @@ final class AudioPlayerService: Sendable {
             repeatMode = mode
         }
         isInfiniteModeActive = defaults.bool(forKey: Self.infiniteModeKey)
-        if let queueData = try? Data(contentsOf: Self.queueFileURL),
+        if let queueData = (try? Data(contentsOf: Self.queueFileURL)) ?? (try? Data(contentsOf: Self.legacyQueueFileURL)),
            let savedQueue = try? JSONDecoder().decode([PlexMetadata].self, from: queueData) {
             queue = savedQueue
         } else if let queueData = defaults.data(forKey: Self.queueKey),
@@ -2565,7 +2600,7 @@ final class AudioPlayerService: Sendable {
             queue = savedQueue
             defaults.removeObject(forKey: Self.queueKey)
         }
-        if let origData = try? Data(contentsOf: Self.originalQueueFileURL),
+        if let origData = (try? Data(contentsOf: Self.originalQueueFileURL)) ?? (try? Data(contentsOf: Self.legacyOriginalQueueFileURL)),
            let savedOriginal = try? JSONDecoder().decode([PlexMetadata].self, from: origData) {
             originalQueue = savedOriginal
         } else if let origData = defaults.data(forKey: Self.originalQueueKey),

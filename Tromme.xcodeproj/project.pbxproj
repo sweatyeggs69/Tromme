@@ -77,6 +77,8 @@
 		F2219C95C94B579CB35E6EA1 /* PlaylistsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36555852E06D7A32A2B7E0B6 /* PlaylistsView.swift */; };
 		F2DDE2E2C0CD183FD5A9EAD4 /* LibrarySyncRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D862074EECF70C3B28A5D49 /* LibrarySyncRecord.swift */; };
 		FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */; };
+		AE532180F460C7AF584015CD /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 27C21A5B2B693466911459F8 /* PrivacyInfo.xcprivacy */; };
+		17833B3C843EDF0C4DED9DD4 /* ScrobbleOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23795A4BE1AD696F5DB35407 /* ScrobbleOutbox.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -154,6 +156,8 @@
 		FC38E01B4F0D3D44D410B7E1 /* PlexModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexModels.swift; sourceTree = "<group>"; };
 		FDBB42B4774E4A3CCABE886B /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		27C21A5B2B693466911459F8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		23795A4BE1AD696F5DB35407 /* ScrobbleOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleOutbox.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -265,6 +269,7 @@
 		7AD43F2900FE467C850EF1C7 /* Tromme */ = {
 			isa = PBXGroup;
 			children = (
+				27C21A5B2B693466911459F8 /* PrivacyInfo.xcprivacy */,
 				0E723B1730487D3B0059BF86 /* Icons */,
 				09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */,
 				198E310192207773F55E967F /* Info.plist */,
@@ -328,6 +333,7 @@
 		B8A3E95C19F206D72C09142B /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				23795A4BE1AD696F5DB35407 /* ScrobbleOutbox.swift */,
 				3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */,
 				0E10DE3930112F3B0045130C /* DownloadManager.swift */,
 			);
@@ -428,6 +434,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AE532180F460C7AF584015CD /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -438,6 +445,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				17833B3C843EDF0C4DED9DD4 /* ScrobbleOutbox.swift in Sources */,
 				0EEC07413048CA9B00ACE377 /* IconPackStore.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,

@@ -57,7 +57,12 @@ actor LibraryStore {
                 try? fm.removeItem(at: URL(fileURLWithPath: url.path + suffix))
             }
             do { return try make() } catch {
-                fatalError("Unable to create library store: \(error)")
+                // Still unusable (e.g. disk full): run from memory for this launch rather than
+                // crash-looping. The mirror is rebuilt from the server anyway.
+                let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                do { return try ModelContainer(for: schema, configurations: memory) } catch {
+                    fatalError("Unable to create library store: \(error)")
+                }
             }
         }
     }

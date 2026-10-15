@@ -1,2 +1,0 @@
-Target dependency graph (1 target)
-Target 'Tromme' in project 'Tromme' (no dependencies)

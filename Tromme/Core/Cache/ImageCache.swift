@@ -378,15 +378,19 @@ actor ImageCache {
     /// Cache key for disk storage. Strips `width`/`height` so one file serves every
     /// display size, and strips the host+port so artwork cached on a local URI is still
     /// found when the server reprobe switches to a remote URI (or vice versa).
-    /// The thumb identity is preserved via the `url` query param and `X-Plex-Token`.
+    /// The thumb identity is preserved via the `url` query param. Auth params are stripped
+    /// so signing out and back in doesn't orphan the whole cache (old files age out via LRU).
     private func diskCacheKey(for url: URL) -> String {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return cacheKey(for: url)
         }
         var changed = false
+        // Width/height vary per display size; the token and client id rotate on re-login
+        // and don't identify the artwork, so none of them belong in the key.
+        let volatileParams: Set<String> = ["width", "height", "X-Plex-Token", "X-Plex-Client-Identifier"]
         if let items = components.queryItems,
-           items.contains(where: { $0.name == "width" || $0.name == "height" }) {
-            components.queryItems = items.filter { $0.name != "width" && $0.name != "height" }
+           items.contains(where: { volatileParams.contains($0.name) }) {
+            components.queryItems = items.filter { !volatileParams.contains($0.name) }
             changed = true
         }
         // Drop the scheme/host/port so the key is stable across server URI changes

@@ -9,6 +9,7 @@ final class ServerConnectionManager {
     var currentLibrarySectionId: String?
 
     private static let serverKey = "currentServer"
+    private static let serverTokenKey = "plexServerAccessToken"
     private static let libraryKey = "currentLibrarySectionId"
 
     private var reprobeTask: Task<Void, Never>?
@@ -16,10 +17,7 @@ final class ServerConnectionManager {
     private var warmingTask: Task<Void, Never>?
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: Self.serverKey),
-           let server = try? JSONDecoder().decode(PlexServer.self, from: data) {
-            self.currentServer = server
-        }
+        self.currentServer = Self.loadPersistedServer()
         self.currentLibrarySectionId = UserDefaults.standard.string(forKey: Self.libraryKey)
 
         // Observe network changes via shared monitor
@@ -47,9 +45,45 @@ final class ServerConnectionManager {
 
     func connect(to server: PlexServer) {
         currentServer = server
-        if let data = try? JSONEncoder().encode(server) {
-            UserDefaults.standard.set(data, forKey: Self.serverKey)
+        Self.persist(server)
+    }
+
+    /// Everything about a server except its access token, which lives in the Keychain.
+    private struct StoredServer: Codable {
+        let name: String
+        let uri: String
+        let machineIdentifier: String
+        let connections: [PlexConnection]
+    }
+
+    private static func persist(_ server: PlexServer) {
+        let stored = StoredServer(
+            name: server.name,
+            uri: server.uri,
+            machineIdentifier: server.machineIdentifier,
+            connections: server.connections
+        )
+        guard let data = try? JSONEncoder().encode(stored) else { return }
+        KeychainHelper.save(server.accessToken, forKey: serverTokenKey)
+        UserDefaults.standard.set(data, forKey: serverKey)
+    }
+
+    private static func loadPersistedServer() -> PlexServer? {
+        guard let data = UserDefaults.standard.data(forKey: serverKey) else { return nil }
+        // Older builds stored the whole server, token included, in UserDefaults.
+        if let legacy = try? JSONDecoder().decode(PlexServer.self, from: data) {
+            persist(legacy)
+            return legacy
         }
+        guard let stored = try? JSONDecoder().decode(StoredServer.self, from: data),
+              let token = KeychainHelper.load(forKey: serverTokenKey) else { return nil }
+        return PlexServer(
+            name: stored.name,
+            uri: stored.uri,
+            machineIdentifier: stored.machineIdentifier,
+            accessToken: token,
+            connections: stored.connections
+        )
     }
 
     func selectLibrary(_ sectionId: String, client: PlexAPIClient? = nil) {
@@ -86,6 +120,7 @@ final class ServerConnectionManager {
         warmingTask?.cancel()
         warmingTask = nil
         UserDefaults.standard.removeObject(forKey: Self.serverKey)
+        KeychainHelper.delete(forKey: Self.serverTokenKey)
         UserDefaults.standard.removeObject(forKey: Self.libraryKey)
         UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")
         Task {

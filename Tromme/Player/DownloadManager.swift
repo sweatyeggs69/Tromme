@@ -122,6 +122,7 @@ final class DownloadManager: @unchecked Sendable {
         Self.migrateLegacyAutoDownloadPreferences()
         loadPersistedRecords()
         verifyExistingDownloads()
+        if !records.isEmpty { prepareDownloadsDirectory() }
     }
 
     /// Maps the retired per-mode toggles ("autoDownloadAllSongs",
@@ -193,7 +194,7 @@ final class DownloadManager: @unchecked Sendable {
         for task in downloadTasks.values { task.cancel() }
         downloadTasks.removeAll()
         pendingQueue.removeAll()
-        activeDownloadCount = 0
+        // activeDownloadCount is left alone: each cancelled task decrements it itself when it unwinds.
         transientStates.removeAll()
         userStoppedAutoDownload = true
     }
@@ -228,7 +229,7 @@ final class DownloadManager: @unchecked Sendable {
         for task in downloadTasks.values { task.cancel() }
         downloadTasks.removeAll()
         pendingQueue.removeAll()
-        activeDownloadCount = 0
+        // activeDownloadCount is left alone: each cancelled task decrements it itself when it unwinds.
         try? FileManager.default.removeItem(at: downloadsDirectory)
         records.removeAll()
         transientStates.removeAll()
@@ -240,6 +241,16 @@ final class DownloadManager: @unchecked Sendable {
     private var downloadsDirectory: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("TrommeDownloads", isDirectory: true)
+    }
+
+    /// Creates the downloads folder and keeps it out of iCloud / device backups — the
+    /// files are re-downloadable and can be many gigabytes.
+    private func prepareDownloadsDirectory() {
+        var dir = downloadsDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? dir.setResourceValues(values)
     }
 
     private func processQueue() {
@@ -282,7 +293,7 @@ final class DownloadManager: @unchecked Sendable {
             return
         }
 
-        try? FileManager.default.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+        prepareDownloadsDirectory()
 
         // Server-side conversion when a lossy download format is selected;
         // falls back to the original file if the transcode fails.
@@ -503,15 +514,19 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
+    /// Drops records whose file is gone. The existence checks run off the main actor so a
+    /// large library doesn't delay launch.
     private func verifyExistingDownloads() {
-        let invalidKeys = records.keys.filter { key in
-            guard let record = records[key] else { return true }
-            return !FileManager.default.fileExists(
-                atPath: downloadsDirectory.appendingPathComponent(record.relativeFilePath).path
-            )
-        }
-        if !invalidKeys.isEmpty {
-            invalidKeys.forEach { records.removeValue(forKey: $0) }
+        let directory = downloadsDirectory
+        let paths = records.mapValues(\.relativeFilePath)
+        Task {
+            let missing = await Task.detached(priority: .utility) {
+                paths.filter {
+                    !FileManager.default.fileExists(atPath: directory.appendingPathComponent($0.value).path)
+                }.map(\.key)
+            }.value
+            guard !missing.isEmpty else { return }
+            missing.forEach { records.removeValue(forKey: $0) }
             persistRecords()
         }
     }
