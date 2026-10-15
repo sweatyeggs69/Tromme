@@ -181,7 +181,6 @@ extension PlexAPIClient {
             "X-Plex-Platform-Version": Self.platformVersion,
             "X-Plex-Device": Self.device,
             "X-Plex-Device-Name": Self.deviceName,
-            "X-Plex-Provides": "player",
             "X-Plex-Client-Profile-Name": "Generic",
             "X-Plex-Client-Profile-Extra": profileExtra,
         ]

@@ -140,7 +140,6 @@ extension PlexAPIClient {
             URLQueryItem(name: "musicBitrate", value: musicBitrate),
             URLQueryItem(name: "mediaBufferSize", value: "102400"),
             URLQueryItem(name: "location", value: location),
-            URLQueryItem(name: "session", value: sessionID),
             URLQueryItem(name: "transcodeSessionId", value: sessionID),
             URLQueryItem(name: "X-Plex-Client-Identifier", value: Self.clientIdentifier),
             URLQueryItem(name: "X-Plex-Product", value: Self.product),

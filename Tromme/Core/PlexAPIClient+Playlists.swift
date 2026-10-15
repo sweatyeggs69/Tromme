@@ -75,12 +75,9 @@ extension PlexAPIClient {
         let normalizedItemKeys = orderedUniqueItemKeys(from: itemRatingKeys)
         guard !normalizedItemKeys.isEmpty else { throw PlexAPIError.invalidURL }
         let uri = playlistMetadataURI(server: server, itemRatingKeys: normalizedItemKeys)
-        let queryItems = [
-            URLQueryItem(name: "uri", value: uri),
-            URLQueryItem(name: "title", value: trimmedTitle),
-            URLQueryItem(name: "type", value: playlistType),
-            URLQueryItem(name: "smart", value: "0"),
-        ]
+        // The spec's create endpoint takes only `uri`; the title is set afterwards by
+        // editing the playlist (PUT /playlists/{playlistId}, same args as metadata edits).
+        let queryItems = [URLQueryItem(name: "uri", value: uri)]
         let data = try await rawServerRequest(
             server: server,
             path: "/playlists",
@@ -90,7 +87,23 @@ extension PlexAPIClient {
         do {
             let decoded = try JSONDecoder().decode(PlexResponse<PlexPlaylist>.self, from: data)
             if let playlist = decoded.mediaContainer.metadata?.first {
-                return playlist
+                guard !trimmedTitle.isEmpty, playlist.title != trimmedTitle else { return playlist }
+                try await renamePlaylist(server: server, playlistId: playlist.ratingKey, newTitle: trimmedTitle)
+                return PlexPlaylist(
+                    ratingKey: playlist.ratingKey,
+                    key: playlist.key,
+                    type: playlist.type,
+                    title: trimmedTitle,
+                    summary: playlist.summary,
+                    smart: playlist.smart,
+                    playlistType: playlist.playlistType,
+                    thumb: playlist.thumb,
+                    composite: playlist.composite,
+                    duration: playlist.duration,
+                    leafCount: playlist.leafCount,
+                    addedAt: playlist.addedAt,
+                    updatedAt: playlist.updatedAt
+                )
             }
             throw PlexAPIError.decodingError(
                 DecodingError.valueNotFound(
