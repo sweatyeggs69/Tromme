@@ -108,6 +108,7 @@
 		F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18BD457F7B7DE8A280528206 /* CarPlaySceneDelegate+Rows.swift */; };
 		92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */; };
 		6DEC6BAE9DC9C11976A5BC97 /* ArtistDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */; };
+		F7FC7CBEA159953593220E3D /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -216,6 +217,7 @@
 		18BD457F7B7DE8A280528206 /* CarPlaySceneDelegate+Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate+Rows.swift; sourceTree = "<group>"; };
 		1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumDetailViewModel.swift; sourceTree = "<group>"; };
 		BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistDetailViewModel.swift; sourceTree = "<group>"; };
+		3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -383,6 +385,7 @@
 		98A459E4DCE9C4222C4676D4 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */,
 				BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */,
 				1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */,
 				027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */,
@@ -532,6 +535,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F7FC7CBEA159953593220E3D /* HomeViewModel.swift in Sources */,
 				6DEC6BAE9DC9C11976A5BC97 /* ArtistDetailViewModel.swift in Sources */,
 				92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */,
 				F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */,
