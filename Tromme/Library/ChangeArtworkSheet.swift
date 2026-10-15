@@ -1,11 +1,14 @@
 import SwiftUI
 
-struct ChangeAlbumArtworkSheet: View {
+struct ChangeArtworkSheet: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.dismiss) private var dismiss
 
-    let albumRatingKey: String
+    /// Rating key of the album or artist whose picture is being changed.
+    let ratingKey: String
+    /// "album" or "artist", for the empty-state text.
+    var subject = "album"
     let onArtworkChanged: @MainActor () async -> Void
 
     @State private var artworkOptions: [PlexImageResource] = []
@@ -55,7 +58,7 @@ struct ChangeAlbumArtworkSheet: View {
                     ContentUnavailableView(
                         "No Artwork Found",
                         systemImage: "photo.on.rectangle",
-                        description: Text("Plex did not return any available artwork options for this album.")
+                        description: Text("Plex did not return any available artwork options for this \(subject).")
                     )
                 } else {
                     GeometryReader { proxy in
@@ -147,11 +150,11 @@ struct ChangeAlbumArtworkSheet: View {
         do {
             let metadataOptions = try await client.getMetadataArtworkOptions(
                 server: server,
-                ratingKey: albumRatingKey
+                ratingKey: ratingKey
             )
             let resourceOptions = try await client.getArtworkResources(
                 server: server,
-                ratingKey: albumRatingKey,
+                ratingKey: ratingKey,
                 element: "posters"
             )
             if !resourceOptions.isEmpty {
@@ -209,13 +212,13 @@ struct ChangeAlbumArtworkSheet: View {
         }
 
         do {
-            let originalThumb = try? await client.getMetadata(server: server, ratingKey: albumRatingKey)?.thumb
+            let originalThumb = try? await client.getMetadata(server: server, ratingKey: ratingKey)?.thumb
             var applied = false
 
             for candidate in artworkCandidates {
                 try await client.setArtworkResource(
                     server: server,
-                    ratingKey: albumRatingKey,
+                    ratingKey: ratingKey,
                     element: "poster",
                     artworkURL: candidate
                 )
@@ -235,7 +238,7 @@ struct ChangeAlbumArtworkSheet: View {
                 return
             }
 
-            if let fresh = try? await client.getMetadata(server: server, ratingKey: albumRatingKey) {
+            if let fresh = try? await client.getMetadata(server: server, ratingKey: ratingKey) {
                 await LibraryStore.shared.replaceListing(fresh, serverId: server.machineIdentifier)
             }
             // The new artwork has a new thumb path, so it is fetched fresh; the rest of the
@@ -309,7 +312,7 @@ struct ChangeAlbumArtworkSheet: View {
 
     private func waitForThumbChange(server: PlexServer, originalThumb: String?) async -> Bool {
         for _ in 0..<4 {
-            if let latestThumb = try? await client.getMetadata(server: server, ratingKey: albumRatingKey)?.thumb,
+            if let latestThumb = try? await client.getMetadata(server: server, ratingKey: ratingKey)?.thumb,
                latestThumb != originalThumb {
                 return true
             }
@@ -321,8 +324,8 @@ struct ChangeAlbumArtworkSheet: View {
 }
 
 #Preview {
-    ChangeAlbumArtworkSheet(
-        albumRatingKey: "1",
+    ChangeArtworkSheet(
+        ratingKey: "1",
         onArtworkChanged: {}
     )
 }

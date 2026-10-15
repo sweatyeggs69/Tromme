@@ -7,10 +7,17 @@ struct ArtistHeroHeaderView: View {
     var isHidden: Bool
     var hasBio = false
     var onInfo: (() -> Void)?
+    var onChangePhoto: (() -> Void)?
     var onPlay: (() -> Void)?
     var onShuffle: (() -> Void)?
 
     var body: some View {
+        content
+            .changeArtworkOnLongPress(isEnabled: onChangePhoto != nil) { onChangePhoto?() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if isHidden {
             VStack(spacing: 20) {
                 Text(artist.title)

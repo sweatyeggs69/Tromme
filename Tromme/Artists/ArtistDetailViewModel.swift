@@ -83,6 +83,14 @@ final class ArtistDetailViewModel {
         }
     }
 
+    /// Re-reads the artist after its photo changed, so the page picks up the new thumb. The sheet
+    /// has already updated the stored listing.
+    func reloadArtist(_ context: Context) async {
+        guard let server = context.server,
+              let fresh = try? await context.client.getMetadata(server: server, ratingKey: artist.ratingKey) else { return }
+        resolvedArtist = fresh
+    }
+
     private static func topTracks(from tracks: [PlexMetadata]) -> [PlexMetadata] {
         Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
     }

@@ -19,6 +19,7 @@ struct ArtistDetailView: View {
     /// spinner never outlives a failed or offline fetch.
     @State private var backdropLookupFinished = false
     @State private var showsBioSheet = false
+    @State private var showsChangePhotoSheet = false
     @State private var viewWidth: CGFloat = 393
     /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
     @State private var scrollOffset: CGFloat = 0
@@ -269,6 +270,7 @@ struct ArtistDetailView: View {
                 isHidden: heroIsHidden,
                 hasBio: !(displayArtist.summary ?? "").isEmpty,
                 onInfo: { showsBioSheet = true },
+                onChangePhoto: previewData == nil ? { showsChangePhotoSheet = true } : nil,
                 onPlay: {
                     guard !allTracks.isEmpty else { return }
                     player.play(tracks: allTracks)
@@ -448,6 +450,13 @@ struct ArtistDetailView: View {
         }
         .task(id: artist.ratingKey) {
             await viewModel.load(loadContext)
+        }
+        .sheet(isPresented: $showsChangePhotoSheet) {
+            ChangeArtworkSheet(ratingKey: artist.ratingKey, subject: "artist") {
+                // The new photo has a new thumb path, so the hero reloads it and the
+                // backdrop color is picked again from it (see the thumb-keyed tasks above).
+                await viewModel.reloadArtist(loadContext)
+            }
         }
         .sheet(isPresented: $showsBioSheet) {
             if let summary = displayArtist.summary, !summary.isEmpty {

@@ -289,6 +289,7 @@ struct AlbumDetailView: View {
                 cornerRadius: AppStyle.Radius.card
             )
                 .headerArtworkStyle()
+                .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .padding(.top, 12)
 
             Text(album.title)
@@ -524,6 +525,7 @@ struct AlbumDetailView: View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(thumbPath: thumbPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
                 .headerArtworkStyle()
+                .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .frame(width: AppStyle.Artwork.header)
                 .padding(.bottom, 20)
 
@@ -748,12 +750,6 @@ struct AlbumDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if !isPreviewMode {
-                        Button {
-                            showingChangeArtworkSheet = true
-                        } label: {
-                            Label("Change Artwork", systemImage: "photo")
-                        }
-                        Divider()
                         albumDownloadButton
                         Divider()
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
@@ -801,8 +797,9 @@ struct AlbumDetailView: View {
             }
         }
         .sheet(isPresented: $showingChangeArtworkSheet) {
-            ChangeAlbumArtworkSheet(
-                albumRatingKey: album.ratingKey
+            ChangeArtworkSheet(
+                ratingKey: album.ratingKey,
+                subject: "album"
             ) {
                 await viewModel.loadAlbumDetails(loadContext)
                 player.updateAlbumThumb(albumRatingKey: album.ratingKey, newThumb: albumDetails.thumb)

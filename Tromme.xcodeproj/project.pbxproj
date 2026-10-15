@@ -16,7 +16,8 @@
 		02EFFE2FF9FE8142805B0263 /* LibraryMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F650499E82802A9919E16B4 /* LibraryMemory.swift */; };
 		0603E2752890285A43E43246 /* ImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C2FC699685A8C436EF372D6 /* ImageCache.swift */; };
 		0CE0A7EF293C45870036FD88 /* LibrarySyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 089047732CAA2781E1129B48 /* LibrarySyncService.swift */; };
-		0E0B926D2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */; };
+		0E0B926E2F9BCAE9007ACD2A /* ChangeArtworkLongPress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B926F2F9BCAE9007ACD2A /* ChangeArtworkLongPress.swift */; };
+		0E0B926D2F9BCAE9007ACD2A /* ChangeArtworkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0B926C2F9BCAE9007ACD2A /* ChangeArtworkSheet.swift */; };
 		0E10DE3A30112F3B0045130C /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10DE3930112F3B0045130C /* DownloadManager.swift */; };
 		0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E10DE3B30112F4B0045130C /* DownloadsView.swift */; };
 		0E1110B9BACB9425E1322364 /* AllSongsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDEFE1EDC3B807A75155156D /* AllSongsView.swift */; };
@@ -194,7 +195,8 @@
 		09EC68AAAE0C1E16AFF7A131 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0D0CCB8AF72F235EAFE1C57D /* PlaylistRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistRecord.swift; sourceTree = "<group>"; };
 		0DEF42D080CAA509D68BED1A /* LibraryRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryRecord.swift; sourceTree = "<group>"; };
-		0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeAlbumArtworkSheet.swift; sourceTree = "<group>"; };
+		0E0B926F2F9BCAE9007ACD2A /* ChangeArtworkLongPress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeArtworkLongPress.swift; sourceTree = "<group>"; };
+		0E0B926C2F9BCAE9007ACD2A /* ChangeArtworkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeArtworkSheet.swift; sourceTree = "<group>"; };
 		0E10DE3930112F3B0045130C /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
 		0E10DE3B30112F4B0045130C /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
 		0E122B552F912AD1006D2BC8 /* NowPlayingStartPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingStartPanel.swift; sourceTree = "<group>"; };
@@ -566,6 +568,8 @@
 				E2B3C4D5F60718293A4B5C6D /* HorizontalTrackGrid.swift */,
 				30B32F38AB3FBE4BA037947B /* TrackRowView.swift */,
 				0E22D137305C380600AB1EC6 /* LibrarySwitcherSheet.swift */,
+				0E0B926C2F9BCAE9007ACD2A /* ChangeArtworkSheet.swift */,
+				0E0B926F2F9BCAE9007ACD2A /* ChangeArtworkLongPress.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -677,7 +681,6 @@
 				1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */,
 				027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */,
 				D8231E3A3CBD690029DAC154 /* AlbumTrackRow.swift */,
-				0E0B926C2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift */,
 			);
 			path = Albums;
 			sourceTree = "<group>";
@@ -896,7 +899,8 @@
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,
 				0E91C64C2F91ADE300775275 /* CarPlaySceneDelegate.swift in Sources */,
-				0E0B926D2F9BCAE9007ACD2A /* ChangeAlbumArtworkSheet.swift in Sources */,
+				0E0B926D2F9BCAE9007ACD2A /* ChangeArtworkSheet.swift in Sources */,
+				0E0B926E2F9BCAE9007ACD2A /* ChangeArtworkLongPress.swift in Sources */,
 				0E1110B9BACB9425E1322364 /* AllSongsView.swift in Sources */,
 				ECCBEDFE65601440EDC129FA /* AppStyle.swift in Sources */,
 				C15AFF987C2932597A1C6F35 /* ArtistDetailView.swift in Sources */,
