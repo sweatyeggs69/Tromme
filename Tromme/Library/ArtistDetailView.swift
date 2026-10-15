@@ -844,10 +844,15 @@ private struct ArtistHeroPhotoView: View {
                     .scaledToFill()
                     .frame(width: width, height: photoHeight, alignment: .top)
                     .clipped()
-                    .blur(radius: 24)
+                    .blur(radius: 30, opaque: true)
+                    .clipped()
                     .mask(
                         LinearGradient(
-                            colors: [.clear, .clear, .black],
+                            stops: [
+                                .init(color: .clear, location: 0.35),
+                                .init(color: .black.opacity(0.6), location: 0.6),
+                                .init(color: .black, location: 0.85)
+                            ],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -857,8 +862,10 @@ private struct ArtistHeroPhotoView: View {
         .overlay {
             LinearGradient(
                 stops: [
-                    .init(color: backdropColor.opacity(0), location: 0.575),
-                    .init(color: backdropColor.opacity(0.9), location: 0.88),
+                    .init(color: backdropColor.opacity(0), location: 0.3),
+                    .init(color: backdropColor.opacity(0.25), location: 0.55),
+                    .init(color: backdropColor.opacity(0.65), location: 0.78),
+                    .init(color: backdropColor.opacity(0.92), location: 0.93),
                     .init(color: backdropColor, location: 1)
                 ],
                 startPoint: .top,
