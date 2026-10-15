@@ -43,7 +43,6 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - use AppStorage for simple scalar user preferences
 - use SwiftData for persistent models
 - use disk files (Codable → JSON) for complex persistent state (e.g. playback queue); never NSUserDefaults for structured data
-  - Known pre-existing exceptions (small structured blobs, not full migration targets): `DownloadManager`'s downloaded-track records and `ServerConnectionManager`'s cached `PlexServer` are still JSON-encoded into UserDefaults. Don't copy this pattern for new persistent state — use disk files instead.
 - Toggles and buttons with different states should always transform unless otherwise stated.
 
 ## Build System

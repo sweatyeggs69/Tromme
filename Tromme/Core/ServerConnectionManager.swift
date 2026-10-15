@@ -65,16 +65,34 @@ final class ServerConnectionManager {
         )
         guard let data = try? JSONEncoder().encode(stored) else { return }
         KeychainHelper.save(server.accessToken, forKey: serverTokenKey)
-        UserDefaults.standard.set(data, forKey: serverKey)
+        try? data.write(to: serverFileURL, options: .atomic)
+        UserDefaults.standard.removeObject(forKey: serverKey)
+    }
+
+    /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
+    private static var serverFileURL: URL {
+        let dir = URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appending(path: "currentServer.json")
     }
 
     private static func loadPersistedServer() -> PlexServer? {
+        if let data = try? Data(contentsOf: serverFileURL) {
+            return decodeStoredServer(data)
+        }
+        // Older builds kept the server in UserDefaults: first the whole server with its
+        // token, later everything but the token. Either way, move it to the file.
         guard let data = UserDefaults.standard.data(forKey: serverKey) else { return nil }
-        // Older builds stored the whole server, token included, in UserDefaults.
         if let legacy = try? JSONDecoder().decode(PlexServer.self, from: data) {
             persist(legacy)
             return legacy
         }
+        guard let server = decodeStoredServer(data) else { return nil }
+        persist(server)
+        return server
+    }
+
+    private static func decodeStoredServer(_ data: Data) -> PlexServer? {
         guard let stored = try? JSONDecoder().decode(StoredServer.self, from: data),
               let token = KeychainHelper.load(forKey: serverTokenKey) else { return nil }
         return PlexServer(
@@ -120,6 +138,7 @@ final class ServerConnectionManager {
         warmingTask?.cancel()
         warmingTask = nil
         UserDefaults.standard.removeObject(forKey: Self.serverKey)
+        try? FileManager.default.removeItem(at: Self.serverFileURL)
         KeychainHelper.delete(forKey: Self.serverTokenKey)
         UserDefaults.standard.removeObject(forKey: Self.libraryKey)
         UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt")

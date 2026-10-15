@@ -484,7 +484,7 @@ final class DownloadManager: @unchecked Sendable {
 
     /// Debounces bursts of `persistRecords()` calls (e.g. a library-wide auto-download
     /// completing many tracks back to back) into a single encode+write instead of
-    /// re-encoding the entire records dictionary to UserDefaults on every completion.
+    /// re-encoding the entire records dictionary to disk on every completion.
     private func persistRecords() {
         guard !persistScheduled else { return }
         persistScheduled = true
@@ -501,16 +501,30 @@ final class DownloadManager: @unchecked Sendable {
         persistRecordsNow()
     }
 
+    /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
+    private var recordsFileURL: URL {
+        let dir = URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appending(path: "downloadRecords.json")
+    }
+
     private func persistRecordsNow() {
         guard let data = try? JSONEncoder().encode(Array(records.values)) else { return }
-        UserDefaults.standard.set(data, forKey: persistenceKey)
+        try? data.write(to: recordsFileURL, options: .atomic)
     }
 
     private func loadPersistedRecords() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
+        let fileData = try? Data(contentsOf: recordsFileURL)
+        // Older builds kept the records in UserDefaults; move them to the file once.
+        let legacyData = fileData == nil ? UserDefaults.standard.data(forKey: persistenceKey) : nil
+        guard let data = fileData ?? legacyData,
               let loaded = try? JSONDecoder().decode([DownloadedTrackRecord].self, from: data) else { return }
         for record in loaded {
             records[record.ratingKey] = record
+        }
+        if legacyData != nil {
+            persistRecordsNow()
+            UserDefaults.standard.removeObject(forKey: persistenceKey)
         }
     }
 
