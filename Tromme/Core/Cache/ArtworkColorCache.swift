@@ -27,7 +27,7 @@ final class ArtworkColorCache {
     func color(
         for thumbPath: String?,
         colorScheme: ColorScheme,
-        style: ArtworkBackdrop.Style = .album
+        style: ArtworkBackdrop.Style = .original
     ) -> Color? {
         guard let thumbPath, let source = cache[Self.key(thumbPath, style)] else { return nil }
         return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme, style: style)
@@ -35,14 +35,14 @@ final class ArtworkColorCache {
 
     /// Artist photos are keyed separately because they use a different color pick.
     private static func key(_ thumbPath: String, _ style: ArtworkBackdrop.Style) -> String {
-        style == .artist ? "artist:" + thumbPath : "vivid:" + thumbPath
+        style == .artist ? "artist:" + thumbPath : "orig:" + thumbPath
     }
 
     func resolveColor(
         for thumbPath: String?,
         using client: PlexAPIClient,
         server: PlexServer,
-        style: ArtworkBackdrop.Style = .album
+        style: ArtworkBackdrop.Style = .original
     ) async {
         guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
         // 512 matches the card bucket in ArtworkView.recommendedTranscodeSize, so this
@@ -50,7 +50,7 @@ final class ArtworkColorCache {
         // fetching a separate low-res thumbnail.
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 512, height: 512) else { return }
         guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 512) else { return }
-        let dominant = image.vividPhotoColor(visibleFraction: style == .artist ? 0.6 : 1.0)
+        let dominant = style == .artist ? image.vividPhotoColor(visibleFraction: 0.6) : image.originalDominantColor
         store(Color(dominant), forKey: Self.key(thumbPath, style))
         scheduleSave()
     }
@@ -117,6 +117,116 @@ private actor ArtworkColorPersistence {
 }
 
 private extension UIImage {
+    /// Returns the most prominent vivid color in the artwork.
+    ///
+    /// Bins pixels into 24 hue buckets weighted by saturation × brightness, then picks
+    /// the heaviest bucket — this surfaces a real accent color rather than the muddy
+    /// average of every pixel. Near-black, near-white, and gray pixels are excluded so
+    /// dark backdrops and white margins don't dominate the result. Falls back to a
+    /// weighted average if the artwork is essentially grayscale.
+    var originalDominantColor: UIColor {
+        guard let cgImage else { return .gray }
+
+        let size = 80
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        var pixelData = [UInt8](repeating: 0, count: size * size * 4)
+
+        guard let context = CGContext(
+            data: &pixelData,
+            width: size,
+            height: size,
+            bitsPerComponent: 8,
+            bytesPerRow: size * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return .gray }
+
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size, height: size))
+
+        let hueBinCount = 24
+        var binWeight = [Double](repeating: 0, count: hueBinCount)
+        var binR = [Double](repeating: 0, count: hueBinCount)
+        var binG = [Double](repeating: 0, count: hueBinCount)
+        var binB = [Double](repeating: 0, count: hueBinCount)
+
+        var fallbackR: Double = 0
+        var fallbackG: Double = 0
+        var fallbackB: Double = 0
+        var fallbackWeight: Double = 0
+
+        let pixelCount = size * size
+        for i in 0..<pixelCount {
+            let offset = i * 4
+            let r = Double(pixelData[offset]) / 255
+            let g = Double(pixelData[offset + 1]) / 255
+            let b = Double(pixelData[offset + 2]) / 255
+
+            let maxC = max(r, g, b)
+            let minC = min(r, g, b)
+            let delta = maxC - minC
+            let brightness = maxC
+            let saturation = maxC == 0 ? 0 : delta / maxC
+
+            guard brightness > 0.18, brightness < 0.96, saturation > 0.25 else {
+                let w = brightness * 0.05
+                fallbackR += r * w
+                fallbackG += g * w
+                fallbackB += b * w
+                fallbackWeight += w
+                continue
+            }
+
+            var hue: Double = 0
+            if delta > 0 {
+                if maxC == r {
+                    hue = ((g - b) / delta).truncatingRemainder(dividingBy: 6)
+                } else if maxC == g {
+                    hue = (b - r) / delta + 2
+                } else {
+                    hue = (r - g) / delta + 4
+                }
+                hue *= 60
+                if hue < 0 { hue += 360 }
+            }
+
+            let bin = min(hueBinCount - 1, Int(hue / 360 * Double(hueBinCount)))
+            let weight = saturation * brightness
+            binWeight[bin] += weight
+            binR[bin] += r * weight
+            binG[bin] += g * weight
+            binB[bin] += b * weight
+
+            fallbackR += r * weight
+            fallbackG += g * weight
+            fallbackB += b * weight
+            fallbackWeight += weight
+        }
+
+        var bestBin = -1
+        var bestWeight: Double = 0
+        for i in 0..<hueBinCount where binWeight[i] > bestWeight {
+            bestWeight = binWeight[i]
+            bestBin = i
+        }
+
+        if bestBin >= 0, binWeight[bestBin] > 0 {
+            return UIColor(
+                red: CGFloat(binR[bestBin] / binWeight[bestBin]),
+                green: CGFloat(binG[bestBin] / binWeight[bestBin]),
+                blue: CGFloat(binB[bestBin] / binWeight[bestBin]),
+                alpha: 1
+            )
+        }
+
+        guard fallbackWeight > 0 else { return .gray }
+        return UIColor(
+            red: CGFloat(fallbackR / fallbackWeight),
+            green: CGFloat(fallbackG / fallbackWeight),
+            blue: CGFloat(fallbackB / fallbackWeight),
+            alpha: 1
+        )
+    }
+
     /// Backdrop color: the most colorful large area of the visible part of the image (the top
     /// `visibleFraction`; artist photos fade out at the bottom), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
     /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
@@ -282,14 +392,16 @@ private extension UIImage {
 /// Music artist pages).
 enum ArtworkBackdrop {
     enum Style {
-        case album, artist
+        /// Album and playlist pages: the original hue-bucket pick, used as is.
+        case original, artist
 
         var darkLightnessCap: Double { self == .artist ? 42.3 : 18.5 }
     }
 
-    static func color(from source: UIColor, colorScheme: ColorScheme, style: Style = .album) -> Color {
+    static func color(from source: UIColor, colorScheme: ColorScheme, style: Style = .original) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
+        if style == .original { return Color(source) }
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
         let ui: UIColor
         switch colorScheme {
