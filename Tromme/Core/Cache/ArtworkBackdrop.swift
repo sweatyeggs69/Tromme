@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import CryptoKit
 
-/// Re-lights an artwork's average color into the Apple Music style backdrop tint.
+/// Re-lights an artwork's accent (or average) color into the Apple Music style backdrop tint.
 ///
 /// Dark appearance: colorful sources go to L* 26 to 40 at about 0.8x chroma; neutral ones
 /// to source L* + 0.5, capped at L* 42.3 (measured from Apple Music artist pages). Light
