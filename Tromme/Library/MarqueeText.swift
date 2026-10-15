@@ -8,11 +8,10 @@ struct MarqueeText: View {
 
     private let gap: CGFloat = 40
     private let speed: CGFloat = 30
-    private let pause: Duration = .seconds(2)
 
     @State private var textWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
-    @State private var offset: CGFloat = 0
+    @State private var start = Date()
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
 
@@ -24,12 +23,17 @@ struct MarqueeText: View {
             .hidden()
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .leading) {
-                HStack(spacing: gap) {
-                    label
-                    if overflows { label }
+                // Offset comes from the clock, not an animated state, so animations from
+                // parent state changes (lyrics/queue) can't interrupt or retarget the scroll.
+                TimelineView(.animation(paused: !overflows)) { context in
+                    HStack(spacing: gap) {
+                        label
+                        if overflows { label }
+                    }
+                    .offset(x: offset(at: context.date))
+                    .fixedSize()
+                    .transaction { $0.animation = nil }
                 }
-                .offset(x: offset)
-                .fixedSize()
             }
             .clipped()
             .mask {
@@ -47,8 +51,7 @@ struct MarqueeText: View {
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
-            // Keyed on overflow, not container width, so resizing mid-scroll doesn't restart the loop.
-            .task(id: "\(text)|\(overflows)") { await run() }
+            .onChange(of: text) { start = Date() }
     }
 
     private var label: some View {
@@ -62,19 +65,15 @@ struct MarqueeText: View {
             }
     }
 
-    private func run() async {
-        offset = 0
-        guard overflows else { return }
+    private func offset(at date: Date) -> CGFloat {
+        guard overflows else { return 0 }
         let distance = textWidth + gap
-        let duration = Double(distance / speed)
-        while !Task.isCancelled {
-            try? await Task.sleep(for: pause)
-            if Task.isCancelled { return }
-            withAnimation(.linear(duration: duration)) { offset = -distance }
-            try? await Task.sleep(for: .seconds(duration))
-            if Task.isCancelled { return }
-            offset = 0
-        }
+        let scroll = Double(distance / speed)
+        let pauseSeconds = 2.0
+        let t = (date.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate)
+            .truncatingRemainder(dividingBy: pauseSeconds + scroll)
+        guard t > pauseSeconds else { return 0 }
+        return -distance * CGFloat((t - pauseSeconds) / scroll)
     }
 }
 
