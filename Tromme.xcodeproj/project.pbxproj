@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7CC494AF88590F8464CA7DC9 /* AnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */; };
+		D308DD86917C0385C2FEDA2B /* AnimatedArtworkEntitlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */; };
+		C5B2B542C9714784EFC274BB /* AnimatedArtworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */; };
+		ED74AE674E6D6243CEF144FE /* AnimatedArtworkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C91A2DB0BC6CFA6C78E19D26 /* AnimatedArtworkView.swift */; };
+		DAF12DFA1C5FD07CCE405C93 /* LoopingVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC89AE31490B4A831A5A934 /* LoopingVideoView.swift */; };
+		7FF9DC1340E0F20DB077DD13 /* PlayerLayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAF51849BF4FEF69BBE706EB /* PlayerLayerView.swift */; };
 		8B7D9E8C10E193809C45A8D1 /* WordWipeTextRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E547DA57B8B53901FCF307A9 /* WordWipeTextRenderer.swift */; };
 		D20D5B1C2E3F4051627384A5 /* LyricsClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10C4A0B1D2E3F4051627384 /* LyricsClock.swift */; };
 		BAB01B6511139523F8649A6F /* WordSyncedLyricText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */; };
@@ -184,6 +190,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtwork.swift; sourceTree = "<group>"; };
+		C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkEntitlement.swift; sourceTree = "<group>"; };
+		3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkService.swift; sourceTree = "<group>"; };
+		C91A2DB0BC6CFA6C78E19D26 /* AnimatedArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkView.swift; sourceTree = "<group>"; };
+		BFC89AE31490B4A831A5A934 /* LoopingVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopingVideoView.swift; sourceTree = "<group>"; };
+		AAF51849BF4FEF69BBE706EB /* PlayerLayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerLayerView.swift; sourceTree = "<group>"; };
 		E547DA57B8B53901FCF307A9 /* WordWipeTextRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordWipeTextRenderer.swift; sourceTree = "<group>"; };
 		C10C4A0B1D2E3F4051627384 /* LyricsClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LyricsClock.swift; sourceTree = "<group>"; };
 		2D662A9CC940EC499DB3B9A8 /* WordSyncedLyricText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordSyncedLyricText.swift; sourceTree = "<group>"; };
@@ -681,6 +693,12 @@
 				1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */,
 				027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */,
 				D8231E3A3CBD690029DAC154 /* AlbumTrackRow.swift */,
+				78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */,
+				C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */,
+				3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */,
+				C91A2DB0BC6CFA6C78E19D26 /* AnimatedArtworkView.swift */,
+				BFC89AE31490B4A831A5A934 /* LoopingVideoView.swift */,
+				AAF51849BF4FEF69BBE706EB /* PlayerLayerView.swift */,
 			);
 			path = Albums;
 			sourceTree = "<group>";
@@ -823,6 +841,12 @@
 				219FAAAA3CD37F376DE3B7A5 /* ArtistHeroHeaderView.swift in Sources */,
 				6D8E7D73A3DA7A8FEFB2CF14 /* ArtistAllTracksListView.swift in Sources */,
 				AB8DE3240A1F6395A199F123 /* AlbumViewMode.swift in Sources */,
+				7CC494AF88590F8464CA7DC9 /* AnimatedArtwork.swift in Sources */,
+				D308DD86917C0385C2FEDA2B /* AnimatedArtworkEntitlement.swift in Sources */,
+				C5B2B542C9714784EFC274BB /* AnimatedArtworkService.swift in Sources */,
+				ED74AE674E6D6243CEF144FE /* AnimatedArtworkView.swift in Sources */,
+				DAF12DFA1C5FD07CCE405C93 /* LoopingVideoView.swift in Sources */,
+				7FF9DC1340E0F20DB077DD13 /* PlayerLayerView.swift in Sources */,
 				AACCE9267A62A671E7A29BFD /* AlbumSortOrder.swift in Sources */,
 				841CE9A85DDFA98C34EC9D7E /* PlexAPIError.swift in Sources */,
 				A6652054F4BE0754BAD00805 /* Notification.Name+Tromme.swift in Sources */,

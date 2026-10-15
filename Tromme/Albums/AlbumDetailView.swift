@@ -22,6 +22,7 @@ struct AlbumDetailView: View {
     @State private var showDeleteAlbumConfirmation = false
     @State private var showingChangeArtworkSheet = false
     @AppStorage("showPopularTracks") private var showPopularTracks = true
+    @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
 
     // Read-only views of the view model's state, so the body reads as before.
     private var albumDetails: PlexMetadata { viewModel.albumDetails }
@@ -281,6 +282,15 @@ struct AlbumDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Tromme+ animated artwork, fading in over the static header artwork when the
+    /// album has it.
+    private var animatedArtworkOverlay: some View {
+        AnimatedArtworkView(
+            url: animatedArtworkEnabled ? viewModel.animatedArtworkURL : nil,
+            cornerRadius: AppStyle.Radius.card
+        )
+    }
+
     private func albumHeader(width: CGFloat) -> some View {
         VStack {
             ArtworkView(
@@ -288,6 +298,7 @@ struct AlbumDetailView: View {
                 size: AppStyle.Artwork.portraitHeader(forWidth: width),
                 cornerRadius: AppStyle.Radius.card
             )
+                .overlay { animatedArtworkOverlay }
                 .headerArtworkStyle()
                 .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .padding(.top, 12)
@@ -524,6 +535,7 @@ struct AlbumDetailView: View {
     private var landscapeHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(thumbPath: thumbPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+                .overlay { animatedArtworkOverlay }
                 .headerArtworkStyle()
                 .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .frame(width: AppStyle.Artwork.header)
@@ -775,6 +787,9 @@ struct AlbumDetailView: View {
         }
         .task(id: album.ratingKey) {
             await viewModel.load(loadContext)
+        }
+        .task(id: "\(album.ratingKey)|\(animatedArtworkEnabled)") {
+            await viewModel.loadAnimatedArtwork()
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {

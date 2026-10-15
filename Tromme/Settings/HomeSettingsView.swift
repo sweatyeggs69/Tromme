@@ -6,6 +6,7 @@ struct HomeSettingsView: View {
     @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
+    @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
 
     var body: some View {
         Form {
@@ -28,10 +29,18 @@ struct HomeSettingsView: View {
             Section {
                 Toggle("Popular Track Indicator", isOn: $showPopularTracks)
                     .tint(.green)
+                if AnimatedArtworkEntitlement.isUnlocked {
+                    Toggle("Animated Artwork", isOn: $animatedArtworkEnabled)
+                        .tint(.green)
+                }
             } header: {
                 Text("Albums")
             } footer: {
-                Text("Track popularity data is sourced from Last.fm.")
+                if AnimatedArtworkEntitlement.isUnlocked {
+                    Text("Track popularity data is sourced from Last.fm. Animated artwork plays on album pages when an album has it and requires an internet connection.")
+                } else {
+                    Text("Track popularity data is sourced from Last.fm.")
+                }
             }
 
             Section("Lyrics") {

@@ -15,6 +15,8 @@ final class AlbumDetailViewModel {
     private(set) var recommendedAlbums: [PlexMetadata]
     private(set) var popularTrackTitles: Set<String> = []
     private(set) var isDeletingAlbum = false
+    /// Square Apple Music animated artwork for the header, when the album has it.
+    private(set) var animatedArtworkURL: URL?
     var albumDeleteErrorMessage: String?
 
     init(
@@ -69,6 +71,17 @@ final class AlbumDetailViewModel {
         async let recommendationsTask: Void = loadRecommendedAlbums(context)
         async let lastFMTask: Void = loadLastFMPopularity(context)
         _ = await (artistAlbumsTask, recommendationsTask, lastFMTask)
+    }
+
+    func loadAnimatedArtwork() async {
+        guard !isPreviewMode, AnimatedArtworkEntitlement.isEnabled,
+              let artist = albumDetails.parentTitle ?? album.parentTitle, !artist.isEmpty else {
+            animatedArtworkURL = nil
+            return
+        }
+        let artwork = await AnimatedArtworkService.artwork(artist: artist, album: album.title)
+        guard !Task.isCancelled else { return }
+        animatedArtworkURL = artwork?.square
     }
 
     func loadAlbumDetails(_ context: Context) async {
