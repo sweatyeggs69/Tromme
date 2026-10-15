@@ -4,9 +4,10 @@ import CryptoKit
 
 /// Turns an artwork's accent (or average) color into the page backdrop.
 ///
-/// Strong accents (chroma 25 or more, the same bar the pick uses) are used as is, in both
-/// appearances, so the page matches the accent on the cover. Only the text-contrast guard
-/// may nudge their lightness. Muted colors are re-lit into the Apple Music style tint.
+/// In light appearance, strong accents (chroma 25 or more, the same bar the pick uses) are
+/// used as is, so the page matches the accent on the cover; only the text-contrast guard
+/// may nudge their lightness. Everything else, including every color in dark appearance,
+/// is re-lit into the Apple Music style tint.
 ///
 /// Dark appearance: colorful sources go to L* 26 to 40 at about 0.8x chroma; neutral ones
 /// to source L* + 0.5, capped at L* 42.3 (measured from Apple Music artist pages). Light
@@ -28,7 +29,7 @@ enum ArtworkBackdrop {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
-        if lab.chroma >= accentChroma {
+        if colorScheme == .light, lab.chroma >= accentChroma {
             return Color(relit(lightness: lab.l, chroma: lab.chroma, hue: lab.hue))
         }
         let ui: UIColor
