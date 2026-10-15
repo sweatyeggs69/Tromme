@@ -62,7 +62,7 @@ final class ArtworkColorCache {
         style: ArtworkBackdrop.Style = .original
     ) {
         guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
-        let dominant = style == .artist ? image.vividPhotoColor(visibleFraction: 0.6) : image.originalDominantColor
+        let dominant = style == .artist ? image.averageColor(visibleFraction: 0.6) : image.originalDominantColor
         store(Color(dominant), forKey: Self.key(thumbPath, style))
         scheduleSave()
     }
@@ -82,7 +82,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v6.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v7.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -99,7 +99,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v6.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v7.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -224,14 +224,12 @@ private extension UIImage {
         )
     }
 
-    /// Backdrop color: the most colorful large area of the visible part of the image (the top
-    /// `visibleFraction`; artist photos fade out at the bottom), ignoring near-neutral pixels. Region score is pixel count times mean chroma,
-    /// over a 16-level RGB grid with neighbours merged. Photos that are essentially neutral
-    /// (black and white, or white walls and black clothing only) fall back to `dominantColor`.
-    func vividPhotoColor(visibleFraction: Double) -> UIColor {
+    /// Overall tone of the visible part of the image (the top `visibleFraction`; artist photos
+    /// fade out at the bottom): the plain average color. The backdrop re-lights it later.
+    func averageColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
 
-        let size = 64
+        let size = 32
         var pixelData = [UInt8](repeating: 0, count: size * size * 4)
         guard let context = CGContext(
             data: &pixelData,
@@ -244,124 +242,12 @@ private extension UIImage {
         ) else { return .gray }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size, height: size))
 
-        let levels = 16
-        let minChroma = 8.0
-        let rows = Int(Double(size) * visibleFraction)
-        func pick() -> UIColor? {
-            var count = [Double](repeating: 0, count: levels * levels * levels)
-            var chromaSum = [Double](repeating: 0, count: levels * levels * levels)
-            @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
-
-            var chromaticPixels = 0
-            for y in 0..<rows {
-                for x in 0..<size {
-                    let o = (y * size + x) * 4
-                    let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                    guard lab.chroma >= minChroma else { continue }
-                    chromaticPixels += 1
-                    let i = bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)
-                    count[i] += 1
-                    chromaSum[i] += lab.chroma
-                }
-            }
-
-            // Too little color to call it a colorful photo.
-            guard chromaticPixels > rows * size / 20 else { return nil }
-
-            var bestBin = 0
-            var bestScore = -1.0
-            for r in 0..<levels { for g in 0..<levels { for b in 0..<levels {
-                var n = 0.0, c = 0.0
-                for dr in -1...1 { for dg in -1...1 { for db in -1...1 {
-                    let rr = r + dr, gg = g + dg, bb = b + db
-                    guard (0..<levels).contains(rr), (0..<levels).contains(gg), (0..<levels).contains(bb) else { continue }
-                    n += count[bin(rr, gg, bb)]
-                    c += chromaSum[bin(rr, gg, bb)]
-                } } }
-                guard n > 0 else { continue }
-                let score = n * (c / n)
-                if score > bestScore { bestScore = score; bestBin = bin(r, g, b) }
-            } } }
-            let bestR = bestBin / (levels * levels)
-            let bestG = (bestBin / levels) % levels
-            let bestB = bestBin % levels
-
-            var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
-            for y in 0..<rows {
-                for x in 0..<size {
-                    let o = (y * size + x) * 4
-                    let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
-                    guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
-                    let lab = Lab(r: Double(pixelData[o]) / 255, g: Double(pixelData[o + 1]) / 255, b: Double(pixelData[o + 2]) / 255)
-                    guard lab.chroma >= minChroma else { continue }
-                    sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
-                }
-            }
-            guard n > 0 else { return nil }
-            return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
+        let rows = max(Int(Double(size) * visibleFraction), 1)
+        var sumR = 0.0, sumG = 0.0, sumB = 0.0
+        for i in 0..<(rows * size) {
+            sumR += Double(pixelData[i * 4]); sumG += Double(pixelData[i * 4 + 1]); sumB += Double(pixelData[i * 4 + 2])
         }
-
-        if let color = pick() { return color }
-        return dominantColor
-    }
-
-    /// Apple Music style album backdrop color.
-    ///
-    /// Measured from Apple Music album-detail screenshots: the page tint is the artwork's
-    /// dominant color (the most common color, not the most vivid accent, so small bright
-    /// accents on a mostly black/white cover are ignored and neutral covers stay neutral),
-    /// clamped to a dark CIELAB lightness (L* 8.5 to 18.5, so light and mid covers sit at 18.5 and dark covers stay darker) while keeping its hue and
-    /// chroma. Low-chroma pale colors therefore become a visibly tinted dark color.
-    var dominantColor: UIColor {
-        guard let cgImage else { return .gray }
-
-        let size = 64
-        var pixelData = [UInt8](repeating: 0, count: size * size * 4)
-        guard let context = CGContext(
-            data: &pixelData,
-            width: size,
-            height: size,
-            bitsPerComponent: 8,
-            bytesPerRow: size * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return .gray }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size, height: size))
-
-        // Histogram on an 16x16x16 grid, then take the densest bin plus its neighbours so a
-        // gradient-y region (sky, paper) counts as one color instead of splitting.
-        let levels = 16
-        var counts = [Int](repeating: 0, count: levels * levels * levels)
-        @inline(__always) func bin(_ r: Int, _ g: Int, _ b: Int) -> Int { (r * levels + g) * levels + b }
-        for i in 0..<(size * size) {
-            let o = i * 4
-            counts[bin(Int(pixelData[o]) >> 4, Int(pixelData[o + 1]) >> 4, Int(pixelData[o + 2]) >> 4)] += 1
-        }
-
-        var bestBin = 0
-        var bestScore = -1
-        for r in 0..<levels { for g in 0..<levels { for b in 0..<levels {
-            var score = 0
-            for dr in -1...1 { for dg in -1...1 { for db in -1...1 {
-                let rr = r + dr, gg = g + dg, bb = b + db
-                guard (0..<levels).contains(rr), (0..<levels).contains(gg), (0..<levels).contains(bb) else { continue }
-                score += counts[bin(rr, gg, bb)]
-            } } }
-            if score > bestScore { bestScore = score; bestBin = bin(r, g, b) }
-        } } }
-        let bestR = bestBin / (levels * levels)
-        let bestG = (bestBin / levels) % levels
-        let bestB = bestBin % levels
-
-        var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0.0
-        for i in 0..<(size * size) {
-            let o = i * 4
-            let r = Int(pixelData[o]) >> 4, g = Int(pixelData[o + 1]) >> 4, b = Int(pixelData[o + 2]) >> 4
-            guard abs(r - bestR) <= 1, abs(g - bestG) <= 1, abs(b - bestB) <= 1 else { continue }
-            sumR += Double(pixelData[o]); sumG += Double(pixelData[o + 1]); sumB += Double(pixelData[o + 2]); n += 1
-        }
-        guard n > 0 else { return .gray }
-
-        return UIColor(red: sumR / n / 255, green: sumG / n / 255, blue: sumB / n / 255, alpha: 1)
+        let n = Double(rows * size) * 255
+        return UIColor(red: sumR / n, green: sumG / n, blue: sumB / n, alpha: 1)
     }
 }

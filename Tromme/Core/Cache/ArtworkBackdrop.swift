@@ -9,8 +9,8 @@ import CryptoKit
 /// covers and 100 for white covers; chroma and hue are kept (same as dark). Dark covers in light mode follow the dark-mode
 /// values (assumed, not yet measured).
 ///
-/// The artist page picks the most colorful large area of the photo (see
-/// `vividPhotoColor`) and re-lights it to L* 26 to 40 at about 0.8x chroma; neutral photos
+/// The artist page uses the average color of the photo (see
+/// `averageColor`) and re-lights it to L* 26 to 40 at about 0.8x chroma; neutral photos
 /// fall back to the album recipe with a higher dark-mode cap (L* 42.3, measured from Apple
 /// Music artist pages).
 enum ArtworkBackdrop {
