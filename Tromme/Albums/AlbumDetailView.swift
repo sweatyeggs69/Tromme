@@ -286,13 +286,9 @@ struct AlbumDetailView: View {
             ArtworkView(
                 thumbPath: thumbPath,
                 size: max(width - AppStyle.Spacing.pageHorizontal * 2, 1),
-                cornerRadius: 8
+                cornerRadius: AppStyle.Radius.card
             )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+                .headerArtworkStyle()
                 .padding(.top, 12)
 
             Text(album.title)
@@ -526,13 +522,9 @@ struct AlbumDetailView: View {
 
     private var landscapeHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
-            ArtworkView(thumbPath: thumbPath, size: 300, cornerRadius: 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                .frame(width: 300)
+            ArtworkView(thumbPath: thumbPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+                .headerArtworkStyle()
+                .frame(width: AppStyle.Artwork.header)
                 .padding(.bottom, 20)
 
             VStack(alignment: .leading, spacing: 0) {
@@ -614,7 +606,7 @@ struct AlbumDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             ArtworkView(
                                 thumbPath: album.thumb,
-                                size: 170,
+                                size: AppStyle.Artwork.card,
                                 cornerRadius: AppStyle.Radius.card
                             )
 
@@ -634,7 +626,7 @@ struct AlbumDetailView: View {
                             .foregroundStyle(tertiaryTextColor)
                             .lineLimit(1)
                         }
-                        .frame(width: 170, alignment: .topLeading)
+                        .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
                     }
                     .buttonStyle(.plain)
                 }

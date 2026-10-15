@@ -130,7 +130,8 @@ struct TimelineSlider: View {
         HStack(spacing: 3) {
             if player.isPlayingLocalDownload {
                 Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
+                    .imageScale(.small)
             }
             if playbackBadgeMode != "off", let codec = player.activeStreamCodec {
                 let bitrateText = (playbackBadgeMode == "codecBitrate" ? player.activeStreamBitrate.map { " · \($0) kbps" } : nil) ?? ""

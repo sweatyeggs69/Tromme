@@ -132,12 +132,8 @@ struct PlaylistDetailView: View {
 
     private var playlistHeader: some View {
         VStack {
-            ArtworkView(thumbPath: artworkPath, size: 300, cornerRadius: 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+            ArtworkView(thumbPath: artworkPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+                .headerArtworkStyle()
                 .padding(.top, 12)
 
             Text(displayTitle)
@@ -154,13 +150,9 @@ struct PlaylistDetailView: View {
 
     private var landscapePlaylistHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
-            ArtworkView(thumbPath: artworkPath, size: 300, cornerRadius: 8)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.white.opacity(0.18), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
-                .frame(width: 300)
+            ArtworkView(thumbPath: artworkPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+                .headerArtworkStyle()
+                .frame(width: AppStyle.Artwork.header)
                 .padding(.bottom, 20)
 
             VStack(alignment: .leading, spacing: 0) {

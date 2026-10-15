@@ -127,7 +127,7 @@ struct NowPlayingView: View {
                                 ArtworkView(
                                     thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
                                     size: landscapeArtworkSize,
-                                    cornerRadius: 8
+                                    cornerRadius: AppStyle.Radius.card
                                 )
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
@@ -317,16 +317,8 @@ struct NowPlayingView: View {
                             )
                             .transition(.opacity)
                     } else {
-                        VStack(spacing: 12) {
-                            Image(systemName: "quote.bubble")
-                                .font(.system(size: 40))
-                                .foregroundStyle(.white.opacity(0.3))
-                            Text("No Lyrics Available")
-                                .font(.callout)
-                                .foregroundStyle(.white.opacity(0.4))
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .transition(.opacity)
+                        NowPlayingEmptyState(message: "No Lyrics Available", systemImage: "quote.bubble")
+                            .transition(.opacity)
                     }
 
                 }

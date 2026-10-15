@@ -201,7 +201,7 @@ struct HomeView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     ArtworkView(
                                         thumbPath: album.thumb,
-                                        size: 170,
+                                        size: AppStyle.Artwork.card,
                                         cornerRadius: AppStyle.Radius.card
                                     )
 
@@ -211,7 +211,7 @@ struct HomeView: View {
                                     Text(album.parentTitle ?? "")
                                         .appItemSubtitleStyle()
                                 }
-                                .frame(width: 170, alignment: .topLeading)
+                                .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
@@ -332,7 +332,7 @@ struct HomeView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     ArtworkView(
                                         thumbPath: playlist.thumb ?? playlist.composite,
-                                        size: 170,
+                                        size: AppStyle.Artwork.card,
                                         cornerRadius: AppStyle.Radius.card
                                     )
 
@@ -347,7 +347,7 @@ struct HomeView: View {
                                             .appItemSubtitleStyle()
                                     }
                                 }
-                                .frame(width: 170, alignment: .topLeading)
+                                .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
                             }
                             .buttonStyle(.plain)
                         }

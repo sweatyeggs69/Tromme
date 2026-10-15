@@ -6,12 +6,14 @@ struct LoginView: View {
 
     var onAuthenticated: (String) -> Void
 
+    @ScaledMetric(relativeTo: .largeTitle) private var logoSize: CGFloat = 72
+
     var body: some View {
         VStack(spacing: 32) {
             Spacer()
 
             Image(systemName: "music.quarternote.3")
-                .font(.system(size: 72))
+                .font(.system(size: logoSize))
                 .foregroundStyle(.tint)
 
             Text("Tromme")

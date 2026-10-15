@@ -431,16 +431,6 @@ struct ArtistDetailView: View {
     }
 }
 
-private extension View {
-    /// Hairline border matching the album details artwork (no shadow).
-    func artworkBorder(cornerRadius: CGFloat) -> some View {
-        overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(.white.opacity(0.18), lineWidth: 0.5)
-        )
-    }
-}
-
 #if DEBUG
 #Preview {
     NavigationStack {

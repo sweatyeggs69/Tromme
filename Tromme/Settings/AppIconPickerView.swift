@@ -70,7 +70,7 @@ struct AppIconPickerView: View {
         } label: {
             HStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
                         .fill(.quaternary)
                     Image(systemName: "lock.fill")
                         .font(.title2)
@@ -112,9 +112,9 @@ struct AppIconPickerView: View {
         HStack(spacing: 14) {
             AppIconPreviewImage(named: option.previewImageName)
                 .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
                         .strokeBorder(Color(.separator), lineWidth: 0.5)
                 )
 
@@ -133,9 +133,9 @@ struct AppIconPickerView: View {
             HStack(spacing: 14) {
                 AppIconPreviewImage(named: option.previewImageName)
                     .frame(width: 60, height: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
                             .strokeBorder(Color(.separator), lineWidth: 0.5)
                     )
 

@@ -28,15 +28,7 @@ struct QueueView: View {
             }
 
             if player.upcomingTracks.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.3))
-                    Text("404 Queue Not Found...")
-                        .font(.callout)
-                        .foregroundStyle(.white.opacity(0.4))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                NowPlayingEmptyState(message: "404 Queue Not Found...", systemImage: "list.bullet")
             } else {
                 List {
                     ForEach(Array(player.upcomingTracks.enumerated()), id: \.element.id) { index, track in

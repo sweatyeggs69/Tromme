@@ -221,15 +221,7 @@ struct LyricsScrollView: View {
     }
 
     private func lyricsNotice(_ text: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "quote.bubble")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.3))
-            Text(text)
-                .font(.callout)
-                .foregroundStyle(.white.opacity(0.4))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        NowPlayingEmptyState(message: text, systemImage: "quote.bubble")
     }
 }
 

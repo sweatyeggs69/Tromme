@@ -16,7 +16,7 @@ struct AppIconPreviewImage: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppStyle.Radius.appIcon, style: .continuous)
                 .fill(.quaternary)
                 .overlay(Image(systemName: "app").font(.title2).foregroundStyle(.tertiary))
         }

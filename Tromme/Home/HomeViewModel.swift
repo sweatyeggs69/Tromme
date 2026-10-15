@@ -301,7 +301,7 @@ final class HomeViewModel {
             displayScale: displayScale
         )
         let cardPixelSize = ArtworkView.recommendedTranscodeSize(
-            pointSize: 170,
+            pointSize: AppStyle.Artwork.card,
             displayScale: displayScale
         )
 

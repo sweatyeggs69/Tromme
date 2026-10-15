@@ -185,7 +185,7 @@ struct SearchView: View {
         case "artist":
             NavigationLink(value: item) {
                 HStack(spacing: 12) {
-                    ArtworkView(thumbPath: item.thumb, size: 44, cornerRadius: 22)
+                    ArtworkView(thumbPath: item.thumb, size: AppStyle.Artwork.rowThumbnail, cornerRadius: AppStyle.Artwork.rowThumbnail / 2)
                     VStack(alignment: .leading) {
                         Text(item.title).lineLimit(1)
                         Text("Artist").font(.caption).foregroundStyle(.secondary)
@@ -195,7 +195,7 @@ struct SearchView: View {
         case "album":
             NavigationLink(value: item) {
                 HStack(spacing: 12) {
-                    ArtworkView(thumbPath: item.thumb, size: 44, cornerRadius: 8)
+                    ArtworkView(thumbPath: item.thumb, size: AppStyle.Artwork.rowThumbnail, cornerRadius: AppStyle.Radius.card)
                     VStack(alignment: .leading) {
                         Text(item.title).lineLimit(1)
                         Text(item.parentTitle ?? "Album").font(.caption).foregroundStyle(.secondary)
@@ -223,7 +223,7 @@ struct SearchView: View {
             PlaylistDetailView(playlist: playlist)
         } label: {
             HStack(spacing: 12) {
-                ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 44, cornerRadius: 8)
+                ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: AppStyle.Artwork.rowThumbnail, cornerRadius: AppStyle.Radius.card)
                 VStack(alignment: .leading) {
                     Text(playlist.title).lineLimit(1)
                     if let count = playlist.leafCount {

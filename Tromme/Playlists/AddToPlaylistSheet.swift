@@ -37,7 +37,7 @@ struct AddToPlaylistSheet: View {
                 } else {
                     List(playlists, selection: $selectedPlaylistIDs) { playlist in
                         HStack(spacing: 12) {
-                            ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: 44, cornerRadius: 6)
+                            ArtworkView(thumbPath: playlist.thumb ?? playlist.composite, size: AppStyle.Artwork.rowThumbnail, cornerRadius: 6)
                             Text(playlist.title)
                                 .lineLimit(1)
                         }

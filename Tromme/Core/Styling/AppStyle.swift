@@ -18,6 +18,18 @@ enum AppStyle {
     enum Radius {
         static let card: CGFloat = 8
         static let avatar: CGFloat = 60
+        static let appIcon: CGFloat = 14
+    }
+
+    enum Artwork {
+        /// Album and playlist header artwork in landscape.
+        static let header: CGFloat = 300
+        /// Album and playlist cards in horizontal rails (Home, More by).
+        static let card: CGFloat = 170
+        /// Thumbnails in search results and pickers.
+        static let rowThumbnail: CGFloat = 44
+        /// Empty-state icons (no queue, no lyrics).
+        static let emptyStateIcon: CGFloat = 40
     }
 
     enum TrackGrid {
@@ -164,6 +176,20 @@ extension Color {
 }
 
 extension View {
+    /// Hairline border drawn over artwork (no shadow).
+    func artworkBorder(cornerRadius: CGFloat = AppStyle.Radius.card) -> some View {
+        overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.5)
+        )
+    }
+
+    /// Border and drop shadow for the large artwork at the top of album and playlist pages.
+    func headerArtworkStyle() -> some View {
+        artworkBorder()
+            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+    }
+
     func appSectionTitleStyle() -> some View {
         self
             .font(AppStyle.Typography.sectionTitle)
