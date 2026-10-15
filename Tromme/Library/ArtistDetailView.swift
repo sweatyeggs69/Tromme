@@ -8,15 +8,9 @@ struct ArtistDetailView: View {
     @Environment(DownloadManager.self) private var downloadManager
 
     let artist: PlexMetadata
-    @State private var resolvedArtist: PlexMetadata?
-    @State private var artistTracks: [PlexMetadata] = []
-    @State private var allTracks: [PlexMetadata] = []
-    @State private var topTracks: [PlexMetadata] = []
-    @State private var artistAlbums: [PlexMetadata] = []
+    @State private var viewModel: ArtistDetailViewModel
     @State private var selectedAlbum: PlexMetadata?
-    @State private var appearsOnAlbums: [PlexMetadata] = []
     @State private var selectedAppearsOnAlbum: PlexMetadata?
-    @State private var similarArtists: [PlexMetadata] = []
     @State private var selectedSimilarArtist: PlexMetadata?
     @State private var showsAllSimilarArtists = false
     @State private var showsAllTracks = false
@@ -34,8 +28,23 @@ struct ArtistDetailView: View {
         ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme, style: .artist) ?? Color(.systemBackground)
     }
 
-    private var displayArtist: PlexMetadata {
-        resolvedArtist ?? artist
+    // Read-only views of the view model's state, so the body reads as before.
+    private var displayArtist: PlexMetadata { viewModel.displayArtist }
+    private var allTracks: [PlexMetadata] { viewModel.allTracks }
+    private var topTracks: [PlexMetadata] { viewModel.topTracks }
+    private var artistAlbums: [PlexMetadata] { viewModel.artistAlbums }
+    private var appearsOnAlbums: [PlexMetadata] { viewModel.appearsOnAlbums }
+    private var similarArtists: [PlexMetadata] { viewModel.similarArtists }
+    private var contentReady: Bool { viewModel.contentReady }
+
+    private var loadContext: ArtistDetailViewModel.Context {
+        ArtistDetailViewModel.Context(
+            server: serverConnection.currentServer,
+            sectionId: serverConnection.currentLibrarySectionId,
+            client: client,
+            isConnected: network.isConnected,
+            downloadManager: downloadManager
+        )
     }
 
     /// The photo area takes about 46% of the screen height; the extra room holds the title and controls over the fade.
@@ -56,13 +65,7 @@ struct ArtistDetailView: View {
     init(artist: PlexMetadata, previewData: PreviewData? = nil) {
         self.artist = artist
         self.previewData = previewData
-        _resolvedArtist = State(initialValue: previewData?.resolvedArtist)
-        _artistTracks = State(initialValue: previewData?.artistTracks ?? [])
-        _allTracks = State(initialValue: previewData?.allTracks ?? previewData?.artistTracks ?? [])
-        _topTracks = State(initialValue: previewData?.topTracks ?? [])
-        _artistAlbums = State(initialValue: previewData?.artistAlbums ?? [])
-        _appearsOnAlbums = State(initialValue: previewData?.appearsOnAlbums ?? [])
-        _similarArtists = State(initialValue: previewData?.similarArtists ?? [])
+        _viewModel = State(initialValue: ArtistDetailViewModel(artist: artist, previewData: previewData))
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -409,47 +412,7 @@ struct ArtistDetailView: View {
             await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server, style: .artist)
         }
         .task(id: artist.ratingKey) {
-            guard previewData == nil else { return }
-
-            if !network.isConnected {
-                // Prefer disk-cached data so non-downloaded albums and all tracks appear.
-                let didLoadFromCache = await loadFromDiskCache(artist: artist)
-                if !didLoadFromCache { loadOfflineContent() }
-                return
-            }
-
-            guard let server = serverConnection.currentServer,
-                  let sectionId = serverConnection.currentLibrarySectionId else { return }
-
-            // Load all data in parallel instead of sequentially
-            async let metadataReq = client.cachedMetadata(server: server, ratingKey: artist.ratingKey)
-            async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
-            async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
-            async let allTracksReq = client.allArtistTracks(server: server, sectionId: sectionId, artist: artist)
-            async let appearsOnReq = client.appearsOnAlbums(server: server, sectionId: sectionId, artistRatingKey: artist.ratingKey, artistTitle: artist.title)
-            async let similarArtistsReq = client.similarArtists(server: server, sectionId: sectionId, seedArtistKey: artist.ratingKey)
-
-            let fetchedMetadata = try? await metadataReq
-            let fetchedArtistTracks = (try? await artistTracksReq) ?? []
-            let fetchedAllTracks = (try? await allTracksReq) ?? fetchedArtistTracks
-            let fetchedAlbums = (try? await releasesReq) ?? []
-            let fetchedAppearsOn = (try? await appearsOnReq) ?? []
-            let fetchedSimilar = (try? await similarArtistsReq) ?? []
-
-            withAnimation(.easeIn(duration: 0.25)) {
-                resolvedArtist = fetchedMetadata
-                artistTracks = fetchedArtistTracks
-                allTracks = fetchedAllTracks
-                artistAlbums = fetchedAlbums
-                appearsOnAlbums = fetchedAppearsOn
-                similarArtists = fetchedSimilar
-                topTracks = Array(
-                    fetchedAllTracks
-                        .sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }
-                        .prefix(10)
-                )
-                contentReady = true
-            }
+            await viewModel.load(loadContext)
         }
         .sheet(isPresented: $showsBioSheet) {
             if let summary = displayArtist.summary, !summary.isEmpty {
@@ -465,59 +428,6 @@ struct ArtistDetailView: View {
                 }
             }
         }
-    }
-
-    /// Reads artist data from disk cache without any network calls.
-    /// Returns true if enough data was found to populate the view.
-    private func loadFromDiskCache(artist: PlexMetadata) async -> Bool {
-        guard let server = serverConnection.currentServer,
-              let sectionId = serverConnection.currentLibrarySectionId else { return false }
-        let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
-
-        async let storedMetadata = LibraryStore.shared.anyMetadata(ratingKey: artist.ratingKey, serverId: server.machineIdentifier)
-        async let storedAlbums = LibraryStore.shared.children(of: artist.ratingKey, scope: scope)
-        async let storedTracks = LibraryStore.shared.tracks(byArtist: artist.ratingKey, scope: scope)
-
-        let (metadata, albums, tracks) = await (storedMetadata, storedAlbums, storedTracks)
-
-        guard !tracks.isEmpty else { return false }
-
-        withAnimation(.easeIn(duration: 0.25)) {
-            resolvedArtist = metadata
-            artistTracks = tracks
-            allTracks = tracks
-            artistAlbums = albums
-            topTracks = Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
-            appearsOnAlbums = []
-            similarArtists = []
-            contentReady = true
-        }
-        return true
-    }
-
-    private func loadOfflineContent() {
-        let artistKey = artist.ratingKey
-        let artistTitle = artist.title
-        let records = downloadManager.downloadedTracksSorted.filter { record in
-            record.artistRatingKey == artistKey || record.artistName == artistTitle
-        }
-        var seenAlbums = Set<String>()
-        artistAlbums = records.compactMap { record -> PlexMetadata? in
-            let key = record.albumRatingKey ?? record.albumName
-            guard seenAlbums.insert(key).inserted else { return nil }
-            return PlexMetadata(
-                ratingKey: record.albumRatingKey ?? "offline:\(record.albumName)",
-                title: record.albumName,
-                type: "album",
-                parentTitle: record.artistName,
-                thumb: record.thumbPath
-            )
-        }
-        artistTracks = records.map { $0.asPlexMetadata() }
-        allTracks = artistTracks
-        topTracks = artistTracks
-        appearsOnAlbums = []
-        contentReady = true
     }
 }
 
