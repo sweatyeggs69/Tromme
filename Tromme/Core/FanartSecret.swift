@@ -5,7 +5,12 @@ import Foundation
 /// This keeps the key out of git and out of a plain `strings` dump of the binary, but it is
 /// obfuscation, not encryption: anything the app can read at runtime can be recovered.
 enum FanartSecret {
+    /// Temporary: paste the fanart.tv key between the quotes to skip the xcconfig setup.
+    /// Don't commit it; `git update-index --skip-worktree Tromme/Core/FanartSecret.swift` keeps it local.
+    private static let hardcodedKey = ""
+
     static var apiKey: String? {
+        if !hardcodedKey.isEmpty { return hardcodedKey }
         guard let data = bytes(forInfoKey: "FanartKeyData"),
               let salt = bytes(forInfoKey: "FanartKeySalt"),
               !data.isEmpty, data.count == salt.count else { return nil }
