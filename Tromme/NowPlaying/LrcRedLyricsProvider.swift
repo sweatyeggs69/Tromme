@@ -12,11 +12,17 @@ enum LrcRedLyricsProvider {
     /// timing, since they don't all carry the same sync level.
     private static let maxCandidates = 4
 
-    /// Returns every distinct word-synced LRC among the matching releases, best
-    /// match first. Line-synced results are ignored; those come from LRCLIB instead.
-    static func wordSyncedLyrics(title: String, artist: String, duration: TimeInterval?) async -> [String] {
+    /// Timed LRCs from the matching releases, best match first, split by sync level.
+    struct TimedLyrics: Sendable {
+        var wordSynced: [String] = []
+        var lineSynced: [String] = []
+    }
+
+    /// Returns every distinct timed LRC among the matching releases. Word-synced ones are
+    /// preferred over everything; line-synced ones only back up LRCLIB's synced lyrics.
+    static func timedLyrics(title: String, artist: String, duration: TimeInterval?) async -> TimedLyrics {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
-        guard !candidates.isEmpty else { return [] }
+        guard !candidates.isEmpty else { return TimedLyrics() }
 
         let lrcs = await withTaskGroup(of: (rank: Int, lrc: FetchedLRC?).self) { group in
             for (rank, isrc) in candidates.enumerated() {
@@ -30,7 +36,11 @@ enum LrcRedLyricsProvider {
         }
 
         var seen = Set<String>()
-        return lrcs.filter(\.isWordSynced).map(\.text).filter { seen.insert($0).inserted }
+        let distinct = lrcs.filter { seen.insert($0.text).inserted }
+        return TimedLyrics(
+            wordSynced: distinct.filter(\.isWordSynced).map(\.text),
+            lineSynced: distinct.filter { !$0.isWordSynced }.map(\.text)
+        )
     }
 
     // MARK: - Search

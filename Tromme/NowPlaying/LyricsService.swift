@@ -92,32 +92,42 @@ final class LyricsService {
         isLoading = false
     }
 
-    // Word-synced lyrics come only from lrc.red; everything else (line-synced, then plain)
-    // comes from LRCLIB. Both sources are queried at once so a miss on lrc.red doesn't add
-    // its wait on top of LRCLIB's. Candidates the user blocked are skipped, so the next
-    // match in this order is used instead.
+    // Preference order: word-synced from lrc.red, synced from LRCLIB, line-synced from lrc.red
+    // (it sometimes has timing LRCLIB lacks), then plain from LRCLIB. Both sources are queried
+    // at once so a miss on lrc.red doesn't add its wait on top of LRCLIB's. Candidates the user
+    // blocked are skipped, so the next match in this order is used instead.
     private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
 
         async let lrcRed = withDeadline(lrcRedTimeout) {
-            await LrcRedLyricsProvider.wordSyncedLyrics(title: title, artist: artist, duration: seconds)
+            await LrcRedLyricsProvider.timedLyrics(title: title, artist: artist, duration: seconds)
         }
         async let lrclib = withDeadline(sourceTimeout) {
             await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
         }
-        let isAllowed = { (lyrics: ResolvedLyrics) in Self.isAllowed(lyrics, blocked: blocked) }
 
-        let wordSynced = await lrcRed
-        let wordSyncedCandidates = (wordSynced.value ?? []).map {
-            ResolvedLyrics(syncedLyrics: $0, plainLyrics: nil, duration: nil, source: .lrcRed)
+        let red = await lrcRed
+        let timed = red.value ?? LrcRedLyricsProvider.TimedLyrics()
+        let lrcRedLyrics = { (lrc: String) in
+            ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil, source: .lrcRed)
         }
-        if let lyrics = wordSyncedCandidates.first(where: isAllowed) {
-            return (lyrics, true)
+        let lib = await lrclib
+        let lrclibResults = (lib.value ?? []).map { result -> ResolvedLyrics in
+            var result = result
+            result.source = .lrclib
+            return result
         }
-        guard var lyrics = (await lrclib.value ?? []).first(where: isAllowed) else { return nil }
-        lyrics.source = .lrclib
-        return (lyrics, !wordSynced.timedOut)
+
+        let candidates: [ResolvedLyrics] = timed.wordSynced.map(lrcRedLyrics)
+            + lrclibResults.filter(\.hasSynced)
+            + timed.lineSynced.map(lrcRedLyrics)
+            + lrclibResults.filter { !$0.hasSynced }
+        guard let lyrics = candidates.first(where: { isAllowed($0, blocked: blocked) }) else { return nil }
+        // Word-synced lyrics are the best possible result. Anything else reached while either
+        // source timed out may be beaten next time, so it isn't final.
+        let isWordSynced = lyrics.syncedLyrics.map { timed.wordSynced.contains($0) } ?? false
+        return (lyrics, isWordSynced || (!red.timedOut && !lib.timedOut))
     }
 
     /// Blocked timed lyrics are matched exactly, so other timings of the same words stay
