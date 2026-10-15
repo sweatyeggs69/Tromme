@@ -28,6 +28,11 @@ final class NowPlayingAnimatedArtwork {
         Self.albumKey(for: track) == albumKey ? entries : [:]
     }
 
+    /// Whether the album or the Animated Artwork setting changed since the last `prepare`.
+    func needsUpdate(for track: PlexMetadata) -> Bool {
+        Self.albumKey(for: track) != albumKey
+    }
+
     /// Looks up the track's album on album change, then hands the entries to `apply`.
     func prepare(
         for track: PlexMetadata,
@@ -148,7 +153,8 @@ final class NowPlayingAnimatedArtwork {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// Includes the setting, so turning it off drops the entries and turning it on looks up again.
     private static func albumKey(for track: PlexMetadata) -> String {
-        "\(track.grandparentTitle ?? "")|\(track.parentTitle ?? "")"
+        "\(AnimatedArtworkEntitlement.isEnabled)|\(track.grandparentTitle ?? "")|\(track.parentTitle ?? "")"
     }
 }

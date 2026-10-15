@@ -7,6 +7,7 @@ struct HomeSettingsView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
+    @Environment(AudioPlayerService.self) private var player
 
     var body: some View {
         Form {
@@ -32,6 +33,8 @@ struct HomeSettingsView: View {
                 if AnimatedArtworkEntitlement.isUnlocked {
                     Toggle("Animated Artwork", isOn: $animatedArtworkEnabled)
                         .tint(.green)
+                        // Adds or removes it on the lock screen right away.
+                        .onChange(of: animatedArtworkEnabled) { player.updateNowPlayingInfo() }
                 }
             } header: {
                 Text("Albums")
@@ -56,4 +59,5 @@ struct HomeSettingsView: View {
     NavigationStack {
         HomeSettingsView()
     }
+    .environment(AudioPlayerService())
 }

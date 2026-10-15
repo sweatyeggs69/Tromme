@@ -123,6 +123,7 @@ extension AudioPlayerService {
         let trackKey = currentTrack.ratingKey
 
         if trackKey == lastPublishedNowPlayingTrackKey,
+           !NowPlayingAnimatedArtwork.shared.needsUpdate(for: currentTrack),
            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
             info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
