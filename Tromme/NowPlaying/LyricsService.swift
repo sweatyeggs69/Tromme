@@ -65,24 +65,26 @@ final class LyricsService {
         isLoading = false
     }
 
-    // Fallback chain: word-synced from lrc.red, then line-synced from lrc.red, then synced
-    // from LRCLIB, then plain from LRCLIB.
+    // Word-synced lyrics come only from lrc.red; everything else (line-synced, then plain)
+    // comes from LRCLIB. Both sources are queried at once so a miss on lrc.red doesn't add
+    // its wait on top of LRCLIB's.
     private nonisolated static func resolve(track: PlexMetadata, artist: String) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
 
-        let lrcRed = await withDeadline(sourceTimeout) {
-            await LrcRedLyricsProvider.syncedLyrics(title: title, artist: artist, duration: seconds)
+        async let lrcRed = withDeadline(sourceTimeout) {
+            await LrcRedLyricsProvider.wordSyncedLyrics(title: title, artist: artist, duration: seconds)
         }
-        if let lrc = lrcRed.value {
-            return (ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil), true)
-        }
-
-        let lrclib = await withDeadline(sourceTimeout) {
+        async let lrclib = withDeadline(sourceTimeout) {
             await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
         }
-        guard let lyrics = lrclib.value else { return nil }
-        return (lyrics, !lrcRed.timedOut)
+
+        let wordSynced = await lrcRed
+        if let lrc = wordSynced.value {
+            return (ResolvedLyrics(syncedLyrics: lrc, plainLyrics: nil, duration: nil), true)
+        }
+        guard let lyrics = await lrclib.value else { return nil }
+        return (lyrics, !wordSynced.timedOut)
     }
 
     /// How long each source gets before the next one is tried.

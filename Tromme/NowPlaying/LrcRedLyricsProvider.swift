@@ -12,9 +12,9 @@ enum LrcRedLyricsProvider {
     /// timing, since they don't all carry the same sync level.
     private static let maxCandidates = 4
 
-    /// Returns the best timed LRC for the track: word-synced if any matching
-    /// release has it, otherwise line-synced, otherwise nil.
-    static func syncedLyrics(title: String, artist: String, duration: TimeInterval?) async -> String? {
+    /// Returns word-synced LRC for the track if any matching release has it.
+    /// Line-synced results are ignored; those come from LRCLIB instead.
+    static func wordSyncedLyrics(title: String, artist: String, duration: TimeInterval?) async -> String? {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
         guard !candidates.isEmpty else { return nil }
 
@@ -29,7 +29,7 @@ enum LrcRedLyricsProvider {
             return results.sorted { $0.rank < $1.rank }.map(\.lrc)
         }
 
-        return (lrcs.first(where: \.isWordSynced) ?? lrcs.first)?.text
+        return lrcs.first(where: \.isWordSynced)?.text
     }
 
     // MARK: - Search
