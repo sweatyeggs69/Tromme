@@ -44,6 +44,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     private var artistsTemplate: CPListTemplate?
     private var albumsTemplate: CPListTemplate?
     private var playlistsTemplate: CPListTemplate?
+    private var tabBarTemplate: CPTabBarTemplate?
     /// Bumped whenever tab content is (re)loaded so an in-flight load against a
     /// stale connection can't overwrite sections loaded after a reprobe.
     private var contentGeneration = 0
@@ -91,6 +92,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         artistsTemplate = nil
         albumsTemplate = nil
         playlistsTemplate = nil
+        tabBarTemplate = nil
     }
 
     private func updateRootTemplate() {
@@ -134,8 +136,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             playlistsTemplate = playlistsList
 
             let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, playlistsList])
+            tabBarTemplate = tabBar
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
+            tabBarTemplate = nil
             homeTemplate = nil
             artistsTemplate = nil
             albumsTemplate = nil
@@ -410,7 +414,26 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             }
         }
 
-        template.updateSections(sections)
+        replaceIndexedTemplate(template, with: sections)
+    }
+
+    /// CarPlay computes the A-Z section index when a list template is created;
+    /// filling an empty template via `updateSections` no longer surfaces it on
+    /// iOS 27. Build a fresh template that already has its sections and swap it
+    /// into the tab bar in place of the placeholder.
+    private func replaceIndexedTemplate(_ old: CPListTemplate, with sections: [CPListSection]) {
+        guard let tabBar = tabBarTemplate, let index = tabBar.templates.firstIndex(where: { $0 === old }) else {
+            old.updateSections(sections)
+            return
+        }
+        let fresh = CPListTemplate(title: old.title, sections: sections)
+        fresh.tabTitle = old.tabTitle
+        fresh.tabImage = old.tabImage
+        var templates = tabBar.templates
+        templates[index] = fresh
+        if old === artistsTemplate { artistsTemplate = fresh }
+        if old === albumsTemplate { albumsTemplate = fresh }
+        tabBar.updateTemplates(templates)
     }
 
     private func showArtistAlbums(artist: PlexMetadata) {
@@ -565,7 +588,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             }
         }
 
-        template.updateSections(sections)
+        replaceIndexedTemplate(template, with: sections)
     }
 
     // MARK: - Playlists
