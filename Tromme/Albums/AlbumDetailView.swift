@@ -298,8 +298,10 @@ struct AlbumDetailView: View {
                 size: AppStyle.Artwork.portraitHeader(forWidth: width),
                 cornerRadius: AppStyle.Radius.card
             )
+                // Shadow goes on the static artwork only, so the video overlay doesn't cast a second one.
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .overlay { animatedArtworkOverlay }
-                .headerArtworkStyle()
+                .artworkBorder()
                 .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .padding(.top, 12)
 
@@ -535,8 +537,10 @@ struct AlbumDetailView: View {
     private var landscapeHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(thumbPath: thumbPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
+                // Shadow goes on the static artwork only, so the video overlay doesn't cast a second one.
+                .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .overlay { animatedArtworkOverlay }
-                .headerArtworkStyle()
+                .artworkBorder()
                 .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .frame(width: AppStyle.Artwork.header)
                 .padding(.bottom, 20)

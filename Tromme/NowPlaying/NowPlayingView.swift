@@ -126,11 +126,12 @@ struct NowPlayingView: View {
                                     size: landscapeArtworkSize,
                                     cornerRadius: AppStyle.Radius.card
                                 )
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
+                                // After the shadows, so the video doesn't cast a second one.
                                 .overlay {
                                     AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card)
                                 }
-                                .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
-                                .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
