@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v9.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v10.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v9.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v10.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -151,7 +151,8 @@ private extension UIImage {
     /// American Idiot, the gold logo on Dookie), returns their chroma-weighted average.
     /// Otherwise, when muted but tinted pixels of one hue family cover at least
     /// `minimumTintShare` (the dark green wall behind Weezer's white jumpsuits), returns
-    /// their average, so a colored background isn't washed out to gray by bright subjects.
+    /// their average, so a colored background isn't washed out to gray by bright subjects,
+    /// and dark tinted clothing on a white backdrop gives a deep color (The 1975).
     /// Otherwise returns the plain average color. The backdrop re-lights it later.
     func accentColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
@@ -173,7 +174,7 @@ private extension UIImage {
         let minimumAccentChroma = 25.0
         let minimumAccentShare = 0.04
         let minimumTintChroma = 4.0
-        let minimumTintShare = 0.2
+        let minimumTintShare = 0.15
 
         let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
@@ -197,8 +198,9 @@ private extension UIImage {
             let chroma = lab.chroma
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
 
-            // Tinted pixels: any visible hue, skipping grays, near-black and highlights.
-            if chroma >= minimumTintChroma, (8...85).contains(lab.l) {
+            // Tinted pixels: any visible hue, dark ones included (black suits read as a deep
+            // navy, as on Apple Music), skipping grays, pure black and highlights.
+            if chroma >= minimumTintChroma, (3...85).contains(lab.l) {
                 tintCount[bin] += 1
                 tintR[bin] += r; tintG[bin] += g; tintB[bin] += b
             }
