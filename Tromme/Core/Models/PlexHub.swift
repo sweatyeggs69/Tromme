@@ -1,7 +1,7 @@
 import Foundation
 
 /// A server-curated home row from `/hubs/sections/{sectionId}` (e.g. "More by X", "Top Albums from 2026").
-struct PlexHub: Decodable, Sendable, Identifiable, Hashable {
+struct PlexHub: Codable, Sendable, Identifiable, Hashable {
     let hubIdentifier: String?
     let key: String?
     let title: String
@@ -24,6 +24,15 @@ struct PlexHub: Decodable, Sendable, Identifiable, Hashable {
         // Decode leniently so one malformed entry doesn't drop the whole row.
         let lossy = try container.decodeIfPresent([LossyItem].self, forKey: .items) ?? []
         items = lossy.compactMap(\.value)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(hubIdentifier, forKey: .hubIdentifier)
+        try container.encodeIfPresent(key, forKey: .key)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(type, forKey: .type)
+        try container.encode(items, forKey: .items)
     }
 
     private struct LossyItem: Decodable {

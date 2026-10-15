@@ -318,9 +318,15 @@ struct HomeView: View {
             serverHubs = []
             return
         }
+        // Show the last fetch immediately, then replace it once the fresh rows arrive.
+        if serverHubs.isEmpty {
+            let cached = PlexHubCache.load(serverURI: server.uri, sectionId: sectionId)
+            serverHubs = cached.filter(isDisplayableHub)
+        }
         guard let hubs = await fetchWithRetryOnFailure({
             try await client.getSectionHubs(server: server, sectionId: sectionId)
         }), !Task.isCancelled else { return }
+        PlexHubCache.save(hubs, serverURI: server.uri, sectionId: sectionId)
         withAnimation(.easeIn(duration: 0.25)) {
             serverHubs = hubs.filter(isDisplayableHub)
         }
