@@ -19,14 +19,6 @@ final class DownloadManager: @unchecked Sendable {
     /// Set while a debounced `persistRecordsNow()` write is pending — see `persistRecords()`.
     private var persistScheduled = false
 
-    static let downloadFormatKey = "downloadFormat"
-    static let downloadTranscodeBitrateKbps = 320
-
-    private var preferredDownloadFormat: DownloadFormat {
-        UserDefaults.standard.string(forKey: Self.downloadFormatKey)
-            .flatMap(DownloadFormat.init(rawValue:)) ?? .defaultFormat
-    }
-
     var hasActiveDownloads: Bool { !transientStates.isEmpty }
 
     var pendingDownloadCount: Int {
@@ -225,18 +217,6 @@ final class DownloadManager: @unchecked Sendable {
 
         prepareDownloadsDirectory()
 
-        // Server-side conversion when a lossy download format is selected;
-        // falls back to the original file if the transcode fails.
-        if let targetContainer = preferredDownloadFormat.container {
-            let converted = await downloadConverted(
-                track: resolvedTrack,
-                container: targetContainer,
-                server: server,
-                client: client
-            )
-            if converted || Task.isCancelled { return }
-        }
-
         let container = resolvedTrack.media?.first?.container
             ?? resolvedTrack.media?.first?.part?.first?.container
             ?? "mp3"
@@ -256,100 +236,6 @@ final class DownloadManager: @unchecked Sendable {
                 transientStates[ratingKey] = .failed
             }
         }
-    }
-
-    /// Downloads the track converted to `container` (MP3) via the PMS
-    /// Download Queue API: add the track to the queue, poll until PMS
-    /// finishes deciding/transcoding, then fetch the finished file. Returns
-    /// false when the server refuses or the transfer fails, so the caller
-    /// can fall back to the original file.
-    private func downloadConverted(
-        track: PlexMetadata,
-        container: String,
-        server: PlexServer,
-        client: PlexAPIClient
-    ) async -> Bool {
-        let ratingKey = track.ratingKey
-        let bitrate = Self.downloadTranscodeBitrateKbps
-        let metadataPath = track.key ?? "/library/metadata/\(ratingKey)"
-        let normalizedPath = metadataPath.hasPrefix("/") ? metadataPath : "/\(metadataPath)"
-        let headers = client.downloadTranscodeHeaders(
-            server: server,
-            sessionID: UUID().uuidString,
-            container: container,
-            codec: container
-        )
-
-        do {
-            let queueId = try await client.getOrCreateDownloadQueue(server: server)
-            let itemId = try await client.addToDownloadQueue(
-                server: server,
-                queueId: queueId,
-                metadataPath: normalizedPath,
-                headers: headers,
-                musicBitrate: bitrate
-            )
-            defer {
-                Task { await client.deleteDownloadQueueItem(server: server, queueId: queueId, itemId: itemId) }
-            }
-
-            guard try await waitForDownloadQueueItem(
-                server: server,
-                queueId: queueId,
-                itemId: itemId,
-                client: client
-            ) else { return false }
-
-            guard let request = client.downloadQueueMediaRequest(server: server, queueId: queueId, itemId: itemId) else {
-                return false
-            }
-            try await fetchAndStore(
-                request: request,
-                filename: "\(ratingKey).\(container)",
-                track: track,
-                server: server,
-                client: client
-            )
-            return true
-        } catch {
-            #if DEBUG
-            print("[DownloadManager] Converted download failed for \(ratingKey) (\(container)): \(error)")
-            #endif
-            if Task.isCancelled {
-                transientStates.removeValue(forKey: ratingKey)
-            }
-            return false
-        }
-    }
-
-    /// Polls a download queue item until PMS finishes deciding/transcoding.
-    /// Returns true once the item is `available`, false on `error`/`expired`/timeout.
-    private func waitForDownloadQueueItem(
-        server: PlexServer,
-        queueId: Int,
-        itemId: Int,
-        client: PlexAPIClient
-    ) async throws -> Bool {
-        let deadline = Date().addingTimeInterval(120)
-        while Date() < deadline {
-            try Task.checkCancellation()
-            let status = try await client.downloadQueueItemStatus(server: server, queueId: queueId, itemId: itemId)
-            switch status {
-            case .available:
-                return true
-            case .error, .expired:
-                #if DEBUG
-                print("[DownloadManager] Queue item \(itemId) ended with status=\(status)")
-                #endif
-                return false
-            case .deciding, .waiting, .processing:
-                try await Task.sleep(for: .seconds(1))
-            }
-        }
-        #if DEBUG
-        print("[DownloadManager] Queue item \(itemId) timed out waiting for availability")
-        #endif
-        return false
     }
 
     private func fetchAndStore(

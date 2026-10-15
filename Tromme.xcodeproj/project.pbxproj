@@ -130,10 +130,6 @@
 		F1B10A5EB584B8BDF07D9341 /* LastFMTopTracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20DABEB831D8F2023A0A134 /* LastFMTopTracks.swift */; };
 		B9443EF5E53E5224EC391D78 /* LastFMTopTracksResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 863572727E76D938A8BD6142 /* LastFMTopTracksResponse.swift */; };
 		C7FC3E0D38413D5F84F9FA60 /* LastFMTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C437EFE8191239064F6ABCD /* LastFMTrack.swift */; };
-		0F466A4F7B2DE81FD5B72B93 /* DownloadQueueAddResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 775B4C9F041789B119B88E7D /* DownloadQueueAddResponse.swift */; };
-		BD2EE151EEF6EB1AFD06691E /* DownloadQueueItemStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3AB6D64DEBB5CE1C32D31F1 /* DownloadQueueItemStatus.swift */; };
-		53BCB1C95E6DB0F54475D8BB /* DownloadQueueItemsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA49BF9800CB4F74AF8CE8F4 /* DownloadQueueItemsResponse.swift */; };
-		AAC223A6D1749827F8EBC10F /* DownloadQueueResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEF446B560F6AABD714AEA72 /* DownloadQueueResponse.swift */; };
 		DFE83C3FBB79C10F0BCBAA5A /* Hub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44B5E232110AA4692B02EF10 /* Hub.swift */; };
 		7B4F545D96415411E2338999 /* LibrarySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCFF40E1280E612168E6E189 /* LibrarySection.swift */; };
 		296BF03B03954087A9EF84AD /* MediaContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C34910F5CB38CE43159121 /* MediaContainer.swift */; };
@@ -181,7 +177,6 @@
 		8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF83A37981CCC81A5D1A148 /* ResolvedLyrics.swift */; };
 		7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58109A662AD5416E7849A5F6 /* VolumeHUDSuppressor.swift */; };
 		830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */; };
-		FADD0F6D34C30C728712B894 /* DownloadFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDACC39EB62D0C5B7A5114F4 /* DownloadFormat.swift */; };
 		98E108B7C1BA7FF6DF85951A /* DownloadedTrackRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */; };
 		7BCB81BF10C737CE71C16DAD /* AddToPlaylistRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D5FB9198F3ABE095781F60 /* AddToPlaylistRequest.swift */; };
 		058696F1DA760ECE4C73F2FA /* AppIconOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFF4CF2474855912FA0144CE /* AppIconOption.swift */; };
@@ -320,10 +315,6 @@
 		C20DABEB831D8F2023A0A134 /* LastFMTopTracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastFMTopTracks.swift; sourceTree = "<group>"; };
 		863572727E76D938A8BD6142 /* LastFMTopTracksResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastFMTopTracksResponse.swift; sourceTree = "<group>"; };
 		7C437EFE8191239064F6ABCD /* LastFMTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastFMTrack.swift; sourceTree = "<group>"; };
-		775B4C9F041789B119B88E7D /* DownloadQueueAddResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQueueAddResponse.swift; sourceTree = "<group>"; };
-		D3AB6D64DEBB5CE1C32D31F1 /* DownloadQueueItemStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQueueItemStatus.swift; sourceTree = "<group>"; };
-		FA49BF9800CB4F74AF8CE8F4 /* DownloadQueueItemsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQueueItemsResponse.swift; sourceTree = "<group>"; };
-		BEF446B560F6AABD714AEA72 /* DownloadQueueResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQueueResponse.swift; sourceTree = "<group>"; };
 		44B5E232110AA4692B02EF10 /* Hub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hub.swift; sourceTree = "<group>"; };
 		FCFF40E1280E612168E6E189 /* LibrarySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySection.swift; sourceTree = "<group>"; };
 		E3C34910F5CB38CE43159121 /* MediaContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaContainer.swift; sourceTree = "<group>"; };
@@ -371,7 +362,6 @@
 		1CF83A37981CCC81A5D1A148 /* ResolvedLyrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResolvedLyrics.swift; sourceTree = "<group>"; };
 		58109A662AD5416E7849A5F6 /* VolumeHUDSuppressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeHUDSuppressor.swift; sourceTree = "<group>"; };
 		2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoDownloadMode.swift; sourceTree = "<group>"; };
-		DDACC39EB62D0C5B7A5114F4 /* DownloadFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadFormat.swift; sourceTree = "<group>"; };
 		5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedTrackRecord.swift; sourceTree = "<group>"; };
 		44D5FB9198F3ABE095781F60 /* AddToPlaylistRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToPlaylistRequest.swift; sourceTree = "<group>"; };
 		EFF4CF2474855912FA0144CE /* AppIconOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconOption.swift; sourceTree = "<group>"; };
@@ -597,7 +587,6 @@
 			children = (
 				5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */,
 				92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */,
-				DDACC39EB62D0C5B7A5114F4 /* DownloadFormat.swift */,
 				2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */,
 				CB5F712E966BE585BD898CD3 /* AudioPlayerService+TrackEnd.swift */,
 				2B9D3EB55AD77BD137AC2C21 /* AudioPlayerService+Timeline.swift */,
@@ -668,10 +657,6 @@
 				E3C34910F5CB38CE43159121 /* MediaContainer.swift */,
 				FCFF40E1280E612168E6E189 /* LibrarySection.swift */,
 				44B5E232110AA4692B02EF10 /* Hub.swift */,
-				BEF446B560F6AABD714AEA72 /* DownloadQueueResponse.swift */,
-				FA49BF9800CB4F74AF8CE8F4 /* DownloadQueueItemsResponse.swift */,
-				D3AB6D64DEBB5CE1C32D31F1 /* DownloadQueueItemStatus.swift */,
-				775B4C9F041789B119B88E7D /* DownloadQueueAddResponse.swift */,
 				0E4345EA2F8EC60700424676 /* DevelopmentMockData.swift */,
 			);
 			path = Models;
@@ -826,7 +811,6 @@
 				058696F1DA760ECE4C73F2FA /* AppIconOption.swift in Sources */,
 				7BCB81BF10C737CE71C16DAD /* AddToPlaylistRequest.swift in Sources */,
 				98E108B7C1BA7FF6DF85951A /* DownloadedTrackRecord.swift in Sources */,
-				FADD0F6D34C30C728712B894 /* DownloadFormat.swift in Sources */,
 				830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
 				8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */,
@@ -882,10 +866,6 @@
 				296BF03B03954087A9EF84AD /* MediaContainer.swift in Sources */,
 				7B4F545D96415411E2338999 /* LibrarySection.swift in Sources */,
 				DFE83C3FBB79C10F0BCBAA5A /* Hub.swift in Sources */,
-				AAC223A6D1749827F8EBC10F /* DownloadQueueResponse.swift in Sources */,
-				53BCB1C95E6DB0F54475D8BB /* DownloadQueueItemsResponse.swift in Sources */,
-				BD2EE151EEF6EB1AFD06691E /* DownloadQueueItemStatus.swift in Sources */,
-				0F466A4F7B2DE81FD5B72B93 /* DownloadQueueAddResponse.swift in Sources */,
 				C7FC3E0D38413D5F84F9FA60 /* LastFMTrack.swift in Sources */,
 				B9443EF5E53E5224EC391D78 /* LastFMTopTracksResponse.swift in Sources */,
 				F1B10A5EB584B8BDF07D9341 /* LastFMTopTracks.swift in Sources */,

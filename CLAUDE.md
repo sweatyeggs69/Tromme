@@ -95,16 +95,7 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - Always send `X-Plex-Client-Profile-Extra` header — without it PMS returns 400 ("client provided bad data")
 
 ## Plex Offline Downloads
-- MP3 (space-saver) downloads use the documented Download Queue API — never the streaming universal-transcode endpoint:
-  - POST `/downloadQueue` → get-or-create this client's queue (idempotent per client id + token)
-  - POST `/downloadQueue/{queueId}/add` with `keys`, `protocol=http`, `directPlay=0`, `directStream=0`, `directStreamAudio=0`, `musicBitrate`, plus `X-Plex-Client-Profile-Extra: add-transcode-target(type=musicProfile&context=static&protocol=http&container=mp3&audioCodec=mp3&replace=true)`
-    - `context` must be `static`, not `streaming` — the Download Queue's decision engine evaluates a one-shot, non-realtime conversion under the static context. `context=streaming` here yields a hard server-side `decisionError` on every item and PMS never transcodes at all. (`context=streaming` is correct for the *playback* profiles under "Plex Audio Streaming" above — those really are a live streaming session. Don't carry that value over to downloads just because it looks like the same directive shape.)
-    - This POST must explicitly set `Accept: application/json` on the request. Unlike the other Download Queue calls, this one is built from `playbackHeaders()`/`downloadTranscodeHeaders()`, which don't set `Accept` — without it PMS defaults to XML and the JSON decode throws, which silently looks like a normal thrown error and falls back to downloading the untouched original file.
-  - Poll GET `/downloadQueue/{queueId}/items/{itemId}` until status is `available` (or fail on `error`/`expired`)
-  - GET `/downloadQueue/{queueId}/item/{itemId}/media` (singular "item") to fetch the finished file
-  - DELETE `/downloadQueue/{queueId}/items/{itemId}` (plural "items") afterward for cleanup
-- Original-quality downloads use the documented direct part endpoint instead: `/library/parts/{partId}/{changestamp}/{filename}?download=1` — this is its own documented endpoint, not part of the Download Queue family, so don't route it through the queue.
-- If an "MP3 download" comes back playable but is actually the source codec/container (e.g. AAC in M4A), don't assume the profile string is wrong first — check for a silent fallback: `DownloadManager.performDownload` falls back to downloading the plain original file whenever the queue conversion throws or ends in `error`/`expired`/timeout, and that fallback path still exists on purpose (resilience), so a broken conversion won't surface as a visible error to the user. Verify with the actual queue item status/error field before changing request parameters.
+- Downloads always fetch the original file (no format setting, no transcoding) from the documented direct part endpoint: `/library/parts/{partId}/{changestamp}/{filename}?download=1`. Do not route downloads through the `/downloadQueue` family or the universal-transcode endpoints.
 
 ## Code Style
 - All new views must include a #Preview Block

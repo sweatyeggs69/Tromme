@@ -9,7 +9,6 @@ struct OfflineSettingsView: View {
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
-    @AppStorage("downloadFormat") private var downloadFormat = DownloadFormat.defaultFormat.rawValue
 
     private static let dynamicDownloadLimitOptions: [Int] = [5, 10, 20]
 
@@ -28,12 +27,6 @@ struct OfflineSettingsView: View {
                             Text(downloadManager.storageDescription)
                                 .foregroundStyle(.secondary)
                         }
-                    }
-                }
-
-                Picker("Download Format", selection: $downloadFormat) {
-                    ForEach(DownloadFormat.allCases, id: \.rawValue) { format in
-                        Text(format.displayName).tag(format.rawValue)
                     }
                 }
 
