@@ -210,8 +210,8 @@ struct NowPlayingView: View {
                     .padding(.bottom, bottomScreenPadding)
                 }
                 // Shadow lives behind the content so it never draws over the track and artist text.
-                // It stays in the full slot: hidden instantly when the artwork shrinks for lyrics/queue,
-                // and faded back in only after the artwork has landed, so its black box never shows.
+                // Only the shadow is drawn (the box casting it is cut out), so it can stay in the full
+                // slot and fade with the lyrics/queue switch without a black square ever showing.
                 .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
@@ -221,10 +221,19 @@ struct NowPlayingView: View {
                                 .frame(width: rect.width, height: rect.height)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.38 : 0.14), radius: 36, x: 0, y: 18)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 8, x: 0, y: 4)
+                                .mask {
+                                    Rectangle()
+                                        .frame(width: rect.width + 240, height: rect.height + 240)
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .frame(width: rect.width, height: rect.height)
+                                                .blendMode(.destinationOut)
+                                        }
+                                        .compositingGroup()
+                                }
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                                 .opacity(isCompact ? 0 : 1)
-                                .animation(isCompact ? nil : .easeOut(duration: 0.2).delay(0.25), value: isCompact)
                                 .position(x: rect.midX, y: rect.midY)
                                 .allowsHitTesting(false)
                         }
