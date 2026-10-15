@@ -209,6 +209,23 @@ struct NowPlayingView: View {
                     .frame(height: bottomControlsHeight)
                     .padding(.bottom, bottomScreenPadding)
                 }
+                // Shadow lives behind the content so it never draws over the track and artist text.
+                .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
+                    GeometryReader { proxy in
+                        if !isCompact, let fullAnchor = anchors[.full] {
+                            let rect = proxy[fullAnchor]
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.black)
+                                .frame(width: rect.width, height: rect.height)
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.38 : 0.14), radius: 36, x: 0, y: 18)
+                                .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 8, x: 0, y: 4)
+                                .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                                .position(x: rect.midX, y: rect.midY)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                }
                 .overlayPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
@@ -225,8 +242,6 @@ struct NowPlayingView: View {
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6
                             )
-                            .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.38 : 0.14)), radius: isCompact ? 0 : 36, x: 0, y: isCompact ? 0 : 18)
-                            .shadow(color: .black.opacity(isCompact ? 0 : (player.isPlaying ? 0.15 : 0.05)), radius: isCompact ? 0 : 8, x: 0, y: isCompact ? 0 : 4)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .position(x: targetRect.midX, y: targetRect.midY)
