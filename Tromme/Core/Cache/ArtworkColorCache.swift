@@ -70,7 +70,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v4.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v5.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -87,7 +87,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v4.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v5.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
