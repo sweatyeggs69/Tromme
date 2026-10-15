@@ -44,15 +44,28 @@ enum ArtistLogoService {
         guard http.statusCode == 200 else { throw URLError(.badServerResponse) }
 
         let decoded = try JSONDecoder().decode(FanartMusicResponse.self, from: data)
-        let best = bestLogo(in: decoded.hdmusiclogo) ?? bestLogo(in: decoded.musiclogo)
-        // fanart.tv sometimes lists http:// asset URLs; ATS only allows https.
-        let secure = best?.replacingOccurrences(of: "http://", with: "https://")
-        return ArtistLogoRecord(logoURL: secure)
+        let hd = candidates(in: decoded.hdmusiclogo)
+        let urls = hd.isEmpty ? candidates(in: decoded.musiclogo) : hd
+        return ArtistLogoRecord(logoURL: await lightest(of: urls)?.absoluteString)
     }
 
-    /// The most-liked logo in the list.
-    private static func bestLogo(in logos: [FanartMusicResponse.Logo]?) -> String? {
-        logos?.max { (Int($0.likes ?? "") ?? 0) < (Int($1.likes ?? "") ?? 0) }?.url
+    /// The most-liked logos first. fanart.tv sometimes lists http:// asset URLs; ATS only allows https.
+    private static func candidates(in logos: [FanartMusicResponse.Logo]?) -> [URL] {
+        let sorted = (logos ?? []).sorted { (Int($0.likes ?? "") ?? 0) > (Int($1.likes ?? "") ?? 0) }
+        return sorted.prefix(4).compactMap { URL(string: $0.url.replacingOccurrences(of: "http://", with: "https://")) }
+    }
+
+    /// Prefers a light logo, since the artist page is dark. Scores each candidate's visible
+    /// pixels and takes the lightest; ties and unscorable logos fall back to most-liked.
+    private static func lightest(of urls: [URL]) async -> URL? {
+        guard urls.count > 1 else { return urls.first }
+        var best: (url: URL, score: Double)?
+        for url in urls {
+            guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 256),
+                  let score = ArtistLogoBrightness.score(of: image) else { continue }
+            if best == nil || score > best!.score + 0.05 { best = (url, score) }
+        }
+        return best?.url ?? urls.first
     }
 
     /// Exact-name MusicBrainz match only, so a similarly named artist never gets the wrong logo.

@@ -9,6 +9,6 @@ enum CacheKey {
         "lastfm_toptracks_\(artist.lowercased())"
     }
     static func artistLogo(mbid: String?, name: String) -> String {
-        "artistlogo_v1_\(mbid ?? "name:" + name.lowercased())"
+        "artistlogo_v2_\(mbid ?? "name:" + name.lowercased())"
     }
 }
