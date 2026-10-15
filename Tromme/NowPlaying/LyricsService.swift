@@ -100,7 +100,7 @@ final class LyricsService {
         let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
 
-        async let lrcRed = withDeadline(sourceTimeout) {
+        async let lrcRed = withDeadline(lrcRedTimeout) {
             await LrcRedLyricsProvider.wordSyncedLyrics(title: title, artist: artist, duration: seconds)
         }
         async let lrclib = withDeadline(sourceTimeout) {
@@ -130,6 +130,10 @@ final class LyricsService {
 
     /// How long each source gets before the next one is tried.
     private nonisolated static let sourceTimeout: TimeInterval = 2
+    /// lrc.red needs a search plus an LRC fetch per matching release before it knows whether
+    /// any are word-synced, so it gets longer. LRCLIB runs alongside, so this only adds wait
+    /// when lrc.red itself is slow.
+    private nonisolated static let lrcRedTimeout: TimeInterval = 4
 
     /// Runs `operation`, giving up on it after `seconds`.
     private nonisolated static func withDeadline<T: Sendable>(
