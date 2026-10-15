@@ -36,10 +36,16 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let country: [PlexTag]?
     let subformat: [PlexTag]?
     let similar: [PlexTag]?
+    var guids: [PlexGuid]? = nil
     let originallyAvailableAt: String?
     var playlistItemID: Int? = nil
 
     var id: String { ratingKey }
+
+    /// The MusicBrainz id Plex matched this artist to, if any.
+    var musicBrainzArtistID: String? {
+        guids?.compactMap(\.id).first { $0.hasPrefix("mbid://") }.map { String($0.dropFirst("mbid://".count)) }
+    }
 
     /// The release format label (e.g. "Single", "EP"). Returns nil for standard albums.
     var formatLabel: String? {
@@ -108,6 +114,7 @@ extension PlexMetadata {
         case style = "Style"
         case country = "Country"
         case similar = "Similar"
+        case guids = "Guid"
     }
 
     init(ratingKey: String, title: String, type: String? = nil, thumb: String? = nil) {
@@ -252,6 +259,7 @@ extension PlexMetadata {
         country = try? c.decodeIfPresent([PlexTag].self, forKey: .country)
         subformat = try? c.decodeIfPresent([PlexTag].self, forKey: .subformat)
         similar = try? c.decodeIfPresent([PlexTag].self, forKey: .similar)
+        guids = try? c.decodeIfPresent([PlexGuid].self, forKey: .guids)
         originallyAvailableAt = try? c.decodeIfPresent(String.self, forKey: .originallyAvailableAt)
         playlistItemID = try? c.decodeIfPresent(Int.self, forKey: .playlistItemID)
     }

@@ -180,6 +180,11 @@
 		CF686C054592B8945030835C /* NowPlayingEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */; };
 		05C9DBE7CE5D1203024CEA46 /* BlockedLyricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */; };
 		B9C716D1DAC1C497556C96A4 /* LyricsSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2AE817FFA6FE2C2943AB0C /* LyricsSource.swift */; };
+		048C0AE9FE22D343C54AD158 /* PlexGuid.swift in Sources */ = {isa = PBXBuildFile; fileRef = B99359183704A1C4B8636951 /* PlexGuid.swift */; };
+		2CC82FF41FBC17E30923236D /* FanartSecret.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21DFA0AD7D51B77AEF612B36 /* FanartSecret.swift */; };
+		6F62B78F01FE2EE1E6A3C25E /* ArtistLogoRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89F3F9393265FAC5E8333ACE /* ArtistLogoRecord.swift */; };
+		AF945C3A52809C8B5DC00658 /* ArtistLogoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4C1662D0681F7CAF2EEDD1 /* ArtistLogoService.swift */; };
+		D656B4BF5A0880C66F07A0C7 /* ArtistTitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB33A83DC561FFE9BF047C4 /* ArtistTitleView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -360,6 +365,13 @@
 		94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingEmptyState.swift; sourceTree = "<group>"; };
 		89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BlockedLyricsStore.swift"; sourceTree = "<group>"; };
 		AB2AE817FFA6FE2C2943AB0C /* LyricsSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LyricsSource.swift"; sourceTree = "<group>"; };
+		B99359183704A1C4B8636951 /* PlexGuid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexGuid.swift; sourceTree = "<group>"; };
+		21DFA0AD7D51B77AEF612B36 /* FanartSecret.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FanartSecret.swift; sourceTree = "<group>"; };
+		89F3F9393265FAC5E8333ACE /* ArtistLogoRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistLogoRecord.swift; sourceTree = "<group>"; };
+		FC4C1662D0681F7CAF2EEDD1 /* ArtistLogoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistLogoService.swift; sourceTree = "<group>"; };
+		CEB33A83DC561FFE9BF047C4 /* ArtistTitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistTitleView.swift; sourceTree = "<group>"; };
+		2F62B59536A0A9EB3F6C5710 /* Tromme.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tromme.xcconfig; sourceTree = "<group>"; };
+		11883EF5C1AB8F45EAFD703D /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -471,6 +483,7 @@
 				EEEF1468766C9410290DA02C /* Models */,
 				C834C29A06A38700E1BDD9FA /* Styling */,
 				0E91C64E2F91B03000775275 /* AppContext.swift */,
+				21DFA0AD7D51B77AEF612B36 /* FanartSecret.swift */,
 				0E52132F3040EE8300583BF3 /* LastFMService.swift */,
 			);
 			path = Core;
@@ -550,6 +563,7 @@
 		921559876514E7BA771BBEE0 = {
 			isa = PBXGroup;
 			children = (
+				89AB40D7EE2EC0B1194561E8 /* Config */,
 				7AD43F2900FE467C850EF1C7 /* Tromme */,
 				5C7D86059CB6E9BBDEA3D94B /* Products */,
 				0EEC07423048CA9E00ACE377 /* Tromme.storekit */,
@@ -624,6 +638,7 @@
 			isa = PBXGroup;
 			children = (
 				B623A478C645C8F080FAC864 /* PlexTag.swift */,
+				B99359183704A1C4B8636951 /* PlexGuid.swift */,
 				31FA3EB408C385CC4EE920B5 /* PlexStream.swift */,
 				0DA977C8D66B3B5DDC5329C5 /* PlexServer.swift */,
 				DB88B09B3AED24590E9DBC4B /* PlexResponse.swift */,
@@ -686,6 +701,9 @@
 			isa = PBXGroup;
 			children = (
 				BA85F5DB7B8B5101F16F21E5 /* ArtistsView.swift */,
+				CEB33A83DC561FFE9BF047C4 /* ArtistTitleView.swift */,
+				FC4C1662D0681F7CAF2EEDD1 /* ArtistLogoService.swift */,
+				89F3F9393265FAC5E8333ACE /* ArtistLogoRecord.swift */,
 				738F3887AF159099D5220077 /* ArtistsViewMode.swift */,
 				9C23DAD78F3BE61712D65856 /* ArtistDetailView.swift */,
 				BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */,
@@ -713,6 +731,15 @@
 				1796793AB1633E85D3564A82 /* DownloadSortOrder.swift */,
 			);
 			path = Downloads;
+			sourceTree = "<group>";
+		};
+		89AB40D7EE2EC0B1194561E8 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				2F62B59536A0A9EB3F6C5710 /* Tromme.xcconfig */,
+				11883EF5C1AB8F45EAFD703D /* Secrets.example.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -824,6 +851,7 @@
 				841CE9A85DDFA98C34EC9D7E /* PlexAPIError.swift in Sources */,
 				A6652054F4BE0754BAD00805 /* Notification.Name+Tromme.swift in Sources */,
 				17534FB93B7F6DB0EAADDD58 /* PlexTag.swift in Sources */,
+				048C0AE9FE22D343C54AD158 /* PlexGuid.swift in Sources */,
 				42E99EC0CCD221F15D6CAAAE /* PlexStream.swift in Sources */,
 				8CEE55B7AA21FEC31C93F816 /* PlexServer.swift in Sources */,
 				397EFCF0A38132248F3086F3 /* PlexResponse.swift in Sources */,
@@ -902,6 +930,9 @@
 				C15AFF987C2932597A1C6F35 /* ArtistDetailView.swift in Sources */,
 				0E4345EB2F8EC60700424676 /* DevelopmentMockData.swift in Sources */,
 				E30ACBC328D20904ED0064B5 /* ArtistsView.swift in Sources */,
+				D656B4BF5A0880C66F07A0C7 /* ArtistTitleView.swift in Sources */,
+				AF945C3A52809C8B5DC00658 /* ArtistLogoService.swift in Sources */,
+				6F62B78F01FE2EE1E6A3C25E /* ArtistLogoRecord.swift in Sources */,
 				B58FF0EA4C97FC394000198E /* ArtworkColorCache.swift in Sources */,
 				65BE712C4B25685082310E7A /* ArtworkView.swift in Sources */,
 				65BE712C4B25685082310AA2 /* SectionIndexBar.swift in Sources */,
@@ -938,6 +969,7 @@
 				4BBE990D597D0E8E75EBBCF4 /* MiniPlayerView.swift in Sources */,
 				0E10DE3C30112F4B0045130C /* DownloadsView.swift in Sources */,
 				0E91C64F2F91B03000775275 /* AppContext.swift in Sources */,
+				2CC82FF41FBC17E30923236D /* FanartSecret.swift in Sources */,
 				0E723B1F304880390059BF86 /* AppIconPickerView.swift in Sources */,
 				7E1DCA19C4645D2EDFB2A565 /* NowPlayingView.swift in Sources */,
 				0E122B562F912AD2006D2BC8 /* NowPlayingStartPanel.swift in Sources */,
@@ -968,6 +1000,7 @@
 /* Begin XCBuildConfiguration section */
 		22CA9070203AF0459637214D /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2F62B59536A0A9EB3F6C5710 /* Tromme.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1080,6 +1113,7 @@
 		};
 		C4230B07035E356A1E3691C0 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 2F62B59536A0A9EB3F6C5710 /* Tromme.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;

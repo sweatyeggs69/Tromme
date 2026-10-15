@@ -13,10 +13,7 @@ struct ArtistHeroHeaderView: View {
     var body: some View {
         if isHidden {
             VStack(spacing: 20) {
-                Text(artist.title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(Color.white)
-                    .multilineTextAlignment(.center)
+                ArtistTitleView(artist: artist)
                 controls
             }
             .frame(maxWidth: .infinity)
@@ -26,12 +23,7 @@ struct ArtistHeroHeaderView: View {
             // Title and controls sit on the bottom edge of the row and scroll with it; the
             // photo behind them is drawn by ArtistHeroPhotoView.
             VStack(spacing: 20) {
-                Text(artist.title)
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
-                    .multilineTextAlignment(.center)
+                ArtistTitleView(artist: artist)
                     .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
                 controls

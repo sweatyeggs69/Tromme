@@ -1,0 +1,3 @@
+// Shared build settings. Local secrets live in Secrets.xcconfig (gitignored); the
+// "?" makes the include optional so a fresh clone still builds, just without logos.
+#include? "Secrets.xcconfig"
