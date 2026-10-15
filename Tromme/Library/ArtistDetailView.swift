@@ -24,6 +24,8 @@ struct ArtistDetailView: View {
     @State private var showsBioSheet = false
     @State private var contentReady = false
     @State private var viewHeight: CGFloat = 800
+    /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
+    @State private var scrollOffset: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
 
     /// Page backdrop, derived from the artist photo through the same
@@ -244,9 +246,8 @@ struct ArtistDetailView: View {
             ArtistHeroHeaderView(
                 artist: displayArtist,
                 heroHeight: heroHeight,
-                photoHeight: photoHeight,
                 backdropColor: backdropColor,
-                isHidden: $heroIsHidden,
+                isHidden: heroIsHidden,
                 hasBio: !(displayArtist.summary ?? "").isEmpty,
                 onInfo: { showsBioSheet = true },
                 onPlay: {
@@ -263,7 +264,8 @@ struct ArtistDetailView: View {
             )
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
-                .listRowBackground(backdropColor)
+                // Clear so the photo drawn behind the list shows through.
+                .listRowBackground(Color.clear)
 
             if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
                 Button {
@@ -371,7 +373,27 @@ struct ArtistDetailView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(backdropColor.ignoresSafeArea())
+        .background {
+            ZStack(alignment: .top) {
+                backdropColor
+                // The photo lives behind the list instead of inside a row, so it is driven
+                // by the scroll view's own offset and never lags or gets recycled with a cell.
+                ArtistHeroPhotoView(
+                    artist: displayArtist,
+                    heroHeight: heroHeight,
+                    photoHeight: photoHeight,
+                    backdropColor: backdropColor,
+                    scrollOffset: scrollOffset,
+                    isHidden: $heroIsHidden
+                )
+            }
+            .ignoresSafeArea()
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top
+        } action: { _, newValue in
+            scrollOffset = newValue
+        }
         .foregroundStyle(backdropColor.contrastForeground)
         .environment(\.colorScheme, backdropColor.isLightColor() ? .light : .dark)
         .scrollEdgeEffectHidden(true, for: .top)
@@ -656,56 +678,30 @@ private struct SimilarArtistsGridView: View {
 }
 
 private struct ArtistHeroHeaderView: View {
-    @Environment(\.plexClient) private var client
-    @Environment(\.serverConnection) private var serverConnection
-    @Environment(NetworkStatus.self) private var network
-
     let artist: PlexMetadata
     let heroHeight: CGFloat
-    let photoHeight: CGFloat
     let backdropColor: Color
-    @Binding var isHidden: Bool
+    var isHidden: Bool
     var hasBio = false
     var onInfo: (() -> Void)?
     var onPlay: (() -> Void)?
     var onShuffle: (() -> Void)?
 
-    @State private var image: UIImage?
-
     var body: some View {
-        Group {
-            if isHidden {
-                VStack(spacing: 20) {
-                    Text(artist.title)
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(backdropColor.contrastForeground)
-                        .multilineTextAlignment(.center)
-                    controls
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.top, 80)
-                .padding(.bottom, 12)
-            } else {
-                heroContent
+        if isHidden {
+            VStack(spacing: 20) {
+                Text(artist.title)
+                    .font(.largeTitle.weight(.bold))
+                    .foregroundStyle(backdropColor.contrastForeground)
+                    .multilineTextAlignment(.center)
+                controls
             }
-        }
-        .task(id: artist.thumb) {
-            await loadImage()
-        }
-    }
-
-    private var heroContent: some View {
-        GeometryReader { geo in
-            let minY = geo.frame(in: .global).minY
-            let stretch = max(minY, 0)
-            // Photo scrolls at half speed so the title and controls glide over it.
-            let parallax = max(-minY, 0) * 0.5
-            // Photo blurs out as the title nears the top safe area.
-            let blurProgress = min(max((-minY - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
-            let scrollBlur = blurProgress * 30
-
-            // Title and controls are laid out against the bottom edge of the row, so they
-            // travel with it when the list is pulled down.
+            .frame(maxWidth: .infinity)
+            .padding(.top, 80)
+            .padding(.bottom, 12)
+        } else {
+            // Title and controls sit on the bottom edge of the row and scroll with it; the
+            // photo behind them is drawn by ArtistHeroPhotoView.
             VStack(spacing: 20) {
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))
@@ -718,7 +714,8 @@ private struct ArtistHeroHeaderView: View {
                 controls
             }
             .padding(.bottom, 12)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+            .frame(maxWidth: .infinity)
+            .frame(height: heroHeight, alignment: .bottom)
             .background(alignment: .bottom) {
                 // Scrim that travels with the title and controls, so they stay legible
                 // while the photo parallaxes behind them.
@@ -731,69 +728,9 @@ private struct ArtistHeroHeaderView: View {
                     startPoint: .top,
                     endPoint: .bottom
                 )
-                .frame(width: geo.size.width, height: 204)
-            }
-            .background(alignment: .top) {
-                // Backdrop does not affect layout: it keeps its top pinned to the top of
-                // the screen and grows downward with the row on overscroll.
-                ZStack(alignment: .top) {
-                    Group {
-                        if let image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Rectangle()
-                                .fill(.quaternary)
-                        }
-                    }
-                    .frame(width: geo.size.width, height: photoHeight, alignment: .top)
-                    .blur(radius: scrollBlur, opaque: true)
-                    .clipped()
-                    .overlay {
-                        // Blur the lower part of the photo, then melt it into the backdrop.
-                        if let image {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: photoHeight, alignment: .top)
-                                .clipped()
-                                .blur(radius: 24)
-                                .mask(
-                                    LinearGradient(
-                                        colors: [.clear, .clear, .black],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        }
-                    }
-                    .overlay {
-                        LinearGradient(
-                            stops: [
-                                .init(color: backdropColor.opacity(0), location: 0.575),
-                                .init(color: backdropColor.opacity(0.9), location: 0.88),
-                                .init(color: backdropColor, location: 1)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    }
-                    // Zoom from the first point of overscroll, pinned to the top edge.
-                    .scaleEffect(1 + stretch / max(photoHeight, 1), anchor: .top)
-                }
-                .frame(width: geo.size.width, height: heroHeight + stretch, alignment: .top)
-                .offset(y: -stretch + parallax)
-                // Never paint below the hero row, so the parallax-shifted photo can't
-                // bleed over the rows that scroll up beneath it.
-                .mask(alignment: .top) {
-                    Rectangle()
-                        .frame(width: geo.size.width, height: heroHeight + stretch)
-                        .offset(y: -stretch)
-                }
+                .frame(height: 204)
             }
         }
-        .frame(height: heroHeight)
     }
 
     private var controls: some View {
@@ -838,6 +775,96 @@ private struct ArtistHeroHeaderView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 4)
+    }
+}
+
+/// Artist photo drawn behind the list. Pinned to the top of the screen, zooms on overscroll,
+/// parallaxes at half speed and blurs out as the page scrolls.
+private struct ArtistHeroPhotoView: View {
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
+    @Environment(NetworkStatus.self) private var network
+
+    let artist: PlexMetadata
+    let heroHeight: CGFloat
+    let photoHeight: CGFloat
+    let backdropColor: Color
+    let scrollOffset: CGFloat
+    @Binding var isHidden: Bool
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            let stretch = max(-scrollOffset, 0)
+            let scrolled = max(scrollOffset, 0)
+            // Photo scrolls at half speed so the title and controls glide over it.
+            let parallax = scrolled * 0.5
+            // Photo blurs out as the title nears the top safe area.
+            let blurProgress = min(max((scrolled - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
+            let scrollBlur = blurProgress * 30
+
+            if !isHidden {
+                photo(width: geo.size.width, blur: scrollBlur)
+                    // Zoom from the first point of overscroll, pinned to the top edge.
+                    .scaleEffect(1 + stretch / max(photoHeight, 1), anchor: .top)
+                    .offset(y: -parallax)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+                    // Never paint below the hero row's current bottom edge.
+                    .mask(alignment: .top) {
+                        Rectangle()
+                            .frame(height: max(heroHeight - scrollOffset, 0))
+                    }
+            }
+        }
+        .task(id: artist.thumb) {
+            await loadImage()
+        }
+    }
+
+    private func photo(width: CGFloat, blur: CGFloat) -> some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Rectangle()
+                    .fill(.quaternary)
+            }
+        }
+        .frame(width: width, height: photoHeight, alignment: .top)
+        .blur(radius: blur, opaque: true)
+        .clipped()
+        .overlay {
+            // Blur the lower part of the photo, then melt it into the backdrop.
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: width, height: photoHeight, alignment: .top)
+                    .clipped()
+                    .blur(radius: 24)
+                    .mask(
+                        LinearGradient(
+                            colors: [.clear, .clear, .black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            }
+        }
+        .overlay {
+            LinearGradient(
+                stops: [
+                    .init(color: backdropColor.opacity(0), location: 0.575),
+                    .init(color: backdropColor.opacity(0.9), location: 0.88),
+                    .init(color: backdropColor, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
     }
 
     private func loadImage() async {
