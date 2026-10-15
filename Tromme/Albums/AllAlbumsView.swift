@@ -562,22 +562,6 @@ struct AllAlbumsView: View {
     }
 }
 
-private enum AlbumViewMode: String {
-    case grid
-    case list
-}
-
-private enum AlbumSortOrder: String {
-    case titleAscending
-    case titleDescending
-    case artistAscending
-    case artistDescending
-    case yearOldest
-    case yearNewest
-    case dateAddedNewest
-    case dateAddedOldest
-}
-
 #if DEBUG
 #Preview {
     NavigationStack {

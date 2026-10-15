@@ -3,23 +3,6 @@ import AVKit
 import MediaPlayer
 import UIKit
 
-/// Marks where the shared Now Playing artwork should sit — either its full-size
-/// resting spot, or the small thumbnail spot next to the track title when the
-/// Queue/Lyrics panel is open. A single floating artwork view is positioned
-/// between these two measured rects so it visually shrinks/slides between them
-/// instead of two separate views cross-fading (which looks like a duplicate).
-private enum ArtworkAnimationSlot: Hashable {
-    case full
-    case compact
-}
-
-private struct ArtworkSlotAnchorsKey: PreferenceKey {
-    static var defaultValue: [ArtworkAnimationSlot: Anchor<CGRect>] { [:] }
-    static func reduce(value: inout [ArtworkAnimationSlot: Anchor<CGRect>], nextValue: () -> [ArtworkAnimationSlot: Anchor<CGRect>]) {
-        value.merge(nextValue()) { _, new in new }
-    }
-}
-
 struct NowPlayingView: View {
     // MARK: - Environment
 
@@ -90,8 +73,6 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
-
-
     // MARK: - Body
 
     var body: some View {
@@ -129,7 +110,6 @@ struct NowPlayingView: View {
             let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight - 16)
             let landscapeLeftWidth = max(96.0, landscapeArtworkAreaHeight)
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
-
 
             let _ = applyInitialLandscapeLyrics(isPadLandscape: isPadLandscape)
 

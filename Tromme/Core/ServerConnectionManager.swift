@@ -330,25 +330,3 @@ final class ServerConnectionManager {
             .map { (200...299).contains($0.statusCode) } ?? false
     }
 }
-
-// MARK: - Environment Keys
-
-struct ServerConnectionManagerKey: @preconcurrency EnvironmentKey {
-    @MainActor static let defaultValue = ServerConnectionManager()
-}
-
-struct PlexAPIClientKey: EnvironmentKey {
-    static let defaultValue = PlexAPIClient()
-}
-
-extension EnvironmentValues {
-    var serverConnection: ServerConnectionManager {
-        get { self[ServerConnectionManagerKey.self] }
-        set { self[ServerConnectionManagerKey.self] = newValue }
-    }
-
-    var plexClient: PlexAPIClient {
-        get { self[PlexAPIClientKey.self] }
-        set { self[PlexAPIClientKey.self] = newValue }
-    }
-}

@@ -326,11 +326,6 @@ struct ArtistsView: View {
     }
 }
 
-private enum ArtistsViewMode: String {
-    case list
-    case grid
-}
-
 #Preview {
     NavigationStack {
         ArtistsView()

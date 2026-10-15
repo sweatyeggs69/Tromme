@@ -1,10 +1,5 @@
 import SwiftUI
 
-struct AddToPlaylistRequest: Identifiable {
-    let id = UUID()
-    let itemRatingKeys: [String]
-}
-
 struct AddToPlaylistSheet: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection

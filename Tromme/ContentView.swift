@@ -286,35 +286,6 @@ struct ContentView: View {
 // On offline-capable tabs, the gear only appears when offline, in the leading position
 // so it doesn't conflict with per-view trailing toolbar items.
 
-private struct SettingsToolbarModifier: ViewModifier {
-    @Environment(NetworkStatus.self) private var network
-    let alwaysVisible: Bool
-
-    func body(content: Content) -> some View {
-        content.toolbar {
-            if alwaysVisible {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                    .tint(.primary)
-                }
-            } else if !network.isConnected {
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gear")
-                    }
-                    .tint(.primary)
-                }
-            }
-        }
-    }
-}
-
 private extension View {
     /// Adds a gear → Settings link. Pass `alwaysVisible: true` for the Home tab;
     /// offline-only tabs pass `false` so the gear only appears when disconnected.

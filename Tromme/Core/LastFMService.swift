@@ -79,17 +79,3 @@ struct LastFMService: Sendable {
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
-
-// MARK: - Response models
-
-private struct LastFMTopTracksResponse: Decodable {
-    let toptracks: LastFMTopTracks?
-}
-
-private struct LastFMTopTracks: Decodable {
-    let track: [LastFMTrack]?
-}
-
-private struct LastFMTrack: Decodable {
-    let name: String
-}

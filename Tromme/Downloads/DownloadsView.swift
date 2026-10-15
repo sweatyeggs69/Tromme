@@ -1,12 +1,5 @@
 import SwiftUI
 
-enum DownloadSortOrder: String, CaseIterable {
-    case dateAdded = "Date Added"
-    case title = "Title"
-    case artist = "Artist"
-    case album = "Album"
-}
-
 struct DownloadsView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(AudioPlayerService.self) private var player

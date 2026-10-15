@@ -63,7 +63,6 @@ struct QueueView: View {
                         player.moveInQueue(from: source, to: destination)
                     }
 
-
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -96,57 +95,6 @@ struct QueueView: View {
         .font(.callout.weight(.semibold))
     }
 
-}
-
-private struct QueueActionPill: View {
-    let systemImage: String
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .foregroundStyle(isActive ? .white : .white.opacity(0.7))
-                .contentTransition(.symbolEffect(.replace))
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background {
-                    Capsule(style: .continuous)
-                        .fill(.white.opacity(isActive ? 0.24 : 0.10))
-                }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct QueueRow: View {
-    let track: PlexMetadata
-
-    var body: some View {
-        HStack(spacing: 12) {
-            ArtworkView(
-                thumbPath: track.parentThumb ?? track.thumb,
-                size: 48,
-                cornerRadius: 6
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.callout)
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Text(track.artistDisplayName)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            Image(systemName: "line.3.horizontal")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white.opacity(0.35))
-        }
-    }
 }
 
 #Preview {

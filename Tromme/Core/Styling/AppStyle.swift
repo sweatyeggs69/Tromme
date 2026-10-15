@@ -106,19 +106,6 @@ enum AppStyle {
     }
 }
 
-// MARK: - Environment: accent color as Color (for explicit tinting of Menu/contextMenu)
-
-private struct AppAccentColorKey: EnvironmentKey {
-    static let defaultValue: Color = AppIconOption.all[0].accentColor
-}
-
-extension EnvironmentValues {
-    var appAccentColor: Color {
-        get { self[AppAccentColorKey.self] }
-        set { self[AppAccentColorKey.self] = newValue }
-    }
-}
-
 // MARK: - Color contrast
 
 extension Color {
