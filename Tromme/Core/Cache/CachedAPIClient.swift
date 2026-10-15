@@ -188,14 +188,8 @@ extension PlexAPIClient {
 
     /// Home's Recently Played: the server's hub (what Plex shows), else the local play history.
     func recentlyPlayedForHome(server: PlexServer, sectionId: String, limit: Int = 10) async throws -> [PlexMetadata] {
-        do {
-            if let hub = try await getRecentlyPlayedHub(server: server, sectionId: sectionId, limit: limit) {
-                return hub
-            }
-        } catch {
-            #if DEBUG
-            print("[Hubs] Recently Played hub failed:", error)
-            #endif
+        if let hub = try? await getRecentlyPlayedHub(server: server, sectionId: sectionId, limit: limit) {
+            return hub
         }
         return try await cachedRecentlyPlayed(server: server, sectionId: sectionId, limit: limit)
     }
