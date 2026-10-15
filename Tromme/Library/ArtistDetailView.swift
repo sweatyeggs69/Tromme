@@ -397,7 +397,13 @@ struct ArtistDetailView: View {
         .environment(\.colorScheme, backdropColor.isLightColor() ? .light : .dark)
         .scrollEdgeEffectHidden(true, for: .top)
         .ignoresSafeArea(edges: .top)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewHeight = $0 }
+        // Measure the full container height including safe areas, so the hero doesn't resize
+        // (and re-crop the photo) when the tab bar minimizes or the bottom inset changes on scroll.
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            (proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom).rounded()
+        } action: { newHeight in
+            if abs(newHeight - viewHeight) > 1 { viewHeight = newHeight }
+        }
         .task(id: displayArtist.thumb) {
             guard previewData == nil, let server = serverConnection.currentServer else { return }
             await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server)
