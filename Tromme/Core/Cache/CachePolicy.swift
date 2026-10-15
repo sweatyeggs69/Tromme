@@ -25,9 +25,6 @@ enum CachePolicy: Sendable {
     /// Last.fm artist top-tracks — changes very slowly.
     /// Memory: 4 hours, Disk: 7 days.
     case lastFM
-    /// fanart.tv artist logo URLs (including "has no logo").
-    /// Memory: 4 hours, Disk: 14 days.
-    case artistLogo
 
     var memoryTTL: TimeInterval {
         switch self {
@@ -38,7 +35,6 @@ enum CachePolicy: Sendable {
         case .homeContent: return 1800      // 30 min
         case .search:      return 600       // 10 min
         case .lastFM:      return 14400     // 4 hours
-        case .artistLogo:  return 14400     // 4 hours
         }
     }
 
@@ -51,7 +47,6 @@ enum CachePolicy: Sendable {
         case .homeContent:  return 1800      // 30 min — always stale on cold launch
         case .search:       return 14400     // 4 hours
         case .lastFM:       return 604_800   // 7 days
-        case .artistLogo:   return 1_209_600 // 14 days
         }
     }
 }
