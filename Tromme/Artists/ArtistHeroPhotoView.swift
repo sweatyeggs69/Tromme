@@ -123,6 +123,11 @@ struct ArtistHeroPhotoView: View {
         }
         let resolvedImage = await ImageCache.shared.image(for: url)
         guard !Task.isCancelled else { return }
+        // Pick the page backdrop from this photo right away rather than waiting on the
+        // backdrop's own smaller fetch, so the color arrives with the photo.
+        if let resolvedImage {
+            ArtworkColorCache.shared.resolveColor(for: artworkPath, from: resolvedImage, style: .artist)
+        }
         image = resolvedImage?.squareCropped()
         isHidden = image == nil && !network.isConnected
     }

@@ -24,7 +24,12 @@ struct ArtistDetailView: View {
     /// Page backdrop, derived from the artist photo through the Apple Music
     /// tint algorithm with the artist-page lightness cap.
     private var backdropColor: Color {
-        ArtworkColorCache.shared.color(for: displayArtist.thumb, colorScheme: colorScheme, style: .artist) ?? Color(.systemBackground)
+        let colors = ArtworkColorCache.shared
+        // Keep the color of the photo we navigated in with while a refreshed thumb resolves,
+        // so the page doesn't flash to the system background.
+        return colors.color(for: displayArtist.thumb, colorScheme: colorScheme, style: .artist)
+            ?? colors.color(for: artist.thumb, colorScheme: colorScheme, style: .artist)
+            ?? Color(.systemBackground)
     }
 
     // Read-only views of the view model's state, so the body reads as before.

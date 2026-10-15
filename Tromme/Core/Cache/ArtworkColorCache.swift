@@ -50,6 +50,18 @@ final class ArtworkColorCache {
         // fetching a separate low-res thumbnail.
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 512, height: 512) else { return }
         guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 512) else { return }
+        resolveColor(for: thumbPath, from: image, style: style)
+    }
+
+    /// Picks the color from an image the caller already has, so the backdrop can appear
+    /// together with that image instead of waiting on a separate fetch. The pick samples a
+    /// small downscale, so the source resolution doesn't change the result.
+    func resolveColor(
+        for thumbPath: String?,
+        from image: UIImage,
+        style: ArtworkBackdrop.Style = .original
+    ) {
+        guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
         let dominant = style == .artist ? image.vividPhotoColor(visibleFraction: 0.6) : image.originalDominantColor
         store(Color(dominant), forKey: Self.key(thumbPath, style))
         scheduleSave()
