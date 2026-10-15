@@ -6,10 +6,10 @@ import CryptoKit
 final class ArtworkColorCache {
     static let shared = ArtworkColorCache()
 
-    /// Soft cap on resident entries — colors are tiny (RGB triples), but the
-    /// dictionary previously grew unbounded over the app's lifetime. 500 is
-    /// roughly an album-listening session's worth of unique artwork.
-    private static let maxEntries = 500
+    /// Soft cap on resident entries. Colors are tiny (RGB triples), and artist colors are
+    /// precomputed for the whole library, so the cap leaves room for a large collection
+    /// while still bounding growth.
+    private static let maxEntries = 5000
 
     private var cache: [String: Color] = [:]
     private var insertionOrder: [String] = []
@@ -62,9 +62,32 @@ final class ArtworkColorCache {
         style: ArtworkBackdrop.Style = .original
     ) {
         guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
-        let dominant = style == .artist ? image.averageColor(visibleFraction: 0.6) : image.originalDominantColor
-        store(Color(dominant), forKey: Self.key(thumbPath, style))
+        store(Color(Self.pick(from: image, style: style)), forKey: Self.key(thumbPath, style))
         scheduleSave()
+    }
+
+    /// Picks and saves backdrop colors for artist photos that are already in the image
+    /// cache, so artist pages open with their color instead of computing it on arrival.
+    /// Reads from disk only and never downloads; the library artwork pass is what puts the
+    /// photos there. Safe to re-run: artists with a saved color are skipped.
+    func precomputeArtistColors(thumbPaths: [String], client: PlexAPIClient, server: PlexServer) async {
+        for path in thumbPaths {
+            guard !Task.isCancelled, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+            let key = Self.key(path, .artist)
+            guard cache[key] == nil,
+                  let url = client.artworkURL(server: server, path: path, width: 512, height: 512),
+                  let image = await ImageCache.shared.anyCachedImage(for: url, targetPixelSize: 512) else { continue }
+            // The pixel work runs off the main actor so a large library doesn't stall the UI.
+            let picked = await Task.detached(priority: .utility) { Self.pick(from: image, style: .artist) }.value
+            guard cache[key] == nil else { continue }
+            store(Color(picked), forKey: key)
+            scheduleSave()
+        }
+    }
+
+    /// The color pick for each style. Pure pixel math, so it can run on any thread.
+    private nonisolated static func pick(from image: UIImage, style: ArtworkBackdrop.Style) -> UIColor {
+        style == .artist ? image.averageColor(visibleFraction: 0.6) : image.originalDominantColor
     }
 
     /// Inserts a color and evicts the oldest entry once the cap is exceeded.

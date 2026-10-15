@@ -146,7 +146,12 @@ actor LibrarySyncService {
             await previous?.value
             // Playlist covers are part of the artwork pass, so make sure playlists are mirrored first.
             try? await self.refreshPlaylists(client: client, server: server)
+            // Artist backdrop colors: once for photos already on disk, again for the ones
+            // this artwork pass downloads, so artist pages never wait on the pick.
+            let artistThumbs = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope).compactMap(\.thumb)
+            await ArtworkColorCache.shared.precomputeArtistColors(thumbPaths: artistThumbs, client: client, server: server)
             await LibraryPrefetcher.prefetchArtwork(client: client, server: server, sectionId: sectionId, includeTracks: includeTracks)
+            await ArtworkColorCache.shared.precomputeArtistColors(thumbPaths: artistThumbs, client: client, server: server)
         }
     }
 
