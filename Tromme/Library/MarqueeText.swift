@@ -68,7 +68,7 @@ struct MarqueeText: View {
         guard overflows else { return 0 }
         let distance = textWidth + gap
         let scroll = Double(distance / speed)
-        let pauseSeconds = 2.0
+        let pauseSeconds = 4.0
         let t = (date.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate)
             .truncatingRemainder(dividingBy: pauseSeconds + scroll)
         guard t > pauseSeconds else { return 0 }
