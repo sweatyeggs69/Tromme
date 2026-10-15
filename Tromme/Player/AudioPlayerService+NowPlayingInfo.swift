@@ -116,6 +116,7 @@ extension AudioPlayerService {
             cachedArtworkThumbPath = nil
             nowPlayingArtworkTask?.cancel()
             nowPlayingArtworkTask = nil
+            NowPlayingAnimatedArtwork.shared.clear()
             return
         }
 
@@ -141,12 +142,14 @@ extension AudioPlayerService {
         if let cachedArtwork {
             info[MPMediaItemPropertyArtwork] = cachedArtwork
         }
+        info.merge(NowPlayingAnimatedArtwork.shared.entries(for: currentTrack)) { _, new in new }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         MPRemoteCommandCenter.shared().likeCommand.isActive = (currentTrack.userRating ?? 0) >= 10
         lastPublishedNowPlayingTrackKey = trackKey
 
         let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
+        prepareAnimatedArtwork(for: currentTrack, thumbPath: thumbPath)
         if thumbPath != cachedArtworkThumbPath {
             cachedArtworkThumbPath = thumbPath
             cachedArtwork = nil
@@ -165,6 +168,23 @@ extension AudioPlayerService {
                     MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
                 }
             }
+        }
+    }
+
+    /// Tromme+ animated artwork for the lock screen; merged into the Now Playing info
+    /// once the album's lookup comes back. The static artwork is its preview image.
+    private func prepareAnimatedArtwork(for track: PlexMetadata, thumbPath: String?) {
+        let pixelSize = ArtworkView.maxTranscodePx
+        let previewURL = client.flatMap { client in
+            server.flatMap { client.artworkURL(server: $0, path: thumbPath, width: pixelSize, height: pixelSize) }
+        }
+        NowPlayingAnimatedArtwork.shared.prepare(for: track) { _ in
+            guard let previewURL else { return nil }
+            return await ImageCache.shared.image(for: previewURL, targetPixelSize: pixelSize)
+        } apply: { entries in
+            guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else { return }
+            info.merge(entries) { _, new in new }
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
         }
     }
 }

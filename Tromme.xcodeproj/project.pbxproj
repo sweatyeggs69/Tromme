@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		968A04EA82EB775A94CD755D /* NowPlayingAnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */; };
+		D26938AB2FE71854B2E1E20D /* AnimatedArtworkClipDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */; };
 		7CC494AF88590F8464CA7DC9 /* AnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */; };
 		D308DD86917C0385C2FEDA2B /* AnimatedArtworkEntitlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */; };
 		C5B2B542C9714784EFC274BB /* AnimatedArtworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */; };
@@ -190,6 +192,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingAnimatedArtwork.swift; sourceTree = "<group>"; };
+		019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkClipDownloader.swift; sourceTree = "<group>"; };
 		78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtwork.swift; sourceTree = "<group>"; };
 		C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkEntitlement.swift; sourceTree = "<group>"; };
 		3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkService.swift; sourceTree = "<group>"; };
@@ -590,6 +594,7 @@
 			isa = PBXGroup;
 			children = (
 				5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */,
+				92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */,
 				DDACC39EB62D0C5B7A5114F4 /* DownloadFormat.swift */,
 				2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */,
 				CB5F712E966BE585BD898CD3 /* AudioPlayerService+TrackEnd.swift */,
@@ -693,6 +698,7 @@
 				1990CFC472EB7AC610668C7A /* AlbumDetailViewModel.swift */,
 				027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */,
 				D8231E3A3CBD690029DAC154 /* AlbumTrackRow.swift */,
+				019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */,
 				78E91F4B02A176FEB7EED829 /* AnimatedArtwork.swift */,
 				C4E6D4AE277CAC9D3A77EACE /* AnimatedArtworkEntitlement.swift */,
 				3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */,
@@ -841,6 +847,8 @@
 				219FAAAA3CD37F376DE3B7A5 /* ArtistHeroHeaderView.swift in Sources */,
 				6D8E7D73A3DA7A8FEFB2CF14 /* ArtistAllTracksListView.swift in Sources */,
 				AB8DE3240A1F6395A199F123 /* AlbumViewMode.swift in Sources */,
+				968A04EA82EB775A94CD755D /* NowPlayingAnimatedArtwork.swift in Sources */,
+				D26938AB2FE71854B2E1E20D /* AnimatedArtworkClipDownloader.swift in Sources */,
 				7CC494AF88590F8464CA7DC9 /* AnimatedArtwork.swift in Sources */,
 				D308DD86917C0385C2FEDA2B /* AnimatedArtworkEntitlement.swift in Sources */,
 				C5B2B542C9714784EFC274BB /* AnimatedArtworkService.swift in Sources */,
