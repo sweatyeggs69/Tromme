@@ -18,10 +18,10 @@ struct ArtistHeroPhotoView: View {
     /// Heights of the blur and color-fade bands. Both are anchored to the bottom edge of the hero
     /// row (where the artist name and buttons sit), not to the photo, so they stay behind them
     /// while the photo parallaxes.
-    private let blurBandHeight: CGFloat = 260
+    private let blurBandHeight: CGFloat = 145
     /// Reaches from the row's bottom edge to just above the top of the artist name
     /// (bottom padding, buttons and the large-title name).
-    private let fadeBandHeight: CGFloat = 150
+    private let fadeBandHeight: CGFloat = 145
 
     var body: some View {
         GeometryReader { geo in
@@ -47,8 +47,8 @@ struct ArtistHeroPhotoView: View {
                                 LinearGradient(
                                     stops: [
                                         .init(color: .clear, location: 0),
-                                        .init(color: .black.opacity(0.7), location: 0.35),
-                                        .init(color: .black, location: 0.6)
+                                        .init(color: .black.opacity(0.8), location: 0.75),
+                                        .init(color: .black, location: 1)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -61,9 +61,7 @@ struct ArtistHeroPhotoView: View {
                         LinearGradient(
                             stops: [
                                 .init(color: backdropColor.opacity(0), location: 0),
-                                .init(color: backdropColor.opacity(0.15), location: 0.3),
-                                .init(color: backdropColor.opacity(0.45), location: 0.6),
-                                .init(color: backdropColor.opacity(0.8), location: 0.85),
+                                .init(color: backdropColor.opacity(0.8), location: 0.75),
                                 .init(color: backdropColor, location: 1)
                             ],
                             startPoint: .top,
