@@ -32,7 +32,6 @@ struct MarqueeText: View {
                     }
                     .offset(x: offset(at: context.date))
                     .fixedSize()
-                    .transaction { $0.animation = nil }
                 }
             }
             .clipped()
