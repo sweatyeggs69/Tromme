@@ -132,7 +132,7 @@ struct NowPlayingView: View {
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 // After the shadows, so the video doesn't cast a second one.
                                 .overlay {
-                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card) { animatedBackdrop = $0 }
+                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                                 }
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
@@ -270,7 +270,7 @@ struct NowPlayingView: View {
                             // Animated artwork stays in the full-size spot and never moves or
                             // resizes: it fades out in place before the static artwork shrinks to
                             // the Lyrics/Queue slot, and fades back in once it has returned.
-                            AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6) { animatedBackdrop = $0 }
+                            AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                                 .frame(width: fullRect.width, height: fullRect.height)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)

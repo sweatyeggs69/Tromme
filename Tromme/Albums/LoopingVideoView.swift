@@ -9,6 +9,8 @@ import CoreImage
 struct LoopingVideoView: UIViewRepresentable {
     let url: URL
     let isPlaying: Bool
+    /// Freezes the video in place (e.g. the song is paused); resuming continues from there.
+    var isHeld = false
     @Binding var isReady: Bool
     var onFrame: ((UIImage) -> Void)?
 
@@ -18,7 +20,7 @@ struct LoopingVideoView: UIViewRepresentable {
         let view = PlayerLayerView()
         context.coordinator.onFrame = onFrame
         context.coordinator.configure(url: url, layerView: view)
-        context.coordinator.setPlaying(isPlaying)
+        context.coordinator.setPlaying(isPlaying, held: isHeld)
         return view
     }
 
@@ -27,7 +29,7 @@ struct LoopingVideoView: UIViewRepresentable {
         if context.coordinator.url != url {
             context.coordinator.configure(url: url, layerView: view)
         }
-        context.coordinator.setPlaying(isPlaying)
+        context.coordinator.setPlaying(isPlaying, held: isHeld)
     }
 
     static func dismantleUIView(_ view: PlayerLayerView, coordinator: Coordinator) {
@@ -43,6 +45,7 @@ struct LoopingVideoView: UIViewRepresentable {
         private var frameTask: Task<Void, Never>?
         var onFrame: ((UIImage) -> Void)?
         private var isPlaying = false
+        private var isHeld = false
         private let isReady: Binding<Bool>
 
         init(isReady: Binding<Bool>) { self.isReady = isReady }
@@ -64,18 +67,20 @@ struct LoopingVideoView: UIViewRepresentable {
                     self?.captureFrame()
                 }
             }
-            if isPlaying { player.play() }
+            if isPlaying, !isHeld { player.play() }
         }
 
-        func setPlaying(_ playing: Bool) {
-            guard playing != isPlaying else { return }
+        func setPlaying(_ playing: Bool, held: Bool) {
+            let screenChanged = playing != isPlaying
             isPlaying = playing
-            if playing {
-                player?.seek(to: .zero)
-                player?.play()
-            } else {
-                player?.pause()
+            isHeld = held
+            guard playing else {
+                if screenChanged { player?.pause() }
+                return
             }
+            // Coming back on screen restarts from the top; a hold only pauses and resumes.
+            if screenChanged { player?.seek(to: .zero) }
+            if held { player?.pause() } else { player?.play() }
         }
 
         /// Grabs one frame per video, retrying briefly until the output has one. The

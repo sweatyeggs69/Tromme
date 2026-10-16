@@ -7,6 +7,8 @@ import SwiftUI
 struct AnimatedArtworkView: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
+    /// Freezes the clip in place while true (Now Playing passes the song being paused).
+    var isHeld = false
     /// Gets a small still of the video once it starts playing.
     var onFrame: ((UIImage) -> Void)?
 
@@ -20,7 +22,7 @@ struct AnimatedArtworkView: View {
     var body: some View {
         Group {
             if let videoURL {
-                LoopingVideoView(url: videoURL, isPlaying: isOnScreen && scenePhase == .active, isReady: $isReady, onFrame: onFrame)
+                LoopingVideoView(url: videoURL, isPlaying: isOnScreen && scenePhase == .active, isHeld: isHeld, isReady: $isReady, onFrame: onFrame)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
                     .opacity(isReady ? 1 : 0)
             }
