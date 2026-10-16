@@ -40,32 +40,37 @@ struct MarqueeText: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
             .overlay(alignment: .leading) {
+                // Only the scrolling copy is clipped and edge-faded. The plain title has no clip,
+                // like the artist line, so nothing trails behind it while the layout slides.
                 if isScrolling {
-                    TimelineView(.animation) { context in
-                        HStack(spacing: gap) {
-                            Text(text)
-                            // Trailing copy that makes the loop seamless.
-                            Text(text)
+                    Color.clear
+                        .overlay(alignment: .leading) {
+                            TimelineView(.animation) { context in
+                                HStack(spacing: gap) {
+                                    Text(text)
+                                    // Trailing copy that makes the loop seamless.
+                                    Text(text)
+                                }
+                                .font(font)
+                                .foregroundStyle(color)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .offset(x: offset(at: context.date))
+                            }
                         }
-                        .font(font)
-                        .foregroundStyle(color)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .offset(x: offset(at: context.date))
-                    }
+                        .clipped()
+                        .mask {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.92),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        }
                 }
             }
-        .clipped()
-        .mask {
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: isScrolling ? 0.92 : 1),
-                    .init(color: .black.opacity(isScrolling ? 0 : 1), location: 1)
-                ],
-                startPoint: .leading, endPoint: .trailing
-            )
-        }
         .background(alignment: .leading) {
             // Natural width of the text, for the overflow check.
             Text(text)
