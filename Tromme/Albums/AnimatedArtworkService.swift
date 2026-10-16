@@ -7,11 +7,24 @@ enum AnimatedArtworkService {
         let url_tall: String?
     }
 
+    /// Whether audio has buffered enough for artwork to start loading. Set by the player.
+    @MainActor static var isAudioBuffered: () -> Bool = { true }
+
+    /// Holds artwork back until the current track is buffered, so clips never compete
+    /// with the audio for a weak connection. Returns at once when nothing is playing.
+    @MainActor private static func waitForAudioBuffer() async {
+        while !isAudioBuffered(), !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
     /// The album's animated artwork, or nil when it has none, the feature is off, or
     /// the lookup fails (network error, timeout, non-200). Failures stay silent: the
     /// static artwork simply stays.
     static func artwork(artist: String, album: String) async -> AnimatedArtwork? {
         guard AnimatedArtworkEntitlement.isEnabled else { return nil }
+        await waitForAudioBuffer()
+        guard !Task.isCancelled else { return nil }
         var components = URLComponents(string: "https://amaa.tromme.app/api/v1/artwork/search")
         components?.queryItems = [
             URLQueryItem(name: "artist", value: artist),

@@ -239,6 +239,7 @@ final class AudioPlayerService: Sendable {
         observeAudioInterruptions()
         observeNetworkChanges()
         refreshAirPlayConnectionState()
+        AnimatedArtworkService.isAudioBuffered = { [weak self] in self?.isReadyForArtworkFetch ?? true }
     }
 
     @MainActor deinit {
@@ -476,6 +477,19 @@ final class AudioPlayerService: Sendable {
             return streamTimeOffset + playerTime
         }
         return currentTime
+    }
+
+    /// True when nothing is streaming or the current track is buffered (fully, or 90 s
+    /// ahead), so animated artwork can load without competing with the audio.
+    var isReadyForArtworkFetch: Bool {
+        guard let item = player?.currentItem else { return true }
+        if (item.asset as? AVURLAsset)?.url.isFileURL == true || isCurrentItemFullyBuffered { return true }
+        let now = player?.currentTime().seconds ?? 0
+        let ahead = item.loadedTimeRanges.reduce(0.0) { result, value in
+            let range = value.timeRangeValue
+            return max(result, CMTimeAdd(range.start, range.duration).seconds - now)
+        }
+        return ahead.isFinite && ahead >= 90
     }
 
     var isCurrentItemFullyBuffered: Bool {
