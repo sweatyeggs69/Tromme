@@ -247,7 +247,8 @@ final class LyricsService {
         let line = lines[index]
         guard index > 0, !line.isBreak, !line.words.isEmpty else { return line.time }
         let previous = lines[index - 1]
-        guard let previousEnd = previous.lastWordEnd else { return line.time }
+        // A music break row starts where the previous line ends, so the gap is all silence.
+        guard let previousEnd = previous.isBreak ? previous.time : previous.lastWordEnd else { return line.time }
         let lead = min(Self.focusLeadTime, max(0, line.time - previousEnd))
         return max(line.time - lead, previous.time)
     }
