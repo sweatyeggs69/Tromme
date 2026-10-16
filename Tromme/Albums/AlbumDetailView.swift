@@ -661,7 +661,7 @@ struct AlbumDetailView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let usesSideBySideHeader = UIDevice.current.userInterfaceIdiom == .pad
+            let usesSideBySideHeader = UIDevice.current.userInterfaceIdiom == .pad || (UIDevice.current.userInterfaceIdiom == .phone && horizontalSizeClass == .regular)
 
             ZStack {
                 artworkColor
