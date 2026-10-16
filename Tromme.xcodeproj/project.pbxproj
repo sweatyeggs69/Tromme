@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0EEC07443048CA9B00ACE377 /* PlusWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07453048CA9B00ACE377 /* PlusWelcomeView.swift */; };
 		0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */; };
 		968A04EA82EB775A94CD755D /* NowPlayingAnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */; };
 		D26938AB2FE71854B2E1E20D /* AnimatedArtworkClipDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */; };
@@ -188,6 +189,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0EEC07453048CA9B00ACE377 /* PlusWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusWelcomeView.swift; sourceTree = "<group>"; };
 		0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusPaywallView.swift; sourceTree = "<group>"; };
 		92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingAnimatedArtwork.swift; sourceTree = "<group>"; };
 		019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkClipDownloader.swift; sourceTree = "<group>"; };
@@ -629,6 +631,7 @@
 				0E723B1E304880390059BF86 /* AppIconPickerView.swift */,
 				0EEC07403048CA9B00ACE377 /* PlusStore.swift */,
 				0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */,
+				0EEC07453048CA9B00ACE377 /* PlusWelcomeView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -911,6 +914,7 @@
 				17833B3C843EDF0C4DED9DD4 /* TimelineOutbox.swift in Sources */,
 				0EEC07413048CA9B00ACE377 /* PlusStore.swift in Sources */,
 				0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */,
+				0EEC07443048CA9B00ACE377 /* PlusWelcomeView.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,

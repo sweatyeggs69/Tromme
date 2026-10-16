@@ -39,10 +39,8 @@ struct ContentView: View {
                 mainTabView
             }
         }
-        .alert("Tromme Plus", isPresented: plusNoticeBinding) {
-            Button("Sounds Good") { hasSeenPlusNotice = true }
-        } message: {
-            Text("Thank you so much for purchasing Tromme, it seriously means the world to me. Tromme now has a subscription option to support ongoing development and hosting the animated artwork service. Because you bought the Premium Icon Pack, you have Tromme Plus for free.")
+        .sheet(isPresented: plusNoticeBinding) {
+            PlusWelcomeView()
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
