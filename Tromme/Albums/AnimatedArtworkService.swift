@@ -10,12 +10,10 @@ enum AnimatedArtworkService {
     /// Whether audio has buffered enough for artwork to start loading. Set by the player.
     @MainActor static var isAudioBuffered: () -> Bool = { true }
 
-    /// Holds artwork back until the current track is fully buffered, so clips never
-    /// compete with the audio for a weak connection. Gives up waiting after 30 seconds,
-    /// and returns at once when nothing is playing.
+    /// Holds artwork back until 30 s of the current track is buffered, so clips never
+    /// compete with the audio for a weak connection. Returns at once when nothing is playing.
     @MainActor private static func waitForAudioBuffer() async {
-        let deadline = ContinuousClock.now + .seconds(30)
-        while !isAudioBuffered(), ContinuousClock.now < deadline, !Task.isCancelled {
+        while !isAudioBuffered(), !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
         }
     }
