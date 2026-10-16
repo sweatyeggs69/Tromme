@@ -85,6 +85,9 @@ final class LyricsService {
             result = fetched.lyrics
         } else {
             result = nil
+            #if DEBUG
+            print("[Lyrics] no lyrics resolved for \(track.title) / \(trackArtist) (ratingKey \(track.ratingKey))")
+            #endif
         }
 
         guard activeRequestID == requestID else { return }
@@ -96,7 +99,7 @@ final class LyricsService {
     /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
     private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         if let first = await resolve(track: track, artist: artist, blocked: blocked) { return first }
-        try? await Task.sleep(for: .milliseconds(500))
+        try? await Task.sleep(for: .milliseconds(1500))
         return await resolve(track: track, artist: artist, blocked: blocked, lrcRedDeadline: 10, lrclibDeadline: 8)
     }
 
@@ -221,6 +224,9 @@ final class LyricsService {
                let http = response as? HTTPURLResponse {
                 if http.statusCode == 200 { return data }
                 if http.statusCode == 404 { return nil }
+                #if DEBUG
+                print("[Lyrics] \(http.statusCode) from \(url.host() ?? "?"), attempt \(attempt + 1)")
+                #endif
             }
             if attempt < retries {
                 try? await Task.sleep(for: .milliseconds(300 * (attempt + 1)))
