@@ -54,6 +54,11 @@ struct MarqueeText: View {
                         }
                         .offset(x: offset(at: context.date))
                 }
+                // Switching between scrolling and truncating (e.g. opening lyrics or the queue)
+                // happens inside the parent's layout animation. Interpolating the jump from the
+                // natural-width, offset text to the truncated one looks glitchy, so it snaps
+                // while the surrounding layout still animates.
+                .transaction(value: isScrolling) { $0.animation = nil }
             }
         .clipped()
         .mask {
@@ -65,6 +70,7 @@ struct MarqueeText: View {
                 ],
                 startPoint: .leading, endPoint: .trailing
             )
+            .transaction(value: isScrolling) { $0.animation = nil }
         }
         .background(alignment: .leading) {
             // Natural width of the text, for the overflow check.
