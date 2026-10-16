@@ -18,67 +18,56 @@ struct MarqueeText: View {
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
     private var isScrolling: Bool { scrolls && overflows }
 
-    // One stable view for both modes (a truncating base with the marquee as an overlay), so
-    // switching modes never swaps the view and it slides with the layout like the artist text.
+    // One Text serves both modes: it truncates in its container, or (when scrolling) takes its
+    // natural width and is offset by the clock. Nothing is swapped or faded between modes, so
+    // the title slides with the layout exactly like the artist text.
     var body: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .opacity(isScrolling ? 0 : 1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(alignment: .leading) {
-                // Natural width of the text, for the overflow check.
-                Text(text)
-                    .font(font)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .hidden()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
-                        if textWidth != $0 { textWidth = $0 }
-                    }
-            }
-            .overlay(alignment: .leading) {
-                if isScrolling {
-                    // Offset comes from the clock, not an animated state, so animations from
-                    // parent state changes can't interrupt or retarget the scroll.
-                    TimelineView(.animation) { context in
-                        HStack(spacing: gap) {
-                            label
-                            label
-                        }
-                        .offset(x: offset(at: context.date))
+        TimelineView(.animation(paused: !isScrolling)) { context in
+            Text(text)
+                .font(font)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: isScrolling, vertical: false)
+                .overlay(alignment: .leading) {
+                    // Trailing copy that makes the loop seamless; never animated in or out.
+                    Text(text)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .lineLimit(1)
                         .fixedSize()
-                    }
+                        .offset(x: textWidth + gap)
+                        .opacity(isScrolling ? 1 : 0)
+                        .transaction { $0.animation = nil }
                 }
-            }
-            .clipped()
-            .mask {
-                if isScrolling {
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.92),
-                            .init(color: .clear, location: 1)
-                        ],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                } else {
-                    Color.black
+                .offset(x: offset(at: context.date))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+        .clipped()
+        .mask {
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: isScrolling ? 0.92 : 1),
+                    .init(color: .black.opacity(isScrolling ? 0 : 1), location: 1)
+                ],
+                startPoint: .leading, endPoint: .trailing
+            )
+        }
+        .background(alignment: .leading) {
+            // Natural width of the text, for the overflow check.
+            Text(text)
+                .font(font)
+                .lineLimit(1)
+                .fixedSize()
+                .hidden()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                    if textWidth != $0 { textWidth = $0 }
                 }
-            }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
-            .onChange(of: text) { start = Date() }
-            .onChange(of: isScrolling) { start = Date() }
-    }
-
-    private var label: some View {
-        Text(text)
-            .font(font)
-            .foregroundStyle(color)
-            .lineLimit(1)
-            .fixedSize()
+        }
+        .onChange(of: text) { start = Date() }
+        .onChange(of: isScrolling) { start = Date() }
     }
 
     private func offset(at date: Date) -> CGFloat {
