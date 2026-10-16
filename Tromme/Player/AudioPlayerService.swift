@@ -479,7 +479,7 @@ final class AudioPlayerService: Sendable {
         return currentTime
     }
 
-    /// True when nothing is streaming or the current track is buffered (fully, or 90 s
+    /// True when nothing is streaming or the current track is buffered (fully, or 30 s
     /// ahead), so animated artwork can load without competing with the audio.
     var isReadyForArtworkFetch: Bool {
         guard let item = player?.currentItem else { return true }
@@ -489,7 +489,7 @@ final class AudioPlayerService: Sendable {
             let range = value.timeRangeValue
             return max(result, CMTimeAdd(range.start, range.duration).seconds - now)
         }
-        return ahead.isFinite && ahead >= 90
+        return ahead.isFinite && ahead >= 30
     }
 
     var isCurrentItemFullyBuffered: Bool {
