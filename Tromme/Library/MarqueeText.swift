@@ -23,41 +23,35 @@ struct MarqueeText: View {
     /// it separately snaps the mode while the title keeps sliding with the layout.
     @State private var isScrolling = false
 
-    // One Text serves both modes: it truncates in its container, or (when scrolling) takes its
-    // natural width and is offset by the clock. Nothing is swapped or faded between modes, so
-    // the title slides with the layout exactly like the artist text.
-    //
-    // The visible text sits in an overlay so it never affects layout. A hidden, always-truncating
-    // copy sizes the view instead; otherwise switching to the natural width while scrolling can
-    // change the measured container width, which flips scrolling back off, and so on forever
-    // (a frozen UI for titles right at the fit threshold).
+    // When it fits (or scrolling is off) the title is a plain truncating Text laid out exactly like
+    // the artist line, so it slides with the layout the same way. Only while scrolling is that
+    // Text hidden and a natural-width copy drawn on top, offset by the clock. The copy sits in an
+    // overlay so it never affects layout: if it did, its wider size could change the measured
+    // container width, flip scrolling off, and loop forever (a frozen UI for titles right at
+    // the fit threshold). The two are swapped in a non-animated update (see `isScrolling`).
     var body: some View {
         Text(text)
             .font(font)
+            .foregroundStyle(color)
             .lineLimit(1)
-            .hidden()
+            .truncationMode(.tail)
+            .opacity(isScrolling ? 0 : 1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
             .overlay(alignment: .leading) {
-                TimelineView(.animation(paused: !isScrolling)) { context in
-                    Text(text)
+                if isScrolling {
+                    TimelineView(.animation) { context in
+                        HStack(spacing: gap) {
+                            Text(text)
+                            // Trailing copy that makes the loop seamless.
+                            Text(text)
+                        }
                         .font(font)
                         .foregroundStyle(color)
                         .lineLimit(1)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: isScrolling, vertical: false)
-                        .overlay(alignment: .leading) {
-                            // Trailing copy that makes the loop seamless; never animated in or out.
-                            Text(text)
-                                .font(font)
-                                .foregroundStyle(color)
-                                .lineLimit(1)
-                                .fixedSize()
-                                .offset(x: textWidth + gap)
-                                .opacity(isScrolling ? 1 : 0)
-                                .transaction { $0.animation = nil }
-                        }
+                        .fixedSize()
                         .offset(x: offset(at: context.date))
+                    }
                 }
             }
         .clipped()
