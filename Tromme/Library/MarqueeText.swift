@@ -17,11 +17,10 @@ struct MarqueeText: View {
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
     private var wantsScrolling: Bool { scrolls && overflows }
-    /// Follows `wantsScrolling`, but is switched in its own non-animated update (and turned on
-    /// only after a short delay, see the `.task` below). The switch
-    /// usually happens inside the parent's layout animation (opening lyrics or the queue), and
-    /// interpolating natural-width scrolling text into truncated text jumps around; updating
-    /// it separately snaps the mode while the title keeps sliding with the layout.
+    /// Follows `wantsScrolling`, but is switched in its own crossfade animation (and turned on
+    /// only after a short delay, see the `.task` below). The need to switch usually comes from
+    /// the parent's layout animation (opening lyrics or the queue); switching separately keeps
+    /// the mode change from being interpolated as part of that slide.
     @State private var isScrolling = false
 
     // When it fits (or scrolling is off) the title is a plain truncating Text laid out exactly like
@@ -29,7 +28,8 @@ struct MarqueeText: View {
     // Text hidden and a natural-width copy drawn on top, offset by the clock. The copy sits in an
     // overlay so it never affects layout: if it did, its wider size could change the measured
     // container width, flip scrolling off, and loop forever (a frozen UI for titles right at
-    // the fit threshold). The two are swapped in a non-animated update (see `isScrolling`).
+    // the fit threshold). The scrolling copy is always present (just transparent when unused) so
+    // it follows layout slides; the two crossfade when the mode changes (see `isScrolling`).
     var body: some View {
         Text(text)
             .font(font)
@@ -42,35 +42,37 @@ struct MarqueeText: View {
             .overlay(alignment: .leading) {
                 // Only the scrolling copy is clipped and edge-faded. The plain title has no clip,
                 // like the artist line, so nothing trails behind it while the layout slides.
-                if isScrolling {
-                    Color.clear
-                        .overlay(alignment: .leading) {
-                            TimelineView(.animation) { context in
-                                HStack(spacing: gap) {
-                                    Text(text)
-                                    // Trailing copy that makes the loop seamless.
-                                    Text(text)
-                                }
-                                .font(font)
-                                .foregroundStyle(color)
-                                .lineLimit(1)
-                                .fixedSize()
-                                .offset(x: offset(at: context.date))
+                Color.clear
+                    .overlay(alignment: .leading) {
+                        TimelineView(.animation(paused: !isScrolling)) { context in
+                            HStack(spacing: gap) {
+                                Text(text)
+                                // Trailing copy that makes the loop seamless.
+                                Text(text)
                             }
+                            .font(font)
+                            .foregroundStyle(color)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .offset(x: offset(at: context.date))
                         }
-                        .clipped()
-                        .mask {
-                            LinearGradient(
-                                stops: [
-                                    .init(color: .black, location: 0),
-                                    .init(color: .black, location: 0.92),
-                                    .init(color: .clear, location: 1)
-                                ],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        }
-                }
+                    }
+                    .clipped()
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .black, location: 0),
+                                .init(color: .black, location: 0.92),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                    }
+                    .opacity(isScrolling ? 1 : 0)
             }
+            // Resolve the title's geometry as one unit, so it slides exactly in step with the
+            // artist line instead of its inner text animating separately from its frame.
+            .geometryGroup()
         .background(alignment: .leading) {
             // Natural width of the text, for the overflow check.
             Text(text)
@@ -89,22 +91,21 @@ struct MarqueeText: View {
             // Scrolling starts only once the layout has settled (e.g. after lyrics or the queue
             // close), since the scrolling copy can't follow a slide that's already under way and
             // would flash to its final spot. Stopping is immediate. The marquee holds still for
-            // its first few seconds anyway, so the delay isn't visible.
+            // its first few seconds anyway, so the delay isn't visible. The swap crossfades on its
+            // own animation, separate from any layout slide.
             if wants {
                 try? await Task.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
             }
-            var snap = Transaction()
-            snap.disablesAnimations = true
-            withTransaction(snap) {
+            // Starting resets the clock; stopping leaves the copy where it is while it fades out.
+            if wants { start = Date() }
+            withAnimation(.easeInOut(duration: 0.35)) {
                 isScrolling = wants
-                start = Date()
             }
         }
     }
 
     private func offset(at date: Date) -> CGFloat {
-        guard isScrolling else { return 0 }
         let distance = textWidth + gap
         let scroll = Double(distance / speed)
         let pauseSeconds = 4.0
