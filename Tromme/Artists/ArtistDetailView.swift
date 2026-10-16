@@ -21,6 +21,7 @@ struct ArtistDetailView: View {
     @State private var showsBioSheet = false
     @State private var showsChangePhotoSheet = false
     @State private var viewWidth: CGFloat = 393
+    @State private var viewHeight: CGFloat = 852
     /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
     @State private var scrollOffset: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
@@ -87,8 +88,17 @@ struct ArtistDetailView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
+    /// iPad landscape: photo, name and controls pinned on the left, content scrolling on the right.
+    private var isWideLayout: Bool {
+        horizontalSizeClass == .regular && viewWidth > viewHeight
+    }
+
+    private var sidePanelWidth: CGFloat {
+        min(viewWidth * 0.38, 460)
+    }
+
     private var albumGridColumns: [GridItem] {
-        let count = horizontalSizeClass == .regular ? 4 : 2
+        let count = isWideLayout ? 3 : (horizontalSizeClass == .regular ? 4 : 2)
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
     }
 
@@ -261,32 +271,26 @@ struct ArtistDetailView: View {
                 .listRowBackground(backdropColor)
     }
 
-    var body: some View {
+    @ViewBuilder
+    private func contentList(showsHero: Bool) -> some View {
         List {
-            ArtistHeroHeaderView(
-                artist: displayArtist,
-                heroHeight: heroHeight,
-                backdropColor: backdropColor,
-                isHidden: heroIsHidden,
-                hasBio: !(displayArtist.summary ?? "").isEmpty,
-                onInfo: { showsBioSheet = true },
-                onChangePhoto: previewData == nil ? { showsChangePhotoSheet = true } : nil,
-                onPlay: {
-                    guard !allTracks.isEmpty else { return }
-                    player.play(tracks: allTracks)
-                },
-                onShuffle: {
-                    guard !allTracks.isEmpty else { return }
-                    player.play(tracks: allTracks)
-                    if !player.isShuffled {
-                        player.toggleShuffle()
-                    }
-                }
-            )
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-                // Clear so the photo drawn behind the list shows through.
-                .listRowBackground(Color.clear)
+            if showsHero {
+                ArtistHeroHeaderView(
+                    artist: displayArtist,
+                    heroHeight: heroHeight,
+                    backdropColor: backdropColor,
+                    isHidden: heroIsHidden,
+                    hasBio: !(displayArtist.summary ?? "").isEmpty,
+                    onInfo: { showsBioSheet = true },
+                    onChangePhoto: previewData == nil ? { showsChangePhotoSheet = true } : nil,
+                    onPlay: playAll,
+                    onShuffle: shuffleAll
+                )
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    // Clear so the photo drawn behind the list shows through.
+                    .listRowBackground(Color.clear)
+            }
 
             if artistAlbums.count > 1, let latestAlbum = artistAlbums.first {
                 Button {
@@ -375,6 +379,70 @@ struct ArtistDetailView: View {
             }
 
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background {
+            ZStack(alignment: .top) {
+                backdropColor
+                if showsHero {
+                    // The photo lives behind the list instead of inside a row, so it is driven
+                    // by the scroll view's own offset and never lags or gets recycled with a cell.
+                    ArtistHeroPhotoView(
+                        artist: displayArtist,
+                        heroHeight: heroHeight,
+                        backdropColor: backdropColor,
+                        scrollOffset: scrollOffset,
+                        isHidden: $heroIsHidden
+                    )
+                }
+            }
+            .ignoresSafeArea()
+        }
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top
+        } action: { _, newValue in
+            scrollOffset = newValue
+        }
+        .scrollEdgeEffectHidden(showsHero, for: .top)
+        .ignoresSafeArea(edges: showsHero ? .top : [])
+    }
+
+    private func playAll() {
+        guard !allTracks.isEmpty else { return }
+        player.play(tracks: allTracks)
+    }
+
+    private func shuffleAll() {
+        guard !allTracks.isEmpty else { return }
+        player.play(tracks: allTracks)
+        if !player.isShuffled {
+            player.toggleShuffle()
+        }
+    }
+
+    var body: some View {
+        Group {
+            if isWideLayout {
+                HStack(spacing: 0) {
+                    ArtistSidePanelView(
+                        artist: displayArtist,
+                        width: sidePanelWidth,
+                        backdropColor: backdropColor,
+                        hasBio: !(displayArtist.summary ?? "").isEmpty,
+                        onInfo: { showsBioSheet = true },
+                        onChangePhoto: previewData == nil ? { showsChangePhotoSheet = true } : nil,
+                        onPlay: playAll,
+                        onShuffle: shuffleAll
+                    )
+                    .frame(width: sidePanelWidth + AppStyle.Spacing.pageHorizontal * 2)
+                    .background(backdropColor.ignoresSafeArea())
+
+                    contentList(showsHero: false)
+                }
+            } else {
+                contentList(showsHero: true)
+            }
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedAlbum) { album in
@@ -392,38 +460,18 @@ struct ArtistDetailView: View {
         .navigationDestination(isPresented: $showsAllTracks) {
             ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background {
-            ZStack(alignment: .top) {
-                backdropColor
-                // The photo lives behind the list instead of inside a row, so it is driven
-                // by the scroll view's own offset and never lags or gets recycled with a cell.
-                ArtistHeroPhotoView(
-                    artist: displayArtist,
-                    heroHeight: heroHeight,
-                    backdropColor: backdropColor,
-                    scrollOffset: scrollOffset,
-                    isHidden: $heroIsHidden
-                )
-            }
-            .ignoresSafeArea()
-        }
-        .onScrollGeometryChange(for: CGFloat.self) { geo in
-            geo.contentOffset.y + geo.contentInsets.top
-        } action: { _, newValue in
-            scrollOffset = newValue
-        }
         // Artist pages always use white text; the backdrop is kept dark enough for it.
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        .scrollEdgeEffectHidden(true, for: .top)
-        .ignoresSafeArea(edges: .top)
         // Measure the full container width including safe areas, so the square hero spans the screen.
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            (proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing).rounded()
-        } action: { newWidth in
-            if abs(newWidth - viewWidth) > 1 { viewWidth = newWidth }
+        .onGeometryChange(for: CGSize.self) { proxy in
+            CGSize(
+                width: (proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing).rounded(),
+                height: proxy.size.height.rounded()
+            )
+        } action: { newSize in
+            if abs(newSize.width - viewWidth) > 1 { viewWidth = newSize.width }
+            if abs(newSize.height - viewHeight) > 1 { viewHeight = newSize.height }
         }
         .overlay {
             if isAwaitingBackdrop {

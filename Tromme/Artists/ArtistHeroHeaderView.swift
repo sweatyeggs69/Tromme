@@ -16,6 +16,16 @@ struct ArtistHeroHeaderView: View {
             .changeArtworkOnLongPress(isEnabled: onChangePhoto != nil) { onChangePhoto?() }
     }
 
+    private var controls: some View {
+        ArtistHeroControlsView(
+            backdropColor: backdropColor,
+            hasBio: hasBio,
+            onInfo: onInfo,
+            onPlay: onPlay,
+            onShuffle: onShuffle
+        )
+    }
+
     @ViewBuilder
     private var content: some View {
         if isHidden {
@@ -47,49 +57,5 @@ struct ArtistHeroHeaderView: View {
             .frame(maxWidth: .infinity)
             .frame(height: heroHeight, alignment: .bottom)
         }
-    }
-
-    private var controls: some View {
-        HStack(spacing: 20) {
-            Button {
-                onInfo?()
-            } label: {
-                Image(systemName: "info")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 52, height: 52)
-                    .background(Color.white.opacity(0.15), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .opacity(hasBio ? 1 : 0.4)
-            .disabled(!hasBio)
-            .accessibilityLabel("About")
-
-            Button {
-                onPlay?()
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 32, weight: .semibold))
-                    .foregroundStyle(backdropColor)
-                    .frame(width: 62, height: 62)
-                    .background(Color.white, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Play")
-
-            Button {
-                onShuffle?()
-            } label: {
-                Image(systemName: "shuffle")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 52, height: 52)
-                    .background(Color.white.opacity(0.15), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Shuffle")
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, 4)
     }
 }
