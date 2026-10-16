@@ -3,6 +3,7 @@ import SwiftUI
 /// One-time sheet telling Premium Icon Pack owners they have Tromme Plus for free.
 struct PlusWelcomeView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var showPaywall = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -31,18 +32,31 @@ struct PlusWelcomeView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                dismiss()
-            } label: {
-                Text("Sounds Good")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
+            VStack(spacing: 12) {
+                Button {
+                    showPaywall = true
+                } label: {
+                    Label("Support Tromme", systemImage: "heart.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Sounds Good")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
         }
         .padding(24)
         .interactiveDismissDisabled()
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
     }
 
     private func featureRow(symbol: String, title: String, detail: String) -> some View {
