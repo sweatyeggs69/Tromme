@@ -75,7 +75,7 @@ struct NowPlayingView: View {
 
     /// iPhone Duo while open: regular width on a phone, shown with the iPad landscape layout.
     private var isDuoOpen: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone && horizontalSizeClass == .regular
+        UIDevice.current.userInterfaceIdiom == .phone && (horizontalSizeClass == .regular || min(geoSize.width, geoSize.height) >= 500)
     }
 
     // MARK: - Body
