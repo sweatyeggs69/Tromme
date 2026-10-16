@@ -76,7 +76,7 @@ final class LyricsService {
         if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
            cached.value.hasSynced, Self.isAllowed(cached.value, blocked: blocked) {
             result = cached.value
-        } else if let fetched = await Self.resolve(track: track, artist: trackArtist, blocked: blocked) {
+        } else if let fetched = await Self.resolveRetryingOnce(track: track, artist: trackArtist, blocked: blocked) {
             // A fallback reached only because lrc.red timed out isn't cached, so the
             // next play can still find the word-synced version.
             if fetched.lyrics.hasSynced, fetched.isFinal {
@@ -92,18 +92,28 @@ final class LyricsService {
         isLoading = false
     }
 
+    /// An empty result right at track start is often a slow or not-yet-ready connection, not a
+    /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
+    private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
+        if let first = await resolve(track: track, artist: artist, blocked: blocked) { return first }
+        try? await Task.sleep(for: .milliseconds(500))
+        return await resolve(track: track, artist: artist, blocked: blocked, lrcRedDeadline: 10, lrclibDeadline: 8)
+    }
+
     // Preference order: lrc.red (word-synced, then line-synced), then LRCLIB (synced, then
     // plain). Both sources are queried
     // at once so a miss on lrc.red doesn't add its wait on top of LRCLIB's. Candidates the user
     // blocked are skipped, so the next match in this order is used instead.
-    private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
+    private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>,
+                                          lrcRedDeadline: TimeInterval = lrcRedTimeout,
+                                          lrclibDeadline: TimeInterval = sourceTimeout) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         let title = track.title
         let seconds = track.duration.map { Double($0) / 1000 }
 
-        async let lrcRed = withDeadline(lrcRedTimeout) {
+        async let lrcRed = withDeadline(lrcRedDeadline) {
             await LrcRedLyricsProvider.timedLyrics(title: title, artist: artist, duration: seconds)
         }
-        async let lrclib = withDeadline(sourceTimeout) {
+        async let lrclib = withDeadline(lrclibDeadline) {
             await resolveLRCLIB(title: title, artist: artist, seconds: seconds)
         }
 
