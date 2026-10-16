@@ -10,6 +10,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let startPanel: NowPlayingStartPanel
     var onNavigate: ((PlexMetadata) -> Void)?
@@ -72,9 +73,57 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
+    /// iPhone Duo while open: regular width on a phone, shown with the iPad landscape layout.
+    private var isDuoOpen: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone && horizontalSizeClass == .regular
+    }
+
     // MARK: - Body
 
     var body: some View {
+        if isDuoOpen {
+            // The Duo moves Lyrics, AirPlay and Queue out of the player into the navigation bar.
+            NavigationStack {
+                playerContent
+                    .toolbar { duoToolbar }
+                    .toolbarBackground(.hidden, for: .navigationBar)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        } else {
+            playerContent
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var duoToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            AirPlayButton(
+                tintOpacity: CGFloat(controlTintOpacity),
+                activeTintOpacity: CGFloat(actionIconActiveOpacity)
+            )
+            .frame(width: 28, height: 28)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                toggleLyricsPanel()
+            } label: {
+                Label("Lyrics", systemImage: "quote.bubble")
+                    .symbolVariant(showLyrics ? .fill : .none)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                toggleQueuePanel()
+            } label: {
+                Label("Queue", systemImage: "list.bullet.circle")
+                    .symbolVariant(showQueue ? .fill : .none)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+        }
+    }
+
+    private var playerContent: some View {
         GeometryReader { geo in
             let width = geo.size.width > 100 ? geo.size.width : geoSize.width
             let height = geo.size.height > 100 ? geo.size.height : geoSize.height
@@ -82,7 +131,7 @@ struct NowPlayingView: View {
             let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && width > height
+            let isPadLandscape = isDuoOpen || (UIDevice.current.userInterfaceIdiom == .pad && width > height)
             let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && height > width
             let controlsContainerWidth = artworkSize
             let controlsHorizontalPadding: CGFloat = 0
@@ -98,7 +147,7 @@ struct NowPlayingView: View {
                 : bottomScreenPaddingWithoutSafeArea
             let landscapeBottomInsetPadding = bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
-            let landscapeBottomActionsHeight: CGFloat = bottomActionIconSize + iPadLandscapeBottomActionsExtraPadding
+            let landscapeBottomActionsHeight: CGFloat = isDuoOpen ? 0 : bottomActionIconSize + iPadLandscapeBottomActionsExtraPadding
             let landscapeMainHeight = max(
                 0.0,
                 height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
@@ -165,11 +214,13 @@ struct NowPlayingView: View {
                     .frame(height: landscapeMainHeight)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
 
-                    landscapeBottomActionsRow
-                        .fixedSize(horizontal: false, vertical: true)
-                        .layoutPriority(1)
-                        .padding(.horizontal, landscapeOuterHorizontalPadding)
-                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
+                    if !isDuoOpen {
+                        landscapeBottomActionsRow
+                            .fixedSize(horizontal: false, vertical: true)
+                            .layoutPriority(1)
+                            .padding(.horizontal, landscapeOuterHorizontalPadding)
+                            .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
+                    }
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
