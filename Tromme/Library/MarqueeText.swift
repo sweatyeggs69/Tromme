@@ -5,6 +5,8 @@ struct MarqueeText: View {
     let text: String
     var font: Font = .title3.bold()
     var color: Color = .white
+    /// When false the text truncates with an ellipsis instead of scrolling.
+    var scrolls: Bool = true
 
     private let gap: CGFloat = 40
     private let speed: CGFloat = 30
@@ -16,6 +18,19 @@ struct MarqueeText: View {
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
 
     var body: some View {
+        if scrolls {
+            marquee
+        } else {
+            Text(text)
+                .font(font)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var marquee: some View {
         // Hidden text gives the row its height and the container its width.
         Text(text)
             .font(font)
