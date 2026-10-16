@@ -5,6 +5,8 @@ struct LyricsScrollView: View {
     let lyricsService: LyricsService
     /// Larger lyric text for the wide iPad landscape layout.
     var isPadLandscape = false
+    /// Slightly smaller text for the open iPhone Duo.
+    var isDuo = false
 
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
 
@@ -21,7 +23,7 @@ struct LyricsScrollView: View {
     private static let edgeFadeHeight: CGFloat = 80
 
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var lineFontSize: CGFloat { isPadLandscape ? 56 : (isPad ? 44 : 32) }
+    private var lineFontSize: CGFloat { isPadLandscape ? (isDuo ? 46 : 56) : (isPad ? 44 : 32) }
 
     /// The active line is derived from the extrapolated clock and re-checked
     /// often, otherwise closely timed lines would switch up to half a second
@@ -146,7 +148,7 @@ struct LyricsScrollView: View {
                         Color.clear.frame(height: Self.edgeFadeHeight)
 
                         Text(plainLyrics)
-                            .font(isPadLandscape ? .system(size: 40, weight: .semibold) : (isPad ? .largeTitle.weight(.semibold) : .title2.weight(.semibold)))
+                            .font(isPadLandscape ? .system(size: isDuo ? 32 : 40, weight: .semibold) : (isPad ? .largeTitle.weight(.semibold) : .title2.weight(.semibold)))
                             .foregroundStyle(.white.opacity(0.85))
                             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
                             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)

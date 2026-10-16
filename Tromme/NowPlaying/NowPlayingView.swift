@@ -364,7 +364,7 @@ struct NowPlayingView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
                     } else if lyricsService.hasLyrics {
-                        LyricsScrollView(lyricsService: lyricsService, isPadLandscape: isPadLandscape)
+                        LyricsScrollView(lyricsService: lyricsService, isPadLandscape: isPadLandscape, isDuo: isDuoOpen)
                             .mask(
                                 VStack(spacing: 0) {
                                     LinearGradient(colors: [.clear, .white], startPoint: .top, endPoint: .bottom)
