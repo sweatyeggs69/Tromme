@@ -23,6 +23,9 @@ struct MarqueeText: View {
     /// opening lyrics or the queue.
     @State private var showsPlain = true
     @State private var showsScroller = false
+    /// Whether the scroller's trailing edge is softly faded. Off, the edge is cut hard where the
+    /// plain title's ellipsis sits, so the ellipsis crossfades into the edge fade on start.
+    @State private var fadesEdge = false
     /// Set while the scroller glides back to its start before handing over to the plain title.
     @State private var returnOffset: CGFloat?
 
@@ -36,7 +39,8 @@ struct MarqueeText: View {
     // present (transparent when unused) so it follows layout slides.
     //
     // At the switch both show the same text in the same place. Starting, the scroller appears fully
-    // opaque and the plain title fades out beneath it, so nothing dims; stopping swaps at once.
+    // opaque with its trailing edge cut away, and the plain title's ellipsis there crossfades into
+    // the scroller's edge fade, so nothing else dims. Stopping swaps at once.
     var body: some View {
         Text(text)
             .font(font)
@@ -66,14 +70,26 @@ struct MarqueeText: View {
                     }
                     .clipped()
                     .mask {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .black, location: 0),
-                                .init(color: .black, location: 0.92),
-                                .init(color: .clear, location: 1)
-                            ],
-                            startPoint: .leading, endPoint: .trailing
-                        )
+                        ZStack {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.92),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                            .opacity(fadesEdge ? 1 : 0)
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.92),
+                                    .init(color: .clear, location: 0.92)
+                                ],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                            .opacity(fadesEdge ? 0 : 1)
+                        }
                     }
                     .opacity(showsScroller ? 1 : 0)
             }
@@ -111,7 +127,11 @@ struct MarqueeText: View {
         start = Date()
         returnOffset = nil
         showsScroller = true
-        withAnimation(.easeOut(duration: 0.3)) { showsPlain = false }
+        fadesEdge = false
+        withAnimation(.easeInOut(duration: 0.35)) {
+            showsPlain = false
+            fadesEdge = true
+        }
     }
 
     /// Glides the scroller back to its start (or on to the trailing copy, if that's closer, which
@@ -133,6 +153,7 @@ struct MarqueeText: View {
         // Swapped at once: fading would show the scroller's edge fade over the truncated title.
         showsPlain = true
         showsScroller = false
+        fadesEdge = false
         returnOffset = nil
     }
 
