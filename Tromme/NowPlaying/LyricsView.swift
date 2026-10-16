@@ -29,6 +29,10 @@ struct LyricsScrollView: View {
     /// often, otherwise closely timed lines would switch up to half a second
     /// late and then have to catch up.
     @State private var currentIndex = 0
+    /// False until `onAppear` has positioned the view on the real active line. Until
+    /// then no line is active, so a freshly shown view (artwork to lyrics) doesn't
+    /// start with line 0 focused and animate it out while the real line animates in.
+    @State private var isPositioned = false
     /// The line the view last jumped to without animation, so the index change
     /// that jump causes doesn't also trigger an animated scroll to the same line.
     @State private var settledIndex: Int?
@@ -40,12 +44,13 @@ struct LyricsScrollView: View {
     /// Positions the view on the active line with no animation.
     private func jumpToActiveLine(proxy: ScrollViewProxy) {
         let index = lineIndex()
-        currentIndex = index
         settledIndex = index
-        guard lyricsService.lines.indices.contains(index) else { return }
         var jump = Transaction()
         jump.disablesAnimations = true
         withTransaction(jump) {
+            currentIndex = index
+            isPositioned = true
+            guard lyricsService.lines.indices.contains(index) else { return }
             proxy.scrollTo(lyricsService.lines[index].id, anchor: .center)
         }
     }
@@ -68,7 +73,7 @@ struct LyricsScrollView: View {
                             Color.clear.frame(height: bufferHeight)
 
                             ForEach(Array(lyricsService.lines.enumerated()), id: \.element.id) { i, line in
-                                lyricLine(line, isActive: i == currentIndex)
+                                lyricLine(line, isActive: isPositioned && i == currentIndex)
                                     .id(line.id)
                                     .onTapGesture {
                                         player.seek(to: line.time)
