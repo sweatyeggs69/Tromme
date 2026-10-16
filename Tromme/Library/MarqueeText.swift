@@ -17,7 +17,8 @@ struct MarqueeText: View {
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
     private var wantsScrolling: Bool { scrolls && overflows }
-    /// Follows `wantsScrolling`, but is switched in its own non-animated update. The switch
+    /// Follows `wantsScrolling`, but is switched in its own non-animated update (and turned on
+    /// only after a short delay, see the `.task` below). The switch
     /// usually happens inside the parent's layout animation (opening lyrics or the queue), and
     /// interpolating natural-width scrolling text into truncated text jumps around; updating
     /// it separately snaps the mode while the title keeps sliding with the layout.
@@ -77,8 +78,17 @@ struct MarqueeText: View {
                 }
         }
         .onChange(of: text) { start = Date() }
-        .onChange(of: wantsScrolling, initial: true) { _, wants in
+        .task(id: wantsScrolling) {
+            let wants = wantsScrolling
             guard wants != isScrolling else { return }
+            // Scrolling starts only once the layout has settled (e.g. after lyrics or the queue
+            // close), since the scrolling copy can't follow a slide that's already under way and
+            // would flash to its final spot. Stopping is immediate. The marquee holds still for
+            // its first few seconds anyway, so the delay isn't visible.
+            if wants {
+                try? await Task.sleep(for: .milliseconds(600))
+                guard !Task.isCancelled else { return }
+            }
             var snap = Transaction()
             snap.disablesAnimations = true
             withTransaction(snap) {
