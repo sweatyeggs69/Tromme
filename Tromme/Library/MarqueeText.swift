@@ -21,29 +21,40 @@ struct MarqueeText: View {
     // One Text serves both modes: it truncates in its container, or (when scrolling) takes its
     // natural width and is offset by the clock. Nothing is swapped or faded between modes, so
     // the title slides with the layout exactly like the artist text.
+    //
+    // The visible text sits in an overlay so it never affects layout. A hidden, always-truncating
+    // copy sizes the view instead; otherwise switching to the natural width while scrolling can
+    // change the measured container width, which flips scrolling back off, and so on forever
+    // (a frozen UI for titles right at the fit threshold).
     var body: some View {
-        TimelineView(.animation(paused: !isScrolling)) { context in
-            Text(text)
-                .font(font)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .fixedSize(horizontal: isScrolling, vertical: false)
-                .overlay(alignment: .leading) {
-                    // Trailing copy that makes the loop seamless; never animated in or out.
+        Text(text)
+            .font(font)
+            .lineLimit(1)
+            .hidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+            .overlay(alignment: .leading) {
+                TimelineView(.animation(paused: !isScrolling)) { context in
                     Text(text)
                         .font(font)
                         .foregroundStyle(color)
                         .lineLimit(1)
-                        .fixedSize()
-                        .offset(x: textWidth + gap)
-                        .opacity(isScrolling ? 1 : 0)
-                        .transaction { $0.animation = nil }
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: isScrolling, vertical: false)
+                        .overlay(alignment: .leading) {
+                            // Trailing copy that makes the loop seamless; never animated in or out.
+                            Text(text)
+                                .font(font)
+                                .foregroundStyle(color)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .offset(x: textWidth + gap)
+                                .opacity(isScrolling ? 1 : 0)
+                                .transaction { $0.animation = nil }
+                        }
+                        .offset(x: offset(at: context.date))
                 }
-                .offset(x: offset(at: context.date))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+            }
         .clipped()
         .mask {
             LinearGradient(
