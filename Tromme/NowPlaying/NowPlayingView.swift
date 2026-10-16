@@ -175,7 +175,8 @@ struct NowPlayingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .layoutPriority(1)
                         .padding(.horizontal, landscapeOuterHorizontalPadding)
-                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
+                        // On the Duo, pull the row down into the bottom safe area to cut the gap below it.
+                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding - (isDuoOpen ? 16 : 0))
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
