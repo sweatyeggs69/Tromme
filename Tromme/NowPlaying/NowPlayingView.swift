@@ -152,7 +152,7 @@ struct NowPlayingView: View {
                         .frame(width: landscapeLeftWidth)
 
                         if showLyrics || showQueue {
-                            lyricsQueueContent
+                            lyricsQueueContent(isPadLandscape: true)
                                 .frame(width: landscapeRightWidth)
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
                                 .padding(.top, 8)
@@ -190,7 +190,7 @@ struct NowPlayingView: View {
                             .frame(width: artworkSize, height: artworkSize)
                             .anchorPreference(key: ArtworkSlotAnchorsKey.self, value: .bounds) { [.full: $0] }
 
-                        lyricsQueueContent
+                        lyricsQueueContent(isPadLandscape: false)
                             .frame(width: controlsContainerWidth)
                             .opacity(isCompact ? 1 : 0)
                     }
@@ -342,7 +342,7 @@ struct NowPlayingView: View {
     }
 
     @ViewBuilder
-    private var lyricsQueueContent: some View {
+    private func lyricsQueueContent(isPadLandscape: Bool) -> some View {
         Group {
             if showLyrics {
                 ZStack {
@@ -357,7 +357,7 @@ struct NowPlayingView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .transition(.opacity)
                     } else if lyricsService.hasLyrics {
-                        LyricsScrollView(lyricsService: lyricsService)
+                        LyricsScrollView(lyricsService: lyricsService, isPadLandscape: isPadLandscape)
                             .mask(
                                 VStack(spacing: 0) {
                                     LinearGradient(colors: [.clear, .white], startPoint: .top, endPoint: .bottom)
