@@ -16,42 +16,46 @@ struct MarqueeText: View {
     @State private var start = Date()
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
+    private var isScrolling: Bool { scrolls && overflows }
 
+    // One stable view for both modes (a truncating base with the marquee as an overlay), so
+    // switching modes never swaps the view and it slides with the layout like the artist text.
     var body: some View {
-        if scrolls {
-            marquee
-        } else {
-            Text(text)
-                .font(font)
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private var marquee: some View {
-        // Hidden text gives the row its height and the container its width.
         Text(text)
             .font(font)
+            .foregroundStyle(color)
             .lineLimit(1)
-            .hidden()
+            .truncationMode(.tail)
+            .opacity(isScrolling ? 0 : 1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .leading) {
-                // Offset comes from the clock, not an animated state, so animations from
-                // parent state changes (lyrics/queue) can't interrupt or retarget the scroll.
-                TimelineView(.animation(paused: !overflows)) { context in
-                    HStack(spacing: gap) {
-                        label
-                        if overflows { label }
-                    }
-                    .offset(x: offset(at: context.date))
+            .background(alignment: .leading) {
+                // Natural width of the text, for the overflow check.
+                Text(text)
+                    .font(font)
+                    .lineLimit(1)
                     .fixedSize()
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                        if textWidth != $0 { textWidth = $0 }
+                    }
+            }
+            .overlay(alignment: .leading) {
+                if isScrolling {
+                    // Offset comes from the clock, not an animated state, so animations from
+                    // parent state changes can't interrupt or retarget the scroll.
+                    TimelineView(.animation) { context in
+                        HStack(spacing: gap) {
+                            label
+                            label
+                        }
+                        .offset(x: offset(at: context.date))
+                        .fixedSize()
+                    }
                 }
             }
             .clipped()
             .mask {
-                if overflows {
+                if isScrolling {
                     LinearGradient(
                         stops: [
                             .init(color: .black, location: 0),
@@ -66,6 +70,7 @@ struct MarqueeText: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
             .onChange(of: text) { start = Date() }
+            .onChange(of: isScrolling) { start = Date() }
     }
 
     private var label: some View {
@@ -74,13 +79,10 @@ struct MarqueeText: View {
             .foregroundStyle(color)
             .lineLimit(1)
             .fixedSize()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
-                if textWidth != $0 { textWidth = $0 }
-            }
     }
 
     private func offset(at date: Date) -> CGFloat {
-        guard overflows else { return 0 }
+        guard isScrolling else { return 0 }
         let distance = textWidth + gap
         let scroll = Double(distance / speed)
         let pauseSeconds = 4.0
