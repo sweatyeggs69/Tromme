@@ -117,13 +117,11 @@ struct MarqueeText: View {
         }
     }
 
-    /// Waits for the layout to settle (e.g. lyrics or the queue closing) before taking over, since
-    /// the marquee holds still for its first few seconds anyway. The scroller appears at its start,
-    /// exactly over the plain title, which then fades out beneath it.
+    /// The scroller appears at its start, exactly over the plain title, and the switch fades in
+    /// alongside any layout slide (e.g. lyrics or the queue closing). The scroller is always laid
+    /// out, so it follows that slide.
     private func startScrolling() async {
         guard !isRunning else { return }
-        try? await Task.sleep(for: .milliseconds(600))
-        guard !Task.isCancelled else { return }
         start = Date()
         returnOffset = nil
         showsScroller = true
