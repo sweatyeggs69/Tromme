@@ -35,8 +35,8 @@ struct MarqueeText: View {
     // off, and loop forever (a frozen UI for titles right at the fit threshold). It is always
     // present (transparent when unused) so it follows layout slides.
     //
-    // At the switch both show the same text in the same place, so the scroller stays fully opaque
-    // and only the plain title fades underneath it. Nothing dims; only the ellipsis comes or goes.
+    // At the switch both show the same text in the same place. Starting, the scroller appears fully
+    // opaque and the plain title fades out beneath it, so nothing dims; stopping swaps at once.
     var body: some View {
         Text(text)
             .font(font)
@@ -115,7 +115,7 @@ struct MarqueeText: View {
     }
 
     /// Glides the scroller back to its start (or on to the trailing copy, if that's closer, which
-    /// looks the same), then fades the plain title in beneath it and drops the scroller.
+    /// looks the same), then swaps straight to the plain title.
     private func stopScrolling() async {
         guard showsScroller else {
             showsPlain = true
@@ -130,10 +130,8 @@ struct MarqueeText: View {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
         }
-        returnOffset = 0
-        withAnimation(.easeOut(duration: 0.3)) { showsPlain = true }
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
+        // Swapped at once: fading would show the scroller's edge fade over the truncated title.
+        showsPlain = true
         showsScroller = false
         returnOffset = nil
     }
