@@ -232,8 +232,24 @@ final class LyricsService {
         }
     }
 
+    /// How early a word-synced line comes into focus before its first word, so it
+    /// is settled by the time the words start animating.
+    private static let focusLeadTime: TimeInterval = 1.0
+
     func currentLineIndex(at time: TimeInterval) -> Int {
-        lines.lastIndex(where: { $0.time <= time }) ?? 0
+        lines.indices.last(where: { focusTime(of: $0) <= time }) ?? 0
+    }
+
+    /// When a line takes focus. Word-synced lines get up to `focusLeadTime` of lead,
+    /// limited to the silence after the previous line's last word, so tightly timed
+    /// lines focus as the previous one finishes (or at their own start if they overlap).
+    private func focusTime(of index: Int) -> TimeInterval {
+        let line = lines[index]
+        guard index > 0, !line.isBreak, !line.words.isEmpty else { return line.time }
+        let previous = lines[index - 1]
+        guard let previousEnd = previous.lastWordEnd else { return line.time }
+        let lead = min(Self.focusLeadTime, max(0, line.time - previousEnd))
+        return max(line.time - lead, previous.time)
     }
 
     private static func looksInstrumental(_ text: String) -> Bool {
