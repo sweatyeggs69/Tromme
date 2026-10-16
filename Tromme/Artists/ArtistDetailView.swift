@@ -88,9 +88,11 @@ struct ArtistDetailView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// iPad landscape: photo, name and controls pinned on the left, content scrolling on the right.
+    /// iPad landscape (and an open iPhone Duo): photo, name and controls pinned on the left, content scrolling on the right.
     private var isWideLayout: Bool {
-        horizontalSizeClass == .regular && viewWidth > viewHeight
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        if isPhone { return horizontalSizeClass == .regular || min(viewWidth, viewHeight) >= 500 }
+        return horizontalSizeClass == .regular && viewWidth > viewHeight
     }
 
     private var sidePanelWidth: CGFloat {

@@ -10,6 +10,7 @@ struct NowPlayingView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let startPanel: NowPlayingStartPanel
     var onNavigate: ((PlexMetadata) -> Void)?
@@ -72,6 +73,11 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
+    /// iPhone Duo while open: regular width on a phone, shown with the iPad landscape layout.
+    private var isDuoOpen: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone && (horizontalSizeClass == .regular || min(geoSize.width, geoSize.height) >= 500)
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -82,7 +88,7 @@ struct NowPlayingView: View {
             let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
-            let isPadLandscape = UIDevice.current.userInterfaceIdiom == .pad && width > height
+            let isPadLandscape = isDuoOpen || (UIDevice.current.userInterfaceIdiom == .pad && width > height)
             let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && height > width
             let controlsContainerWidth = artworkSize
             let controlsHorizontalPadding: CGFloat = 0
