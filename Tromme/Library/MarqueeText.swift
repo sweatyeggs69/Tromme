@@ -16,7 +16,12 @@ struct MarqueeText: View {
     @State private var start = Date()
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
-    private var isScrolling: Bool { scrolls && overflows }
+    private var wantsScrolling: Bool { scrolls && overflows }
+    /// Follows `wantsScrolling`, but is switched in its own non-animated update. The switch
+    /// usually happens inside the parent's layout animation (opening lyrics or the queue), and
+    /// interpolating natural-width scrolling text into truncated text jumps around; updating
+    /// it separately snaps the mode while the title keeps sliding with the layout.
+    @State private var isScrolling = false
 
     // One Text serves both modes: it truncates in its container, or (when scrolling) takes its
     // natural width and is offset by the clock. Nothing is swapped or faded between modes, so
@@ -54,11 +59,6 @@ struct MarqueeText: View {
                         }
                         .offset(x: offset(at: context.date))
                 }
-                // Switching between scrolling and truncating (e.g. opening lyrics or the queue)
-                // happens inside the parent's layout animation. Interpolating the jump from the
-                // natural-width, offset text to the truncated one looks glitchy, so it snaps
-                // while the surrounding layout still animates.
-                .transaction(value: isScrolling) { $0.animation = nil }
             }
         .clipped()
         .mask {
@@ -70,7 +70,6 @@ struct MarqueeText: View {
                 ],
                 startPoint: .leading, endPoint: .trailing
             )
-            .transaction(value: isScrolling) { $0.animation = nil }
         }
         .background(alignment: .leading) {
             // Natural width of the text, for the overflow check.
@@ -84,7 +83,15 @@ struct MarqueeText: View {
                 }
         }
         .onChange(of: text) { start = Date() }
-        .onChange(of: isScrolling) { start = Date() }
+        .onChange(of: wantsScrolling, initial: true) { _, wants in
+            guard wants != isScrolling else { return }
+            var snap = Transaction()
+            snap.disablesAnimations = true
+            withTransaction(snap) {
+                isScrolling = wants
+                start = Date()
+            }
+        }
     }
 
     private func offset(at date: Date) -> CGFloat {
