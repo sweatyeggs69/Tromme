@@ -17,26 +17,33 @@ struct MarqueeText: View {
 
     private var overflows: Bool { textWidth > containerWidth && containerWidth > 0 }
     private var wantsScrolling: Bool { scrolls && overflows }
-    /// Follows `wantsScrolling`, but is switched in its own crossfade animation (and turned on
-    /// only after a short delay, see the `.task` below). The need to switch usually comes from
-    /// the parent's layout animation (opening lyrics or the queue); switching separately keeps
-    /// the mode change from being interpolated as part of that slide.
-    @State private var isScrolling = false
+
+    /// The mode switch is driven by these instead of `wantsScrolling` directly, in steps of its
+    /// own (see the `.task` below), so it's never interpolated as part of a layout slide such as
+    /// opening lyrics or the queue.
+    @State private var showsPlain = true
+    @State private var showsScroller = false
+    /// Set while the scroller glides back to its start before handing over to the plain title.
+    @State private var returnOffset: CGFloat?
+
+    private var isRunning: Bool { showsScroller && returnOffset == nil }
 
     // When it fits (or scrolling is off) the title is a plain truncating Text laid out exactly like
-    // the artist line, so it slides with the layout the same way. Only while scrolling is that
-    // Text hidden and a natural-width copy drawn on top, offset by the clock. The copy sits in an
-    // overlay so it never affects layout: if it did, its wider size could change the measured
-    // container width, flip scrolling off, and loop forever (a frozen UI for titles right at
-    // the fit threshold). The scrolling copy is always present (just transparent when unused) so
-    // it follows layout slides; the two crossfade when the mode changes (see `isScrolling`).
+    // the artist line, so it slides with the layout the same way. While scrolling, a natural-width
+    // copy is drawn on top, offset by the clock. The copy sits in an overlay so it never affects
+    // layout: if it did, its wider size could change the measured container width, flip scrolling
+    // off, and loop forever (a frozen UI for titles right at the fit threshold). It is always
+    // present (transparent when unused) so it follows layout slides.
+    //
+    // At the switch both show the same text in the same place, so the scroller stays fully opaque
+    // and only the plain title fades underneath it. Nothing dims; only the ellipsis comes or goes.
     var body: some View {
         Text(text)
             .font(font)
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(.tail)
-            .opacity(isScrolling ? 0 : 1)
+            .opacity(showsPlain ? 1 : 0)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
             .overlay(alignment: .leading) {
@@ -44,7 +51,7 @@ struct MarqueeText: View {
                 // like the artist line, so nothing trails behind it while the layout slides.
                 Color.clear
                     .overlay(alignment: .leading) {
-                        TimelineView(.animation(paused: !isScrolling)) { context in
+                        TimelineView(.animation(paused: !isRunning)) { context in
                             HStack(spacing: gap) {
                                 Text(text)
                                 // Trailing copy that makes the loop seamless.
@@ -54,7 +61,7 @@ struct MarqueeText: View {
                             .foregroundStyle(color)
                             .lineLimit(1)
                             .fixedSize()
-                            .offset(x: offset(at: context.date))
+                            .offset(x: returnOffset ?? offset(at: context.date))
                         }
                     }
                     .clipped()
@@ -68,7 +75,7 @@ struct MarqueeText: View {
                             startPoint: .leading, endPoint: .trailing
                         )
                     }
-                    .opacity(isScrolling ? 1 : 0)
+                    .opacity(showsScroller ? 1 : 0)
             }
             // Resolve the title's geometry as one unit, so it slides exactly in step with the
             // artist line instead of its inner text animating separately from its frame.
@@ -86,23 +93,49 @@ struct MarqueeText: View {
         }
         .onChange(of: text) { start = Date() }
         .task(id: wantsScrolling) {
-            let wants = wantsScrolling
-            guard wants != isScrolling else { return }
-            // Scrolling starts only once the layout has settled (e.g. after lyrics or the queue
-            // close), since the scrolling copy can't follow a slide that's already under way and
-            // would flash to its final spot. Stopping is immediate. The marquee holds still for
-            // its first few seconds anyway, so the delay isn't visible. The swap crossfades on its
-            // own animation, separate from any layout slide.
-            if wants {
-                try? await Task.sleep(for: .milliseconds(600))
-                guard !Task.isCancelled else { return }
-            }
-            // Starting resets the clock; stopping leaves the copy where it is while it fades out.
-            if wants { start = Date() }
-            withAnimation(.easeInOut(duration: 0.35)) {
-                isScrolling = wants
+            if wantsScrolling {
+                await startScrolling()
+            } else {
+                await stopScrolling()
             }
         }
+    }
+
+    /// Waits for the layout to settle (e.g. lyrics or the queue closing) before taking over, since
+    /// the marquee holds still for its first few seconds anyway. The scroller appears at its start,
+    /// exactly over the plain title, which then fades out beneath it.
+    private func startScrolling() async {
+        guard !isRunning else { return }
+        try? await Task.sleep(for: .milliseconds(600))
+        guard !Task.isCancelled else { return }
+        start = Date()
+        returnOffset = nil
+        showsScroller = true
+        withAnimation(.easeOut(duration: 0.3)) { showsPlain = false }
+    }
+
+    /// Glides the scroller back to its start (or on to the trailing copy, if that's closer, which
+    /// looks the same), then fades the plain title in beneath it and drops the scroller.
+    private func stopScrolling() async {
+        guard showsScroller else {
+            showsPlain = true
+            return
+        }
+        let distance = textWidth + gap
+        let current = returnOffset ?? offset(at: .now)
+        let target: CGFloat = current < -distance / 2 ? -distance : 0
+        if current != target {
+            returnOffset = current
+            withAnimation(.easeInOut(duration: 0.5)) { returnOffset = target }
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+        }
+        returnOffset = 0
+        withAnimation(.easeOut(duration: 0.3)) { showsPlain = true }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        showsScroller = false
+        returnOffset = nil
     }
 
     private func offset(at date: Date) -> CGFloat {
