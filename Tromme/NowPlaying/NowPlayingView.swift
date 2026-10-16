@@ -102,7 +102,8 @@ struct NowPlayingView: View {
             let bottomScreenPadding = geo.safeAreaInsets.bottom > 0
                 ? bottomScreenPaddingWithSafeArea
                 : bottomScreenPaddingWithoutSafeArea
-            let landscapeBottomInsetPadding = bottomScreenPadding
+            // The Duo layout extends into the bottom safe area (see below), so it sets its own small inset.
+            let landscapeBottomInsetPadding = isDuoOpen ? 14 : bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
             let landscapeBottomActionsHeight: CGFloat = bottomActionIconSize + iPadLandscapeBottomActionsExtraPadding
             let landscapeMainHeight = max(
@@ -175,8 +176,7 @@ struct NowPlayingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .layoutPriority(1)
                         .padding(.horizontal, landscapeOuterHorizontalPadding)
-                        // On the Duo, pull the row down into the bottom safe area to cut the gap below it.
-                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding - (isDuoOpen ? 16 : 0))
+                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
@@ -299,6 +299,7 @@ struct NowPlayingView: View {
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: isDuoOpen ? .bottom : [])
         .background { NowPlayingBackground(animatedBackdrop: animatedBackdrop) }
         .overlay(alignment: .topLeading) {
             VolumeHUDSuppressor()
