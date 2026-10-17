@@ -5,7 +5,6 @@ import SwiftUI
 struct ArtistHeroPhotoView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
-    @Environment(NetworkStatus.self) private var network
 
     let artist: PlexMetadata
     let heroHeight: CGFloat
@@ -15,12 +14,9 @@ struct ArtistHeroPhotoView: View {
 
     @State private var image: UIImage?
 
-    /// Heights of the blur and color-fade bands. Both are anchored to the bottom edge of the hero
-    /// row (where the artist name and buttons sit), not to the photo, so they stay behind them
-    /// while the photo parallaxes.
+    /// Heights of the blur and color-fade bands, anchored to the bottom edge of the photo itself
+    /// so they travel with the image (zoom, parallax) instead of the name and buttons.
     private let blurBandHeight: CGFloat = 145
-    /// Reaches from the row's bottom edge to just above the top of the artist name
-    /// (bottom padding, buttons and the large-title name).
     private let fadeBandHeight: CGFloat = 145
 
     var body: some View {
@@ -37,44 +33,16 @@ struct ArtistHeroPhotoView: View {
             let width = geo.size.width
 
             if !isHidden {
-                ZStack(alignment: .top) {
-                    transformedPhoto(width: width, blur: scrollBlur, stretch: stretch, parallax: parallax)
-
-                    // Progressive blur behind the title and controls.
-                    transformedPhoto(width: width, blur: 30, stretch: stretch, parallax: parallax)
-                        .mask(alignment: .top) {
-                            band(rowBottom: rowBottom, height: blurBandHeight) {
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: .clear, location: 0),
-                                        .init(color: .black.opacity(0.8), location: 0.75),
-                                        .init(color: .black, location: 1)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            }
-                        }
-
-                    // Melt into the backdrop color.
-                    band(rowBottom: rowBottom, height: fadeBandHeight) {
-                        LinearGradient(
-                            stops: [
-                                .init(color: backdropColor.opacity(0), location: 0),
-                                .init(color: backdropColor.opacity(0.8), location: 0.75),
-                                .init(color: backdropColor, location: 1)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                photoWithFades(width: width, blur: scrollBlur)
+                    // Zoom from the first point of overscroll, pinned to the top edge.
+                    .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
+                    .offset(y: -parallax)
+                    .frame(width: width, height: geo.size.height, alignment: .top)
+                    // Never paint below the hero row's current bottom edge.
+                    .mask(alignment: .top) {
+                        Rectangle()
+                            .frame(height: rowBottom)
                     }
-                }
-                .frame(width: width, height: geo.size.height, alignment: .top)
-                // Never paint below the hero row's current bottom edge.
-                .mask(alignment: .top) {
-                    Rectangle()
-                        .frame(height: rowBottom)
-                }
             }
         }
         .task(id: artist.thumb) {
@@ -82,15 +50,42 @@ struct ArtistHeroPhotoView: View {
         }
     }
 
-    /// Places `content` in a band of `height` that ends at the hero row's bottom edge.
-    private func band(rowBottom: CGFloat, height: CGFloat, @ViewBuilder content: () -> some View) -> some View {
-        content()
-            .frame(height: height)
-            .offset(y: rowBottom - height)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    /// The photo with its progressive blur and color fade baked into its bottom edge.
+    private func photoWithFades(width: CGFloat, blur: CGFloat) -> some View {
+        ZStack(alignment: .bottom) {
+            photo(width: width, blur: blur)
+
+            photo(width: width, blur: 30)
+                .mask(alignment: .bottom) {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black.opacity(0.8), location: 0.75),
+                            .init(color: .black, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: blurBandHeight)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                }
+
+            LinearGradient(
+                stops: [
+                    .init(color: backdropColor.opacity(0), location: 0),
+                    .init(color: backdropColor.opacity(0.8), location: 0.75),
+                    .init(color: backdropColor, location: 1)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: fadeBandHeight)
+        }
+        .frame(width: width, height: heroHeight)
+        .clipped()
     }
 
-    private func transformedPhoto(width: CGFloat, blur: CGFloat, stretch: CGFloat, parallax: CGFloat) -> some View {
+    private func photo(width: CGFloat, blur: CGFloat) -> some View {
         Group {
             if let image {
                 Image(uiImage: image)
@@ -104,10 +99,6 @@ struct ArtistHeroPhotoView: View {
         .frame(width: width, height: heroHeight, alignment: .top)
         .blur(radius: blur, opaque: true)
         .clipped()
-        // Zoom from the first point of overscroll, pinned to the top edge.
-        .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
-        .offset(y: -parallax)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func loadImage() async {
@@ -119,7 +110,7 @@ struct ArtistHeroPhotoView: View {
         let artworkPath = artist.thumb
         guard let url = client.artworkURL(server: server, path: artworkPath, width: 1000, height: 1000) else {
             image = nil
-            isHidden = !network.isConnected
+            isHidden = true
             return
         }
         let resolvedImage = await ImageCache.shared.image(for: url)
@@ -130,7 +121,7 @@ struct ArtistHeroPhotoView: View {
             ArtworkColorCache.shared.resolveColor(for: artworkPath, from: resolvedImage, style: .artist)
         }
         image = resolvedImage?.squareCropped()
-        isHidden = image == nil && !network.isConnected
+        isHidden = image == nil
     }
 }
 

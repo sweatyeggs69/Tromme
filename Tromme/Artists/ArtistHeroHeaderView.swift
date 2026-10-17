@@ -37,7 +37,7 @@ struct ArtistHeroHeaderView: View {
                 controls
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, 80)
+            .padding(.top, 130)
             .padding(.bottom, 12)
         } else {
             // Title and controls sit on the bottom edge of the row and scroll with it; the

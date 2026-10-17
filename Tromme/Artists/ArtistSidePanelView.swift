@@ -17,14 +17,16 @@ struct ArtistSidePanelView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                ArtworkView(
-                    thumbPath: artist.thumb,
-                    size: width,
-                    cornerRadius: photoCornerRadius,
-                    minimumTranscodePx: 1000
-                )
-                .artworkBorder(cornerRadius: photoCornerRadius)
-                .changeArtworkOnLongPress(isEnabled: onChangePhoto != nil) { onChangePhoto?() }
+                if artist.thumb != nil {
+                    ArtworkView(
+                        thumbPath: artist.thumb,
+                        size: width,
+                        cornerRadius: photoCornerRadius,
+                        minimumTranscodePx: 1000
+                    )
+                    .artworkBorder(cornerRadius: photoCornerRadius)
+                    .changeArtworkOnLongPress(isEnabled: onChangePhoto != nil) { onChangePhoto?() }
+                }
 
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))
