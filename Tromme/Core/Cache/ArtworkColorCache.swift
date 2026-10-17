@@ -93,8 +93,8 @@ final class ArtworkColorCache {
     /// The color pick for each style. Pure pixel math, so it can run on any thread.
     private nonisolated static func pick(from image: UIImage, style: ArtworkBackdrop.Style) -> UIColor {
         switch style {
-        case .artist: image.accentColor(visibleFraction: 0.6)
-        case .cover: image.accentColor(visibleFraction: 1)
+        case .artist: image.accentColor(visibleFraction: 0.6, keepsPaleAverage: false)
+        case .cover: image.accentColor(visibleFraction: 1, keepsPaleAverage: true)
         }
     }
 
@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v14.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v15.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v14.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v15.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -156,10 +156,11 @@ private extension UIImage {
     /// pixels cover at least `minimumDarkShare` of the non-white pixels, returns their
     /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music; a
     /// black-and-white photo needs only `minimumAchromaticDarkShare` of them).
-    /// A pale, desaturated image (average L* 70+, little dark area) returns its plain average
-    /// before the tint and dark picks, so it gives a pale page. Otherwise returns the plain
+    /// With `keepsPaleAverage` (covers only; artist pages carry white text and need a dark
+    /// page, so a white studio photo must not take this path), a pale, desaturated image
+    /// (average L* 70+, little dark area) returns its plain average before the tint and dark picks, so it gives a pale page. Otherwise returns the plain
     /// average color. The backdrop keeps its hue and chroma.
-    func accentColor(visibleFraction: Double) -> UIColor {
+    func accentColor(visibleFraction: Double, keepsPaleAverage: Bool) -> UIColor {
         guard let cgImage else { return .gray }
 
         let size = 32
@@ -268,7 +269,7 @@ private extension UIImage {
         guard weight > 0, share >= minimumAccentShare else {
             // A pale, desaturated image (a misty Witcher cover) keeps its pale average instead
             // of having its few darker pixels picked, unless it holds a real dark subject.
-            if averageLightness >= paleAverageLightness, darkCount / n < paleMaximumDarkShare, sumChroma / n < 12 {
+            if keepsPaleAverage, averageLightness >= paleAverageLightness, darkCount / n < paleMaximumDarkShare, sumChroma / n < 12 {
                 return average
             }
             let tintBins = bestFamily(by: tintCount)
