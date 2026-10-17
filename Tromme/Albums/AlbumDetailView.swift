@@ -460,6 +460,7 @@ struct AlbumDetailView: View {
                 viewModel.removeTrack(deletedTrack)
             }
         )
+        .listRowInsets(AppStyle.TrackList.rowInsets)
         .listRowBackground(artworkColor)
         .listRowSeparatorTint(titleColor.opacity(0.22))
     }
