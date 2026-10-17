@@ -276,7 +276,7 @@ struct AlbumDetailView: View {
                 .foregroundStyle(secondaryTextColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
@@ -295,7 +295,7 @@ struct AlbumDetailView: View {
         VStack {
             ArtworkView(
                 thumbPath: thumbPath,
-                size: AppStyle.Artwork.portraitHeader(forWidth: width),
+                size: AppStyle.Artwork.portraitHeader(forWidth: width + (AppStyle.Spacing.pageHorizontal - AppStyle.TrackList.rowInsets.leading) * 2),
                 cornerRadius: AppStyle.Radius.card
             )
                 // Shadow goes on the static artwork only, so the video overlay doesn't cast a second one.
@@ -310,7 +310,7 @@ struct AlbumDetailView: View {
                 .foregroundStyle(titleColor)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
 
             if let artistTarget = artistNavigationTarget {
                 if shouldPopToSourceArtist {
@@ -336,14 +336,14 @@ struct AlbumDetailView: View {
 
             albumInfoLineView(centered: true)
                 .padding(.top, 0.5)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
 
             albumActionButtons(bottomPadding: bioText != nil ? 4 : 20)
 
             albumBioPreview
                 .padding(.top, 4)
                 .padding(.bottom, 20)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
         }
         .frame(maxWidth: .infinity)
     }
@@ -439,7 +439,7 @@ struct AlbumDetailView: View {
             .foregroundStyle(tertiaryTextColor)
             .listRowBackground(artworkColor)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 4, trailing: 20))
+            .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.TrackList.rowInsets.leading, bottom: 4, trailing: AppStyle.TrackList.rowInsets.leading))
     }
 
     private func trackRow(track: PlexMetadata, globalIndex: Int, isLandscape: Bool = false) -> some View {
@@ -558,7 +558,7 @@ struct AlbumDetailView: View {
             .padding(.top, 20)
         }
         .padding(.top, 96)
-        .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+        .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
     }
 
     private var albumFooter: some View {
@@ -610,7 +610,7 @@ struct AlbumDetailView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
+            .listRowInsets(EdgeInsets(top: 20, leading: AppStyle.TrackList.rowInsets.leading, bottom: 8, trailing: AppStyle.TrackList.rowInsets.leading))
             .listRowBackground(artworkColor)
             .listRowSeparator(.hidden)
     }
@@ -651,7 +651,7 @@ struct AlbumDetailView: View {
                 }
             }
             .scrollTargetLayout()
-            .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+            .padding(.horizontal, AppStyle.TrackList.rowInsets.leading)
         }
         .scrollTargetBehavior(.viewAligned)
         .padding(.bottom, 24)
@@ -712,7 +712,7 @@ struct AlbumDetailView: View {
                                 .listRowSeparator(.hidden, edges: .top)
                                 .listRowSeparator(.visible, edges: .bottom)
                                 .listRowSeparatorTint(titleColor.opacity(0.22))
-                                .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + 20 }
+                                .alignmentGuide(.listRowSeparatorLeading) { d in d[.leading] + AppStyle.TrackList.rowInsets.leading }
                                 .listRowBackground(artworkColor)
 
                             trackListRows()
