@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v13.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v14.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v13.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v14.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -156,7 +156,9 @@ private extension UIImage {
     /// pixels cover at least `minimumDarkShare` of the non-white pixels, returns their
     /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music; a
     /// black-and-white photo needs only `minimumAchromaticDarkShare` of them).
-    /// Otherwise returns the plain average color. The backdrop re-lights it later.
+    /// A pale, desaturated image (average L* 70+, little dark area) returns its plain average
+    /// before the tint and dark picks, so it gives a pale page. Otherwise returns the plain
+    /// average color. The backdrop keeps its hue and chroma.
     func accentColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
 
@@ -184,6 +186,8 @@ private extension UIImage {
         // call the backdrop black (Being as an Ocean: dark shirts and hair on white).
         let achromaticShare = 0.05
         let minimumAchromaticDarkShare = 0.10
+        let paleAverageLightness = 70.0
+        let paleMaximumDarkShare = 0.20
 
         let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
@@ -194,6 +198,7 @@ private extension UIImage {
         var binB = [Double](repeating: 0, count: hueBins)
         var tintCount = [Double](repeating: 0, count: hueBins)
         var nonWhiteCount = 0.0
+        var sumChroma = 0.0
         var chromaticCount = 0.0
         var darkCount = 0.0, darkR = 0.0, darkG = 0.0, darkB = 0.0
         var tintR = [Double](repeating: 0, count: hueBins)
@@ -208,6 +213,7 @@ private extension UIImage {
 
             let lab = Lab(r: r, g: g, b: b)
             let chroma = lab.chroma
+            sumChroma += chroma
             if chroma >= minimumTintChroma { chromaticCount += 1 }
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
 
@@ -238,6 +244,7 @@ private extension UIImage {
 
         let n = Double(pixelCount)
         let average = UIColor(red: sumR / n, green: sumG / n, blue: sumB / n, alpha: 1)
+        let averageLightness = Lab(r: sumR / n, g: sumG / n, b: sumB / n).l
 
         // A hue family is a bin plus its neighbors, so an accent split across a bin edge
         // still counts as one.
@@ -259,13 +266,18 @@ private extension UIImage {
         let weight = total(binWeight, over: bins)
         let share = total(binCount.map(Double.init), over: bins) / n
         guard weight > 0, share >= minimumAccentShare else {
+            // A pale, desaturated image (a misty Witcher cover) keeps its pale average instead
+            // of having its few darker pixels picked, unless it holds a real dark subject.
+            if averageLightness >= paleAverageLightness, darkCount / n < paleMaximumDarkShare, sumChroma / n < 12 {
+                return average
+            }
             let tintBins = bestFamily(by: tintCount)
             let tintTotal = total(tintCount, over: tintBins)
             let nonWhite = max(nonWhiteCount, 1)
             guard tintTotal / nonWhite >= minimumTintShare else {
                 let isAchromatic = chromaticCount / n < achromaticShare
-            let darkShare = isAchromatic ? minimumAchromaticDarkShare : minimumDarkShare
-            guard darkCount / nonWhite >= darkShare else { return average }
+                let darkShare = isAchromatic ? minimumAchromaticDarkShare : minimumDarkShare
+                guard darkCount / nonWhite >= darkShare else { return average }
                 return UIColor(red: darkR / darkCount, green: darkG / darkCount, blue: darkB / darkCount, alpha: 1)
             }
             return UIColor(

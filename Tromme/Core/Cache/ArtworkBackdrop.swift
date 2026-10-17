@@ -4,15 +4,14 @@ import CryptoKit
 
 /// Turns an artwork's accent (or average) color into the page backdrop.
 ///
-/// In light appearance, strong accents (chroma 25 or more, the same bar the pick uses) are
-/// used as is, so the page matches the accent on the cover; only the text-contrast guard
-/// may nudge their lightness. Everything else, including every color in dark appearance,
-/// is re-lit into the Apple Music style tint.
+/// Album and playlist pages keep the artwork's own color in either appearance: hue and
+/// chroma are kept, lightness is clamped only enough to avoid near-black and near-white
+/// pages, and neutral sources keep their lightness (a pale misty cover gives a pale page,
+/// a dark one a dark page). Only the text-contrast guard may nudge lightness; the page's
+/// text color follows the result.
 ///
-/// Dark appearance: colorful sources go to L* 26 to 40 at about 0.8x chroma; neutral ones
-/// to source L* + 0.5, capped at L* 42.3 (measured from Apple Music artist pages). Light
-/// appearance: L* is roughly the source L* minus 7 for mid tones and 100 for white;
-/// chroma and hue are kept.
+/// Artist pages always carry white text, so they take the same color pulled into a dark
+/// range (L* 22 to 46) with most of its chroma kept.
 enum ArtworkBackdrop {
     enum Style {
         /// Artist pages: accent or average of the visible photo.
@@ -22,25 +21,13 @@ enum ArtworkBackdrop {
     }
 
     private static let darkLightnessCap = 42.3
-    /// Matches `minimumAccentChroma` in the color pick.
-    private static let accentChroma = 25.0
 
     static func color(from source: UIColor, colorScheme: ColorScheme) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
         let lab = Lab(r: Double(r), g: Double(g), b: Double(b))
-        if colorScheme == .light, lab.chroma >= accentChroma {
-            return Color(relit(lightness: lab.l, chroma: lab.chroma, hue: lab.hue))
-        }
-        let ui: UIColor
-        switch colorScheme {
-        case .light:
-            ui = relit(lightness: lightBackdropLightness(forSource: lab.l), chroma: lab.chroma >= 8 ? lab.chroma * 0.8 : lab.chroma, hue: lab.hue)
-        default:
-            let tint = darkTint(for: lab)
-            ui = relit(lightness: tint.lightness, chroma: tint.chroma, hue: lab.hue)
-        }
-        return Color(ui)
+        let lightness = lab.chroma >= 8 ? min(max(lab.l, 20), 90) : lab.l
+        return Color(relit(lightness: lightness, chroma: lab.chroma, hue: lab.hue))
     }
 
     /// Backdrop that always carries white text (artist pages), in either appearance: the
@@ -59,12 +46,12 @@ enum ArtworkBackdrop {
         return Color(color)
     }
 
-    /// Dark-appearance target: colorful sources at L* 26 to 40 and about 0.8x chroma,
-    /// neutral ones just above their own L*, capped.
+    /// White-text target: colorful sources at L* 22 to 46 keeping 0.95x chroma, neutral ones
+    /// just above their own L*, capped.
     private static func darkTint(for lab: Lab) -> (lightness: Double, chroma: Double) {
         let colorful = lab.chroma >= 8
-        let chroma = colorful ? lab.chroma * 0.8 : lab.chroma
-        let lightness = colorful ? min(max(lab.l, 26), 40) : min(lab.l + 0.5, darkLightnessCap)
+        let chroma = colorful ? lab.chroma * 0.95 : lab.chroma
+        let lightness = colorful ? min(max(lab.l, 22), 46) : min(lab.l + 0.5, darkLightnessCap)
         return (lightness, chroma)
     }
 
@@ -103,18 +90,5 @@ enum ArtworkBackdrop {
             return c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
         }
         return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
-    }
-
-    /// Piecewise-linear fit through measured (source L*, backdrop L*) pairs; white covers
-    /// map to a white page.
-    private static func lightBackdropLightness(forSource l: Double) -> Double {
-        let anchors: [(src: Double, out: Double)] = [
-            (0, 0.5), (18, 18.5), (50, 43), (85, 78), (99.3, 100), (100, 100)
-        ]
-        for (a, b) in zip(anchors, anchors.dropFirst()) where l <= b.src {
-            let t = (l - a.src) / (b.src - a.src)
-            return a.out + t * (b.out - a.out)
-        }
-        return 100
     }
 }
