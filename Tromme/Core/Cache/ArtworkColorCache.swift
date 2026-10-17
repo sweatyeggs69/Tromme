@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v12.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v13.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v12.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v13.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -154,7 +154,8 @@ private extension UIImage {
     /// jumpsuits, The 1975's dark suits), returns their average, so a colored area isn't
     /// washed out to gray by bright subjects or a white studio backdrop. Otherwise, when dark
     /// pixels cover at least `minimumDarkShare` of the non-white pixels, returns their
-    /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music).
+    /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music; a
+    /// black-and-white photo needs only `minimumAchromaticDarkShare` of them).
     /// Otherwise returns the plain average color. The backdrop re-lights it later.
     func accentColor(visibleFraction: Double) -> UIColor {
         guard let cgImage else { return .gray }
@@ -179,6 +180,10 @@ private extension UIImage {
         let minimumTintShare = 0.15
         let darkLightness = 25.0
         let minimumDarkShare = 0.25
+        // A black-and-white photo has no hue to pick, so a smaller dark area is enough to
+        // call the backdrop black (Being as an Ocean: dark shirts and hair on white).
+        let achromaticShare = 0.05
+        let minimumAchromaticDarkShare = 0.10
 
         let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
@@ -189,6 +194,7 @@ private extension UIImage {
         var binB = [Double](repeating: 0, count: hueBins)
         var tintCount = [Double](repeating: 0, count: hueBins)
         var nonWhiteCount = 0.0
+        var chromaticCount = 0.0
         var darkCount = 0.0, darkR = 0.0, darkG = 0.0, darkB = 0.0
         var tintR = [Double](repeating: 0, count: hueBins)
         var tintG = [Double](repeating: 0, count: hueBins)
@@ -202,6 +208,7 @@ private extension UIImage {
 
             let lab = Lab(r: r, g: g, b: b)
             let chroma = lab.chroma
+            if chroma >= minimumTintChroma { chromaticCount += 1 }
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
 
             // A white studio backdrop or blown highlights shouldn't dilute the colors below.
@@ -256,7 +263,9 @@ private extension UIImage {
             let tintTotal = total(tintCount, over: tintBins)
             let nonWhite = max(nonWhiteCount, 1)
             guard tintTotal / nonWhite >= minimumTintShare else {
-                guard darkCount / nonWhite >= minimumDarkShare else { return average }
+                let isAchromatic = chromaticCount / n < achromaticShare
+            let darkShare = isAchromatic ? minimumAchromaticDarkShare : minimumDarkShare
+            guard darkCount / nonWhite >= darkShare else { return average }
                 return UIColor(red: darkR / darkCount, green: darkG / darkCount, blue: darkB / darkCount, alpha: 1)
             }
             return UIColor(
