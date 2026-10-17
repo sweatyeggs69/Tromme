@@ -61,6 +61,18 @@ final class HomeViewModel {
         await load(context)
     }
 
+    /// Process-lifetime flag: true after the first refresh since the app was launched, so
+    /// returning from the background (same process) never triggers it again.
+    private static var didRefreshSinceLaunch = false
+
+    /// Runs the pull-to-refresh path once per cold launch so new Plex media shows up without a manual pull.
+    func refreshOnColdLaunch(_ context: Context) async {
+        guard !isPreviewMode, !Self.didRefreshSinceLaunch,
+              context.server != nil, context.sectionId != nil else { return }
+        Self.didRefreshSinceLaunch = true
+        await refresh(context)
+    }
+
     func libraryContentDidChange(_ context: Context) async {
         guard !isPreviewMode else { return }
         await loadHomeContent(context)
