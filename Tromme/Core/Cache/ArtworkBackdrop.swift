@@ -14,7 +14,7 @@ import CryptoKit
 /// range (L* 22 to 46) with most of its chroma kept.
 enum ArtworkBackdrop {
     enum Style {
-        /// Artist pages: accent or average of the visible photo.
+        /// Artist pages: accent or average of the photo's bottom third.
         case artist
         /// Album and playlist pages: accent or average of the whole cover.
         case cover

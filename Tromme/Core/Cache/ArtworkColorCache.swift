@@ -93,8 +93,8 @@ final class ArtworkColorCache {
     /// The color pick for each style. Pure pixel math, so it can run on any thread.
     private nonisolated static func pick(from image: UIImage, style: ArtworkBackdrop.Style) -> UIColor {
         switch style {
-        case .artist: image.accentColor(visibleFraction: 0.6, keepsPaleAverage: false)
-        case .cover: image.accentColor(visibleFraction: 1, keepsPaleAverage: true)
+        case .artist: image.accentColor(rows: (2.0 / 3.0)..<1, keepsPaleAverage: false)
+        case .cover: image.accentColor(rows: 0..<1, keepsPaleAverage: true)
         }
     }
 
@@ -113,7 +113,7 @@ final class ArtworkColorCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk() async {
-        let fileURL = diskURL.appendingPathComponent("colors-v15.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v16.json")
         let entries = await persistence.load(from: fileURL)
         for (key, rgb) in entries where rgb.count == 3 {
             store(Color(red: rgb[0], green: rgb[1], blue: rgb[2]), forKey: key)
@@ -130,7 +130,7 @@ final class ArtworkColorCache {
     }
 
     private func flushToDisk() {
-        let fileURL = diskURL.appendingPathComponent("colors-v15.json")
+        let fileURL = diskURL.appendingPathComponent("colors-v16.json")
         var entries: [String: [CGFloat]] = [:]
         for (key, color) in cache {
             let uiColor = UIColor(color)
@@ -145,8 +145,8 @@ final class ArtworkColorCache {
 }
 
 private extension UIImage {
-    /// Backdrop source color for the visible part of the image (the top `visibleFraction`;
-    /// artist photos fade out at the bottom). Favors a strong accent: when vivid pixels of
+    /// Backdrop source color for a band of the image (`rows`, as fractions of its height; artist
+    /// pages sample the bottom third, where the photo fades into the page). Favors a strong accent: when vivid pixels of
     /// one hue family cover at least `minimumAccentShare` of the image (the red grenade on
     /// American Idiot, the gold logo on Dookie), returns their chroma-weighted average.
     /// Otherwise, when muted but tinted pixels of one hue family cover at least
@@ -160,7 +160,7 @@ private extension UIImage {
     /// page, so a white studio photo must not take this path), a pale, desaturated image
     /// (average L* 70+, little dark area) returns its plain average before the tint and dark picks, so it gives a pale page. Otherwise returns the plain
     /// average color. The backdrop keeps its hue and chroma.
-    func accentColor(visibleFraction: Double, keepsPaleAverage: Bool) -> UIColor {
+    func accentColor(rows: Range<Double>, keepsPaleAverage: Bool) -> UIColor {
         guard let cgImage else { return .gray }
 
         let size = 32
@@ -190,7 +190,10 @@ private extension UIImage {
         let paleAverageLightness = 70.0
         let paleMaximumDarkShare = 0.20
 
-        let pixelCount = max(Int(Double(size) * visibleFraction), 1) * size
+        let firstRow = min(Int(Double(size) * rows.lowerBound), size - 1)
+        let lastRow = max(Int(Double(size) * rows.upperBound), firstRow + 1)
+        let firstPixel = firstRow * size
+        let pixelCount = (lastRow - firstRow) * size
         var sumR = 0.0, sumG = 0.0, sumB = 0.0
         var binWeight = [Double](repeating: 0, count: hueBins)
         var binCount = [Int](repeating: 0, count: hueBins)
@@ -206,7 +209,7 @@ private extension UIImage {
         var tintG = [Double](repeating: 0, count: hueBins)
         var tintB = [Double](repeating: 0, count: hueBins)
 
-        for i in 0..<pixelCount {
+        for i in firstPixel..<(firstPixel + pixelCount) {
             let r = Double(pixelData[i * 4]) / 255
             let g = Double(pixelData[i * 4 + 1]) / 255
             let b = Double(pixelData[i * 4 + 2]) / 255
