@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Artist photo drawn behind the list. Pinned to the top of the screen, zooms on overscroll,
-/// parallaxes at half speed and blurs out as the page scrolls.
+/// scrolls with the list and blurs out as the page scrolls.
 struct ArtistHeroPhotoView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -15,7 +15,7 @@ struct ArtistHeroPhotoView: View {
     @State private var image: UIImage?
 
     /// Heights of the blur and color-fade bands, anchored to the bottom edge of the photo itself
-    /// so they travel with the image (zoom, parallax) instead of the name and buttons.
+    /// so they travel with the image (zoom, scroll) instead of the name and buttons.
     private let blurBandHeight: CGFloat = 145
     private let fadeBandHeight: CGFloat = 145
 
@@ -23,8 +23,6 @@ struct ArtistHeroPhotoView: View {
         GeometryReader { geo in
             let stretch = max(-scrollOffset, 0)
             let scrolled = max(scrollOffset, 0)
-            // Photo scrolls at half speed so the title and controls glide over it.
-            let parallax = scrolled * 0.5
             // Photo blurs out as the title nears the top safe area.
             let blurProgress = min(max((scrolled - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
             let scrollBlur = blurProgress * 30
@@ -36,7 +34,9 @@ struct ArtistHeroPhotoView: View {
                 photoWithFades(width: width, blur: scrollBlur)
                     // Zoom from the first point of overscroll, pinned to the top edge.
                     .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
-                    .offset(y: -parallax)
+                    // Scrolls with the row (no parallax), so the photo's faded bottom edge always
+                    // lands exactly on the row's bottom edge and no hard edge shows.
+                    .offset(y: -scrolled)
                     .frame(width: width, height: geo.size.height, alignment: .top)
                     // Never paint below the hero row's current bottom edge.
                     .mask(alignment: .top) {
