@@ -31,6 +31,7 @@ struct ArtistSidePanelView: View {
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))
                     .foregroundStyle(Color.white)
+                    .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
                     .multilineTextAlignment(.center)
