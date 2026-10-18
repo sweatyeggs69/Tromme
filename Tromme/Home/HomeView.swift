@@ -71,6 +71,7 @@ struct HomeView: View {
         }
         .task(id: loadTaskID) {
             await viewModel.load(loadContext)
+            await viewModel.refreshOnColdLaunch(loadContext)
         }
         .task {
             for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
