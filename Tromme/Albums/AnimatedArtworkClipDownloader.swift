@@ -4,7 +4,7 @@ import Foundation
 /// places that need a video file instead of a stream (the lock screen).
 enum AnimatedArtworkClipDownloader {
     /// Widest variant to pick from the master playlist; the lock screen doesn't need more.
-    private static let maxVariantWidth = 720
+    private static let maxVariantWidth = 960
 
     static func clipData(from streamURL: URL) async -> Data? {
         do {
