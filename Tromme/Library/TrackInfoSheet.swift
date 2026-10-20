@@ -24,7 +24,6 @@ struct TrackInfoSheet: View {
                 }
 
                 Section("Media") {
-                    row("Container", (viewModel.part?.container ?? viewModel.media?.container)?.uppercased())
                     row("Codec", (viewModel.audioStream?.codec ?? viewModel.media?.audioCodec)?.uppercased())
                     row("Bit Rate", (viewModel.audioStream?.bitrate ?? viewModel.media?.bitrate).map { "\($0) kbps" })
                     row("Sample Rate", viewModel.audioStream?.samplingRate.map { String(format: "%.1f kHz", Double($0) / 1000) })
