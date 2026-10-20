@@ -220,9 +220,6 @@ struct PlaylistDetailView: View {
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
                 .onMove(perform: moveTracks)
-                .onDelete(perform: canReorderPlaylist ? { offsets in
-                    requestRemoval(of: Set(offsets.map { tracks[$0].id }))
-                } : nil)
                 .moveDisabled(!canReorderPlaylist)
             }
         }
@@ -295,6 +292,7 @@ struct PlaylistDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.editMode, $editMode)
+        .navigationBarBackButtonHidden(isEditing)
         .navigationDestination(item: $trackNavigationTarget) { target in
             if target.type == "artist" {
                 ArtistDetailView(artist: target)
@@ -308,15 +306,15 @@ struct PlaylistDetailView: View {
                     Button("Done") { endEditing() }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(selection.count == tracks.count ? "Deselect All" : "Select All") {
-                        selection = selection.count == tracks.count ? [] : Set(tracks.map(\.id))
-                    }
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button("Remove", systemImage: "trash", role: .destructive) {
+                    Button("Delete", role: .destructive) {
                         requestRemoval(of: selection)
                     }
                     .disabled(selection.isEmpty)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button(selection.count == tracks.count ? "Deselect All" : "Select All") {
+                        selection = selection.count == tracks.count ? [] : Set(tracks.map(\.id))
+                    }
                 }
             } else {
             ToolbarItem(placement: .topBarTrailing) {
