@@ -578,12 +578,6 @@ struct NowPlayingView: View {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }
             Button {
-                metadataRequest = .edit(track)
-            } label: {
-                Label("Edit Track", systemImage: "pencil")
-            }
-            .disabled(serverConnection.currentServer == nil)
-            Button {
                 metadataRequest = .trackInfo(track)
             } label: {
                 Label("Track Info", systemImage: "info.circle")
