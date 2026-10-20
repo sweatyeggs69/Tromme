@@ -306,12 +306,12 @@ struct PlaylistDetailView: View {
                     Button("Done") { endEditing() }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Delete", role: .destructive) {
+                    Button("Delete", systemImage: "trash", role: .destructive) {
                         requestRemoval(of: selection)
                     }
                     .disabled(selection.isEmpty)
                 }
-                ToolbarItem(placement: .bottomBar) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button(selection.count == tracks.count ? "Deselect All" : "Select All") {
                         selection = selection.count == tracks.count ? [] : Set(tracks.map(\.id))
                     }
