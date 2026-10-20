@@ -220,10 +220,10 @@ struct PlaylistDetailView: View {
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
                 .onMove(perform: moveTracks)
-                .moveDisabled(!canReorderPlaylist)
                 .onDelete(perform: canReorderPlaylist ? { offsets in
                     requestRemoval(of: Set(offsets.map { tracks[$0].id }))
                 } : nil)
+                .moveDisabled(!canReorderPlaylist)
             }
         }
     }
