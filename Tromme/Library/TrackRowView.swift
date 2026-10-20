@@ -113,15 +113,6 @@ struct TrackRowView: View {
             Label("Add to Playlist", systemImage: "text.badge.plus")
         }
 
-        Divider()
-
-        Button {
-            metadataRequest = .edit(shown)
-        } label: {
-            Label("Edit Track", systemImage: "pencil")
-        }
-        .disabled(serverConnection.currentServer == nil)
-
         Button {
             metadataRequest = .trackInfo(shown)
         } label: {
@@ -153,6 +144,13 @@ struct TrackRowView: View {
         }
 
         Divider()
+
+        Button {
+            metadataRequest = .edit(shown)
+        } label: {
+            Label("Edit Track", systemImage: "pencil")
+        }
+        .disabled(serverConnection.currentServer == nil)
 
         Button("Delete Track", systemImage: "trash", role: .destructive) {
             showDeleteTrackConfirmation = true

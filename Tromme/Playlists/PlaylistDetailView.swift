@@ -325,14 +325,16 @@ struct PlaylistDetailView: View {
             } else {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    playlistDownloadButton
+                    if canReorderPlaylist || canDeletePlaylist {
+                        Divider()
+                    }
                     if canReorderPlaylist {
                         Button("Edit Playlist", systemImage: "checklist") {
                             withAnimation { editMode = .active }
                         }
                     }
-                    playlistDownloadButton
                     if canDeletePlaylist {
-                        Divider()
                         Button("Delete Playlist", systemImage: "trash", role: .destructive) {
                             showDeletePlaylistConfirmation = true
                         }

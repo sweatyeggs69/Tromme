@@ -156,10 +156,6 @@ struct AlbumTrackRow: View {
 
                 Divider()
 
-                Button("Edit Track", systemImage: "pencil") {
-                    metadataRequest = .edit(track)
-                }
-                .disabled(serverConnection.currentServer == nil)
                 Button("Track Info", systemImage: "info.circle") {
                     metadataRequest = .trackInfo(track)
                 }
@@ -167,6 +163,10 @@ struct AlbumTrackRow: View {
 
                 Divider()
 
+                Button("Edit Track", systemImage: "pencil") {
+                    metadataRequest = .edit(track)
+                }
+                .disabled(serverConnection.currentServer == nil)
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
                 }
@@ -198,10 +198,6 @@ struct AlbumTrackRow: View {
 
             Divider()
 
-            Button("Edit Track", systemImage: "pencil") {
-                metadataRequest = .edit(track)
-            }
-            .disabled(serverConnection.currentServer == nil)
             Button("Track Info", systemImage: "info.circle") {
                 metadataRequest = .trackInfo(track)
             }
@@ -209,6 +205,10 @@ struct AlbumTrackRow: View {
 
             Divider()
 
+            Button("Edit Track", systemImage: "pencil") {
+                metadataRequest = .edit(track)
+            }
+            .disabled(serverConnection.currentServer == nil)
             Button("Delete Track", systemImage: "trash", role: .destructive) {
                 showDeleteTrackConfirmation = true
             }
