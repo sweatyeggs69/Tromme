@@ -322,11 +322,6 @@ struct PlaylistDetailView: View {
                     }
                     .disabled(selection.isEmpty)
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button(selection.count == tracks.count ? "Deselect All" : "Select All") {
-                        selection = selection.count == tracks.count ? [] : Set(tracks.map(\.id))
-                    }
-                }
             } else {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
