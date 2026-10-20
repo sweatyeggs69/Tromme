@@ -115,10 +115,6 @@ struct TrackRowView: View {
 
         Divider()
 
-        downloadMenuButton
-
-        Divider()
-
         Button {
             metadataRequest = .edit(shown)
         } label: {
@@ -131,6 +127,10 @@ struct TrackRowView: View {
         } label: {
             Label("Track Info", systemImage: "info.circle")
         }
+
+        Divider()
+
+        downloadMenuButton
 
         Divider()
 

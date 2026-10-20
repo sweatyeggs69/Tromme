@@ -155,17 +155,15 @@ struct AlbumTrackRow: View {
                 }
 
                 Divider()
-                trackDownloadButton
 
-                Divider()
-
-Button("Edit Track", systemImage: "pencil") {
+                Button("Edit Track", systemImage: "pencil") {
                     metadataRequest = .edit(track)
                 }
                 .disabled(serverConnection.currentServer == nil)
                 Button("Track Info", systemImage: "info.circle") {
                     metadataRequest = .trackInfo(track)
                 }
+                trackDownloadButton
 
                 Divider()
 
@@ -197,7 +195,6 @@ Button("Edit Track", systemImage: "pencil") {
             Button("Add to Playlist", systemImage: "text.badge.plus") {
                 onAddToPlaylist(track)
             }
-            trackDownloadButton
 
             Divider()
 
@@ -208,6 +205,7 @@ Button("Edit Track", systemImage: "pencil") {
             Button("Track Info", systemImage: "info.circle") {
                 metadataRequest = .trackInfo(track)
             }
+            trackDownloadButton
 
             Divider()
 

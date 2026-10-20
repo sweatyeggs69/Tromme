@@ -775,12 +775,11 @@ struct AlbumDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     if !isPreviewMode {
-                        albumDownloadButton
-                        Divider()
                         Button("Edit Album", systemImage: "pencil") {
                             metadataRequest = .edit(albumDetails)
                         }
                         .disabled(serverConnection.currentServer == nil)
+                        albumDownloadButton
                         Divider()
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
