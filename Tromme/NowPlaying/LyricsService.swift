@@ -91,7 +91,7 @@ final class LyricsService {
         }
 
         guard activeRequestID == requestID else { return }
-        if let result { apply(result) }
+        if let result { apply(result, trackDuration: track.duration.map { Double($0) / 1000 }) }
         isLoading = false
     }
 
@@ -235,10 +235,10 @@ final class LyricsService {
         return nil
     }
 
-    private func apply(_ response: ResolvedLyrics) {
+    private func apply(_ response: ResolvedLyrics, trackDuration: TimeInterval?) {
         current = response
         if let synced = response.syncedLyrics, !synced.isEmpty {
-            lines = LRCParser.parse(synced)
+            lines = LRCParser.parse(synced, trackDuration: trackDuration)
             hasSynced = !lines.isEmpty
             hasLyrics = hasSynced
         }

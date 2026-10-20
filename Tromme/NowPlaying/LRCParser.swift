@@ -13,7 +13,7 @@ enum LRCParser {
     /// A gap between lyrics longer than this gets a music note.
     static let breakThreshold: TimeInterval = 5
 
-    static func parse(_ lrc: String) -> [LyricsLine] {
+    static func parse(_ lrc: String, trackDuration: TimeInterval? = nil) -> [LyricsLine] {
         var result: [(line: LyricsLine, isBackground: Bool)] = []
         // Empty stamps mark where a line ends, which tells a long instrumental
         // gap apart from a line that is simply held.
@@ -44,7 +44,7 @@ enum LRCParser {
             result.append((LyricsLine(time: time, text: text, words: words), false))
         }
         let sorted = result.sorted { $0.line.time < $1.line.time }
-        return insertingBreaks(into: foldingBacking(sorted), endMarkers: endMarkers.sorted())
+        return insertingBreaks(into: foldingBacking(sorted), endMarkers: endMarkers.sorted(), trackDuration: trackDuration)
     }
 
     /// Attaches backing vocals to the line they overlap, so the primary stays
@@ -81,8 +81,9 @@ enum LRCParser {
 
     /// Adds a music-note row at the start of every gap longer than
     /// `breakThreshold`, including before the first line. The row is active
-    /// from when the previous line ends until the next one starts.
-    private static func insertingBreaks(into lines: [LyricsLine], endMarkers: [TimeInterval]) -> [LyricsLine] {
+    /// from when the previous line ends until the next one starts. A note also
+    /// closes the song when more than `breakThreshold` of music follows the last line.
+    private static func insertingBreaks(into lines: [LyricsLine], endMarkers: [TimeInterval], trackDuration: TimeInterval?) -> [LyricsLine] {
         guard let first = lines.first else { return lines }
         var result: [LyricsLine] = []
         if first.time > breakThreshold {
@@ -90,7 +91,17 @@ enum LRCParser {
         }
         for (index, line) in lines.enumerated() {
             result.append(line)
-            guard index + 1 < lines.count else { break }
+            guard index + 1 < lines.count else {
+                if let trackDuration {
+                    let end = line.lastWordEnd
+                        ?? endMarkers.first(where: { $0 > line.time })
+                        ?? line.time + 1.5 + 0.08 * Double(line.text.count)
+                    if trackDuration - end > breakThreshold {
+                        result.append(LyricsLine(time: end, text: "", isBreak: true))
+                    }
+                }
+                break
+            }
             let next = lines[index + 1]
             let end = endTime(of: line, before: next, endMarkers: endMarkers)
             if next.time - end > breakThreshold {
