@@ -196,11 +196,11 @@ extension PlexAPIClient {
     func setArtworkResource(server: PlexServer, ratingKey: String, element: String = "poster", artworkURL: String) async throws {
         let candidateElements: [String]
         if element == "poster" {
-            candidateElements = ["poster", "thumb", "posters", "thumbs", "art", "arts"]
+            candidateElements = ["posters", "poster", "thumb", "thumbs", "art", "arts"]
         } else {
             candidateElements = [element, "poster", "thumb", "posters", "thumbs", "art", "arts"]
         }
-        let candidateMethods = ["PUT", "POST"]
+        let candidateMethods = ["POST", "PUT"]
         var lastError: Error?
 
         for candidateElement in candidateElements {

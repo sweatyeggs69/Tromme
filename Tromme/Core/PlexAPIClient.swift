@@ -269,33 +269,38 @@ final class PlexAPIClient: Sendable {
     }
 
     /// Uploads image bytes as the item's artwork (`POST /library/metadata/{ids}/{element}` with the binary as the body).
-    func uploadArtwork(server: PlexServer, ratingKey: String, element: String = "poster", imageData: Data) async throws {
-        guard let baseURL = server.baseURL,
-              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else {
-            throw PlexAPIError.invalidURL
-        }
-        components.path = "/library/metadata/\(ratingKey)/\(element)"
-        guard let url = components.url else { throw PlexAPIError.invalidURL }
+    /// PMS serves the plural collection (`posters`) for uploads; the singular names are tried as fallbacks.
+    func uploadArtwork(server: PlexServer, ratingKey: String, imageData: Data) async throws {
+        var lastError: Error = PlexAPIError.serverError(404)
+        for element in ["posters", "poster", "thumb"] {
+            guard let baseURL = server.baseURL,
+                  var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true) else {
+                throw PlexAPIError.invalidURL
+            }
+            components.path = "/library/metadata/\(ratingKey)/\(element)"
+            guard let url = components.url else { throw PlexAPIError.invalidURL }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        applyPlexHeaders(to: &request, token: server.accessToken)
-        request.setValue("*/*", forHTTPHeaderField: "Accept")
-        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            applyPlexHeaders(to: &request, token: server.accessToken)
+            request.setValue("*/*", forHTTPHeaderField: "Accept")
+            request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
 
-        let response: URLResponse
-        do {
-            (_, response) = try await session.upload(for: request, from: imageData)
-        } catch {
-            throw PlexAPIError.networkError(error)
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw PlexAPIError.invalidURL
-        }
-        guard (200...299).contains(http.statusCode) else {
+            let response: URLResponse
+            do {
+                (_, response) = try await session.upload(for: request, from: imageData)
+            } catch {
+                throw PlexAPIError.networkError(error)
+            }
+            guard let http = response as? HTTPURLResponse else {
+                throw PlexAPIError.invalidURL
+            }
+            if (200...299).contains(http.statusCode) { return }
             if http.statusCode == 401 { throw PlexAPIError.unauthorized }
-            throw PlexAPIError.serverError(http.statusCode)
+            lastError = PlexAPIError.serverError(http.statusCode)
+            guard [400, 404, 406].contains(http.statusCode) else { throw lastError }
         }
+        throw lastError
     }
 
     /// Execute a typed request against plex.tv.

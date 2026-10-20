@@ -311,6 +311,7 @@ struct ChangeArtworkSheet: View {
     private func applyCustomURL(_ value: String) async {
         guard !isApplyingArtwork else { return }
         guard let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased()) else {
+            try? await Task.sleep(for: .milliseconds(400))
             artworkErrorMessage = "Enter a valid http or https address."
             return
         }
@@ -408,7 +409,7 @@ struct ChangeArtworkSheet: View {
     }
 
     private func waitForThumbChange(server: PlexServer, originalThumb: String?) async -> Bool {
-        for _ in 0..<4 {
+        for _ in 0..<20 {
             if let latestThumb = try? await client.getMetadata(server: server, ratingKey: ratingKey)?.thumb,
                latestThumb != originalThumb {
                 return true
