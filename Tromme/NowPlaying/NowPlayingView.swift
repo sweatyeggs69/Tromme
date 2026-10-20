@@ -572,11 +572,13 @@ struct NowPlayingView: View {
                     Text(track.grandparentTitle ?? track.artistName)
                 }
             }
+            Divider()
             Button {
                 addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: [track.ratingKey])
             } label: {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }
+            Divider()
             Button {
                 metadataRequest = .trackInfo(track)
             } label: {
