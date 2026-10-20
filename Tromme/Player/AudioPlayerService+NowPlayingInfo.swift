@@ -87,12 +87,25 @@ extension AudioPlayerService {
 
     func updateShuffleRepeatState() {
         let center = MPRemoteCommandCenter.shared()
-        center.changeShuffleModeCommand.currentShuffleType = isShuffled ? .items : .off
-        switch repeatMode {
-        case .off: center.changeRepeatModeCommand.currentRepeatType = .off
-        case .song: center.changeRepeatModeCommand.currentRepeatType = .all
-        case .once: center.changeRepeatModeCommand.currentRepeatType = .one
+        let shuffleType: MPShuffleType = isShuffled ? .items : .off
+        if center.changeShuffleModeCommand.currentShuffleType != shuffleType {
+            center.changeShuffleModeCommand.currentShuffleType = shuffleType
         }
+        let repeatType: MPRepeatType
+        switch repeatMode {
+        case .off: repeatType = .off
+        case .song: repeatType = .all
+        case .once: repeatType = .one
+        }
+        if center.changeRepeatModeCommand.currentRepeatType != repeatType {
+            center.changeRepeatModeCommand.currentRepeatType = repeatType
+        }
+    }
+
+    /// Only writes when the state changes; re-setting the same value still makes CarPlay redraw its buttons.
+    func setLikeCommandActive(_ active: Bool) {
+        let command = MPRemoteCommandCenter.shared().likeCommand
+        if command.isActive != active { command.isActive = active }
     }
 
     func resolvedPlaybackPath(for server: PlexServer) -> PlaybackPath {
@@ -125,10 +138,23 @@ extension AudioPlayerService {
         if trackKey == lastPublishedNowPlayingTrackKey,
            !NowPlayingAnimatedArtwork.shared.needsUpdate(for: currentTrack),
            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
+            // Every write makes CarPlay refresh its whole transport row (play/pause,
+            // shuffle, repeat), so skip writes that wouldn't change anything.
+            let rate = isPlaying ? 1.0 : 0.0
+            let publishedRate = info[MPNowPlayingInfoPropertyPlaybackRate] as? Double
+            let publishedDuration = info[MPMediaItemPropertyPlaybackDuration] as? Double
+            let publishedElapsed = info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double
+            if publishedRate == rate,
+               let publishedDuration, abs(publishedDuration - duration) < 0.5,
+               let publishedElapsed {
+                let expected = publishedElapsed + rate * Date().timeIntervalSince(lastPublishedNowPlayingDate)
+                if abs(expected - currentTime) < 1.5 { return }
+            }
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
-            info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
+            info[MPNowPlayingInfoPropertyPlaybackRate] = rate
             info[MPMediaItemPropertyPlaybackDuration] = duration
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+            lastPublishedNowPlayingDate = Date()
             return
         }
 
@@ -146,7 +172,8 @@ extension AudioPlayerService {
         info.merge(NowPlayingAnimatedArtwork.shared.entries(for: currentTrack)) { _, new in new }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        MPRemoteCommandCenter.shared().likeCommand.isActive = (currentTrack.userRating ?? 0) >= 10
+        lastPublishedNowPlayingDate = Date()
+        setLikeCommandActive((currentTrack.userRating ?? 0) >= 10)
         lastPublishedNowPlayingTrackKey = trackKey
 
         let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb

@@ -71,6 +71,7 @@ final class AudioPlayerService: Sendable {
     var playbackGeneration: Int = 0
     var playbackIntent: Bool = false
     var lastPublishedNowPlayingTrackKey: String?
+    var lastPublishedNowPlayingDate = Date.distantPast
     let maxRecoveryAttemptsPerTrack = 2
     var recoveryTrackRatingKey: String?
     var recoveryAttemptsForTrack = 0
@@ -275,7 +276,7 @@ final class AudioPlayerService: Sendable {
     /// Call this from any UI that can rate the currently playing track.
     func updateCurrentTrackRating(_ userRating: Double?) {
         currentTrack?.userRating = userRating
-        MPRemoteCommandCenter.shared().likeCommand.isActive = (userRating ?? 0) >= 10
+        setLikeCommandActive((userRating ?? 0) >= 10)
     }
 
     /// Persists a favorite/unfavorite rating for `track`, invalidating the favorites caches,
