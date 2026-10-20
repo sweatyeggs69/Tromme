@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct ChangeArtworkSheet: View {
@@ -16,6 +17,10 @@ struct ChangeArtworkSheet: View {
     @State private var isApplyingArtwork = false
     @State private var applyingArtworkID: String?
     @State private var artworkErrorMessage: String?
+    @State private var showingPhotoPicker = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var showingURLPrompt = false
+    @State private var customArtworkURL = ""
     private let gridSpacing: CGFloat = 12
     private let horizontalInset: CGFloat = 16
 
@@ -84,7 +89,40 @@ struct ChangeArtworkSheet: View {
                     }
                     .disabled(isApplyingArtwork)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Upload Photo", systemImage: "photo") {
+                            showingPhotoPicker = true
+                        }
+                        Button("Add from URL", systemImage: "link") {
+                            customArtworkURL = ""
+                            showingURLPrompt = true
+                        }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(isLoadingArtwork || isApplyingArtwork)
+                }
             }
+        }
+        .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhoto, matching: .images)
+        .onChange(of: selectedPhoto) { _, item in
+            guard let item else { return }
+            selectedPhoto = nil
+            Task { await uploadPhoto(item) }
+        }
+        .alert("Artwork URL", isPresented: $showingURLPrompt) {
+            TextField("https://", text: $customArtworkURL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            Button("Cancel", role: .cancel) {}
+            Button("Add") {
+                let value = customArtworkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                Task { await applyCustomURL(value) }
+            }
+        } message: {
+            Text("Enter the web address of an image for this \(subject).")
         }
         .task {
             await loadArtworkOptions()
@@ -248,6 +286,65 @@ struct ChangeArtworkSheet: View {
         } catch {
             artworkErrorMessage = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func uploadPhoto(_ item: PhotosPickerItem) async {
+        guard !isApplyingArtwork else { return }
+        isApplyingArtwork = true
+        defer { isApplyingArtwork = false }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.95) else {
+                artworkErrorMessage = "Unable to read the selected photo."
+                return
+            }
+            try await applyCustomArtwork { server in
+                try await client.uploadArtwork(server: server, ratingKey: ratingKey, imageData: jpeg)
+            }
+        } catch {
+            artworkErrorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func applyCustomURL(_ value: String) async {
+        guard !isApplyingArtwork else { return }
+        guard let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased()) else {
+            artworkErrorMessage = "Enter a valid http or https address."
+            return
+        }
+        isApplyingArtwork = true
+        defer { isApplyingArtwork = false }
+        do {
+            try await applyCustomArtwork { server in
+                try await client.setArtworkResource(
+                    server: server,
+                    ratingKey: ratingKey,
+                    element: "poster",
+                    artworkURL: value
+                )
+            }
+        } catch {
+            artworkErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Runs the upload or URL request, waits for the new thumb, then refreshes the listing and closes.
+    @MainActor
+    private func applyCustomArtwork(_ send: (PlexServer) async throws -> Void) async throws {
+        guard let server = serverConnection.currentServer else { return }
+        let originalThumb = try? await client.getMetadata(server: server, ratingKey: ratingKey)?.thumb
+        try await send(server)
+        guard await waitForThumbChange(server: server, originalThumb: originalThumb) else {
+            artworkErrorMessage = "Unable to change artwork."
+            return
+        }
+        if let fresh = try? await client.getMetadata(server: server, ratingKey: ratingKey) {
+            await LibraryStore.shared.replaceListing(fresh, serverId: server.machineIdentifier)
+        }
+        await onArtworkChanged()
+        dismiss()
     }
 
     private func orderedUniqueArtworkCandidates(for artwork: PlexImageResource) -> [String] {
