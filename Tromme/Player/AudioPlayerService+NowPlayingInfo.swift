@@ -158,6 +158,26 @@ extension AudioPlayerService {
             return
         }
 
+        // Resolve artwork first so a memory-cached image goes out in the same write
+        // as the metadata; a second write right after makes CarPlay redraw twice.
+        let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
+        let artworkURL = client.flatMap { client in
+            server.flatMap { client.artworkURL(server: $0, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) }
+        }
+        var needsArtworkFetch = false
+        if thumbPath != cachedArtworkThumbPath {
+            cachedArtworkThumbPath = thumbPath
+            cachedArtwork = nil
+            nowPlayingArtworkTask?.cancel()
+            if let artworkURL {
+                if let image = ImageCache.shared.memoryCachedImage(for: artworkURL, targetPixelSize: ArtworkView.maxTranscodePx) {
+                    cachedArtwork = Self.makeArtwork(from: image)
+                } else {
+                    needsArtworkFetch = true
+                }
+            }
+        }
+
         var info = [String: Any]()
         info[MPMediaItemPropertyTitle] = currentTrack.title
         info[MPMediaItemPropertyArtist] = currentTrack.artistDisplayName
@@ -176,25 +196,18 @@ extension AudioPlayerService {
         setLikeCommandActive((currentTrack.userRating ?? 0) >= 10)
         lastPublishedNowPlayingTrackKey = trackKey
 
-        let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
         prepareAnimatedArtwork(for: currentTrack, thumbPath: thumbPath)
-        if thumbPath != cachedArtworkThumbPath {
-            cachedArtworkThumbPath = thumbPath
-            cachedArtwork = nil
-            nowPlayingArtworkTask?.cancel()
-            if let client, let server,
-               let url = client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) {
-                let generation = playbackGeneration
-                let capturedTrackKey = trackKey
-                nowPlayingArtworkTask = Task {
-                    guard let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx) else { return }
-                    guard !Task.isCancelled else { return }
-                    guard self.playbackGeneration == generation else { return }
-                    guard self.currentTrack?.ratingKey == capturedTrackKey else { return }
-                    let artwork = Self.makeArtwork(from: image)
-                    self.cachedArtwork = artwork
-                    MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
-                }
+        if needsArtworkFetch, let url = artworkURL {
+            let generation = playbackGeneration
+            let capturedTrackKey = trackKey
+            nowPlayingArtworkTask = Task {
+                guard let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx) else { return }
+                guard !Task.isCancelled else { return }
+                guard self.playbackGeneration == generation else { return }
+                guard self.currentTrack?.ratingKey == capturedTrackKey else { return }
+                let artwork = Self.makeArtwork(from: image)
+                self.cachedArtwork = artwork
+                MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] = artwork
             }
         }
     }

@@ -30,17 +30,14 @@ extension CarPlaySceneDelegate {
         }
         self.magicMixButton = mixBtn
 
-        let filled = CPNowPlayingImageButton(image: UIImage(systemName: "star.fill") ?? UIImage()) { [weak self] _ in
+        // One button whose selected state marks a favorite. Swapping two buttons via
+        // updateNowPlayingButtons() re-sends the whole row and flashes shuffle/repeat.
+        let favorite = CPNowPlayingImageButton(image: UIImage(systemName: "star.fill") ?? UIImage()) { [weak self] _ in
             self?.toggleFavorite()
         }
-        self.favFilledButton = filled
+        self.favoriteButton = favorite
 
-        let outline = CPNowPlayingImageButton(image: UIImage(systemName: "star") ?? UIImage()) { [weak self] _ in
-            self?.toggleFavorite()
-        }
-        self.favOutlineButton = outline
-
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, outline, mixBtn])
+        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, favorite, mixBtn])
         lastPublishedFavoriteState = false
         syncMixButtons()
     }
@@ -60,13 +57,10 @@ extension CarPlaySceneDelegate {
     }
 
     func rebuildNowPlayingButtons() {
-        guard let s = shuffleNPButton, let r = repeatNPButton,
-              let mix = magicMixButton,
-              let filled = favFilledButton, let outline = favOutlineButton else { return }
-        guard lastPublishedFavoriteState != currentTrackFavorited else { return }
+        guard let favorite = favoriteButton,
+              lastPublishedFavoriteState != currentTrackFavorited else { return }
         lastPublishedFavoriteState = currentTrackFavorited
-        let fav = currentTrackFavorited ? filled : outline
-        CPNowPlayingTemplate.shared.updateNowPlayingButtons([s, r, fav, mix])
+        favorite.isSelected = currentTrackFavorited
     }
 
     func toggleFavorite() {

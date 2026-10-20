@@ -13,15 +13,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var shuffleNPButton: CPNowPlayingShuffleButton?
     var repeatNPButton: CPNowPlayingRepeatButton?
     var magicMixButton: CPNowPlayingImageButton?
-    var favFilledButton: CPNowPlayingImageButton?
-    var favOutlineButton: CPNowPlayingImageButton?
+    var favoriteButton: CPNowPlayingImageButton?
     var currentTrackFavorited = false
-    /// Last favorited state actually pushed to `CPNowPlayingTemplate`. Several
+    /// Last favorited state actually pushed to `favoriteButton.isSelected`. Several
     /// listeners (pushNowPlaying, the player-state observation loop) react to
-    /// the same track-change event and each call rebuildNowPlayingButtons();
-    /// without this guard they redundantly re-call updateNowPlayingButtons()
-    /// with an unchanged value, and each call flashes the whole button row
-    /// (shuffle included) as CarPlay redraws it.
+    /// the same track-change event; without this guard they redundantly set the
+    /// property with an unchanged value, and each set flashes the whole button
+    /// row (shuffle included) as CarPlay redraws it.
     var lastPublishedFavoriteState: Bool?
     /// Last Magic Mix state actually pushed to `magicMixButton.isSelected`.
     /// `syncMixButtons()` runs on every track change (currentTrack is one of
