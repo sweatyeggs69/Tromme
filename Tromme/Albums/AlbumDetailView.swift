@@ -637,13 +637,13 @@ struct AlbumDetailView: View {
                                 cornerRadius: AppStyle.Radius.card
                             )
 
-                            Text(displayTitle)
+                            Text(album.title)
                                 .font(AppStyle.Typography.itemTitle)
                                 .foregroundStyle(titleColor)
                                 .lineLimit(1)
 
                             HStack(spacing: 4) {
-                                Text(albumDetails.releaseYear)
+                                Text(album.releaseYear)
                                 if let format = album.formatLabel {
                                     Text("·")
                                     Text(format)
