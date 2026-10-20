@@ -9,6 +9,7 @@ final class SettingsSync {
 
     /// Plain preference keys (same strings the `@AppStorage` properties use).
     static let syncedKeys: [String] = [
+        "infiniteModeActive",
         "playbackBadgeMode",
         "disableCellularTranscoding",
         "soundCheckEnabled",
