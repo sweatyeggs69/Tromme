@@ -19,6 +19,7 @@ struct AlbumDetailView: View {
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var addToPlaylistResultMessage: String?
     @State private var showsAlbumInfoSheet = false
+    @State private var metadataRequest: MetadataSheetRequest?
     @State private var showDeleteAlbumConfirmation = false
     @State private var showingChangeArtworkSheet = false
     @AppStorage("showPopularTracks") private var showPopularTracks = true
@@ -45,6 +46,10 @@ struct AlbumDetailView: View {
             downloadManager: downloadManager,
             showPopularTracks: showPopularTracks
         )
+    }
+
+    private var displayTitle: String {
+        albumDetails.title.isEmpty ? album.title : albumDetails.title
     }
 
     private var thumbPath: String? {
@@ -305,7 +310,7 @@ struct AlbumDetailView: View {
                 .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .padding(.top, 12)
 
-            Text(album.title)
+            Text(displayTitle)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(titleColor)
                 .multilineTextAlignment(.center)
@@ -458,6 +463,9 @@ struct AlbumDetailView: View {
             },
             onDelete: { deletedTrack in
                 viewModel.removeTrack(deletedTrack)
+            },
+            onEdited: { editedTrack in
+                viewModel.applyEditedTrack(editedTrack)
             }
         )
         .listRowInsets(AppStyle.TrackList.rowInsets)
@@ -489,7 +497,7 @@ struct AlbumDetailView: View {
     @ViewBuilder
     private var landscapeAlbumTitleAndArtist: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(album.title)
+            Text(displayTitle)
                 .font(.largeTitle.weight(.bold))
                 .foregroundStyle(titleColor)
                 .lineLimit(2)
@@ -629,13 +637,13 @@ struct AlbumDetailView: View {
                                 cornerRadius: AppStyle.Radius.card
                             )
 
-                            Text(album.title)
+                            Text(displayTitle)
                                 .font(AppStyle.Typography.itemTitle)
                                 .foregroundStyle(titleColor)
                                 .lineLimit(1)
 
                             HStack(spacing: 4) {
-                                Text(album.releaseYear)
+                                Text(albumDetails.releaseYear)
                                 if let format = album.formatLabel {
                                     Text("·")
                                     Text(format)
@@ -769,6 +777,11 @@ struct AlbumDetailView: View {
                     if !isPreviewMode {
                         albumDownloadButton
                         Divider()
+                        Button("Edit Album", systemImage: "pencil") {
+                            metadataRequest = .edit(albumDetails)
+                        }
+                        .disabled(serverConnection.currentServer == nil)
+                        Divider()
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
                         }
@@ -795,6 +808,12 @@ struct AlbumDetailView: View {
         }
         .task(id: "\(album.ratingKey)|\(animatedArtworkEnabled)") {
             await viewModel.loadAnimatedArtwork()
+        }
+        .metadataSheets(request: $metadataRequest) { fresh in
+            viewModel.applyEditedAlbum(fresh)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .libraryContentDidChange)) { _ in
+            Task { await viewModel.reloadFromStore(loadContext) }
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {
             NavigationStack {

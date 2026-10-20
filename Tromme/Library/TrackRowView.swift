@@ -31,10 +31,20 @@ struct TrackRowView: View {
     @State private var addToPlaylistTrack: PlexMetadata? = nil
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
+    @State private var metadataRequest: MetadataSheetRequest?
+    /// The track as re-read after an edit, so the row updates before its list reloads.
+    @State private var editedTrack: PlexMetadata?
+
+    private var shown: PlexMetadata { editedTrack ?? track }
 
     var body: some View {
         trackRow
             .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu.tint(appAccentColor) })
+        .metadataSheets(request: $metadataRequest) { fresh in
+            editedTrack = fresh
+            player.updateTrack(fresh)
+        }
+        .onChange(of: track) { editedTrack = nil }
         .sheet(item: $addToPlaylistTrack) { trackToAdd in
             AddToPlaylistSheet(itemRatingKeys: [trackToAdd.ratingKey])
         }
@@ -44,7 +54,7 @@ struct TrackRowView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will permanently remove \"\(track.title)\".")
+            Text("This will permanently remove \"\(shown.title)\".")
         }
         .alert("Unable to Delete Track", isPresented: .init(
             get: { trackDeleteErrorMessage != nil },
@@ -57,13 +67,13 @@ struct TrackRowView: View {
     }
 
     private var isFavorited: Bool {
-        (favoriteOverride ?? track.userRating ?? 0) >= 10
+        (favoriteOverride ?? shown.userRating ?? 0) >= 10
     }
 
     private func toggleFavorite() {
         guard let server = serverConnection.currentServer else { return }
         let sectionId = serverConnection.currentLibrarySectionId
-        let previous = favoriteOverride ?? track.userRating
+        let previous = favoriteOverride ?? shown.userRating
         let removing = isFavorited
         favoriteOverride = removing ? 0 : 10
         isRating = true
@@ -98,7 +108,7 @@ struct TrackRowView: View {
         }
 
         Button {
-            addToPlaylistTrack = track
+            addToPlaylistTrack = shown
         } label: {
             Label("Add to Playlist", systemImage: "text.badge.plus")
         }
@@ -109,21 +119,36 @@ struct TrackRowView: View {
 
         Divider()
 
-        if let album = PlexMetadata.albumStub(from: track) {
+        Button {
+            metadataRequest = .edit(shown)
+        } label: {
+            Label("Edit Track", systemImage: "pencil")
+        }
+        .disabled(serverConnection.currentServer == nil)
+
+        Button {
+            metadataRequest = .trackInfo(shown)
+        } label: {
+            Label("Track Info", systemImage: "info.circle")
+        }
+
+        Divider()
+
+        if let album = PlexMetadata.albumStub(from: shown) {
             Button {
                 onNavigate?(album)
             } label: {
                 Label("Go to Album", systemImage: "square.stack")
-                Text(track.parentTitle ?? "")
+                Text(shown.parentTitle ?? "")
             }
         }
 
-        if let artist = PlexMetadata.artistStub(from: track) {
+        if let artist = PlexMetadata.artistStub(from: shown) {
             Button {
                 onNavigate?(artist)
             } label: {
                 Label("Go to Artist", systemImage: "music.mic")
-                Text(track.grandparentTitle ?? track.artistName)
+                Text(shown.grandparentTitle ?? shown.artistName)
             }
         }
 
@@ -137,18 +162,18 @@ struct TrackRowView: View {
 
     @ViewBuilder
     private var downloadMenuButton: some View {
-        let isDownloaded = downloadManager.isDownloaded(track.ratingKey)
-        let isActive = downloadManager.transientStates[track.ratingKey] != nil
+        let isDownloaded = downloadManager.isDownloaded(shown.ratingKey)
+        let isActive = downloadManager.transientStates[shown.ratingKey] != nil
         if isDownloaded {
             Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
-                downloadManager.deleteDownload(ratingKey: track.ratingKey)
+                downloadManager.deleteDownload(ratingKey: shown.ratingKey)
             }
         } else {
             Button {
                 guard let server = serverConnection.currentServer else { return }
                 downloadManager.download(track: track, server: server, client: client)
             } label: {
-                switch downloadManager.transientStates[track.ratingKey] {
+                switch downloadManager.transientStates[shown.ratingKey] {
                 case .queued:
                     Label("Queued", systemImage: "clock")
                 case .downloading:
@@ -165,7 +190,7 @@ struct TrackRowView: View {
 
     @ViewBuilder
     private var downloadStateIndicator: some View {
-        if let state = downloadManager.transientStates[track.ratingKey] {
+        if let state = downloadManager.transientStates[shown.ratingKey] {
             Group {
                 switch state {
                 case .queued:
@@ -181,7 +206,7 @@ struct TrackRowView: View {
             .font(.subheadline)
             .frame(width: 22)
             .transition(.opacity.combined(with: .scale(scale: 0.8)))
-        } else if downloadManager.isDownloaded(track.ratingKey) {
+        } else if downloadManager.isDownloaded(shown.ratingKey) {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.subheadline)
                 .foregroundStyle(secondaryColorOverride ?? Color.secondary)
@@ -202,14 +227,14 @@ struct TrackRowView: View {
     private var rowContent: some View {
         HStack(spacing: isCompact ? 8 : 10) {
             if showArtwork {
-                ArtworkView(thumbPath: track.thumb ?? track.parentThumb, size: artworkSize, cornerRadius: artworkCornerRadius)
+                ArtworkView(thumbPath: shown.thumb ?? shown.parentThumb, size: artworkSize, cornerRadius: artworkCornerRadius)
             } else if showTrackNumber {
                 ZStack {
                     if isCurrentTrack && player.isPlaying {
                         NowPlayingBarsView()
                             .frame(width: 24, height: 16)
                     } else {
-                        Text("\(track.index ?? (index + 1))")
+                        Text("\(shown.index ?? (index + 1))")
                             .font(.body)
                             .monospacedDigit()
                             .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(secondaryColorOverride ?? Color.secondary))
@@ -219,7 +244,7 @@ struct TrackRowView: View {
             }
 
             VStack(alignment: .leading, spacing: isCompact ? 1 : 2) {
-                Text(track.title)
+                Text(shown.title)
                     .font(titleFont ?? (isCompact ? .caption : .body))
                     .lineLimit(1)
                     .foregroundStyle(isCurrentTrack ? AnyShapeStyle(.tint) : AnyShapeStyle(titleColorOverride ?? Color.primary))
@@ -230,7 +255,7 @@ struct TrackRowView: View {
                         .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                         .lineLimit(1)
                 } else if showArtist {
-                    Text(track.artistDisplayName)
+                    Text(shown.artistDisplayName)
                         .font(artistFont ?? (isCompact ? .caption2 : .caption))
                         .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                         .lineLimit(1)
@@ -247,8 +272,8 @@ struct TrackRowView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
 
-            if showDuration, !track.durationFormatted.isEmpty {
-                Text(track.durationFormatted)
+            if showDuration, !shown.durationFormatted.isEmpty {
+                Text(shown.durationFormatted)
                     .font(isCompact ? .caption2 : .caption)
                     .foregroundStyle(secondaryColorOverride ?? Color.secondary)
                     .monospacedDigit()
@@ -275,7 +300,7 @@ struct TrackRowView: View {
     }
 
     private var isCurrentTrack: Bool {
-        player.currentTrack?.ratingKey == track.ratingKey
+        player.currentTrack?.ratingKey == shown.ratingKey
     }
 
     @MainActor
@@ -287,9 +312,9 @@ struct TrackRowView: View {
         defer { isDeletingTrack = false }
 
         do {
-            try await client.deleteLibraryItem(server: server, ratingKey: track.ratingKey)
-            downloadManager.deleteDownload(ratingKey: track.ratingKey)
-            await LibraryStore.shared.remove(ratingKey: track.ratingKey, serverId: server.machineIdentifier)
+            try await client.deleteLibraryItem(server: server, ratingKey: shown.ratingKey)
+            downloadManager.deleteDownload(ratingKey: shown.ratingKey)
+            await LibraryStore.shared.remove(ratingKey: shown.ratingKey, serverId: server.machineIdentifier)
             if let sectionId = serverConnection.currentLibrarySectionId {
                 Task { await client.smartRefresh(server: server, sectionId: sectionId) }
             }

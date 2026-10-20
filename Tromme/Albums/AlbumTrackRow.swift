@@ -17,12 +17,14 @@ struct AlbumTrackRow: View {
     var isLandscape: Bool = false
     let onAddToPlaylist: (PlexMetadata) -> Void
     let onDelete: (PlexMetadata) -> Void
+    let onEdited: (PlexMetadata) -> Void
 
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
     @State private var showDeleteTrackConfirmation = false
     @State private var trackDeleteErrorMessage: String?
     @State private var isDeletingTrack = false
+    @State private var metadataRequest: MetadataSheetRequest?
 
     @ViewBuilder
     private var trackDownloadButton: some View {
@@ -157,6 +159,16 @@ struct AlbumTrackRow: View {
 
                 Divider()
 
+Button("Edit Track", systemImage: "pencil") {
+                    metadataRequest = .edit(track)
+                }
+                .disabled(serverConnection.currentServer == nil)
+                Button("Track Info", systemImage: "info.circle") {
+                    metadataRequest = .trackInfo(track)
+                }
+
+                Divider()
+
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
                 }
@@ -189,10 +201,24 @@ struct AlbumTrackRow: View {
 
             Divider()
 
+            Button("Edit Track", systemImage: "pencil") {
+                metadataRequest = .edit(track)
+            }
+            .disabled(serverConnection.currentServer == nil)
+            Button("Track Info", systemImage: "info.circle") {
+                metadataRequest = .trackInfo(track)
+            }
+
+            Divider()
+
             Button("Delete Track", systemImage: "trash", role: .destructive) {
                 showDeleteTrackConfirmation = true
             }
             .disabled(isDeletingTrack || serverConnection.currentServer == nil)
+        }
+        .metadataSheets(request: $metadataRequest) { fresh in
+            player.updateTrack(fresh)
+            onEdited(fresh)
         }
         .alert("Delete Track?", isPresented: $showDeleteTrackConfirmation) {
             Button("Delete Track", role: .destructive) {

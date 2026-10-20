@@ -298,6 +298,27 @@ final class AudioPlayerService: Sendable {
         }
     }
 
+    /// Swaps in a track that was edited on the server so the queue, Now Playing and the lock
+    /// screen show the new title, artist and album.
+    func updateTrack(_ updated: PlexMetadata) {
+        func merged(_ old: PlexMetadata) -> PlexMetadata {
+            var track = updated
+            track.playlistItemID = old.playlistItemID
+            return track
+        }
+        if let current = currentTrack, current.ratingKey == updated.ratingKey {
+            currentTrack = merged(current)
+            lastPublishedNowPlayingTrackKey = nil
+            updateNowPlayingInfo()
+        }
+        for i in queue.indices where queue[i].ratingKey == updated.ratingKey {
+            queue[i] = merged(queue[i])
+        }
+        for i in originalQueue.indices where originalQueue[i].ratingKey == updated.ratingKey {
+            originalQueue[i] = merged(originalQueue[i])
+        }
+    }
+
     func updateAlbumThumb(albumRatingKey: String, newThumb: String?) {
         if currentTrack?.parentRatingKey == albumRatingKey {
             currentTrack?.parentThumb = newThumb

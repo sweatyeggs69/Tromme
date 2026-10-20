@@ -174,6 +174,28 @@ final class AlbumDetailViewModel {
         )
     }
 
+    /// Replaces an edited track in place, or drops it when it moved to another album.
+    func applyEditedTrack(_ edited: PlexMetadata) {
+        guard let index = tracks.firstIndex(where: { $0.ratingKey == edited.ratingKey }) else { return }
+        if let parent = edited.parentRatingKey, parent != album.ratingKey {
+            tracks.remove(at: index)
+        } else {
+            tracks[index] = edited
+        }
+    }
+
+    func applyEditedAlbum(_ edited: PlexMetadata) {
+        albumDetails = edited
+    }
+
+    /// Re-reads the album and its tracks from the local library after it changed.
+    func reloadFromStore(_ context: Context) async {
+        guard !isPreviewMode, context.isConnected else { return }
+        async let detailsTask: Void = loadAlbumDetails(context)
+        async let tracksTask: Void = loadTracks(context)
+        _ = await (detailsTask, tracksTask)
+    }
+
     func removeTrack(_ track: PlexMetadata) {
         tracks.removeAll { $0.ratingKey == track.ratingKey }
     }

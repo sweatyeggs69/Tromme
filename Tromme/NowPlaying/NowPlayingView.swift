@@ -23,6 +23,7 @@ struct NowPlayingView: View {
     @State private var isVisible = false
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
+    @State private var metadataRequest: MetadataSheetRequest?
     @State private var isRating = false
     /// Square Tromme+ animated artwork for the current album, when it has one.
     @State private var animatedArtworkURL: URL?
@@ -344,6 +345,9 @@ struct NowPlayingView: View {
         }
         // Confirms a Wrong Lyrics block took effect.
         .sensoryFeedback(.impact(weight: .light), trigger: lyricsService.blockConfirmations)
+        .metadataSheets(request: $metadataRequest) { fresh in
+            player.updateTrack(fresh)
+        }
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
@@ -572,6 +576,17 @@ struct NowPlayingView: View {
                 addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: [track.ratingKey])
             } label: {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
+            }
+            Button {
+                metadataRequest = .edit(track)
+            } label: {
+                Label("Edit Track", systemImage: "pencil")
+            }
+            .disabled(serverConnection.currentServer == nil)
+            Button {
+                metadataRequest = .trackInfo(track)
+            } label: {
+                Label("Track Info", systemImage: "info.circle")
             }
             if showLyrics {
                 Divider()
