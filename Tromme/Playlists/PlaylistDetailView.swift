@@ -20,6 +20,11 @@ struct PlaylistDetailView: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var displayTitle: String
+    @State private var editMode: EditMode = .inactive
+    @State private var selection = Set<String>()
+    @State private var showRemoveConfirmation = false
+    @State private var pendingRemovalIDs = Set<String>()
+    @State private var removeErrorMessage: String?
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
 
@@ -183,6 +188,10 @@ struct PlaylistDetailView: View {
         !isPreviewMode && !(playlist.smart ?? false)
     }
 
+    private var isEditing: Bool { editMode.isEditing }
+
+    private var removalCount: Int { pendingRemovalIDs.count }
+
     private var trackListRows: some View {
         Group {
             if isLoading {
@@ -205,12 +214,16 @@ struct PlaylistDetailView: View {
                         secondaryColorOverride: tertiaryTextColor,
                         onNavigate: { trackNavigationTarget = $0 }
                     )
+                    .allowsHitTesting(!isEditing)
                     .listRowInsets(AppStyle.TrackList.rowInsets)
                     .listRowBackground(artworkColor)
                     .listRowSeparatorTint(titleColor.opacity(0.22))
                 }
                 .onMove(perform: moveTracks)
                 .moveDisabled(!canReorderPlaylist)
+                .onDelete(perform: canReorderPlaylist ? { offsets in
+                    requestRemoval(of: Set(offsets.map { tracks[$0].id }))
+                } : nil)
             }
         }
     }
@@ -235,7 +248,7 @@ struct PlaylistDetailView: View {
                     .ignoresSafeArea()
 
                 if usesSideBySideHeader {
-                    List {
+                    List(selection: $selection) {
                         landscapePlaylistHeader
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             .listRowSeparator(.hidden)
@@ -255,7 +268,7 @@ struct PlaylistDetailView: View {
                     .scrollEdgeEffectHidden(true, for: .top)
                     .ignoresSafeArea(edges: .top)
                 } else {
-                    List {
+                    List(selection: $selection) {
                         Section {
                             playlistHeader(width: geo.size.width)
                                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -281,6 +294,7 @@ struct PlaylistDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .environment(\.editMode, $editMode)
         .navigationDestination(item: $trackNavigationTarget) { target in
             if target.type == "artist" {
                 ArtistDetailView(artist: target)
@@ -289,9 +303,30 @@ struct PlaylistDetailView: View {
             }
         }
         .toolbar {
+            if isEditing {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { endEditing() }
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(selection.count == tracks.count ? "Deselect All" : "Select All") {
+                        selection = selection.count == tracks.count ? [] : Set(tracks.map(\.id))
+                    }
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Remove", systemImage: "trash", role: .destructive) {
+                        requestRemoval(of: selection)
+                    }
+                    .disabled(selection.isEmpty)
+                }
+            } else {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     playlistDownloadButton
+                    if canReorderPlaylist {
+                        Button("Edit Playlist", systemImage: "checklist") {
+                            withAnimation { editMode = .active }
+                        }
+                    }
                     if canDeletePlaylist {
                         Divider()
                         Button("Rename", systemImage: "pencil") {
@@ -308,6 +343,23 @@ struct PlaylistDetailView: View {
                 .tint(.primary)
                 .disabled(isDeletingPlaylist)
             }
+            }
+        }
+        .alert("Remove \(removalCount == 1 ? "Song" : "\(removalCount) Songs")?", isPresented: $showRemoveConfirmation) {
+            Button("Remove", role: .destructive) {
+                Task { await removeTracks(ids: pendingRemovalIDs) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes them from \"\(displayTitle)\" only. Your library is not changed.")
+        }
+        .alert("Unable to Remove Songs", isPresented: .init(
+            get: { removeErrorMessage != nil },
+            set: { if !$0 { removeErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(removeErrorMessage ?? "")
         }
         .alert("Delete Playlist?", isPresented: $showDeletePlaylistConfirmation) {
             Button("Delete Playlist", role: .destructive) {
@@ -350,6 +402,41 @@ struct PlaylistDetailView: View {
             guard !isPreviewMode else { return }
             await prefetchVisibleArtwork()
         }
+    }
+
+    private func endEditing() {
+        withAnimation { editMode = .inactive }
+        selection.removeAll()
+    }
+
+    private func requestRemoval(of ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        pendingRemovalIDs = ids
+        showRemoveConfirmation = true
+    }
+
+    @MainActor
+    private func removeTracks(ids: Set<String>) async {
+        guard let server = serverConnection.currentServer else { return }
+        let previousTracks = tracks
+        let removed = tracks.filter { ids.contains($0.id) }
+        withAnimation { tracks.removeAll { ids.contains($0.id) } }
+        selection.subtract(ids)
+        var failed = false
+        for track in removed {
+            guard let itemID = track.playlistItemID else { continue }
+            do {
+                try await client.removePlaylistItem(server: server, playlistId: playlist.ratingKey, playlistItemID: itemID)
+            } catch {
+                failed = true
+            }
+        }
+        await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
+        if failed {
+            removeErrorMessage = "Some songs could not be removed."
+            tracks = (try? await client.cachedPlaylistItems(server: server, playlistKey: playlistItemRequestKey)) ?? previousTracks
+        }
+        if tracks.isEmpty { endEditing() }
     }
 
     private func playPlaylistNext() {

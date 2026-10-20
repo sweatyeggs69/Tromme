@@ -147,6 +147,15 @@ extension PlexAPIClient {
         }
     }
 
+    /// Removes one item from a manual playlist; `playlistItemID` is the item's generator ID.
+    func removePlaylistItem(server: PlexServer, playlistId: String, playlistItemID: Int) async throws {
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/playlists/\(playlistId)/items/\(playlistItemID)",
+            method: "DELETE"
+        )
+    }
+
     func deleteLibraryItem(server: PlexServer, ratingKey: String) async throws {
         _ = try await rawServerRequest(
             server: server,
