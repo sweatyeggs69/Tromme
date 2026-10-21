@@ -32,7 +32,8 @@ enum AnimatedArtworkService {
         ]
         guard let url = components?.url else { return nil }
         do {
-            let request = URLRequest(url: url, timeoutInterval: 5)
+            // The service caches results itself; bypass URLSession's cache so a stale or wrong match is never replayed.
+            let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 5)
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
             let decoded = try JSONDecoder().decode(Response.self, from: data)
