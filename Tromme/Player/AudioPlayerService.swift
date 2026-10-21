@@ -616,6 +616,7 @@ final class AudioPlayerService: Sendable {
             return
         }
 
+        player?.pause()
         isPlaying = false
         playbackIntent = false
         updateNowPlayingInfo()
@@ -839,8 +840,15 @@ final class AudioPlayerService: Sendable {
         guard let server, let client else { return }
 
         tearDownObservers()
-        player?.pause()
-        player?.removeAllItems()
+        if let outgoing = player, playbackIntent, outgoing.timeControlStatus == .playing {
+            // Keep the outgoing player running, muted, until the new item takes over.
+            // Pausing it now leaves nothing playing while the stream is set up, and
+            // CarPlay flashes paused on every skip. startPlayback() stops it.
+            outgoing.volume = 0
+        } else {
+            player?.pause()
+            player?.removeAllItems()
+        }
 
         // Fast path: locally downloaded file — skip network transcode entirely.
         // Plex metadata duration is authoritative for local files: downloaded MP3
@@ -923,6 +931,7 @@ final class AudioPlayerService: Sendable {
         // FLAC or cellular-constrained: route through Plex universal HLS.
         guard let sessionID = currentSessionID else {
             logPlayback("load_rejected", "reason=missing_session_id")
+            player?.pause()
             return
         }
         let metadataPath = track.key ?? "/library/metadata/\(track.ratingKey)"
@@ -1001,6 +1010,7 @@ final class AudioPlayerService: Sendable {
 
             guard let masterURL = candidates.first else {
                 self.logPlayback("universal_url_unavailable")
+                self.player?.pause()
                 self.isPlaying = false
                 return
             }
@@ -1026,6 +1036,8 @@ final class AudioPlayerService: Sendable {
         if !isPlayingLocalFile {
             item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: duration)
         }
+        player?.pause()
+        player?.removeAllItems()
         let queuePlayer = AVQueuePlayer(playerItem: item)
         // Only advance on item end while a gapless next item is enqueued; otherwise
         // keep the finished item so resume-from-end and end-of-queue seeks still work.
@@ -1064,6 +1076,7 @@ final class AudioPlayerService: Sendable {
         syncDynamicQueueDownloads()
         reportTimelineState(isPlaying ? "playing" : "paused")
         savePlaybackState()
+        watchForStalledStart()
     }
 
     /// Buffer enough of the current track to make playback resilient to network changes.

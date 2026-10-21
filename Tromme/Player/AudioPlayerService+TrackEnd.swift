@@ -41,6 +41,29 @@ extension AudioPlayerService {
         }
     }
 
+    /// A new track occasionally lands paused while the user still wants playback (the
+    /// player pausing itself at an item boundary, a transient audio session hiccup).
+    /// Nothing else restarts it, so nudge it once the item has had time to load.
+    func watchForStalledStart() {
+        let generation = playbackGeneration
+        Task { @MainActor [weak self] in
+            for delay in [1.5, 3.0] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let self, self.playbackGeneration == generation,
+                      self.playbackIntent, !self.wasInterruptedWhilePlaying, !self.isSeeking,
+                      let player = self.player, let item = player.currentItem,
+                      item.status == .readyToPlay, player.timeControlStatus == .paused,
+                      !Self.hasReachedEnd(item) else { continue }
+                self.logPlayback("stalled_start_nudge")
+                player.play()
+                if !self.isPlaying {
+                    self.isPlaying = true
+                    self.updateNowPlayingInfo()
+                }
+            }
+        }
+    }
+
     static func hasReachedEnd(_ item: AVPlayerItem?) -> Bool {
         guard let item, item.status == .readyToPlay else { return false }
         let itemDuration = item.duration.seconds

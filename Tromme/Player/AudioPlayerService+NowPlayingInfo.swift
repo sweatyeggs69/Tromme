@@ -124,6 +124,7 @@ extension AudioPlayerService {
     func updateNowPlayingInfo() {
         guard let currentTrack else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            MPNowPlayingInfoCenter.default().playbackState = .stopped
             lastPublishedNowPlayingTrackKey = nil
             cachedArtwork = nil
             cachedArtworkThumbPath = nil
@@ -134,6 +135,10 @@ extension AudioPlayerService {
         }
 
         let trackKey = currentTrack.ratingKey
+        let state: MPNowPlayingPlaybackState = isPlaying ? .playing : .paused
+        if MPNowPlayingInfoCenter.default().playbackState != state {
+            MPNowPlayingInfoCenter.default().playbackState = state
+        }
 
         if trackKey == lastPublishedNowPlayingTrackKey,
            !NowPlayingAnimatedArtwork.shared.needsUpdate(for: currentTrack),
