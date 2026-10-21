@@ -669,14 +669,14 @@ struct NowPlayingView: View {
             Button { player.previous() } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(actionIconActiveOpacity))
                     .frame(width: 56, height: 56)
             }
             Spacer()
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: player.isPlaying ? 52 : 46))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(actionIconActiveOpacity))
                     .frame(width: 72, height: 72)
                     .contentTransition(.symbolEffect(.replace))
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: player.isPlaying)
@@ -685,7 +685,7 @@ struct NowPlayingView: View {
             Button { player.next() } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 36))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.white.opacity(actionIconActiveOpacity))
                     .frame(width: 56, height: 56)
             }
             Spacer()
