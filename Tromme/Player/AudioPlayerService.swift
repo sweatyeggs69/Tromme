@@ -1040,8 +1040,10 @@ final class AudioPlayerService: Sendable {
         player?.removeAllItems()
         let queuePlayer = AVQueuePlayer(playerItem: item)
         // Only advance on item end while a gapless next item is enqueued; otherwise
-        // keep the finished item so resume-from-end and end-of-queue seeks still work.
-        queuePlayer.actionAtItemEnd = .pause
+        // keep the finished item. .none (not .pause) leaves the player in the playing
+        // state through the gap before the next track loads, so CarPlay never shows
+        // paused (and the audio session isn't released) between songs.
+        queuePlayer.actionAtItemEnd = .none
         player = queuePlayer
         // Local files are on disk — stall minimization only applies to network streams.
         player?.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile

@@ -50,11 +50,13 @@ extension AudioPlayerService {
             for delay in [1.5, 3.0] {
                 try? await Task.sleep(for: .seconds(delay))
                 guard let self, self.playbackGeneration == generation,
-                      self.playbackIntent, !self.wasInterruptedWhilePlaying, !self.isSeeking,
+                      self.playbackIntent, !self.isSeeking,
                       let player = self.player, let item = player.currentItem,
                       item.status == .readyToPlay, player.timeControlStatus == .paused,
                       !Self.hasReachedEnd(item) else { continue }
                 self.logPlayback("stalled_start_nudge")
+                self.wasInterruptedWhilePlaying = false
+                try? await self.activateAudioSession()
                 player.play()
                 if !self.isPlaying {
                     self.isPlaying = true
@@ -167,7 +169,7 @@ extension AudioPlayerService {
         tearDownObservers()
 
         preloadedNext = nil
-        player.actionAtItemEnd = .pause
+        player.actionAtItemEnd = .none
         consumeRepeatOnce()
 
         let track = target.track

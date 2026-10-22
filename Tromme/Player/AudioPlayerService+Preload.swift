@@ -177,7 +177,7 @@ extension AudioPlayerService {
             }
         }
         preloadedNext = nil
-        player?.actionAtItemEnd = .pause
+        player?.actionAtItemEnd = .none
     }
 
     func refreshAirPlayConnectionState() {
