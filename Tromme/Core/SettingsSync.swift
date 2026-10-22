@@ -14,6 +14,7 @@ final class SettingsSync {
         "disableCellularTranscoding",
         "soundCheckEnabled",
         "soundCheckGainSource",
+        "magicMixSeedCap",
         "autoDownloadEnabled",
         "autoDownloadMode",
         "dynamicDownloadLimit",
