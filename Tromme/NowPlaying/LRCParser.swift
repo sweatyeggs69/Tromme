@@ -8,7 +8,9 @@ import Foundation
 ///
 /// Backing vocals sung over a line are folded into it as `LyricsLine.backing`:
 /// either a line explicitly tagged `[bg:<00:03.73>ooh <00:04.50>]`, or a
-/// word-synced line that starts before the previous line has finished.
+/// word-synced line that starts before the previous line has finished. In
+/// line-synced lyrics, a trailing "(backing)" or a fully parenthesized line
+/// after a primary line becomes its backing.
 enum LRCParser {
     /// A gap between lyrics longer than this gets a music note.
     static let breakThreshold: TimeInterval = 5
@@ -41,6 +43,12 @@ enum LRCParser {
                 endMarkers.append(time)
                 continue
             }
+            if words.isEmpty, let (main, echo) = splittingTrailingBacking(text) {
+                var primary = LyricsLine(time: time, text: main)
+                primary.backing = [LyricsLine(time: time, text: echo)]
+                result.append((primary, false))
+                continue
+            }
             result.append((LyricsLine(time: time, text: text, words: words), false))
         }
         let sorted = result.sorted { $0.line.time < $1.line.time }
@@ -59,7 +67,11 @@ enum LRCParser {
             // Only the primary's own words count, so a long backing line can't swallow the next lyric.
             let primaryEnd = primary.words.last?.endTime
             let overlaps = primaryEnd.map { line.time < $0 - 0.05 } ?? false
-            if overlaps, !line.words.isEmpty, isParenthesized(primary.text), !isParenthesized(line.text) {
+            if line.words.isEmpty, primary.words.isEmpty, isParenthesized(line.text), !isParenthesized(primary.text) {
+                // In line-synced lyrics a fully parenthesized line is the backing for the line before it.
+                primary.backing.append(LyricsLine(time: line.time, text: String(line.text.dropFirst().dropLast())))
+                result.append(primary)
+            } else if overlaps, !line.words.isEmpty, isParenthesized(primary.text), !isParenthesized(line.text) {
                 // A parenthesized echo that starts first is the backing for the line it overlaps.
                 var promoted = line.withTime(primary.time)
                 promoted.backing = [primary]
@@ -73,6 +85,17 @@ enum LRCParser {
             }
         }
         return result
+    }
+
+    /// Splits `Main text (backing)` into its two parts, for line-synced lyrics
+    /// that carry the backing vocal inline. Only a trailing parenthetical counts,
+    /// so a title-like opener such as "(I Can't Get No) Satisfaction" stays whole.
+    private static func splittingTrailingBacking(_ text: String) -> (main: String, backing: String)? {
+        guard text.hasSuffix(")"), let open = text.lastIndex(of: "(") else { return nil }
+        let main = text[..<open].trimmingCharacters(in: .whitespaces)
+        let backing = text[text.index(after: open)..<text.index(before: text.endIndex)].trimmingCharacters(in: .whitespaces)
+        guard !main.isEmpty, !backing.isEmpty, !main.contains("("), !backing.contains(")") else { return nil }
+        return (main, backing)
     }
 
     private static func isParenthesized(_ text: String) -> Bool {
