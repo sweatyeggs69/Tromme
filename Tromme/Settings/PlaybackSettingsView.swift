@@ -7,6 +7,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
+    @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 2
 
     var body: some View {
         Form {
@@ -15,6 +16,17 @@ struct PlaybackSettingsView: View {
                     .tint(.green)
             } footer: {
                 Text("When the queue empties, keep playing related music.")
+            }
+
+            Section {
+                Picker("Seed Artist Tracks", selection: $magicMixSeedCap) {
+                    Text("1x").tag(1)
+                    Text("2x").tag(2)
+                    Text("3x").tag(3)
+                    Text("4x").tag(4)
+                }
+            } footer: {
+                Text("Magic Mix uses up to this many seed artist tracks per similar artist track.")
             }
 
             if supportsCellularSettings {
