@@ -49,8 +49,15 @@ extension AudioPlayerService {
         Task { @MainActor [weak self] in
             for delay in [1.5, 3.0] {
                 try? await Task.sleep(for: .seconds(delay))
-                guard let self, self.playbackGeneration == generation,
-                      self.playbackIntent, !self.isSeeking,
+                guard let self, self.playbackGeneration == generation else { return }
+                // A gapless item that failed while it was still queued never fires the
+                // status observer registered after the advance, so recover it here.
+                if self.playbackIntent, self.player?.currentItem?.status == .failed {
+                    self.logPlayback("stalled_start_item_failed")
+                    self.handlePlaybackFailure("preloaded_item_failed")
+                    return
+                }
+                guard self.playbackIntent, !self.isSeeking,
                       let player = self.player, let item = player.currentItem,
                       item.status == .readyToPlay, player.timeControlStatus == .paused,
                       !Self.hasReachedEnd(item) else { continue }
@@ -215,6 +222,9 @@ extension AudioPlayerService {
 
         let item = preloaded.item
         isReadyToPlay = item.status == .readyToPlay
+        if item.status == .failed {
+            logPlayback("gapless_item_already_failed", "track=\(track.ratingKey)")
+        }
         let itemDuration = item.duration.seconds
         if !isPlayingLocalFile, itemDuration.isFinite, itemDuration > 0 {
             duration = itemDuration
