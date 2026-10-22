@@ -26,7 +26,7 @@ struct PlaybackSettingsView: View {
                     Text("4x").tag(4)
                 }
             } footer: {
-                Text("Magic Mix uses up to this many seed artist tracks per similar artist track.")
+                Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track, spread across their albums. Lower values favor similar artists.")
             }
 
             if supportsCellularSettings {
