@@ -43,32 +43,48 @@ extension AudioPlayerService {
             let allAlbums = (try? await allAlbumsTask) ?? []
             let allTracks = (try? await allTracksTask) ?? []
 
-            let poolArtistKeySet = Set(similar.map(\.ratingKey)).union([seedArtistKey])
-            let poolAlbumKeys = Set(allAlbums.compactMap { album -> String? in
-                guard let parentKey = album.parentRatingKey,
-                      poolArtistKeySet.contains(parentKey) else { return nil }
-                return album.ratingKey
-            })
+            let similarKeySet = Set(similar.map(\.ratingKey))
+            let albumArtist = Dictionary(
+                allAlbums.compactMap { album in album.parentRatingKey.map { (album.ratingKey, $0) } },
+                uniquingKeysWith: { first, _ in first }
+            )
 
-            let matchedPool = allTracks.filter {
-                poolAlbumKeys.contains($0.parentRatingKey ?? "") && $0.ratingKey != seedTrackKey
+            var similarTracks: [PlexMetadata] = []
+            var seedTracks: [PlexMetadata] = []
+            for track in allTracks where track.ratingKey != seedTrackKey {
+                guard let artistKey = albumArtist[track.parentRatingKey ?? ""] else { continue }
+                if artistKey == seedArtistKey {
+                    seedTracks.append(track)
+                } else if similarKeySet.contains(artistKey) {
+                    similarTracks.append(track)
+                }
             }
 
-            guard !Task.isCancelled, !matchedPool.isEmpty else {
+            // Seed artist contributes up to 2x the similar tracks, spread across its albums.
+            // With no similar tracks at all, fall back to the whole seed catalog.
+            let seedLimit = similarTracks.isEmpty ? seedTracks.count : similarTracks.count * 2
+            let pickedSeed = Self.evenlySpreadAcrossAlbums(seedTracks, limit: seedLimit)
+
+            guard !Task.isCancelled, !(similarTracks.isEmpty && pickedSeed.isEmpty) else {
                 await MainActor.run { self.logPlayback("magic_mix_build_empty", "") }
                 return
             }
 
-            var dispersed = Self.evenlyDispersedShuffle(matchedPool)
-
-            // The seed artist is part of the pool for dispersion purposes, but the mix
-            // should open with a different artist than the one already playing.
-            if let first = dispersed.first,
-               (first.grandparentRatingKey ?? first.parentRatingKey ?? first.ratingKey) == seedArtistKey,
-               let swapIndex = dispersed.firstIndex(where: {
-                   ($0.grandparentRatingKey ?? $0.parentRatingKey ?? $0.ratingKey) != seedArtistKey
-               }) {
-                dispersed.swapAt(0, swapIndex)
+            let infinite = await MainActor.run { self.isInfiniteModeActive }
+            var dispersed: [PlexMetadata]
+            if infinite {
+                // Infinite Mode: similar artists first, seed artist tracks after.
+                dispersed = Self.evenlyDispersedShuffle(similarTracks) + Self.evenlyDispersedShuffle(pickedSeed)
+            } else {
+                dispersed = Self.evenlyDispersedShuffle(similarTracks + pickedSeed)
+                // The mix should open with a different artist than the one already playing.
+                if let first = dispersed.first,
+                   (first.grandparentRatingKey ?? first.parentRatingKey ?? first.ratingKey) == seedArtistKey,
+                   let swapIndex = dispersed.firstIndex(where: {
+                       ($0.grandparentRatingKey ?? $0.parentRatingKey ?? $0.ratingKey) != seedArtistKey
+                   }) {
+                    dispersed.swapAt(0, swapIndex)
+                }
             }
 
             await MainActor.run {
@@ -85,6 +101,22 @@ extension AudioPlayerService {
         if freshMix {
             clearQueue()
         }
+    }
+
+    /// Picks up to `limit` tracks round-robin across albums so each album contributes equally.
+    static func evenlySpreadAcrossAlbums(_ tracks: [PlexMetadata], limit: Int) -> [PlexMetadata] {
+        guard limit > 0 else { return [] }
+        var groups = Dictionary(grouping: tracks, by: { $0.parentRatingKey ?? "" })
+            .values.map { $0.shuffled() }.shuffled()
+        var result: [PlexMetadata] = []
+        while result.count < limit, !groups.isEmpty {
+            for i in groups.indices.reversed() {
+                guard result.count < limit else { break }
+                result.append(groups[i].removeFirst())
+                if groups[i].isEmpty { groups.remove(at: i) }
+            }
+        }
+        return result
     }
 
     // Spreads tracks evenly by artist across the entire queue using weighted fair queuing.
