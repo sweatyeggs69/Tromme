@@ -185,13 +185,22 @@ extension AudioPlayerService {
         currentIndex -= dropCount
     }
 
-    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata]) -> [PlexMetadata] {
+    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata], artists: [PlexMetadata]) -> [PlexMetadata] {
         let queuedKeys = Set(queue.map(\.ratingKey))
         let fresh = tracks.filter { !queuedKeys.contains($0.ratingKey) }
         let fallback = fresh.isEmpty ? tracks : fresh
 
         func tagSet(_ tags: [PlexTag]?) -> Set<String> {
             Set((tags ?? []).compactMap { $0.tag?.lowercased() })
+        }
+
+        let artistGenres = Dictionary(artists.map { ($0.ratingKey, tagSet($0.genre)) }, uniquingKeysWith: { first, _ in first })
+
+        /// Album genres, falling back to the album artist's genres when the album has none.
+        func genres(of album: PlexMetadata) -> Set<String> {
+            let own = tagSet(album.genre)
+            guard own.isEmpty, let artistKey = album.parentRatingKey else { return own }
+            return artistGenres[artistKey] ?? []
         }
 
         guard let albumKey = currentTrack?.parentRatingKey,
@@ -230,13 +239,26 @@ extension AudioPlayerService {
         }
 
         // At least infiniteMinSharedStyles shared styles and infiniteMinSharedMoods shared
-        // moods (genre is not required), capped at what the seed has, then relaxed in turn.
+        // moods, capped at what the seed has, then relaxed to styles only. Albums without
+        // enough tags to qualify, and seeds with no styles or moods, fall back to a shared
+        // genre. Only when that finds nothing does it use the whole library.
         let needStyles = min(infiniteMinSharedStyles, seedStyles.count)
         let needMoods = min(infiniteMinSharedMoods, seedMoods.count)
-        let attempts = [(needStyles, needMoods), (needStyles, 0), (0, 0)]
+        var attempts: [(Int, Int)] = []
+        if needStyles > 0 || needMoods > 0 { attempts.append((needStyles, needMoods)) }
+        if needStyles > 0, needMoods > 0 { attempts.append((needStyles, 0)) }
         for (styles, moods) in attempts {
             let matched = tracks(of: albums, minStyles: styles, minMoods: moods)
             if !matched.isEmpty { return matched }
+        }
+
+        let seedGenres = genres(of: seed)
+        if !seedGenres.isEmpty {
+            let sameGenre = tracks(
+                of: albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) },
+                minStyles: 0, minMoods: 0
+            )
+            if !sameGenre.isEmpty { return sameGenre }
         }
         return fallback.shuffled()
     }
@@ -284,12 +306,13 @@ extension AudioPlayerService {
                let index = allAlbums.firstIndex(where: { $0.ratingKey == seedAlbumKey }) {
                 allAlbums[index] = detail
             }
+            let allArtists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
             guard !Task.isCancelled else { return }
 
             let selected: [PlexMetadata] = await MainActor.run {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
-                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums)
+                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists)
                 return Array(pool.prefix(currentNeeded))
             }
 
