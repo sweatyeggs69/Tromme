@@ -129,10 +129,10 @@ final class AudioPlayerService: Sendable {
     /// and drop anything older.
     let infiniteModeHistoryLimit = 40
     /// Infinite Mode candidates: tracks from albums sharing a genre with the current
-    /// track's album and at least `infiniteMinSharedStyles` of its styles. If that finds
-    /// nothing it relaxes the style requirement but keeps the genre; only when the current
-    /// album has no genre at all (album or artist) does it use the whole library.
-    let infiniteMinSharedStyles = 2
+    /// track's album, at least one style and at least one mood (when the seed has them),
+    /// weighted so tracks with more shared styles and moods come up more often. If that
+    /// finds nothing it relaxes mood, then style, but keeps the genre; only when the
+    /// current album has no genre at all (album or artist) does it use the whole library.
     var gainPrefetchTask: Task<Void, Never>?
     var playbackLoadTask: Task<Void, Never>?
     var nowPlayingArtworkTask: Task<Void, Never>?

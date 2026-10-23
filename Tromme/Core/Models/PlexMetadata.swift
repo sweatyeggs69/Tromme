@@ -33,6 +33,7 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
     let media: [PlexMedia]?
     let genre: [PlexTag]?
     let style: [PlexTag]?
+    var mood: [PlexTag]? = nil
     let country: [PlexTag]?
     let subformat: [PlexTag]?
     let similar: [PlexTag]?
@@ -106,6 +107,7 @@ extension PlexMetadata {
         case subformat = "Subformat"
         case genre = "Genre"
         case style = "Style"
+        case mood = "Mood"
         case country = "Country"
         case similar = "Similar"
     }
@@ -249,6 +251,7 @@ extension PlexMetadata {
         media = try? c.decodeIfPresent([PlexMedia].self, forKey: .media)
         genre = try? c.decodeIfPresent([PlexTag].self, forKey: .genre)
         style = try? c.decodeIfPresent([PlexTag].self, forKey: .style)
+        mood = try? c.decodeIfPresent([PlexTag].self, forKey: .mood)
         country = try? c.decodeIfPresent([PlexTag].self, forKey: .country)
         subformat = try? c.decodeIfPresent([PlexTag].self, forKey: .subformat)
         similar = try? c.decodeIfPresent([PlexTag].self, forKey: .similar)

@@ -204,29 +204,53 @@ extension AudioPlayerService {
         }
 
         guard let albumKey = currentTrack?.parentRatingKey,
-              let seed = albums.first(where: { $0.ratingKey == albumKey }) else { return fallback }
+              let seed = albums.first(where: { $0.ratingKey == albumKey }) else { return fallback.shuffled() }
         let seedGenres = genres(of: seed)
         let seedStyles = tagSet(seed.style)
-        guard !seedGenres.isEmpty else { return fallback }
+        let seedMoods = tagSet(seed.mood)
+        guard !seedGenres.isEmpty else { return fallback.shuffled() }
 
         let sameGenreAlbums = albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) }
         let freshByAlbum = Dictionary(grouping: fresh, by: { $0.parentRatingKey ?? "" })
 
-        func tracksOf(_ albums: [PlexMetadata]) -> [PlexMetadata] {
-            albums.flatMap { freshByAlbum[$0.ratingKey] ?? [] }
+        /// Shared style and mood counts per album, used to rank its tracks.
+        func score(of album: PlexMetadata) -> (styles: Int, moods: Int) {
+            (tagSet(album.style).intersection(seedStyles).count,
+             tagSet(album.mood).intersection(seedMoods).count)
         }
 
-        // Same genre plus the required shared styles, relaxed to what the seed actually has
-        // (a seed with one style can only share one). Never drops the genre requirement.
-        let requiredStyles = min(infiniteMinSharedStyles, seedStyles.count)
-        if requiredStyles > 0 {
-            let styled = tracksOf(sameGenreAlbums.filter {
-                tagSet($0.style).intersection(seedStyles).count >= requiredStyles
-            })
-            if !styled.isEmpty { return styled }
+        /// Random order weighted by score (Efraimidis-Spirakis), so more matches come up
+        /// more often without always repeating the same top tracks.
+        func weightedShuffle(_ scored: [(track: PlexMetadata, weight: Int)]) -> [PlexMetadata] {
+            scored
+                .map { (track: $0.track, key: pow(Double.random(in: .ulpOfOne..<1), 1 / Double(max($0.weight, 1)))) }
+                .sorted { $0.key > $1.key }
+                .map(\.track)
         }
-        let sameGenre = tracksOf(sameGenreAlbums)
-        return sameGenre.isEmpty ? fallback : sameGenre
+
+        func tracks(of albums: [PlexMetadata], requireStyle: Bool, requireMood: Bool) -> [PlexMetadata] {
+            var scored: [(track: PlexMetadata, weight: Int)] = []
+            for album in albums {
+                let s = score(of: album)
+                if requireStyle, s.styles == 0 { continue }
+                if requireMood, s.moods == 0 { continue }
+                for track in freshByAlbum[album.ratingKey] ?? [] {
+                    scored.append((track, s.styles + s.moods))
+                }
+            }
+            return weightedShuffle(scored)
+        }
+
+        // At least one shared style and one shared mood, relaxed in turn to what the seed
+        // actually has. Never drops the genre requirement.
+        let needStyle = !seedStyles.isEmpty
+        let needMood = !seedMoods.isEmpty
+        let attempts = [(needStyle, needMood), (needStyle, false), (false, false)]
+        for (style, mood) in attempts {
+            let matched = tracks(of: sameGenreAlbums, requireStyle: style, requireMood: mood)
+            if !matched.isEmpty { return matched }
+        }
+        return fallback.shuffled()
     }
 
     func maybeRefillInfiniteQueueIfNeeded(trigger: String) {
@@ -279,7 +303,7 @@ extension AudioPlayerService {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
                 let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists)
-                return Array(pool.shuffled().prefix(currentNeeded))
+                return Array(pool.prefix(currentNeeded))
             }
 
             guard !selected.isEmpty else { return }
