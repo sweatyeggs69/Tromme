@@ -291,7 +291,7 @@ struct AlbumDetailView: View {
     /// album has it.
     private var animatedArtworkOverlay: some View {
         AnimatedArtworkView(
-            url: animatedArtworkEnabled ? viewModel.animatedArtworkURL : nil,
+            url: animatedArtworkEnabled && !NetworkStatus.shared.isConstrained ? viewModel.animatedArtworkURL : nil,
             cornerRadius: AppStyle.Radius.card
         )
     }
@@ -805,7 +805,7 @@ struct AlbumDetailView: View {
         .task(id: album.ratingKey) {
             await viewModel.load(loadContext)
         }
-        .task(id: "\(album.ratingKey)|\(animatedArtworkEnabled)") {
+        .task(id: "\(album.ratingKey)|\(animatedArtworkEnabled)|\(NetworkStatus.shared.isConstrained)") {
             await viewModel.loadAnimatedArtwork()
         }
         .metadataSheets(request: $metadataRequest) { fresh in

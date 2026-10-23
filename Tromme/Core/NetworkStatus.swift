@@ -10,6 +10,7 @@ final class NetworkStatus: @unchecked Sendable {
     private(set) var isConnected = true
     private(set) var isExpensive = false
     private(set) var isCellular = false
+    private(set) var isConstrained = false
     private(set) var interfaceType: NWInterface.InterfaceType?
 
     private let monitor = NWPathMonitor()
@@ -20,6 +21,7 @@ final class NetworkStatus: @unchecked Sendable {
             let connected = path.status == .satisfied
             let expensive = path.isExpensive
             let cellular = path.usesInterfaceType(.cellular)
+            let constrained = path.isConstrained
             let newType: NWInterface.InterfaceType? = if path.usesInterfaceType(.wifi) {
                 .wifi
             } else if path.usesInterfaceType(.cellular) {
@@ -37,6 +39,7 @@ final class NetworkStatus: @unchecked Sendable {
                 self.isConnected = connected
                 self.isExpensive = expensive
                 self.isCellular = cellular
+                self.isConstrained = constrained
                 self.interfaceType = newType
                 NotificationCenter.default.post(name: Self.didChangeNotification, object: self)
             }

@@ -124,6 +124,8 @@ extension AudioPlayerService {
         let oldConnected = lastNetworkIsConnected
         lastNetworkInterfaceType = newType
         lastNetworkIsConnected = newConnected
+        // Adds or removes lock screen animated artwork when Low Data Mode flips.
+        updateNowPlayingInfo()
 
         let interfaceChanged = newType != oldType
         let lostConnection = oldConnected && !newConnected

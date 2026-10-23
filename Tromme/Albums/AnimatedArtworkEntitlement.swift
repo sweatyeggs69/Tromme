@@ -10,9 +10,14 @@ enum AnimatedArtworkEntitlement {
     /// `@AppStorage` key for the Settings > Interface toggle (default on).
     static let settingKey = "animatedArtworkEnabled"
 
-    /// Tromme+ and the user's toggle both allow it. When false, nothing is looked
-    /// up or played and only static artwork shows.
+    /// Low Data Mode is on for the current network path.
+    static var isLowDataMode: Bool {
+        NetworkStatus.shared.isConstrained
+    }
+
+    /// Tromme+ and the user's toggle both allow it, and Low Data Mode is off. When
+    /// false, nothing is looked up or played and only static artwork shows.
     static var isEnabled: Bool {
-        isUnlocked && (UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true)
+        isUnlocked && !isLowDataMode && (UserDefaults.standard.object(forKey: settingKey) as? Bool ?? true)
     }
 }

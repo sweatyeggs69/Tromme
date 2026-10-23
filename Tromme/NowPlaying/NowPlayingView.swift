@@ -309,10 +309,10 @@ struct NowPlayingView: View {
                 .opacity(0.01)
         }
         .preferredColorScheme(.dark)
-        .task(id: "\(player.currentTrack?.grandparentTitle ?? "")|\(player.currentTrack?.parentTitle ?? "")|\(animatedArtworkEnabled)") {
+        .task(id: "\(player.currentTrack?.grandparentTitle ?? "")|\(player.currentTrack?.parentTitle ?? "")|\(animatedArtworkEnabled)|\(NetworkStatus.shared.isConstrained)") {
             animatedArtworkURL = nil
             animatedBackdrop = nil
-            guard animatedArtworkEnabled,
+            guard animatedArtworkEnabled, !NetworkStatus.shared.isConstrained,
                   let artist = player.currentTrack?.grandparentTitle, !artist.isEmpty,
                   let album = player.currentTrack?.parentTitle, !album.isEmpty else { return }
             let artwork = await AnimatedArtworkService.artwork(artist: artist, album: album)

@@ -10,6 +10,10 @@ struct HomeSettingsView: View {
     @Environment(AudioPlayerService.self) private var player
     @State private var plus = PlusStore.shared
 
+    private var canUseAnimatedArtwork: Bool {
+        plus.isPlus && !NetworkStatus.shared.isConstrained
+    }
+
     var body: some View {
         Form {
             Section("Home") {
@@ -31,15 +35,17 @@ struct HomeSettingsView: View {
             Section {
                 Toggle("Popular Track Indicator", isOn: $showPopularTracks)
                     .tint(.green)
-                Toggle("Animated Artwork", isOn: plus.isPlus ? $animatedArtworkEnabled : .constant(false))
+                Toggle("Animated Artwork", isOn: canUseAnimatedArtwork ? $animatedArtworkEnabled : .constant(false))
                     .tint(.green)
-                    .disabled(!plus.isPlus)
+                    .disabled(!canUseAnimatedArtwork)
                     // Adds or removes it on the lock screen right away.
                     .onChange(of: animatedArtworkEnabled) { player.updateNowPlayingInfo() }
             } header: {
                 Text("Albums")
             } footer: {
-                if plus.isPlus {
+                if plus.isPlus, NetworkStatus.shared.isConstrained {
+                    Text("Track popularity data is sourced from Last.fm. Animated artwork is unavailable in Low Data Mode.")
+                } else if plus.isPlus {
                     Text("Track popularity data is sourced from Last.fm. Animated artwork requires an internet connection.")
                 } else {
                     Text("Track popularity data is sourced from Last.fm. Animated artwork is part of Tromme Plus.")
@@ -53,6 +59,7 @@ struct HomeSettingsView: View {
         }
         .navigationTitle("Interface")
         .onChange(of: plus.isPlus) { player.updateNowPlayingInfo() }
+        .onChange(of: NetworkStatus.shared.isConstrained) { player.updateNowPlayingInfo() }
     }
 }
 

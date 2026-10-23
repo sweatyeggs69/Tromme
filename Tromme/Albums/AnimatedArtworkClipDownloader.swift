@@ -73,7 +73,9 @@ enum AnimatedArtworkClipDownloader {
     }
 
     private static func fetch(_ url: URL) async throws -> Data {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.allowsConstrainedNetworkAccess = false
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         return data
     }
