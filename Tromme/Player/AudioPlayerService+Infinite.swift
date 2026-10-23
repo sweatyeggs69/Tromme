@@ -225,7 +225,7 @@ extension AudioPlayerService {
                 .map(\.track)
         }
 
-        func tracks(of albums: [PlexMetadata], minStyles: Int, minMoods: Int) -> [PlexMetadata] {
+        func scoredTracks(of albums: [PlexMetadata], minStyles: Int, minMoods: Int) -> [PlexMetadata] {
             var scored: [(track: PlexMetadata, weight: Int)] = []
             for album in albums {
                 let s = score(of: album)
@@ -248,13 +248,13 @@ extension AudioPlayerService {
         if needStyles > 0 || needMoods > 0 { attempts.append((needStyles, needMoods)) }
         if needStyles > 0, needMoods > 0 { attempts.append((needStyles, 0)) }
         for (styles, moods) in attempts {
-            let matched = tracks(of: albums, minStyles: styles, minMoods: moods)
+            let matched = scoredTracks(of: albums, minStyles: styles, minMoods: moods)
             if !matched.isEmpty { return matched }
         }
 
         let seedGenres = genres(of: seed)
         if !seedGenres.isEmpty {
-            let sameGenre = tracks(
+            let sameGenre = scoredTracks(
                 of: albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) },
                 minStyles: 0, minMoods: 0
             )
