@@ -185,7 +185,7 @@ extension AudioPlayerService {
         currentIndex -= dropCount
     }
 
-    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata], artists: [PlexMetadata]) -> [PlexMetadata] {
+    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata]) -> [PlexMetadata] {
         let queuedKeys = Set(queue.map(\.ratingKey))
         let fresh = tracks.filter { !queuedKeys.contains($0.ratingKey) }
         let fallback = fresh.isEmpty ? tracks : fresh
@@ -194,23 +194,11 @@ extension AudioPlayerService {
             Set((tags ?? []).compactMap { $0.tag?.lowercased() })
         }
 
-        let artistGenres = Dictionary(artists.map { ($0.ratingKey, tagSet($0.genre)) }, uniquingKeysWith: { first, _ in first })
-
-        /// Album genres, falling back to the album artist's genres when the album has none.
-        func genres(of album: PlexMetadata) -> Set<String> {
-            let own = tagSet(album.genre)
-            guard own.isEmpty, let artistKey = album.parentRatingKey else { return own }
-            return artistGenres[artistKey] ?? []
-        }
-
         guard let albumKey = currentTrack?.parentRatingKey,
               let seed = albums.first(where: { $0.ratingKey == albumKey }) else { return fallback.shuffled() }
-        let seedGenres = genres(of: seed)
         let seedStyles = tagSet(seed.style)
         let seedMoods = tagSet(seed.mood)
-        guard !seedGenres.isEmpty else { return fallback.shuffled() }
 
-        let sameGenreAlbums = albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) }
         let freshByAlbum = Dictionary(grouping: fresh, by: { $0.parentRatingKey ?? "" })
 
         /// Shared style and mood counts per album, used to rank its tracks.
@@ -241,13 +229,13 @@ extension AudioPlayerService {
             return weightedShuffle(scored)
         }
 
-        // At least one shared style and one shared mood, relaxed in turn to what the seed
-        // actually has. Never drops the genre requirement.
+        // At least one shared style and one shared mood (genre is not required), relaxed in
+        // turn to what the seed actually has.
         let needStyle = !seedStyles.isEmpty
         let needMood = !seedMoods.isEmpty
         let attempts = [(needStyle, needMood), (needStyle, false), (false, false)]
         for (style, mood) in attempts {
-            let matched = tracks(of: sameGenreAlbums, requireStyle: style, requireMood: mood)
+            let matched = tracks(of: albums, requireStyle: style, requireMood: mood)
             if !matched.isEmpty { return matched }
         }
         return fallback.shuffled()
@@ -284,7 +272,7 @@ extension AudioPlayerService {
                 return
             }
 
-            // Genre/style tags live on albums in Plex, not tracks.
+            // Style/mood tags live on albums in Plex, not tracks.
             // The listing omits Style, so read the stored detail payloads.
             var allAlbums = await LibraryStore.shared.albumsPreferringDetail(
                 scope: LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
@@ -296,13 +284,12 @@ extension AudioPlayerService {
                let index = allAlbums.firstIndex(where: { $0.ratingKey == seedAlbumKey }) {
                 allAlbums[index] = detail
             }
-            let allArtists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
             guard !Task.isCancelled else { return }
 
             let selected: [PlexMetadata] = await MainActor.run {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
-                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists)
+                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums)
                 return Array(pool.prefix(currentNeeded))
             }
 
