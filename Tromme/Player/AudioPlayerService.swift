@@ -128,10 +128,12 @@ final class AudioPlayerService: Sendable {
     /// bounded history behind the current track (enough for `previous()` to still work)
     /// and drop anything older.
     let infiniteModeHistoryLimit = 40
-    /// Infinite Mode candidates: tracks from albums sharing at least one style and at
-    /// least one mood with the current track's album (genre need not match), weighted so
+    /// Infinite Mode candidates: tracks from albums sharing at least `infiniteMinSharedStyles`
+    /// styles and `infiniteMinSharedMoods` moods with the current track's album (genre need not match), weighted so
     /// tracks with more shared styles and moods come up more often. If that finds nothing
     /// it relaxes mood, then style, and finally uses the whole library.
+    let infiniteMinSharedStyles = 2
+    let infiniteMinSharedMoods = 2
     var gainPrefetchTask: Task<Void, Never>?
     var playbackLoadTask: Task<Void, Never>?
     var nowPlayingArtworkTask: Task<Void, Never>?

@@ -216,12 +216,12 @@ extension AudioPlayerService {
                 .map(\.track)
         }
 
-        func tracks(of albums: [PlexMetadata], requireStyle: Bool, requireMood: Bool) -> [PlexMetadata] {
+        func tracks(of albums: [PlexMetadata], minStyles: Int, minMoods: Int) -> [PlexMetadata] {
             var scored: [(track: PlexMetadata, weight: Int)] = []
             for album in albums {
                 let s = score(of: album)
-                if requireStyle, s.styles == 0 { continue }
-                if requireMood, s.moods == 0 { continue }
+                if s.styles < minStyles { continue }
+                if s.moods < minMoods { continue }
                 for track in freshByAlbum[album.ratingKey] ?? [] {
                     scored.append((track, s.styles + s.moods))
                 }
@@ -229,13 +229,13 @@ extension AudioPlayerService {
             return weightedShuffle(scored)
         }
 
-        // At least one shared style and one shared mood (genre is not required), relaxed in
-        // turn to what the seed actually has.
-        let needStyle = !seedStyles.isEmpty
-        let needMood = !seedMoods.isEmpty
-        let attempts = [(needStyle, needMood), (needStyle, false), (false, false)]
-        for (style, mood) in attempts {
-            let matched = tracks(of: albums, requireStyle: style, requireMood: mood)
+        // At least infiniteMinSharedStyles shared styles and infiniteMinSharedMoods shared
+        // moods (genre is not required), capped at what the seed has, then relaxed in turn.
+        let needStyles = min(infiniteMinSharedStyles, seedStyles.count)
+        let needMoods = min(infiniteMinSharedMoods, seedMoods.count)
+        let attempts = [(needStyles, needMoods), (needStyles, 0), (0, 0)]
+        for (styles, moods) in attempts {
+            let matched = tracks(of: albums, minStyles: styles, minMoods: moods)
             if !matched.isEmpty { return matched }
         }
         return fallback.shuffled()
