@@ -23,7 +23,6 @@ struct PlaybackSettingsView: View {
                     Text("1x").tag(1)
                     Text("2x").tag(2)
                     Text("3x").tag(3)
-                    Text("4x").tag(4)
                 }
             } footer: {
                 Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track, spread across their albums. Lower values favor similar artists.")
