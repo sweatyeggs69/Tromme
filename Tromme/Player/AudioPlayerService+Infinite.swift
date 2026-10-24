@@ -71,21 +71,14 @@ extension AudioPlayerService {
                 return
             }
 
-            let infinite = await MainActor.run { self.isInfiniteModeActive }
-            var dispersed: [PlexMetadata]
-            if infinite {
-                // Infinite Mode: similar artists first, seed artist tracks after.
-                dispersed = Self.evenlyDispersedShuffle(similarTracks) + Self.evenlyDispersedShuffle(pickedSeed)
-            } else {
-                dispersed = Self.evenlyDispersedShuffle(similarTracks + pickedSeed)
-                // The mix should open with a different artist than the one already playing.
-                if let first = dispersed.first,
-                   (first.grandparentRatingKey ?? first.parentRatingKey ?? first.ratingKey) == seedArtistKey,
-                   let swapIndex = dispersed.firstIndex(where: {
-                       ($0.grandparentRatingKey ?? $0.parentRatingKey ?? $0.ratingKey) != seedArtistKey
-                   }) {
-                    dispersed.swapAt(0, swapIndex)
-                }
+            var dispersed = Self.evenlyDispersedShuffle(similarTracks + pickedSeed)
+            // The mix should open with a different artist than the one already playing.
+            if let first = dispersed.first,
+               (first.grandparentRatingKey ?? first.parentRatingKey ?? first.ratingKey) == seedArtistKey,
+               let swapIndex = dispersed.firstIndex(where: {
+                   ($0.grandparentRatingKey ?? $0.parentRatingKey ?? $0.ratingKey) != seedArtistKey
+               }) {
+                dispersed.swapAt(0, swapIndex)
             }
 
             await MainActor.run {
