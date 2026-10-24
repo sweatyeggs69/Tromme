@@ -7,7 +7,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
-    @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 2
+    @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
 
     var body: some View {
         Form {

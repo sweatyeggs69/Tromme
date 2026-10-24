@@ -60,9 +60,9 @@ extension AudioPlayerService {
                 }
             }
 
-            // Seed artist contributes up to the user-set multiple (default 2x) of the similar tracks, spread across its albums.
+            // Seed artist contributes up to the user-set multiple (default 1x) of the similar tracks, spread across its albums.
             // With no similar tracks at all, fall back to the whole seed catalog.
-            let seedMultiplier = min(3, max(1, UserDefaults.standard.object(forKey: "magicMixSeedCap") as? Int ?? 2))
+            let seedMultiplier = min(3, max(1, UserDefaults.standard.object(forKey: "magicMixSeedCap") as? Int ?? 1))
             let seedLimit = similarTracks.isEmpty ? seedTracks.count : similarTracks.count * seedMultiplier
             let pickedSeed = Self.evenlySpreadAcrossAlbums(seedTracks, limit: seedLimit)
 
