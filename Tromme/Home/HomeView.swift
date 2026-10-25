@@ -62,9 +62,6 @@ struct HomeView: View {
                 if !hideEmptySections || isLoading || !playlists.isEmpty {
                     playlistsSection
                 }
-                ForEach(viewModel.plexHubs) { hub in
-                    HomeHubSectionView(hub: hub)
-                }
             }
             .padding(.bottom, 8)
             .padding(.top, 8)

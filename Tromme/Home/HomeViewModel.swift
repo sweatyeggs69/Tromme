@@ -11,7 +11,6 @@ final class HomeViewModel {
     private(set) var playlists: [PlexPlaylist]
     private(set) var recentAlbums: [PlexMetadata]
     private(set) var featuredAlbums: [PlexMetadata]
-    private(set) var plexHubs: [Hub] = []
     private(set) var isLoading: Bool
 
     // Same keys the view used through @AppStorage, so existing picks carry over.
@@ -45,7 +44,6 @@ final class HomeViewModel {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadHomeContent(context) }
             group.addTask { await self.loadFeaturedAlbum(context, forced: false) }
-            group.addTask { await self.loadPlexHubs(context) }
         }
     }
 
@@ -106,26 +104,6 @@ final class HomeViewModel {
               let tracks = try? await context.client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt),
               !tracks.isEmpty else { return nil }
         return tracks
-    }
-
-    /// Plex's Recommended hubs are server-defined and change over time, so they are rendered generically.
-    /// Hubs that duplicate Home's own Recently Added / Recently Played rows are dropped.
-    private func loadPlexHubs(_ context: Context) async {
-        guard let server = context.server,
-              let sectionId = context.sectionId else {
-            plexHubs = []
-            return
-        }
-        guard let hubs = try? await context.client.getSectionHubs(server: server, sectionId: sectionId) else { return }
-        guard !Task.isCancelled else { return }
-        let shown = hubs.filter { hub in
-            let identifier = hub.hubIdentifier ?? ""
-            guard !identifier.hasSuffix("recent.added"), !identifier.hasSuffix("recent.played") else { return false }
-            return !HomeHubSectionView.displayableItems(in: hub).isEmpty
-        }
-        withAnimation(.easeIn(duration: 0.25)) {
-            plexHubs = shown
-        }
     }
 
     private func loadFeaturedAlbum(_ context: Context, forced: Bool) async {
