@@ -811,7 +811,7 @@ struct AlbumDetailView: View {
         .metadataSheets(request: $metadataRequest) { fresh in
             viewModel.applyEditedAlbum(fresh)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .libraryContentDidChange)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .libraryContentDidChange).receive(on: DispatchQueue.main)) { _ in
             Task { await viewModel.reloadFromStore(loadContext) }
         }
         .sheet(isPresented: $showsAlbumInfoSheet) {

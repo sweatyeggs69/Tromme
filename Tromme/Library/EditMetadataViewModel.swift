@@ -96,7 +96,7 @@ final class EditMetadataViewModel {
         await LibraryStore.shared.upsert(page: [fresh], kind: kind, scope: scope)
         await LibraryStore.shared.saveDetail(fresh, serverId: server.machineIdentifier)
         await LibraryStore.shared.invalidateMemory(kind: kind, scope: scope)
-        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+        Notification.Name.postLibraryContentDidChange()
 
         // Titles are copied into child and sibling rows (a track carries its album and artist
         // names), so renames and moves need the mirror re-read.

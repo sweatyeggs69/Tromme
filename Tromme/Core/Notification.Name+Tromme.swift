@@ -8,4 +8,15 @@ extension Notification.Name {
     static let libraryContentDidChange = Notification.Name("TrommeLibraryContentDidChange")
     /// Posted after a finished play is reported to the server so the home screen refreshes recently played.
     static let recentlyPlayedDidChange = Notification.Name("TrommeRecentlyPlayedDidChange")
+
+    /// Posts `libraryContentDidChange` on the main thread; observers update published view state.
+    static func postLibraryContentDidChange() {
+        if Thread.isMainThread {
+            NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+        } else {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+            }
+        }
+    }
 }

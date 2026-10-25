@@ -100,7 +100,7 @@ actor LibrarySyncService {
                 try await group.waitForAll()
             }
             await LibraryStore.shared.markReady(kind: LibraryStore.Kind.album, scope: scope)
-            NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+            Notification.Name.postLibraryContentDidChange()
         }
         // Tracks download alongside artists/albums but are only committed after them, so
         // the store never holds tracks whose albums it hasn't seen yet.
@@ -110,7 +110,7 @@ actor LibrarySyncService {
             }
             await LibraryStore.shared.markReady(kind: LibraryStore.Kind.track, scope: scope)
             await LibraryStore.shared.markSynced(scope: scope, serverUpdatedAt: serverUpdatedAt)
-            NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+            Notification.Name.postLibraryContentDidChange()
         }
         let run = Run(meta: meta, tracks: tracks)
         runs[scope] = run

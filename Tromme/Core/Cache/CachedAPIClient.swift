@@ -301,7 +301,7 @@ extension PlexAPIClient {
             for _ in 0..<3 { addNext() }
             while await group.next() != nil { addNext() }
         }
-        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+        Notification.Name.postLibraryContentDidChange()
     }
 
     /// Re-reads one playlist (listing + items) after the user changed it.
@@ -316,7 +316,7 @@ extension PlexAPIClient {
         } else {
             await LibraryStore.shared.removePlaylist(playlistKey: key, serverId: serverId)
         }
-        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+        Notification.Name.postLibraryContentDidChange()
     }
 
     // MARK: - Metadata (single item)
@@ -383,7 +383,7 @@ extension PlexAPIClient {
         }
         guard !updates.isEmpty else { return }
         await LibraryStore.shared.applyTrackUpdates(updates, scope: scope)
-        NotificationCenter.default.post(name: .libraryContentDidChange, object: nil)
+        Notification.Name.postLibraryContentDidChange()
     }
 
     /// Re-reads one track after the user rated or played it, so Home and Favorites update
