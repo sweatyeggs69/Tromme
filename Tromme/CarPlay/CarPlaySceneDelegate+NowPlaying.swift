@@ -13,15 +13,22 @@ extension CarPlaySceneDelegate {
         nowPlaying.upNextTitle = "Queue"
         nowPlaying.isAlbumArtistButtonEnabled = true
 
-        let shuffleButton = CPNowPlayingShuffleButton { [weak self] _ in
+        // Custom buttons, not the system shuffle/repeat ones: those re-read the remote
+        // command state on every Now Playing update and flash. These only change when
+        // the user changes them.
+        let shuffleButton = CPNowPlayingImageButton(image: UIImage(systemName: "shuffle") ?? UIImage()) { [weak self] _ in
             self?.player.toggleShuffle()
         }
         self.shuffleNPButton = shuffleButton
 
-        let repeatButton = CPNowPlayingRepeatButton { [weak self] _ in
-            self?.player.cycleRepeatMode()
-        }
-        self.repeatNPButton = repeatButton
+        let modes: [(AudioPlayerService.RepeatMode, String)] = [(.off, "repeat"), (.song, "repeat"), (.once, "repeat.1")]
+        repeatNPButtons = Dictionary(uniqueKeysWithValues: modes.map { mode, symbol in
+            let button = CPNowPlayingImageButton(image: UIImage(systemName: symbol) ?? UIImage()) { [weak self] _ in
+                self?.player.cycleRepeatMode()
+            }
+            button.isSelected = mode != .off
+            return (mode, button)
+        })
 
         let magicMixImage = UIImage(systemName: "wand.and.stars") ?? UIImage()
         let mixBtn = CPNowPlayingImageButton(image: magicMixImage) { [weak self] _ in
@@ -37,7 +44,10 @@ extension CarPlaySceneDelegate {
         }
         self.favoriteButton = favorite
 
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatButton, favorite, mixBtn])
+        shuffleButton.isSelected = player.isShuffled
+        lastPublishedShuffleState = player.isShuffled
+        lastPublishedRepeatMode = player.repeatMode
+        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatNPButtons[player.repeatMode] ?? repeatNPButtons[.off]!, favorite, mixBtn])
         lastPublishedFavoriteState = false
         syncMixButtons()
     }
@@ -57,10 +67,20 @@ extension CarPlaySceneDelegate {
     }
 
     func rebuildNowPlayingButtons() {
-        guard let favorite = favoriteButton,
-              lastPublishedFavoriteState != currentTrackFavorited else { return }
-        lastPublishedFavoriteState = currentTrackFavorited
-        favorite.isSelected = currentTrackFavorited
+        if let shuffle = shuffleNPButton, lastPublishedShuffleState != player.isShuffled {
+            lastPublishedShuffleState = player.isShuffled
+            shuffle.isSelected = player.isShuffled
+        }
+        if let favorite = favoriteButton, lastPublishedFavoriteState != currentTrackFavorited {
+            lastPublishedFavoriteState = currentTrackFavorited
+            favorite.isSelected = currentTrackFavorited
+        }
+        if lastPublishedRepeatMode != player.repeatMode,
+           let repeatButton = repeatNPButtons[player.repeatMode],
+           let shuffle = shuffleNPButton, let favorite = favoriteButton, let mix = magicMixButton {
+            lastPublishedRepeatMode = player.repeatMode
+            CPNowPlayingTemplate.shared.updateNowPlayingButtons([shuffle, repeatButton, favorite, mix])
+        }
     }
 
     func toggleFavorite() {

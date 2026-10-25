@@ -10,8 +10,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var client: PlexAPIClient { AppContext.shared.plexClient }
     var player: AudioPlayerService { AppContext.shared.audioPlayer }
 
-    var shuffleNPButton: CPNowPlayingShuffleButton?
-    var repeatNPButton: CPNowPlayingRepeatButton?
+    var shuffleNPButton: CPNowPlayingImageButton?
+    /// One button per repeat mode; the row is re-sent only when the mode changes.
+    var repeatNPButtons: [AudioPlayerService.RepeatMode: CPNowPlayingImageButton] = [:]
+    var lastPublishedShuffleState: Bool?
+    var lastPublishedRepeatMode: AudioPlayerService.RepeatMode?
     var magicMixButton: CPNowPlayingImageButton?
     var favoriteButton: CPNowPlayingImageButton?
     var currentTrackFavorited = false
