@@ -236,6 +236,20 @@ extension PlexAPIClient {
     }
 
 
+    // MARK: - Section Hubs
+
+    /// Returns the hubs Plex shows on the library's Recommended page (`GET /hubs/sections/{sectionId}`).
+    func getSectionHubs(server: PlexServer, sectionId: String, count: Int = 12) async throws -> [Hub] {
+        let data = try await rawServerRequest(
+            server: server,
+            path: "/hubs/sections/\(sectionId)",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "count", value: "\(count)")]
+        )
+        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
+        return response.mediaContainer.hub ?? []
+    }
+
     // MARK: - Related Hubs
 
     /// Returns the "You May Also Like" and other related hubs for a given metadata item.

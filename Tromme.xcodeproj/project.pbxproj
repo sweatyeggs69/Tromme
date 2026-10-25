@@ -190,6 +190,7 @@
 		F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18BD457F7B7DE8A280528206 /* CarPlaySceneDelegate+Rows.swift */; };
 		F4FF637A43ABCCDF42CEE6EE /* PlexImageResource.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC29A43D6D692C1630B99255 /* PlexImageResource.swift */; };
 		F5772284193FF87A82D178C1 /* CacheKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEA9B2F355353777C35A4716 /* CacheKey.swift */; };
+		A1B2C3D4E5F6071829304A5B /* HomeHubSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304A5C /* HomeHubSectionView.swift */; };
 		F7FC7CBEA159953593220E3D /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */; };
 		F8048329D1AF38E5D051A099 /* PlexArtworkResourceMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = B698299B566F2968B70EE531 /* PlexArtworkResourceMetadata.swift */; };
 		F90699B7E20AAA99E8C83348 /* AudioPlayerService+TrackEnd.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5F712E966BE585BD898CD3 /* AudioPlayerService+TrackEnd.swift */; };
@@ -268,6 +269,7 @@
 		3673B8F94920D7F8BB5A3AC2 /* AnimatedArtworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkService.swift; sourceTree = "<group>"; };
 		3BE54BE32E8EC9FD004BAD4F /* AlbumDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumDetailView.swift; sourceTree = "<group>"; };
 		3D2B3D7C17C6BECB37CF5390 /* AudioPlayerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerService.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304A5C /* HomeHubSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHubSectionView.swift; sourceTree = "<group>"; };
 		3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
 		427DC1A3B77E0A18822DB0BD /* Notification.Name+Tromme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Notification.Name+Tromme.swift"; sourceTree = "<group>"; };
 		42BB6B7139BCB32BF5F17D78 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
@@ -721,6 +723,7 @@
 			isa = PBXGroup;
 			children = (
 				570A2B691FCC5F218BF6D09D /* HomeView.swift */,
+				A1B2C3D4E5F6071829304A5C /* HomeHubSectionView.swift */,
 				3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */,
 				DC307E2345C91DC7DBC7E889 /* FeaturedCarouselView.swift */,
 				0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */,
@@ -909,6 +912,7 @@
 				4865C5FAA0797325FFD575A7 /* ArtworkColorPersistence.swift in Sources */,
 				AA6D59788A62DD10CE982D85 /* ArtworkBackdrop.swift in Sources */,
 				4BB274706DE61123EC23EEEC /* ArtworkXMLParserDelegate.swift in Sources */,
+				A1B2C3D4E5F6071829304A5B /* HomeHubSectionView.swift in Sources */,
 				F7FC7CBEA159953593220E3D /* HomeViewModel.swift in Sources */,
 				6DEC6BAE9DC9C11976A5BC97 /* ArtistDetailViewModel.swift in Sources */,
 				92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */,
