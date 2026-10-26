@@ -221,13 +221,35 @@ final class DownloadManager: @unchecked Sendable {
             ?? resolvedTrack.media?.first?.part?.first?.container
             ?? "mp3"
 
+        let sourceCodec = resolvedTrack.media?.first?.audioCodec
+        let wantsTranscode = DownloadQuality.current == .spaceSaver
+            && DownloadQuality.transcodes(codec: sourceCodec)
+
         do {
+            if wantsTranscode {
+                do {
+                    try await fetchAndStore(
+                        filename: "\(ratingKey).\(PlexAPIClient.spaceSaverFileExtension)",
+                        track: resolvedTrack,
+                        server: server,
+                        client: client,
+                        fetch: { try await client.transcodedDownload(server: server, ratingKey: ratingKey) }
+                    )
+                    return
+                } catch {
+                    // Cancelled downloads stop here; a failed transcode falls back to the original file.
+                    if Task.isCancelled { throw error }
+                    #if DEBUG
+                    print("[Downloads] Space Saver transcode failed for \(ratingKey): \(error)")
+                    #endif
+                }
+            }
             try await fetchAndStore(
-                request: URLRequest(url: downloadURL),
                 filename: "\(ratingKey).\(container)",
                 track: resolvedTrack,
                 server: server,
-                client: client
+                client: client,
+                fetch: { try await Self.downloadFile(URLRequest(url: downloadURL)) }
             )
         } catch {
             if Task.isCancelled {
@@ -238,20 +260,25 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
-    private func fetchAndStore(
-        request: URLRequest,
-        filename: String,
-        track: PlexMetadata,
-        server: PlexServer,
-        client: PlexAPIClient
-    ) async throws {
-        let ratingKey = track.ratingKey
-        let destURL = downloadsDirectory.appendingPathComponent(filename)
-
+    private static func downloadFile(_ request: URLRequest) async throws -> URL {
         let (tempURL, response) = try await URLSession.shared.download(for: request)
         if let statusCode = (response as? HTTPURLResponse)?.statusCode, statusCode >= 400 {
             throw PlexAPIError.serverError(statusCode)
         }
+        return tempURL
+    }
+
+    private func fetchAndStore(
+        filename: String,
+        track: PlexMetadata,
+        server: PlexServer,
+        client: PlexAPIClient,
+        fetch: () async throws -> URL
+    ) async throws {
+        let ratingKey = track.ratingKey
+        let destURL = downloadsDirectory.appendingPathComponent(filename)
+
+        let tempURL = try await fetch()
         // A dying transcoder can return 200 with an empty body — don't record
         // an empty file as a successful download.
         let downloadedSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 ?? 0

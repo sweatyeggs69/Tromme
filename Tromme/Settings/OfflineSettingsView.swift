@@ -9,6 +9,7 @@ struct OfflineSettingsView: View {
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
     @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
+    @AppStorage(DownloadQuality.storageKey) private var downloadQuality = DownloadQuality.original.rawValue
 
     private static let dynamicDownloadLimitOptions: [Int] = [5, 10, 20]
 
@@ -58,6 +59,16 @@ struct OfflineSettingsView: View {
                 }
             } footer: {
                 Text(footerText)
+            }
+
+            Section {
+                Picker("Download Quality", selection: $downloadQuality) {
+                    ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
+                        Text(quality.displayName).tag(quality.rawValue)
+                    }
+                }
+            } footer: {
+                Text("Space Saver converts lossless and Opus songs to AAC on your server. Other songs download as the original.")
             }
         }
         .navigationTitle("Offline")

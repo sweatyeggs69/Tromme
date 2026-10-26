@@ -18,6 +18,7 @@ final class SettingsSync {
         "autoDownloadEnabled",
         "autoDownloadMode",
         "dynamicDownloadLimit",
+        "downloadQuality",
         "animatedArtworkEnabled",
         "leftAlignLyrics",
         "showFeaturedSection",

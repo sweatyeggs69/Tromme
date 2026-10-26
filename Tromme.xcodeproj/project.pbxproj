@@ -199,6 +199,8 @@
 		F90699B7E20AAA99E8C83348 /* AudioPlayerService+TrackEnd.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB5F712E966BE585BD898CD3 /* AudioPlayerService+TrackEnd.swift */; };
 		FCDC662C4145C838BC5F4C03 /* LrcRedLyricsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */; };
 		FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */; };
+		A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0001000100000001 /* DownloadQuality.swift */; };
+		A1D0C0DE0004000400000004 /* PlexAPIClient+Downloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -398,6 +400,8 @@
 		FDBB42B4774E4A3CCABE886B /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		FF7EFF422AC20F722325DF44 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 		FFBF09E48768C79583BCFE65 /* PlexAPIClient+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlexAPIClient+Playback.swift"; sourceTree = "<group>"; };
+		A1D0C0DE0001000100000001 /* DownloadQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQuality.swift; sourceTree = "<group>"; };
+		A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlexAPIClient+Downloads.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -521,6 +525,7 @@
 				FFBF09E48768C79583BCFE65 /* PlexAPIClient+Playback.swift */,
 				0335A16CB3C2BB8033CE25D3 /* PlexAPIClient+Playlists.swift */,
 				76E4FEC397AD08F9EEE2379F /* PlexAPIClient+Library.swift */,
+				A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */,
 				EE5E0E523F51F698FA7E19C4 /* PlexAPIClient+Metadata.swift */,
 				C2D3E4F506172839A1B2C3D4 /* KeychainHelper.swift */,
 				E4F506172839A1B2C3D4E5F6 /* NetworkStatus.swift */,
@@ -666,6 +671,7 @@
 				5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */,
 				92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */,
 				2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */,
+				A1D0C0DE0001000100000001 /* DownloadQuality.swift */,
 				CB5F712E966BE585BD898CD3 /* AudioPlayerService+TrackEnd.swift */,
 				2B9D3EB55AD77BD137AC2C21 /* AudioPlayerService+Timeline.swift */,
 				BE0157898E7499F0B84BB506 /* AudioPlayerService+TimeTracking.swift */,
@@ -856,6 +862,7 @@
 				89CF18EF9E82656F6565B9E1 /* TrackMarkerStore.swift in Sources */,
 				98E108B7C1BA7FF6DF85951A /* DownloadedTrackRecord.swift in Sources */,
 				830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */,
+				A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
 				8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */,
 				4EF1AB66E4C346F4DDD503E2 /* QueueRow.swift in Sources */,
@@ -947,6 +954,7 @@
 				53A5903BC47BD0FF66890867 /* PlexAPIClient+Playback.swift in Sources */,
 				B02CA1C16E12B21296F9ECD9 /* PlexAPIClient+Playlists.swift in Sources */,
 				78C41438EC306D8D591E373F /* PlexAPIClient+Library.swift in Sources */,
+				A1D0C0DE0004000400000004 /* PlexAPIClient+Downloads.swift in Sources */,
 				842F4889C00487C672FDFBC8 /* PlexAPIClient+Metadata.swift in Sources */,
 				65A307AEDD2E42AD1D19AC18 /* AlbumRecommendationGridView.swift in Sources */,
 				C9350E3CEF47DDFE9C03A3C5 /* AlbumTrackRow.swift in Sources */,
