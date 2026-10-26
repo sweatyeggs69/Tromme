@@ -30,7 +30,7 @@ struct OfflineSettingsView: View {
                     }
                 }
 
-                Toggle("Auto-Download", isOn: $autoDownloadEnabled)
+                Toggle("Download Library", isOn: $autoDownloadEnabled)
                     .tint(.green)
                     .onChange(of: autoDownloadEnabled) { _, enabled in
                         guard enabled else { return }

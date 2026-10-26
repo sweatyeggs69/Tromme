@@ -14,8 +14,6 @@ struct PlaybackSettingsView: View {
             Section {
                 Toggle("Infinite Mode", isOn: infiniteModeBinding)
                     .tint(.green)
-            } footer: {
-                Text("When the queue empties, keep playing related music.")
             }
 
             Section {
@@ -25,7 +23,7 @@ struct PlaybackSettingsView: View {
                     Text("3x").tag(3)
                 }
             } footer: {
-                Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track, spread across their albums. Lower values favor similar artists.")
+                Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track.")
             }
 
             if supportsCellularSettings {

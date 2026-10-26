@@ -30,18 +30,12 @@ struct SettingsView: View {
                 } else {
                     Button("Get Tromme Plus") { showPaywall = true }
                 }
-            } footer: {
-                if plus.isGrandfathered {
-                    Text("You have Tromme Plus for free as a Premium Icon Pack owner.")
-                } else if !plus.isPlus {
-                    Text("Get access to the premium icons, animated artwork and support ongoing development of Tromme.")
-                }
             }
 
             Section {
                 NavigationLink("Interface") { HomeSettingsView() }
                 NavigationLink("Playback") { PlaybackSettingsView() }
-                NavigationLink("Offline") { OfflineSettingsView() }
+                NavigationLink("Downloads") { OfflineSettingsView() }
                 NavigationLink("App Icon") { AppIconPickerView() }
             }
 
