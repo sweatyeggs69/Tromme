@@ -2,13 +2,28 @@ import Foundation
 import Observation
 
 /// Per-track start/stop markers, keyed by Plex rating key. Local only: Plex has no
-/// documented marker type for music.
+/// documented marker type for music. Mirrored to iCloud key-value storage so markers
+/// survive a reinstall and follow the user to a new device.
 @Observable @MainActor
 final class TrackMarkerStore {
+    private static let cloudKey = "trackMarkers"
+
     private var markers: [String: TrackMarkers] = [:]
+    private let cloud = NSUbiquitousKeyValueStore.default
 
     init() {
         load()
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: cloud,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pullFromCloud() }
+        }
+        cloud.synchronize()
+        // Cloud wins where it has a value (fresh install); otherwise seed it from this device.
+        pullFromCloud(merging: true)
+        pushToCloud()
     }
 
     func markers(for ratingKey: String) -> TrackMarkers {
@@ -58,6 +73,23 @@ final class TrackMarkerStore {
     private func persist() {
         guard let data = try? JSONEncoder().encode(markers) else { return }
         try? data.write(to: fileURL, options: .atomic)
+        pushToCloud()
+    }
+
+    private func pushToCloud() {
+        guard let data = try? JSONEncoder().encode(markers) else { return }
+        cloud.set(data, forKey: Self.cloudKey)
+        cloud.synchronize()
+    }
+
+    /// `merging` keeps local entries the cloud lacks (launch); otherwise the cloud copy replaces them.
+    private func pullFromCloud(merging: Bool = false) {
+        guard let data = cloud.data(forKey: Self.cloudKey),
+              let remote = try? JSONDecoder().decode([String: TrackMarkers].self, from: data) else { return }
+        markers = merging ? markers.merging(remote) { _, cloudValue in cloudValue } : remote
+        if let encoded = try? JSONEncoder().encode(markers) {
+            try? encoded.write(to: fileURL, options: .atomic)
+        }
     }
 
     private func load() {
