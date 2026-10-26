@@ -40,10 +40,9 @@ struct TrackInfoSheet: View {
 
                 if let download = viewModel.download {
                     Section("Download") {
-                        row("Format", download.fileExtension.uppercased())
+                        row("Format", download.codecLabel(source: viewModel.media))
                         row("Bit Rate", download.averageBitrateKbps.map { "\($0) kbps" })
                         row("File Size", ByteCountFormatter.string(fromByteCount: download.fileSize, countStyle: .file))
-                        row("Downloaded", download.downloadedAt.formatted(date: .abbreviated, time: .omitted))
                     }
                 }
 

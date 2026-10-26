@@ -882,8 +882,8 @@ final class AudioPlayerService: Sendable {
             discardPreloadedNext()
             logPlayback("load_local_file", "track=\(track.ratingKey)")
             isPlayingLocalFile = true
-            let ext = localURL.pathExtension
-            localFileCodec = ext.isEmpty ? nil : ext.uppercased()
+            localFileCodec = AppContext.shared.downloadManager.records[track.ratingKey]?
+                .codecLabel(source: track.media?.first)
             currentSessionID = nil
             pendingInitialSeekTime = boundedResume
             startPlayback(url: localURL)

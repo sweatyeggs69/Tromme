@@ -45,8 +45,9 @@ extension AudioPlayerService {
         guard !Task.isCancelled else { return }
 
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
-            let ext = localURL.pathExtension
-            enqueuePreloaded(track, url: localURL, source: .local(codec: ext.isEmpty ? nil : ext.uppercased()), detailedTrack: detailedTrack)
+            let codec = AppContext.shared.downloadManager.records[track.ratingKey]?
+                .codecLabel(source: track.media?.first)
+            enqueuePreloaded(track, url: localURL, source: .local(codec: codec), detailedTrack: detailedTrack)
             return
         }
 

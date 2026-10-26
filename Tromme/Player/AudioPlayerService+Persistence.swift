@@ -159,8 +159,8 @@ extension AudioPlayerService {
                 guard let self, self.currentTrack?.ratingKey == ratingKey else { return }
                 if let localURL = AppContext.shared.downloadManager.localURL(for: ratingKey) {
                     self.isPlayingLocalFile = true
-                    let ext = localURL.pathExtension
-                    self.localFileCodec = ext.isEmpty ? nil : ext.uppercased()
+                    self.localFileCodec = AppContext.shared.downloadManager.records[ratingKey]?
+                        .codecLabel(source: self.currentTrack?.media?.first)
                 }
             }
         }
