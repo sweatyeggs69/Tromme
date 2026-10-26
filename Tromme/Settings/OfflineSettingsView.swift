@@ -68,7 +68,7 @@ struct OfflineSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Songs above the chosen bitrate, and all Opus songs, are converted to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
+                Text("Songs above the chosen bitrate are converted to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
             }
         }
         .navigationTitle("Offline")

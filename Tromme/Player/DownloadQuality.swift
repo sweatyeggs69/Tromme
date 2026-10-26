@@ -28,15 +28,9 @@ enum DownloadQuality: String, CaseIterable {
         return DownloadQuality(rawValue: raw) ?? .original
     }
 
-    /// Opus has poor AVPlayer support, so it is always converted.
-    private static let alwaysConvertedCodecs: Set<String> = ["opus"]
-
     /// The AAC bitrate to convert a song to, or nil when it downloads as the original file.
     func transcodeBitrate(codec: String?, sourceBitrate: Int?) -> Int? {
         guard let cap = maxBitrateKbps else { return nil }
-        if let codec = codec?.lowercased(), Self.alwaysConvertedCodecs.contains(codec) {
-            return max(128, min(cap, sourceBitrate ?? cap))
-        }
         if let sourceBitrate {
             return sourceBitrate > cap ? cap : nil
         }
