@@ -32,6 +32,10 @@ struct TrackInfoSheet: View {
                     row("File Size", viewModel.part?.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) })
                 }
 
+                if let duration = viewModel.track.duration, duration > 1000 {
+                    TrackMarkersSection(ratingKey: viewModel.track.ratingKey, duration: Double(duration) / 1000)
+                }
+
                 if let file = viewModel.part?.file {
                     Section("File Path") {
                         Text(file)

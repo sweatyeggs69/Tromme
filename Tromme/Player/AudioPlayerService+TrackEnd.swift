@@ -189,7 +189,7 @@ extension AudioPlayerService {
         streamTimeOffset = 0
         pendingStreamOffsetCalibration = false
         duration = Double(track.duration ?? 0) / 1000.0
-        currentTime = 0
+        currentTime = currentTrackStartTime
         detailedTrackForSoundCheck = preloaded.detailedTrack
         universalCandidateIndexForCurrentItem = 0
 
@@ -234,5 +234,11 @@ extension AudioPlayerService {
 
         logPlayback("gapless_advance", "to=\(track.ratingKey) index=\(target.index)")
         beginTrackSession(item: item)
+
+        // Fallback if the pre-seek of the queued item didn't take.
+        let start = currentTrackStartTime
+        if start > 0, item.currentTime().seconds < start - 0.5 {
+            seek(to: start)
+        }
     }
 }

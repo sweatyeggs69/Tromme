@@ -14,6 +14,7 @@ final class AppContext {
     let plexClient = PlexAPIClient()
     let audioPlayer = AudioPlayerService()
     let downloadManager = DownloadManager()
+    let trackMarkers = TrackMarkerStore()
 
     private var serverObservationTask: Task<Void, Never>?
 

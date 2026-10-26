@@ -665,7 +665,7 @@ final class AudioPlayerService: Sendable {
     func previous() {
         guard !queue.isEmpty else { return }
         if currentTime > 3 {
-            seek(to: 0)
+            seek(to: currentTrackStartTime)
             return
         }
         if currentIndex > 0 {
@@ -775,8 +775,20 @@ final class AudioPlayerService: Sendable {
         heldSeekTask = nil
     }
 
-    func makePlayerItem(url: URL) -> AVPlayerItem {
-        AVPlayerItem(url: url)
+    /// Start marker for the current track, or 0.
+    var currentTrackStartTime: TimeInterval {
+        currentTrack.flatMap { AppContext.shared.trackMarkers.start(for: $0.ratingKey) } ?? 0
+    }
+
+    /// `trimmedTo` ends playback at that track's stop marker. Offset HLS streams skip it
+    /// because their item timeline isn't the track timeline.
+    func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0) -> AVPlayerItem {
+        let item = AVPlayerItem(url: url)
+        if let track, streamOffset == 0,
+           let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {
+            item.forwardPlaybackEndTime = CMTime(seconds: stop, preferredTimescale: 600)
+        }
+        return item
     }
 
     enum PlaybackPath {
@@ -796,7 +808,8 @@ final class AudioPlayerService: Sendable {
 
     }
 
-    func loadAndPlay(_ track: PlexMetadata, resumeAt: TimeInterval? = nil, forceHLS: Bool = false) {
+    func loadAndPlay(_ track: PlexMetadata, resumeAt requestedResume: TimeInterval? = nil, forceHLS: Bool = false) {
+        let resumeAt = requestedResume ?? AppContext.shared.trackMarkers.start(for: track.ratingKey)
         guard server != nil, client != nil else {
             logPlayback("load_failed", "reason=server_or_client_not_configured requested=\(track.ratingKey)")
             return
@@ -1032,7 +1045,7 @@ final class AudioPlayerService: Sendable {
 
     func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
-        let item = makePlayerItem(url: url)
+        let item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset)
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {

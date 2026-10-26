@@ -121,7 +121,7 @@ extension AudioPlayerService {
     }
 
     func enqueuePreloaded(_ track: PlexMetadata, url: URL, source: PreloadedNextTrack.Source, detailedTrack: PlexMetadata?) {
-        let item = makePlayerItem(url: url)
+        let item = makePlayerItem(url: url, trimmedTo: track)
         if case .local = source {} else {
             item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: Double(track.duration ?? 0) / 1000.0)
         }
@@ -131,6 +131,9 @@ extension AudioPlayerService {
               player.canInsert(item, after: currentItem) else {
             logPlayback("preload_dropped", "track=\(track.ratingKey)")
             return
+        }
+        if case .hls = source {} else if let start = AppContext.shared.trackMarkers.start(for: track.ratingKey) {
+            item.seek(to: CMTime(seconds: start, preferredTimescale: 600), completionHandler: nil)
         }
         player.insert(item, after: currentItem)
         player.actionAtItemEnd = .advance

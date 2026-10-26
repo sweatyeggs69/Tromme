@@ -112,6 +112,7 @@
 		8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B32F38AB3FBE4BA037947B /* TrackRowView.swift */; };
 		02A629775E8816382FCC6B5B /* MetadataSheetsModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */; };
 		F075CAC8B67F4BDEABDFB5F4 /* TrackInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */; };
+		E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */; };
 		4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */; };
 		BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */; };
 		67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */; };
@@ -127,6 +128,8 @@
 		968A04EA82EB775A94CD755D /* NowPlayingAnimatedArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */; };
 		969AE5A7AD63816CF628EADC /* ArtworkSlotAnchorsKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F3B116518C704AF56F02E99 /* ArtworkSlotAnchorsKey.swift */; };
 		9764E75994A42462A6CA3DB9 /* AudioPlayerService+NowPlayingInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 562E6E1C32C6B611904BE487 /* AudioPlayerService+NowPlayingInfo.swift */; };
+		57BCC06AC84FACEFDFC56AD6 /* TrackMarkers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D0DF4BA787CC16658EC1586 /* TrackMarkers.swift */; };
+		89CF18EF9E82656F6565B9E1 /* TrackMarkerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF5F8AF8A040A0FBCCA8BD8 /* TrackMarkerStore.swift */; };
 		98E108B7C1BA7FF6DF85951A /* DownloadedTrackRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */; };
 		9B259D06FA9240F91DDFC4D0 /* ArtistsViewMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 738F3887AF159099D5220077 /* ArtistsViewMode.swift */; };
 		9D27BEC4EE27F5A36C9B6323 /* AudioPlayerService+TimeTracking.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE0157898E7499F0B84BB506 /* AudioPlayerService+TimeTracking.swift */; };
@@ -257,6 +260,7 @@
 		30B32F38AB3FBE4BA037947B /* TrackRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRowView.swift; sourceTree = "<group>"; };
 		C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSheetsModifier.swift; sourceTree = "<group>"; };
 		C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoSheet.swift; sourceTree = "<group>"; };
+		A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMarkersSection.swift; sourceTree = "<group>"; };
 		32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoViewModel.swift; sourceTree = "<group>"; };
 		AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataSheet.swift; sourceTree = "<group>"; };
 		99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataViewModel.swift; sourceTree = "<group>"; };
@@ -289,6 +293,8 @@
 		5C18E9387E0F58EF5B54B040 /* LrcRedLyricsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LrcRedLyricsProvider.swift; sourceTree = "<group>"; };
 		5C81C2D359056960A39D0007 /* ArtworkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkView.swift; sourceTree = "<group>"; };
 		5C81C2D359056960A39D0AA1 /* SectionIndexBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionIndexBar.swift; sourceTree = "<group>"; };
+		9D0DF4BA787CC16658EC1586 /* TrackMarkers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMarkers.swift; sourceTree = "<group>"; };
+		1DF5F8AF8A040A0FBCCA8BD8 /* TrackMarkerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMarkerStore.swift; sourceTree = "<group>"; };
 		5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedTrackRecord.swift; sourceTree = "<group>"; };
 		5E7C1A0B9D3F4A2C8B6E1D01 /* SettingsSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSync.swift; sourceTree = "<group>"; };
 		5F769AA66A1E2E8565FEDD7C /* PlexConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexConnection.swift; sourceTree = "<group>"; };
@@ -637,6 +643,7 @@
 				30B32F38AB3FBE4BA037947B /* TrackRowView.swift */,
 				C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */,
 				C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */,
+				A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */,
 				32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */,
 				AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */,
 				99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */,
@@ -651,6 +658,8 @@
 		B8A3E95C19F206D72C09142B /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				9D0DF4BA787CC16658EC1586 /* TrackMarkers.swift */,
+				1DF5F8AF8A040A0FBCCA8BD8 /* TrackMarkerStore.swift */,
 				5E61F8DCD9383E31296E733C /* DownloadedTrackRecord.swift */,
 				92285C34E6A29348334446BB /* NowPlayingAnimatedArtwork.swift */,
 				2E167FA5EFF0AC19A10F0AC3 /* AutoDownloadMode.swift */,
@@ -840,6 +849,8 @@
 				877A020DD3AE9A7D9B7C8806 /* AppIconPreviewImage.swift in Sources */,
 				058696F1DA760ECE4C73F2FA /* AppIconOption.swift in Sources */,
 				7BCB81BF10C737CE71C16DAD /* AddToPlaylistRequest.swift in Sources */,
+				57BCC06AC84FACEFDFC56AD6 /* TrackMarkers.swift in Sources */,
+				89CF18EF9E82656F6565B9E1 /* TrackMarkerStore.swift in Sources */,
 				98E108B7C1BA7FF6DF85951A /* DownloadedTrackRecord.swift in Sources */,
 				830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
@@ -1014,6 +1025,7 @@
 				8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */,
 				02A629775E8816382FCC6B5B /* MetadataSheetsModifier.swift in Sources */,
 				F075CAC8B67F4BDEABDFB5F4 /* TrackInfoSheet.swift in Sources */,
+				E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */,
 				4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */,
 				BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */,
 				67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */,
