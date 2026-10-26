@@ -188,7 +188,18 @@ final class AudioPlayerService: Sendable {
         let audioStream = media?.part?
             .flatMap { $0.stream ?? [] }
             .first(where: { $0.streamType == 2 })
-        return audioStream?.bitrate ?? media?.bitrate
+        let sourceBitrate = audioStream?.bitrate ?? media?.bitrate
+        // A Space Saver download is a different file than the Plex source, so the
+        // source bitrate would be wrong; derive the real average from the file.
+        if isPlayingLocalFile,
+           let track = currentTrack,
+           let record = AppContext.shared.downloadManager.records[track.ratingKey],
+           let durationMs = record.durationMs, durationMs > 0,
+           URL(fileURLWithPath: record.relativeFilePath).pathExtension.lowercased()
+               != (media?.container ?? "").lowercased() {
+            return Int(Double(record.fileSize) * 8 / Double(durationMs))
+        }
+        return sourceBitrate
     }
 
     /// The codec currently being delivered to the audio pipeline.
