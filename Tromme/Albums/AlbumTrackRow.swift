@@ -163,10 +163,6 @@ struct AlbumTrackRow: View {
 
                 Divider()
 
-                Button("Edit Track", systemImage: "pencil") {
-                    metadataRequest = .edit(track)
-                }
-                .disabled(serverConnection.currentServer == nil)
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
                 }
@@ -205,10 +201,6 @@ struct AlbumTrackRow: View {
 
             Divider()
 
-            Button("Edit Track", systemImage: "pencil") {
-                metadataRequest = .edit(track)
-            }
-            .disabled(serverConnection.currentServer == nil)
             Button("Delete Track", systemImage: "trash", role: .destructive) {
                 showDeleteTrackConfirmation = true
             }

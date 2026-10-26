@@ -112,6 +112,7 @@
 		8BC62779657BBC7E955F9A92 /* TrackRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B32F38AB3FBE4BA037947B /* TrackRowView.swift */; };
 		02A629775E8816382FCC6B5B /* MetadataSheetsModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */; };
 		F075CAC8B67F4BDEABDFB5F4 /* TrackInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */; };
+		B1C2D3E4F5A60718293A4B5C /* MetadataFieldsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */; };
 		E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */; };
 		4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */; };
 		BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */; };
@@ -260,6 +261,7 @@
 		30B32F38AB3FBE4BA037947B /* TrackRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRowView.swift; sourceTree = "<group>"; };
 		C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSheetsModifier.swift; sourceTree = "<group>"; };
 		C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoSheet.swift; sourceTree = "<group>"; };
+		C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataFieldsSection.swift; sourceTree = "<group>"; };
 		A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMarkersSection.swift; sourceTree = "<group>"; };
 		32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoViewModel.swift; sourceTree = "<group>"; };
 		AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataSheet.swift; sourceTree = "<group>"; };
@@ -644,6 +646,7 @@
 				C5FFC4727829DA9C6B54F7AD /* MetadataSheetsModifier.swift */,
 				C0831B8F7CE6EA8EEA98310B /* TrackInfoSheet.swift */,
 				A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */,
+				C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */,
 				32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */,
 				AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */,
 				99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */,
@@ -1026,6 +1029,7 @@
 				02A629775E8816382FCC6B5B /* MetadataSheetsModifier.swift in Sources */,
 				F075CAC8B67F4BDEABDFB5F4 /* TrackInfoSheet.swift in Sources */,
 				E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */,
+				B1C2D3E4F5A60718293A4B5C /* MetadataFieldsSection.swift in Sources */,
 				4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */,
 				BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */,
 				67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */,

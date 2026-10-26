@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Presents the edit and Track Info sheets for a `MetadataSheetRequest`.
+/// Presents the album edit and combined track sheets for a `MetadataSheetRequest`.
 private struct MetadataSheetsModifier: ViewModifier {
     @Binding var request: MetadataSheetRequest?
     let onSaved: @MainActor (PlexMetadata) -> Void
@@ -11,7 +11,7 @@ private struct MetadataSheetsModifier: ViewModifier {
             case .edit(let item):
                 EditMetadataSheet(item: item, onSaved: onSaved)
             case .trackInfo(let track):
-                TrackInfoSheet(track: track)
+                TrackInfoSheet(track: track, onSaved: onSaved)
             }
         }
     }
