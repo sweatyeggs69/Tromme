@@ -96,9 +96,6 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - HLS+MPEGTS cannot carry FLAC (Apple only supports AAC/MP3/AC3 in MPEGTS)
 - Always send `X-Plex-Client-Profile-Extra` header — without it PMS returns 400 ("client provided bad data")
 
-## Plex Offline Downloads
-- Downloads always fetch the original file (no format setting, no transcoding) from the documented direct part endpoint: `/library/parts/{partId}/{changestamp}/{filename}?download=1`. Do not route downloads through the `/downloadQueue` family or the universal-transcode endpoints.
-
 ## Code Style
 - All new views must include a #Preview Block
 - Use SF symbols for icons - reference by exact name
