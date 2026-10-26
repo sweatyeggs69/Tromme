@@ -345,7 +345,7 @@ struct NowPlayingView: View {
         }
         // Confirms a Wrong Lyrics block took effect.
         .sensoryFeedback(.impact(weight: .light), trigger: lyricsService.blockConfirmations)
-        .metadataSheets(request: $metadataRequest) { fresh in
+        .metadataSheets(request: $metadataRequest, isTrackEditable: false) { fresh in
             player.updateTrack(fresh)
         }
         .sheet(item: $addToPlaylistRequest) { request in

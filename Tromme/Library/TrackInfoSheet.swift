@@ -7,22 +7,26 @@ struct TrackInfoSheet: View {
 
     @State private var viewModel: TrackInfoViewModel
     @State private var editModel: EditMetadataViewModel
+    let isEditable: Bool
     let onSaved: @MainActor (PlexMetadata) -> Void
 
-    init(track: PlexMetadata, onSaved: @escaping @MainActor (PlexMetadata) -> Void) {
+    init(track: PlexMetadata, isEditable: Bool = true, onSaved: @escaping @MainActor (PlexMetadata) -> Void) {
         _viewModel = State(initialValue: TrackInfoViewModel(track: track))
         _editModel = State(initialValue: EditMetadataViewModel(item: track))
+        self.isEditable = isEditable
         self.onSaved = onSaved
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                MetadataFieldsSection(viewModel: editModel)
-                    .disabled(serverConnection.currentServer == nil || editModel.isSaving)
+                if isEditable {
+                    MetadataFieldsSection(viewModel: editModel)
+                        .disabled(serverConnection.currentServer == nil || editModel.isSaving)
 
-                Section {
-                    row("Duration", viewModel.track.durationFormatted)
+                    Section {
+                        row("Duration", viewModel.track.durationFormatted)
+                    }
                 }
 
                 Section("Media") {
