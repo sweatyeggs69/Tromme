@@ -157,7 +157,7 @@ extension AudioPlayerService {
             let ratingKey = track.ratingKey
             Task { @MainActor [weak self] in
                 guard let self, self.currentTrack?.ratingKey == ratingKey else { return }
-                if let localURL = AppContext.shared.downloadManager.localURL(for: ratingKey) {
+                if AppContext.shared.downloadManager.localURL(for: ratingKey) != nil {
                     self.isPlayingLocalFile = true
                     self.localFileCodec = AppContext.shared.downloadManager.records[ratingKey]?
                         .codecLabel(source: self.currentTrack?.media?.first)
