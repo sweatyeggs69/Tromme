@@ -68,7 +68,7 @@ struct OfflineSettingsView: View {
                     }
                 }
             } footer: {
-                Text("Space Saver converts lossless and Opus songs to AAC on your server. Other songs download as the original.")
+                Text("Space Saver converts lossless and Opus songs to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
             }
         }
         .navigationTitle("Offline")

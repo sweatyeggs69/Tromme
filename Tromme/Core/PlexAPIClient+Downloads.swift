@@ -61,10 +61,6 @@ extension PlexAPIClient {
             throw PlexAPIError.serverError(-1)
         }
 
-        #if DEBUG
-        await logQueueItemDecision(server: server, queueID: queueID, itemID: itemID)
-        #endif
-
         do {
             try await waitForQueueItem(server: server, queueID: queueID, itemID: itemID)
             let url = try await downloadQueueMedia(server: server, queueID: queueID, itemID: itemID)
@@ -94,19 +90,6 @@ extension PlexAPIClient {
             try await Task.sleep(for: Self.queueItemPollInterval)
         }
     }
-
-    #if DEBUG
-    /// Logs Plex's decision for a queue item (codec, container, transcode vs direct play).
-    private func logQueueItemDecision(server: PlexServer, queueID: Int, itemID: Int) async {
-        guard let request = try? makeQueueRequest(
-            server: server,
-            path: "/downloadQueue/\(queueID)/item/\(itemID)/decision",
-            method: "GET"
-        ), let (data, response) = try? await session.data(for: request) else { return }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-        print("[DownloadQueue] decision (\(status)): \(String(decoding: data.prefix(3000), as: UTF8.self))")
-    }
-    #endif
 
     private func downloadQueueMedia(server: PlexServer, queueID: Int, itemID: Int) async throws -> URL {
         let request = try makeQueueRequest(
@@ -157,11 +140,6 @@ extension PlexAPIClient {
             }
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
             guard statusCode < 400 else { throw PlexAPIError.serverError(statusCode) }
-            #if DEBUG
-            if path.contains("/items/") {
-                print("[DownloadQueue] \(method) \(path): \(String(decoding: data.prefix(1500), as: UTF8.self))")
-            }
-            #endif
             do {
                 return try JSONDecoder().decode(QueueEnvelope.self, from: data)
             } catch {
