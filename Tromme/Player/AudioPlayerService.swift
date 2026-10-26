@@ -189,7 +189,7 @@ final class AudioPlayerService: Sendable {
             .flatMap { $0.stream ?? [] }
             .first(where: { $0.streamType == 2 })
         let sourceBitrate = audioStream?.bitrate ?? media?.bitrate
-        // A Space Saver download is a different file than the Plex source, so the
+        // A transcoded download is a different file than the Plex source, so the
         // source bitrate would be wrong; derive the real average from the file.
         if isPlayingLocalFile,
            let track = currentTrack,

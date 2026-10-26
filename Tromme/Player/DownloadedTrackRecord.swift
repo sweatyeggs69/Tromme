@@ -23,7 +23,7 @@ struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
         URL(fileURLWithPath: relativeFilePath).pathExtension.lowercased()
     }
 
-    /// Display codec for the stored file. An m4a made from a non-m4a source is a Space Saver AAC transcode.
+    /// Display codec for the stored file. An m4a made from a non-m4a source is a server-side AAC transcode.
     func codecLabel(source: PlexMedia?) -> String {
         let aacContainers = ["m4a", "mp4"]
         if aacContainers.contains(fileExtension),
@@ -34,7 +34,7 @@ struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
         return fileExtension.uppercased()
     }
 
-    /// Average bitrate of the stored file, which differs from the Plex source for Space Saver downloads.
+    /// Average bitrate of the stored file, which differs from the Plex source for transcoded downloads.
     var averageBitrateKbps: Int? {
         guard let durationMs, durationMs > 0 else { return nil }
         return Int(Double(fileSize) * 8 / Double(durationMs))

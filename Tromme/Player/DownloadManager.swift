@@ -222,25 +222,27 @@ final class DownloadManager: @unchecked Sendable {
             ?? "mp3"
 
         let sourceCodec = resolvedTrack.media?.first?.audioCodec
-        let wantsTranscode = DownloadQuality.current == .spaceSaver
-            && DownloadQuality.transcodes(codec: sourceCodec)
+        let transcodeBitrate = DownloadQuality.current.transcodeBitrate(
+            codec: sourceCodec,
+            sourceBitrate: resolvedTrack.media?.first?.bitrate
+        )
 
         do {
-            if wantsTranscode {
+            if let transcodeBitrate {
                 do {
                     try await fetchAndStore(
-                        filename: "\(ratingKey).\(PlexAPIClient.spaceSaverFileExtension)",
+                        filename: "\(ratingKey).\(PlexAPIClient.transcodedFileExtension)",
                         track: resolvedTrack,
                         server: server,
                         client: client,
-                        fetch: { try await client.transcodedDownload(server: server, ratingKey: ratingKey) }
+                        fetch: { try await client.transcodedDownload(server: server, ratingKey: ratingKey, bitrateKbps: transcodeBitrate) }
                     )
                     return
                 } catch {
                     // Cancelled downloads stop here; a failed transcode falls back to the original file.
                     if Task.isCancelled { throw error }
                     #if DEBUG
-                    print("[Downloads] Space Saver transcode failed for \(ratingKey): \(error)")
+                    print("[Downloads] transcode failed for \(ratingKey): \(error)")
                     #endif
                 }
             }

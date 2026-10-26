@@ -2,8 +2,7 @@ import Foundation
 
 // Server-side transcoded downloads through the documented /downloadQueue family.
 extension PlexAPIClient {
-    static let spaceSaverBitrateKbps = 256
-    static let spaceSaverFileExtension = "m4a"
+    static let transcodedFileExtension = "m4a"
 
     private static let profileExtraSpaceSaver =
         "add-transcode-target(type=musicProfile&context=static&protocol=http&container=mp4&audioCodec=aac)"
@@ -35,9 +34,9 @@ extension PlexAPIClient {
         enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
     }
 
-    /// Transcodes a track on the server to the Space Saver target (AAC) and returns the
+    /// Transcodes a track on the server to AAC at the given bitrate and returns the
     /// downloaded temp file. The queue item is removed from the server afterwards.
-    func transcodedDownload(server: PlexServer, ratingKey: String) async throws -> URL {
+    func transcodedDownload(server: PlexServer, ratingKey: String, bitrateKbps: Int) async throws -> URL {
         let queue = try await queueRequest(server: server, path: "/downloadQueue", method: "POST")
         guard let queueID = queue.mediaContainer.downloadQueue?.first?.id else {
             throw PlexAPIError.serverError(-1)
@@ -54,7 +53,7 @@ extension PlexAPIClient {
                 URLQueryItem(name: "directPlay", value: "0"),
                 URLQueryItem(name: "directStream", value: "0"),
                 URLQueryItem(name: "directStreamAudio", value: "0"),
-                URLQueryItem(name: "musicBitrate", value: "\(Self.spaceSaverBitrateKbps)"),
+                URLQueryItem(name: "musicBitrate", value: "\(bitrateKbps)"),
             ]
         )
         guard let itemID = added.mediaContainer.addedQueueItems?.first?.id else {
