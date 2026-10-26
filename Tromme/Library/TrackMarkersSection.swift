@@ -27,8 +27,23 @@ struct TrackMarkersSection: View {
         )
     }
 
+    @State private var plus = PlusStore.shared
+    @State private var showPaywall = false
+
     var body: some View {
         Section("Trim") {
+            if plus.isPlus {
+                controls
+            } else {
+                Button("Unlock with Tromme Plus", systemImage: "sparkles") { showPaywall = true }
+            }
+        }
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
+    }
+
+    @ViewBuilder
+    private var controls: some View {
+        Group {
             Stepper(value: start, in: 0...max(0, (markers.stop ?? duration) - 1), step: 1) {
                 LabeledContent("Start", value: markers.start.map(Self.format) ?? "Off")
             }

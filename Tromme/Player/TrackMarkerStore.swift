@@ -15,14 +15,16 @@ final class TrackMarkerStore {
         markers[ratingKey] ?? TrackMarkers()
     }
 
-    /// Where playback begins; nil when the track has no start marker.
+    /// Where playback begins; nil when the track has no start marker or Plus is off.
     func start(for ratingKey: String) -> TimeInterval? {
-        markers[ratingKey]?.start
+        guard PlusStore.cachedIsPlus else { return nil }
+        return markers[ratingKey]?.start
     }
 
-    /// Where playback ends; nil when the track has no stop marker.
+    /// Where playback ends; nil when the track has no stop marker or Plus is off.
     func stop(for ratingKey: String) -> TimeInterval? {
-        markers[ratingKey]?.stop
+        guard PlusStore.cachedIsPlus else { return nil }
+        return markers[ratingKey]?.stop
     }
 
     func setStart(_ seconds: TimeInterval?, for ratingKey: String) {

@@ -26,6 +26,7 @@ struct PlusWelcomeView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 featureRow(symbol: "play.rectangle.on.rectangle.fill", title: "Animated Artwork", detail: "Moving album art on album pages, Now Playing, and the lock screen.")
+                featureRow(symbol: "slider.horizontal.below.rectangle", title: "Advanced Playback", detail: "Trim the start and end of any track.")
                 featureRow(symbol: "app.badge.fill", title: "Premium Icon Pack", detail: "Every premium app icon, plus new ones as they are added.")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
