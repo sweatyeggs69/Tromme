@@ -12,8 +12,6 @@ final class SettingsSync {
         "infiniteModeActive",
         "playbackBadgeMode",
         "disableCellularTranscoding",
-        "soundCheckEnabled",
-        "soundCheckGainSource",
         "magicMixSeedCap",
         "autoDownloadEnabled",
         "autoDownloadMode",
