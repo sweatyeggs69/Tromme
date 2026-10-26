@@ -72,6 +72,10 @@ struct OfflineSettingsView: View {
             }
         }
         .navigationTitle("Offline")
+        .onAppear {
+            // "spaceSaver" was the earlier fixed 256 kbps setting.
+            if downloadQuality == "spaceSaver" { downloadQuality = DownloadQuality.kbps256.rawValue }
+        }
     }
 
     private var footerText: String {

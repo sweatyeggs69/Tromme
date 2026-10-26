@@ -4,7 +4,7 @@ import Foundation
 extension PlexAPIClient {
     static let transcodedFileExtension = "m4a"
 
-    private static let profileExtraSpaceSaver =
+    private static let profileExtraAAC =
         "add-transcode-target(type=musicProfile&context=static&protocol=http&container=mp4&audioCodec=aac)"
 
     private static let queueItemPollInterval: Duration = .seconds(2)
@@ -165,7 +165,7 @@ extension PlexAPIClient {
         request.httpMethod = method
         applyPlexHeaders(to: &request, token: server.accessToken)
         request.setValue("Generic", forHTTPHeaderField: "X-Plex-Client-Profile-Name")
-        request.setValue(Self.profileExtraSpaceSaver, forHTTPHeaderField: "X-Plex-Client-Profile-Extra")
+        request.setValue(Self.profileExtraAAC, forHTTPHeaderField: "X-Plex-Client-Profile-Extra")
         return request
     }
 }
