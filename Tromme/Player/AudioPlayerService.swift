@@ -194,10 +194,8 @@ final class AudioPlayerService: Sendable {
         if isPlayingLocalFile,
            let track = currentTrack,
            let record = AppContext.shared.downloadManager.records[track.ratingKey],
-           let durationMs = record.durationMs, durationMs > 0,
-           URL(fileURLWithPath: record.relativeFilePath).pathExtension.lowercased()
-               != (media?.container ?? "").lowercased() {
-            return Int(Double(record.fileSize) * 8 / Double(durationMs))
+           record.fileExtension != (media?.container ?? "").lowercased() {
+            return record.averageBitrateKbps ?? sourceBitrate
         }
         return sourceBitrate
     }

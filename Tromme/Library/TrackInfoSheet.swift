@@ -38,6 +38,15 @@ struct TrackInfoSheet: View {
                     row("File Size", viewModel.part?.size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) })
                 }
 
+                if let download = viewModel.download {
+                    Section("Download") {
+                        row("Format", download.fileExtension.uppercased())
+                        row("Bit Rate", download.averageBitrateKbps.map { "\($0) kbps" })
+                        row("File Size", ByteCountFormatter.string(fromByteCount: download.fileSize, countStyle: .file))
+                        row("Downloaded", download.downloadedAt.formatted(date: .abbreviated, time: .omitted))
+                    }
+                }
+
                 if let duration = viewModel.track.duration, duration > 1000 {
                     TrackMarkersSection(ratingKey: viewModel.track.ratingKey, duration: Double(duration) / 1000)
                 }

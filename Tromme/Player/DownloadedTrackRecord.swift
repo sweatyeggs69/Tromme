@@ -19,6 +19,16 @@ struct DownloadedTrackRecord: Codable, Identifiable, Sendable {
 
     var id: String { ratingKey }
 
+    var fileExtension: String {
+        URL(fileURLWithPath: relativeFilePath).pathExtension.lowercased()
+    }
+
+    /// Average bitrate of the stored file, which differs from the Plex source for Space Saver downloads.
+    var averageBitrateKbps: Int? {
+        guard let durationMs, durationMs > 0 else { return nil }
+        return Int(Double(fileSize) * 8 / Double(durationMs))
+    }
+
     func asPlexMetadata() -> PlexMetadata {
         PlexMetadata(
             ratingKey: ratingKey,
