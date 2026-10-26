@@ -187,32 +187,6 @@ actor LibraryStore {
         return decode(record.detail ?? record.payload)
     }
 
-    /// Distinct track-level artwork paths that differ from the track's album art. Read in
-    /// pages so the full track list is never decoded at once.
-    func trackThumbPaths(scope: String) -> Set<String> {
-        let kind = Kind.track
-        let pageSize = 2000
-        var offset = 0
-        var paths = Set<String>()
-        let decoder = JSONDecoder()
-        while true {
-            var descriptor = FetchDescriptor<LibraryRecord>(
-                predicate: #Predicate { $0.scope == scope && $0.kind == kind }
-            )
-            descriptor.fetchLimit = pageSize
-            descriptor.fetchOffset = offset
-            guard let rows = try? modelContext.fetch(descriptor), !rows.isEmpty else { break }
-            for row in rows {
-                if let track = try? decoder.decode(PlexMetadata.self, from: row.payload),
-                   let thumb = track.thumb, thumb != track.parentThumb {
-                    paths.insert(thumb)
-                }
-            }
-            offset += pageSize
-        }
-        return paths
-    }
-
     /// Items of `kind` whose detail payload is missing or out of date.
     func keysNeedingDetail(kind: Int, scope: String) -> [String] {
         let descriptor = FetchDescriptor<LibraryRecord>(

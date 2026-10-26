@@ -38,7 +38,7 @@ actor LibrarySyncService {
             && !NetworkStatus.shared.isExpensive
         guard force || !complete || stale || state.serverUpdatedAt != serverUpdatedAt else {
             // Nothing changed, but a previous prefetch may have been interrupted — resume it.
-            schedulePrefetch(client: client, server: server, sectionId: sectionId, includeTracks: true)
+            schedulePrefetch(client: client, server: server, sectionId: sectionId)
             return
         }
 
@@ -132,13 +132,13 @@ actor LibrarySyncService {
         enrichmentTasks[scope] = Task(priority: .utility) {
             await Self.enrichDetails(client: client, server: server, scope: scope)
             self.finishEnrichment(scope: scope)
-            self.schedulePrefetch(client: client, server: server, sectionId: sectionId, includeTracks: true)
+            self.schedulePrefetch(client: client, server: server, sectionId: sectionId)
         }
     }
 
     /// Queues the artwork pass (stage 4). Does nothing while a sync or artist-detail pass
     /// is still running for the library — the last of those starts it when it finishes.
-    private func schedulePrefetch(client: PlexAPIClient, server: PlexServer, sectionId: String, includeTracks: Bool) {
+    private func schedulePrefetch(client: PlexAPIClient, server: PlexServer, sectionId: String) {
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         guard runs[scope] == nil, enrichmentTasks[scope] == nil else { return }
         let previous = prefetchTask
@@ -150,7 +150,7 @@ actor LibrarySyncService {
             // this artwork pass downloads, so artist pages never wait on the pick.
             let artistThumbs = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope).compactMap(\.thumb)
             await ArtworkColorCache.shared.precomputeArtistColors(thumbPaths: artistThumbs, client: client, server: server)
-            await LibraryPrefetcher.prefetchArtwork(client: client, server: server, sectionId: sectionId, includeTracks: includeTracks)
+            await LibraryPrefetcher.prefetchArtwork(client: client, server: server, sectionId: sectionId)
             await ArtworkColorCache.shared.precomputeArtistColors(thumbPaths: artistThumbs, client: client, server: server)
         }
     }

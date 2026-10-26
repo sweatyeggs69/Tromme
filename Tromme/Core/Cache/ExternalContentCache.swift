@@ -13,7 +13,7 @@ actor ExternalContentCache {
     private let diskURL: URL
     private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
-    private let maxDiskSize: Int = 256 * 1024 * 1024 // 256 MB
+    private let maxDiskSize: Int = 32 * 1024 * 1024 // 32 MB
 
     /// Tracks in-flight fetch tasks by cache key so concurrent callers
     /// share one network request instead of firing duplicates.

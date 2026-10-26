@@ -15,8 +15,8 @@ actor ImageCache {
     // NSCache is documented thread-safe, so reads/writes from nonisolated contexts are fine.
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, UIImage>()
     private let diskURL: URL
-    // Sized to hold a whole library's artwork at full resolution (see `storeToDisk`).
-    private let maxDiskBytes: Int = 3 * 1024 * 1024 * 1024 // 3 GB
+    // Holds a whole library's grid-size artwork (see `storeToDisk`); least recently used go first.
+    private let maxDiskBytes: Int = 400 * 1024 * 1024 // 400 MB
     // Tracked incrementally so routine saves don't need a full directory scan;
     // only refreshed by an authoritative re-scan when trimDiskCacheIfNeeded() runs.
     private var currentDiskBytes: Int = 0
@@ -57,6 +57,8 @@ actor ImageCache {
         memoryCache.countLimit = 1000
         memoryCache.totalCostLimit = 100 * 1024 * 1024 // 100 MB
         currentDiskBytes = Self.scanDiskBytes(at: diskURL)
+        // Shrinks stores written under an older, larger cap.
+        Task(priority: .background) { await self.trimDiskCacheIfNeeded() }
     }
 
     private static func scanDiskBytes(at url: URL) -> Int {

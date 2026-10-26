@@ -1,13 +1,13 @@
 import Foundation
 
 /// Downloads everything the browsing UI renders so it never waits on the server: artwork
-/// for the whole library at full resolution (written to the persistent image store), plus
+/// for the whole library at grid size (written to the persistent image store), plus
 /// the playlists' covers. Safe to re-run — files already stored at full size are skipped,
 /// so an interrupted run just resumes next time.
 enum LibraryPrefetcher {
-    /// One stored size serves every surface (rows, grids, headers, Now Playing).
-    /// Matches `ArtworkView.maxTranscodePx` (main-actor isolated, so not referenced here).
-    private static let artworkPixelSize = 1000
+    /// Covers every row and grid bucket in `ArtworkView.recommendedTranscodeSize`; headers
+    /// and Now Playing re-fetch at full size only for the albums actually opened.
+    private static let artworkPixelSize = 640
 
     private static var canPrefetch: Bool {
         NetworkStatus.shared.isConnected
@@ -15,8 +15,8 @@ enum LibraryPrefetcher {
             && !ProcessInfo.processInfo.isLowPowerModeEnabled
     }
 
-    /// Artwork for albums (newest first), artists, playlists, then any distinct track art.
-    static func prefetchArtwork(client: PlexAPIClient, server: PlexServer, sectionId: String, includeTracks: Bool) async {
+    /// Artwork for albums (newest first), artists and playlists. Track-level art loads on demand.
+    static func prefetchArtwork(client: PlexAPIClient, server: PlexServer, sectionId: String) async {
         guard canPrefetch else { return }
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
 
@@ -28,9 +28,6 @@ enum LibraryPrefetcher {
         var paths: [String] = albums.compactMap(\.thumb)
         paths += artists.compactMap(\.thumb)
         paths += playlists.compactMap { $0.composite ?? $0.thumb }
-        if includeTracks {
-            paths += await LibraryStore.shared.trackThumbPaths(scope: scope)
-        }
 
         let urls = paths.compactMap {
             client.artworkURL(server: server, path: $0, width: artworkPixelSize, height: artworkPixelSize)
