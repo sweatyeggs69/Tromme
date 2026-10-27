@@ -18,6 +18,10 @@ final class DownloadManager: @unchecked Sendable {
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
     /// Set while a debounced `persistRecordsNow()` write is pending — see `persistRecords()`.
     private var persistScheduled = false
+    /// False until the on-disk records have been read; writes are skipped before then so an
+    /// early persist can't overwrite the file with a partial set.
+    private var hasLoadedRecords = false
+    private let fileQueue = DispatchQueue(label: "com.tromme.downloadManager.files", qos: .utility)
 
     var hasActiveDownloads: Bool { !transientStates.isEmpty }
 
@@ -43,8 +47,6 @@ final class DownloadManager: @unchecked Sendable {
     init() {
         Self.migrateLegacyAutoDownloadPreferences()
         loadPersistedRecords()
-        verifyExistingDownloads()
-        if !records.isEmpty { prepareDownloadsDirectory() }
     }
 
     /// Maps the retired per-mode toggles ("autoDownloadAllSongs",
@@ -106,7 +108,7 @@ final class DownloadManager: @unchecked Sendable {
         cancelDownload(ratingKey: ratingKey)
         if let record = records[ratingKey] {
             let url = downloadsDirectory.appendingPathComponent(record.relativeFilePath)
-            try? FileManager.default.removeItem(at: url)
+            fileQueue.async { try? FileManager.default.removeItem(at: url) }
             records.removeValue(forKey: ratingKey)
             persistRecords()
         }
@@ -152,7 +154,8 @@ final class DownloadManager: @unchecked Sendable {
         downloadTasks.removeAll()
         pendingQueue.removeAll()
         // activeDownloadCount is left alone: each cancelled task decrements it itself when it unwinds.
-        try? FileManager.default.removeItem(at: downloadsDirectory)
+        let directory = downloadsDirectory
+        fileQueue.async { try? FileManager.default.removeItem(at: directory) }
         records.removeAll()
         transientStates.removeAll()
         persistRecords()
@@ -167,8 +170,8 @@ final class DownloadManager: @unchecked Sendable {
 
     /// Creates the downloads folder and keeps it out of iCloud / device backups — the
     /// files are re-downloadable and can be many gigabytes.
-    private func prepareDownloadsDirectory() {
-        var dir = downloadsDirectory
+    private nonisolated static func prepareDownloadsDirectory(_ directory: URL) {
+        var dir = directory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
@@ -215,7 +218,8 @@ final class DownloadManager: @unchecked Sendable {
             return
         }
 
-        prepareDownloadsDirectory()
+        let directory = downloadsDirectory
+        await Task.detached(priority: .utility) { Self.prepareDownloadsDirectory(directory) }.value
 
         let container = resolvedTrack.media?.first?.container
             ?? resolvedTrack.media?.first?.part?.first?.container
@@ -283,18 +287,10 @@ final class DownloadManager: @unchecked Sendable {
         let tempURL = try await fetch()
         // A dying transcoder can return 200 with an empty body — don't record
         // an empty file as a successful download.
-        let downloadedSize = (try? FileManager.default.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 ?? 0
-        guard downloadedSize > 0 else {
-            throw PlexAPIError.serverError(-1)
-        }
         try Task.checkCancellation()
-
-        if FileManager.default.fileExists(atPath: destURL.path) {
-            try FileManager.default.removeItem(at: destURL)
-        }
-        try FileManager.default.moveItem(at: tempURL, to: destURL)
-
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: destURL.path))?[.size] as? Int64 ?? 0
+        let fileSize = try await Task.detached(priority: .utility) {
+            try Self.moveDownloadedFile(from: tempURL, to: destURL)
+        }.value
         let thumbPath = track.thumb ?? track.parentThumb
         let record = DownloadedTrackRecord(
             ratingKey: ratingKey,
@@ -325,6 +321,22 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
+    /// Validates and moves a finished download into place; returns its size. Runs off the main actor.
+    private nonisolated static func moveDownloadedFile(from tempURL: URL, to destURL: URL) throws -> Int64 {
+        let fm = FileManager.default
+        let downloadedSize = (try? fm.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 ?? 0
+        guard downloadedSize > 0 else {
+            throw PlexAPIError.serverError(-1)
+        }
+        try Task.checkCancellation()
+
+        if fm.fileExists(atPath: destURL.path) {
+            try fm.removeItem(at: destURL)
+        }
+        try fm.moveItem(at: tempURL, to: destURL)
+        return (try? fm.attributesOfItem(atPath: destURL.path))?[.size] as? Int64 ?? 0
+    }
+
     // MARK: - Persistence
 
     /// Debounces bursts of `persistRecords()` calls (e.g. a library-wide auto-download
@@ -347,46 +359,57 @@ final class DownloadManager: @unchecked Sendable {
     }
 
     /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
-    private var recordsFileURL: URL {
-        let dir = URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appending(path: "downloadRecords.json")
+    private nonisolated static var recordsFileURL: URL {
+        URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
+            .appending(path: "downloadRecords.json")
     }
 
+    /// Encodes on the main actor, then writes on a serial queue so writes stay ordered.
     private func persistRecordsNow() {
-        guard let data = try? JSONEncoder().encode(Array(records.values)) else { return }
-        try? data.write(to: recordsFileURL, options: .atomic)
+        guard hasLoadedRecords,
+              let data = try? JSONEncoder().encode(Array(records.values)) else { return }
+        let fileURL = Self.recordsFileURL
+        fileQueue.async {
+            try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: fileURL, options: .atomic)
+        }
     }
 
+    /// Reads the records file, drops records whose file is gone, and prepares the downloads
+    /// folder, all off the main actor so a large library doesn't delay launch.
     private func loadPersistedRecords() {
+        let directory = downloadsDirectory
+        let legacyKey = persistenceKey
+        Task {
+            let (loaded, needsPersist) = await Task.detached(priority: .utility) {
+                Self.readPersistedRecords(directory: directory, legacyKey: legacyKey)
+            }.value
+            for record in loaded where records[record.ratingKey] == nil {
+                records[record.ratingKey] = record
+            }
+            hasLoadedRecords = true
+            if needsPersist { persistRecordsNow() }
+        }
+    }
+
+    private nonisolated static func readPersistedRecords(
+        directory: URL,
+        legacyKey: String
+    ) -> (records: [DownloadedTrackRecord], needsPersist: Bool) {
         let fileData = try? Data(contentsOf: recordsFileURL)
         // Older builds kept the records in UserDefaults; move them to the file once.
-        let legacyData = fileData == nil ? UserDefaults.standard.data(forKey: persistenceKey) : nil
+        let legacyData = fileData == nil ? UserDefaults.standard.data(forKey: legacyKey) : nil
         guard let data = fileData ?? legacyData,
-              let loaded = try? JSONDecoder().decode([DownloadedTrackRecord].self, from: data) else { return }
-        for record in loaded {
-            records[record.ratingKey] = record
+              let loaded = try? JSONDecoder().decode([DownloadedTrackRecord].self, from: data) else {
+            return ([], false)
         }
         if legacyData != nil {
-            persistRecordsNow()
-            UserDefaults.standard.removeObject(forKey: persistenceKey)
+            UserDefaults.standard.removeObject(forKey: legacyKey)
         }
-    }
-
-    /// Drops records whose file is gone. The existence checks run off the main actor so a
-    /// large library doesn't delay launch.
-    private func verifyExistingDownloads() {
-        let directory = downloadsDirectory
-        let paths = records.mapValues(\.relativeFilePath)
-        Task {
-            let missing = await Task.detached(priority: .utility) {
-                paths.filter {
-                    !FileManager.default.fileExists(atPath: directory.appendingPathComponent($0.value).path)
-                }.map(\.key)
-            }.value
-            guard !missing.isEmpty else { return }
-            missing.forEach { records.removeValue(forKey: $0) }
-            persistRecords()
+        let present = loaded.filter {
+            FileManager.default.fileExists(atPath: directory.appendingPathComponent($0.relativeFilePath).path)
         }
+        if !present.isEmpty { prepareDownloadsDirectory(directory) }
+        return (present, legacyData != nil || present.count != loaded.count)
     }
 }
