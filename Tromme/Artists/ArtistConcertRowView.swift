@@ -8,16 +8,16 @@ struct ArtistConcertRowView: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 14) {
-                ConcertDateTileView(concert: concert, size: 64)
+            HStack(spacing: 12) {
+                ConcertDateTileView(concert: concert, size: 48)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(concert.location)
-                        .font(.title3)
+                        .font(.body)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     Text(concert.detailText(includesDate: includesDate))
-                        .font(.subheadline)
+                        .font(.footnote)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
