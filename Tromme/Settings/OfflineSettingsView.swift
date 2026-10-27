@@ -65,7 +65,7 @@ struct OfflineSettingsView: View {
             }
 
             Section {
-                Picker("Max Bitrate", selection: $downloadQuality) {
+                Picker("Max Bitrate", selection: displayedQuality) {
                     ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
                         Text(quality.displayName).tag(quality.rawValue)
                     }
@@ -91,6 +91,14 @@ struct OfflineSettingsView: View {
             // "spaceSaver" was the earlier fixed 256 kbps setting.
             if downloadQuality == "spaceSaver" { downloadQuality = DownloadQuality.kbps256.rawValue }
         }
+    }
+
+    /// Shows Original without Tromme Plus, since downloads ignore the saved choice then.
+    private var displayedQuality: Binding<String> {
+        Binding(
+            get: { plus.isPlus ? downloadQuality : DownloadQuality.original.rawValue },
+            set: { downloadQuality = $0 }
+        )
     }
 
     private var footerText: String {
