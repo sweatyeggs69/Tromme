@@ -7,19 +7,20 @@ struct PlusPaywallView: View {
 
     var body: some View {
         SubscriptionStoreView(productIDs: PlusStore.subscriptionProductIDs) {
-            VStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.tint)
-                Text("Tromme +")
-                    .font(.largeTitle.bold())
-                Text("Get access to the premium icons, animated artwork, advanced playback and download options and support ongoing development of Tromme.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            VStack(spacing: 24) {
+                VStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.tint)
+                        .symbolRenderingMode(.hierarchical)
+                    Text("Tromme +")
+                        .font(.largeTitle.bold())
+                }
+                PlusFeaturesView()
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 24)
         }
+        .subscriptionStoreControlStyle(.prominentPicker)
         .storeButton(.visible, for: .restorePurchases)
         .onInAppPurchaseCompletion { _, result in
             if case .success(.success) = result {

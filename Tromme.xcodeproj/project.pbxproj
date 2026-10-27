@@ -201,6 +201,7 @@
 		FF5AADB44484565C6F2215A7 /* ExternalContentCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038C1CCDF9AE80768D9F702E /* ExternalContentCache.swift */; };
 		A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0001000100000001 /* DownloadQuality.swift */; };
 		A1D0C0DE0004000400000004 /* PlexAPIClient+Downloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */; };
+		A1D0C0DE0006000600000006 /* PlusFeaturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -402,6 +403,7 @@
 		FFBF09E48768C79583BCFE65 /* PlexAPIClient+Playback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlexAPIClient+Playback.swift"; sourceTree = "<group>"; };
 		A1D0C0DE0001000100000001 /* DownloadQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQuality.swift; sourceTree = "<group>"; };
 		A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlexAPIClient+Downloads.swift"; sourceTree = "<group>"; };
+		A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusFeaturesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -731,6 +733,7 @@
 				0EEC07403048CA9B00ACE377 /* PlusStore.swift */,
 				0EEC07433048CA9B00ACE377 /* PlusPaywallView.swift */,
 				0EEC07453048CA9B00ACE377 /* PlusWelcomeView.swift */,
+				A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -966,6 +969,7 @@
 				0EEC07413048CA9B00ACE377 /* PlusStore.swift in Sources */,
 				0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */,
 				0EEC07443048CA9B00ACE377 /* PlusWelcomeView.swift in Sources */,
+				A1D0C0DE0006000600000006 /* PlusFeaturesView.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,
