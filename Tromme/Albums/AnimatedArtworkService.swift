@@ -25,7 +25,7 @@ enum AnimatedArtworkService {
         guard AnimatedArtworkEntitlement.isEnabled else { return nil }
         await waitForAudioBuffer()
         guard !Task.isCancelled else { return nil }
-        var components = URLComponents(string: "https://amaa.tromme.app/api/v1/artwork/search")
+        var components = URLComponents(string: "https://api.tromme.app/artwork/search")
         components?.queryItems = [
             URLQueryItem(name: "artist", value: artist),
             URLQueryItem(name: "album", value: album)
