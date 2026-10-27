@@ -15,6 +15,7 @@ struct ArtistDetailView: View {
     @State private var showsAllSimilarArtists = false
     @State private var showsAllTracks = false
     @State private var showsAllConcerts = false
+    @State private var selectedConcert: ConcertEvent?
     @State private var heroIsHidden = false
     /// Set once the backdrop color lookup has finished, found or not, so the loading
     /// spinner never outlives a failed or offline fetch.
@@ -374,7 +375,7 @@ struct ArtistDetailView: View {
                 sectionHeader("All Upcoming Concerts", disclosureAction: { showsAllConcerts = true })
 
                 ForEach(viewModel.concerts.prefix(3)) { concert in
-                    ArtistConcertRowView(concert: concert)
+                    ArtistConcertRowView(concert: concert) { selectedConcert = concert }
                         .listRowInsets(EdgeInsets(top: 6, leading: AppStyle.Spacing.pageHorizontal, bottom: 6, trailing: AppStyle.Spacing.pageHorizontal))
                         .listRowSeparator(.hidden)
                         .listRowBackground(backdropColor)
@@ -472,7 +473,15 @@ struct ArtistDetailView: View {
             SimilarArtistsGridView(artists: similarArtists)
         }
         .navigationDestination(isPresented: $showsAllConcerts) {
-            ArtistConcertsListView(concerts: viewModel.concerts)
+            ArtistConcertsListView(concerts: viewModel.concerts) { selectedConcert = $0 }
+        }
+        .navigationDestination(item: $selectedConcert) { concert in
+            ArtistConcertDetailView(
+                concert: concert,
+                artist: displayArtist,
+                backdropColor: backdropColor,
+                onShuffle: shuffleAll
+            )
         }
         .navigationDestination(isPresented: $showsAllTracks) {
             ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)

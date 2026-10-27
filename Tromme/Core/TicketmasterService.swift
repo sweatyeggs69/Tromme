@@ -45,7 +45,9 @@ struct TicketmasterService: Sendable {
             throw URLError(.badServerResponse)
         }
 
-        let decoded = try JSONDecoder().decode(TicketmasterEventsResponse.self, from: data)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(TicketmasterEventsResponse.self, from: data)
         let wanted = normalized(artist)
         return (decoded.embedded?.events ?? []).compactMap { event in
             // The keyword search also matches tribute acts and festivals, so require the artist
@@ -74,7 +76,9 @@ struct TicketmasterService: Sendable {
             city: venue?.city?.name ?? "",
             region: venue?.state?.stateCode ?? venue?.country?.countryCode,
             venue: venue?.name ?? "",
+            address: venue?.address?.line1,
             date: date,
+            instant: start.dateTime,
             hasTime: hasTime,
             url: event.url
         )

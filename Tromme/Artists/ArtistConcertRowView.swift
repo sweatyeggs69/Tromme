@@ -2,29 +2,13 @@ import SwiftUI
 
 /// One concert: calendar tile, city, then venue, weekday and time. Opens the ticket page.
 struct ArtistConcertRowView: View {
-    @Environment(\.openURL) private var openURL
-
     let concert: ConcertEvent
+    let onSelect: () -> Void
 
     var body: some View {
-        Button {
-            if let url = concert.url { openURL(url) }
-        } label: {
+        Button(action: onSelect) {
             HStack(spacing: 14) {
-                VStack(spacing: 0) {
-                    Text(concert.monthText)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.red)
-                    Text(concert.dayText)
-                        .font(.title.weight(.medium))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 64, height: 64)
-                .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                )
+                ConcertDateTileView(concert: concert, size: 64)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(concert.location)
@@ -43,7 +27,6 @@ struct ArtistConcertRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(concert.url == nil)
     }
 }
 
@@ -54,10 +37,13 @@ struct ArtistConcertRowView: View {
             city: "Mesa",
             region: "AZ",
             venue: "Mesa Amphitheatre",
+            address: "263 N Center St",
             date: Date(),
+            instant: nil,
             hasTime: true,
             url: nil
-        )
+        ),
+        onSelect: {}
     )
     .padding()
     .background(Color(red: 0.08, green: 0.16, blue: 0.22))

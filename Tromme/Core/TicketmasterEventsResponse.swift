@@ -29,6 +29,7 @@ struct TicketmasterEventsResponse: Decodable, Sendable {
     struct Start: Decodable, Sendable {
         let localDate: String?
         let localTime: String?
+        let dateTime: Date?
     }
 
     struct EventEmbedded: Decodable, Sendable {
@@ -38,9 +39,14 @@ struct TicketmasterEventsResponse: Decodable, Sendable {
 
     struct Venue: Decodable, Sendable {
         let name: String?
+        let address: Address?
         let city: Named?
         let state: State?
         let country: Country?
+    }
+
+    struct Address: Decodable, Sendable {
+        let line1: String?
     }
 
     struct Named: Decodable, Sendable {

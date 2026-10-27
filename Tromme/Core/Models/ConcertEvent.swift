@@ -7,13 +7,34 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     let city: String
     let region: String?
     let venue: String
+    let address: String?
     let date: Date
+    /// The real start instant, when the API gives one; the calendar uses it.
+    let instant: Date?
     let hasTime: Bool
     let url: URL?
 
     var location: String {
         [city, region].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
+
+    /// "263 N Center St, Mesa, AZ"
+    var addressText: String {
+        [address, city, region].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    var mapURL: URL? {
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [URLQueryItem(name: "q", value: [venue, addressText].filter { !$0.isEmpty }.joined(separator: ", "))]
+        return components?.url
+    }
+
+    /// "January 15, 2027 · Friday"
+    var longDateText: String {
+        Self.format("MMMMdyyyy", date) + " · " + Self.format("EEEE", date)
+    }
+
+    var timeText: String? { hasTime ? Self.format("h:mm a", date) : nil }
 
     var monthText: String { Self.format("MMM", date) }
     var dayText: String { Self.format("d", date) }

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		81EACDF35984235534DEE088 /* ConcertCalendarEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */; };
+		9F4ACACE99186E4E157D6AE7 /* ConcertDateTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */; };
+		ABD5557FF0132948AEA96FDF /* ArtistConcertDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */; };
 		016DC6E1EC7FFAD4B974DF49 /* TicketmasterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD31804385D28CA7D9756F5 /* TicketmasterService.swift */; };
 		792E216D9C11653E2F0725EC /* TicketmasterEventsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB61C1155F4B1F1422507C99 /* TicketmasterEventsResponse.swift */; };
 		09E77F518A1F15406849070C /* ConcertEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43658A2397996BDE150D7820 /* ConcertEvent.swift */; };
@@ -210,6 +213,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertCalendarEditor.swift; sourceTree = "<group>"; };
+		92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertDateTileView.swift; sourceTree = "<group>"; };
+		8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistConcertDetailView.swift; sourceTree = "<group>"; };
 		7DD31804385D28CA7D9756F5 /* TicketmasterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketmasterService.swift; sourceTree = "<group>"; };
 		FB61C1155F4B1F1422507C99 /* TicketmasterEventsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketmasterEventsResponse.swift; sourceTree = "<group>"; };
 		43658A2397996BDE150D7820 /* ConcertEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertEvent.swift; sourceTree = "<group>"; };
@@ -713,6 +719,9 @@
 				BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */,
 				8989B39C0A84F1DA3F68D18E /* ArtistAllTracksListView.swift */,
 				E684118EDEBCCF7366979A6A /* SimilarArtistsGridView.swift */,
+				73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */,
+				92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */,
+				8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */,
 				1ADC10B1CF41174A925A0A05 /* ArtistConcertsListView.swift */,
 				7811ACACDF0FC1C55D8C90A5 /* ArtistConcertRowView.swift */,
 				EA6AE1E51014CF06E7AB54BC /* ArtistHeroControlsView.swift */,
@@ -892,6 +901,9 @@
 				72FDB61684229D88B316C5A8 /* ArtworkAnimationSlot.swift in Sources */,
 				56EA4759C85A6A4583929185 /* SongSortOrder.swift in Sources */,
 				5594A0034FF6923C02CE4AAD /* SimilarArtistsGridView.swift in Sources */,
+				81EACDF35984235534DEE088 /* ConcertCalendarEditor.swift in Sources */,
+				9F4ACACE99186E4E157D6AE7 /* ConcertDateTileView.swift in Sources */,
+				ABD5557FF0132948AEA96FDF /* ArtistConcertDetailView.swift in Sources */,
 				441E9C85CB76D5530B6B188B /* ArtistConcertsListView.swift in Sources */,
 				14053F34316038CC4F9D8FEB /* ArtistConcertRowView.swift in Sources */,
 				A981CA7D0E064840E4E10C9F /* NowPlayingBarsView.swift in Sources */,
