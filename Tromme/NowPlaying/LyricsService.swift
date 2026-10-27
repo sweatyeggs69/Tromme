@@ -209,7 +209,7 @@ final class LyricsService {
     }
 
     private nonisolated static func search(_ query: [URLQueryItem]) async -> [ResolvedLyrics] {
-        var components = URLComponents(string: "https://api.tromme.app/lyrics/lrclib/search")!
+        var components = URLComponents(string: "https://lrclib.net/api/search")!
         components.queryItems = query
         guard let url = components.url, let data = await fetchWithRetry(url) else { return [] }
         return (try? JSONDecoder().decode([ResolvedLyrics].self, from: data)) ?? []

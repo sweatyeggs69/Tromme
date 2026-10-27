@@ -1,12 +1,12 @@
 import Foundation
 
-/// Looks up timed lyrics on lrc.red (through api.tromme.app), which keys its catalog by ISRC.
+/// Looks up timed lyrics on lrc.red, which keys its catalog by ISRC.
 /// Plex doesn't expose a track's ISRC, so the track is matched through
-/// `/search` first, then the timed lyrics come from `/lrc?isrc=<ISRC>`.
+/// `/search.json` first, then the timed lyrics come from `/s/<ISRC>.lrc`.
 /// That file carries per-word `<mm:ss.xx>` stamps when the lyrics are
 /// word-synced and answers 404 when they have no timing at all.
 enum LrcRedLyricsProvider {
-    private static let baseURL = URL(string: "https://api.tromme.app/lyrics/lrcred")!
+    private static let baseURL = URL(string: "https://lrc.red")!
 
     /// How many matching releases (remasters, compilations…) are checked for
     /// timing, since they don't all carry the same sync level.
@@ -75,7 +75,7 @@ enum LrcRedLyricsProvider {
     }
 
     private static func search(query: String) async -> [Hit] {
-        var components = URLComponents(url: baseURL.appending(path: "search"), resolvingAgainstBaseURL: false)!
+        var components = URLComponents(url: baseURL.appending(path: "search.json"), resolvingAgainstBaseURL: false)!
         components.queryItems = [.init(name: "q", value: query)]
         guard let url = components.url,
               let data = await LyricsService.fetchWithRetry(url),
@@ -109,10 +109,8 @@ enum LrcRedLyricsProvider {
     }
 
     private static func lrc(isrc: String) async -> FetchedLRC? {
-        var components = URLComponents(url: baseURL.appending(path: "lrc"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [.init(name: "isrc", value: isrc)]
-        guard let url = components.url,
-              let data = await LyricsService.fetchWithRetry(url),
+        let url = baseURL.appending(path: "s/\(isrc).lrc")
+        guard let data = await LyricsService.fetchWithRetry(url),
               let text = String(data: data, encoding: .utf8) else { return nil }
         let lines = LRCParser.parse(text)
         guard !lines.isEmpty else { return nil }
