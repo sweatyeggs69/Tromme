@@ -21,7 +21,6 @@ final class SettingsSync {
         "leftAlignLyrics",
         "showFeaturedSection",
         "featuredBannerSize",
-        "showPopularTracks",
         "hideEmptySections",
         "artistsViewMode",
         "artistAllTracksSortNewestFirst",

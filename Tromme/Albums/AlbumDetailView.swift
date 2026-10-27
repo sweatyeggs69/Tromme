@@ -22,7 +22,6 @@ struct AlbumDetailView: View {
     @State private var metadataRequest: MetadataSheetRequest?
     @State private var showDeleteAlbumConfirmation = false
     @State private var showingChangeArtworkSheet = false
-    @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
 
     // Read-only views of the view model's state, so the body reads as before.
@@ -43,8 +42,7 @@ struct AlbumDetailView: View {
             sectionId: serverConnection.currentLibrarySectionId,
             client: client,
             isConnected: network.isConnected,
-            downloadManager: downloadManager,
-            showPopularTracks: showPopularTracks
+            downloadManager: downloadManager
         )
     }
 

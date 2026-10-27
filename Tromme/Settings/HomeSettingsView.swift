@@ -3,7 +3,6 @@ import SwiftUI
 struct HomeSettingsView: View {
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "large"
-    @AppStorage("showPopularTracks") private var showPopularTracks = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
@@ -33,8 +32,6 @@ struct HomeSettingsView: View {
             }
 
             Section {
-                Toggle("Popular Track Indicator", isOn: $showPopularTracks)
-                    .tint(.green)
                 Toggle("Animated Artwork", isOn: canUseAnimatedArtwork ? $animatedArtworkEnabled : .constant(false))
                     .tint(.green)
                     .disabled(!canUseAnimatedArtwork)

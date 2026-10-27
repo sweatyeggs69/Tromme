@@ -41,7 +41,6 @@ final class AlbumDetailViewModel {
         let client: PlexAPIClient
         let isConnected: Bool
         let downloadManager: DownloadManager
-        let showPopularTracks: Bool
     }
 
     var artistNavigationTarget: PlexMetadata? {
@@ -165,7 +164,7 @@ final class AlbumDetailViewModel {
     }
 
     private func loadLastFMPopularity(_ context: Context) async {
-        guard context.isConnected, context.showPopularTracks else { return }
+        guard context.isConnected else { return }
         guard let artistName = albumDetails.parentTitle ?? album.parentTitle,
               !artistName.isEmpty, !tracks.isEmpty else { return }
         popularTrackTitles = await LastFMService.fetchPopularTracks(
