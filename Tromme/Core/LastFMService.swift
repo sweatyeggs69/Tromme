@@ -3,29 +3,16 @@ import Foundation
 struct LastFMService: Sendable {
 
     /// Returns the subset of `albumTrackTitles` that appear in the artist's all-time top 10
-    /// on Last.fm. Results are cached per artist (memory: 4h, disk: 7 days).
+    /// on Last.fm. Caching happens at api.tromme.app and in URLSession (Cache-Control).
     static func fetchPopularTracks(
         artist: String,
         albumTrackTitles: [String]
     ) async -> Set<String> {
         guard !artist.isEmpty, !albumTrackTitles.isEmpty else { return [] }
 
-        let cacheKey = CacheKey.lastFMTopTracks(artist: artist)
+        guard let topTen = try? await fetchTopTenNormalized(artist: artist) else { return [] }
 
-        let topTenNormalized: [String]
-        do {
-            topTenNormalized = try await ExternalContentCache.shared.cachedFetch(
-                [String].self,
-                forKey: cacheKey,
-                policy: .lastFM
-            ) {
-                try await fetchTopTenNormalized(artist: artist)
-            }
-        } catch {
-            return []
-        }
-
-        let topTenSet = Set(topTenNormalized)
+        let topTenSet = Set(topTen)
         return Set(albumTrackTitles.filter { topTenSet.contains(normalized($0)) })
     }
 

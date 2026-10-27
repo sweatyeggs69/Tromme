@@ -2,21 +2,10 @@ import Foundation
 
 struct TicketmasterService: Sendable {
 
-    /// Upcoming concerts for `artist`. Results are cached per artist.
+    /// Upcoming concerts for `artist`. Caching happens at api.tromme.app and in URLSession (Cache-Control).
     static func fetchConcerts(artist: String) async -> [ConcertEvent] {
         guard !artist.isEmpty else { return [] }
-
-        do {
-            return try await ExternalContentCache.shared.cachedFetch(
-                [ConcertEvent].self,
-                forKey: CacheKey.concerts(artist: artist),
-                policy: .concerts
-            ) {
-                try await fetchEvents(artist: artist)
-            }
-        } catch {
-            return []
-        }
+        return (try? await fetchEvents(artist: artist)) ?? []
     }
 
     // MARK: - Network
