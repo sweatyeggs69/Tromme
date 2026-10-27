@@ -60,11 +60,6 @@ struct OfflineSettingsView: View {
                         }
                     }
                 }
-            } footer: {
-                Text(footerText)
-            }
-
-            Section {
                 Picker("Max Bitrate", selection: displayedQuality) {
                     ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
                         Text(quality.displayName).tag(quality.rawValue)
@@ -99,18 +94,6 @@ struct OfflineSettingsView: View {
             get: { plus.isPlus ? downloadQuality : DownloadQuality.original.rawValue },
             set: { downloadQuality = $0 }
         )
-    }
-
-    private var footerText: String {
-        if autoDownloadEnabled {
-            switch AutoDownloadMode(rawValue: autoDownloadMode) ?? .defaultMode {
-            case .library:
-                return "Downloads your entire library and any newly added tracks automatically."
-            case .queue:
-                return "Dynamically downloads songs from your play queue, advancing as you listen."
-            }
-        }
-        return "Automatically download songs for offline playback."
     }
 
     private func startAutoDownloadForCurrentMode() {
