@@ -11,6 +11,9 @@ struct OfflineSettingsView: View {
     @AppStorage("dynamicDownloadLimit") private var dynamicDownloadLimit = 5
     @AppStorage(DownloadQuality.storageKey) private var downloadQuality = DownloadQuality.original.rawValue
 
+    @State private var plus = PlusStore.shared
+    @State private var showPaywall = false
+
     private static let dynamicDownloadLimitOptions: [Int] = [5, 10, 20]
 
     var body: some View {
@@ -62,16 +65,21 @@ struct OfflineSettingsView: View {
             }
 
             Section {
-                Picker("Max Bitrate", selection: $downloadQuality) {
-                    ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
-                        Text(quality.displayName).tag(quality.rawValue)
+                if plus.isPlus {
+                    Picker("Max Bitrate", selection: $downloadQuality) {
+                        ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
+                            Text(quality.displayName).tag(quality.rawValue)
+                        }
                     }
+                } else {
+                    Button("Unlock with Tromme Plus", systemImage: "sparkles") { showPaywall = true }
                 }
             } footer: {
                 Text("Songs above the chosen bitrate are converted to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
             }
         }
         .navigationTitle("Offline")
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
         .onAppear {
             // "spaceSaver" was the earlier fixed 256 kbps setting.
             if downloadQuality == "spaceSaver" { downloadQuality = DownloadQuality.kbps256.rawValue }

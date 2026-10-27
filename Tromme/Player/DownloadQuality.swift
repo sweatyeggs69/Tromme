@@ -21,7 +21,9 @@ enum DownloadQuality: String, CaseIterable {
 
     var maxBitrateKbps: Int? { Int(rawValue) }
 
+    /// Always `.original` without Tromme Plus, so a lapsed subscription stops converting downloads.
     static var current: DownloadQuality {
+        guard PlusStore.cachedIsPlus else { return .original }
         let raw = UserDefaults.standard.string(forKey: storageKey) ?? DownloadQuality.original.rawValue
         // "spaceSaver" was the earlier fixed 256 kbps setting.
         if raw == "spaceSaver" { return .kbps256 }
