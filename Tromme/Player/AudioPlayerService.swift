@@ -673,8 +673,9 @@ final class AudioPlayerService: Sendable {
 
     func previous() {
         guard !queue.isEmpty else { return }
-        if currentTime > 3 {
-            seek(to: currentTrackStartTime)
+        let trimStart = currentTrackStartTime
+        if currentTime - trimStart > 3 {
+            seek(to: trimStart)
             return
         }
         if currentIndex > 0 {
