@@ -3,7 +3,7 @@ import Foundation
 struct TicketmasterService: Sendable {
 
     /// Free key from developer.ticketmaster.com. Concerts stay hidden while this is empty.
-    private static let apiKey = ""
+    private static let apiKey = "jVaTJtdUr9bN9Qfar4VJluW29OTGfE4y"
 
     /// Upcoming concerts for `artist`. Results are cached per artist.
     static func fetchConcerts(artist: String) async -> [ConcertEvent] {
