@@ -73,7 +73,7 @@ struct OfflineSettingsView: View {
                             .contentShape(.rect)
                             .onTapGesture { showPaywall = true }
                             .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel("Max Bitrate, requires Tromme Plus")
+                            .accessibilityLabel("Max Bitrate, requires Tromme +")
                     }
                 }
             } footer: {

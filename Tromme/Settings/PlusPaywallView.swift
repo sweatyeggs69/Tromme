@@ -11,7 +11,7 @@ struct PlusPaywallView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
                     .foregroundStyle(.tint)
-                Text("Tromme Plus")
+                Text("Tromme +")
                     .font(.largeTitle.bold())
                 Text("Get access to the premium icons, animated artwork, advanced playback options and support ongoing development of Tromme.")
                     .font(.subheadline)

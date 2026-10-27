@@ -43,9 +43,9 @@ struct SettingsView: View {
                 if plus.isGrandfathered {
                     Button("Support Tromme") { showPaywall = true }
                 } else if plus.isPlus {
-                    Button("Manage Tromme Plus") { showManageSubscription = true }
+                    Button("Manage Tromme +") { showManageSubscription = true }
                 } else {
-                    Button("Get Tromme Plus") { showPaywall = true }
+                    Button("Get Tromme +") { showPaywall = true }
                 }
             }
         }

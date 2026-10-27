@@ -50,7 +50,7 @@ struct AppIconPickerView: View {
                         }
                         .frame(width: 60, height: 60)
 
-                        Text("Unlock with Tromme Plus")
+                        Text("Unlock with Tromme +")
                             .foregroundStyle(.primary)
                             .fontWeight(.medium)
 
@@ -67,7 +67,7 @@ struct AppIconPickerView: View {
         } header: {
             Text(title)
         } footer: {
-            Text("Included with Tromme Plus. New icons are added over time.")
+            Text("Included with Tromme +. New icons are added over time.")
         }
     }
 

@@ -15,10 +15,10 @@ struct PlusWelcomeView: View {
                 .symbolRenderingMode(.hierarchical)
 
             VStack(spacing: 10) {
-                Text("You Have Tromme Plus")
+                Text("You Have Tromme +")
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
-                Text("Thank you so much for purchasing Tromme, it seriously means the world to me. Tromme now has a subscription option to support ongoing development and hosting the animated artwork service. Because you bought the Premium Icon Pack, you have Tromme Plus for free.")
+                Text("Thank you so much for purchasing Tromme, it seriously means the world to me. Tromme now has a subscription option to support ongoing development and hosting the animated artwork service. Because you bought the Premium Icon Pack, you have Tromme + for free.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

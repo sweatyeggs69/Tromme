@@ -35,7 +35,7 @@ struct TrackMarkersSection: View {
             if plus.isPlus {
                 controls
             } else {
-                Button("Unlock with Tromme Plus", systemImage: "sparkles") { showPaywall = true }
+                Button("Unlock with Tromme +", systemImage: "sparkles") { showPaywall = true }
             }
         }
         .sheet(isPresented: $showPaywall) { PlusPaywallView() }
