@@ -65,21 +65,21 @@ struct OfflineSettingsView: View {
             }
 
             Section {
-                if plus.isPlus {
-                    Picker("Max Bitrate", selection: $downloadQuality) {
-                        ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
-                            Text(quality.displayName).tag(quality.rawValue)
-                        }
+                Picker("Max Bitrate", selection: $downloadQuality) {
+                    ForEach(DownloadQuality.allCases, id: \.rawValue) { quality in
+                        Text(quality.displayName).tag(quality.rawValue)
                     }
-                } else {
-                    Button {
-                        showPaywall = true
-                    } label: {
-                        LabeledContent("Max Bitrate") {
-                            Label("Tromme Plus", systemImage: "sparkles")
-                        }
+                }
+                .disabled(!plus.isPlus)
+                .overlay {
+                    // A disabled control swallows taps, so catch them above it to offer the paywall.
+                    if !plus.isPlus {
+                        Color.clear
+                            .contentShape(.rect)
+                            .onTapGesture { showPaywall = true }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel("Max Bitrate, requires Tromme Plus")
                     }
-                    .foregroundStyle(.primary)
                 }
             } footer: {
                 Text("Songs above the chosen bitrate are converted to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
