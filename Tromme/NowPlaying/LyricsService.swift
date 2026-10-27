@@ -217,16 +217,18 @@ final class LyricsService {
 
     // Retries transient failures (timeouts, dropped connections, 429/5xx) so a momentary
     // network hiccup doesn't get treated the same as a confirmed "no lyrics" 404 and cause
-    // resolve() to settle prematurely on a worse (e.g. plain-only) fallback result.
+    // resolve() to settle prematurely on a worse (e.g. plain-only) fallback result. Other 4xx
+    // answers are final, and a cancelled lookup (deadline hit) stops instead of re-sending.
     nonisolated static func fetchWithRetry(_ url: URL, retries: Int = 2) async -> Data? {
         for attempt in 0...retries {
+            if Task.isCancelled { return nil }
             if let (data, response) = try? await URLSession.shared.data(from: url),
                let http = response as? HTTPURLResponse {
                 if http.statusCode == 200 { return data }
-                if http.statusCode == 404 { return nil }
                 #if DEBUG
                 print("[Lyrics] \(http.statusCode) from \(url.host() ?? "?"), attempt \(attempt + 1)")
                 #endif
+                if http.statusCode != 429, !(500...599).contains(http.statusCode) { return nil }
             }
             if attempt < retries {
                 try? await Task.sleep(for: .milliseconds(300 * (attempt + 1)))
