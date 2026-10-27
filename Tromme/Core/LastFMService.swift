@@ -2,8 +2,6 @@ import Foundation
 
 struct LastFMService: Sendable {
 
-    private static let apiKey = "b78cca3f0e48b50bbef9ce3b357a5bb3"
-
     /// Returns the subset of `albumTrackTitles` that appear in the artist's all-time top 10
     /// on Last.fm. Results are cached per artist (memory: 4h, disk: 7 days).
     static func fetchPopularTracks(
@@ -36,16 +34,9 @@ struct LastFMService: Sendable {
     private static func fetchTopTenNormalized(artist: String) async throws -> [String] {
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "ws.audioscrobbler.com"
-        components.path = "/2.0/"
-        components.queryItems = [
-            URLQueryItem(name: "method", value: "artist.gettoptracks"),
-            URLQueryItem(name: "artist", value: artist),
-            URLQueryItem(name: "api_key", value: apiKey),
-            URLQueryItem(name: "format", value: "json"),
-            URLQueryItem(name: "limit", value: "10"),
-            URLQueryItem(name: "autocorrect", value: "1")
-        ]
+        components.host = "api.tromme.app"
+        components.path = "/lastfm/top-tracks"
+        components.queryItems = [URLQueryItem(name: "artist", value: artist)]
 
         guard let url = components.url else { throw URLError(.badURL) }
 

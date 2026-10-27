@@ -2,12 +2,9 @@ import Foundation
 
 struct TicketmasterService: Sendable {
 
-    /// Free key from developer.ticketmaster.com. Concerts stay hidden while this is empty.
-    private static let apiKey = "jVaTJtdUr9bN9Qfar4VJluW29OTGfE4y"
-
     /// Upcoming concerts for `artist`. Results are cached per artist.
     static func fetchConcerts(artist: String) async -> [ConcertEvent] {
-        guard !apiKey.isEmpty, !artist.isEmpty else { return [] }
+        guard !artist.isEmpty else { return [] }
 
         do {
             return try await ExternalContentCache.shared.cachedFetch(
@@ -27,16 +24,9 @@ struct TicketmasterService: Sendable {
     private static func fetchEvents(artist: String) async throws -> [ConcertEvent] {
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "app.ticketmaster.com"
-        components.path = "/discovery/v2/events.json"
-        components.queryItems = [
-            URLQueryItem(name: "apikey", value: apiKey),
-            URLQueryItem(name: "keyword", value: artist),
-            URLQueryItem(name: "classificationName", value: "music"),
-            URLQueryItem(name: "sort", value: "date,asc"),
-            URLQueryItem(name: "size", value: "50"),
-            URLQueryItem(name: "locale", value: "*")
-        ]
+        components.host = "api.tromme.app"
+        components.path = "/ticketmaster/events"
+        components.queryItems = [URLQueryItem(name: "keyword", value: artist)]
 
         guard let url = components.url else { throw URLError(.badURL) }
 

@@ -1,0 +1,20 @@
+name = "tromme-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+routes = [
+  { pattern = "api.tromme.app", custom_domain = true }
+]
+
+[observability]
+enabled = true
+
+# Per-client limit, keyed on IP in src/index.js. Cache hits are not counted.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
+# Secrets (set with `wrangler secret put`): LASTFM_API_KEY, TICKETMASTER_API_KEY
