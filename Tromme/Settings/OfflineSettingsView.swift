@@ -72,7 +72,14 @@ struct OfflineSettingsView: View {
                         }
                     }
                 } else {
-                    Button("Unlock with Tromme Plus", systemImage: "sparkles") { showPaywall = true }
+                    Button {
+                        showPaywall = true
+                    } label: {
+                        LabeledContent("Max Bitrate") {
+                            Label("Tromme Plus", systemImage: "sparkles")
+                        }
+                    }
+                    .foregroundStyle(.primary)
                 }
             } footer: {
                 Text("Songs above the chosen bitrate are converted to AAC on your Plex server, which can make those downloads take longer. Other songs download as the original.")
