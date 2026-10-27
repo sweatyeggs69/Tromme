@@ -39,11 +39,11 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     var monthText: String { Self.format("MMM", date) }
     var dayText: String { Self.format("d", date) }
 
-    /// "Venue · Fri · 12 PM", or "Venue · Fri, Jan 15 · 12 PM" with `includesDate`.
+    /// "Venue · Fri · 12:00 PM", or "Venue · Fri, Jan 15 · 12 PM" with `includesDate`.
     func detailText(includesDate: Bool = false) -> String {
         var parts = [venue, Self.format(includesDate ? "EEEMMMd" : "EEE", date)]
-        if hasTime { parts.append(shortTimeText) }
-        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+        if hasTime { parts.append(includesDate ? shortTimeText : Self.format("jmm", date)) }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\u{2009}·\u{2009}")
     }
 
     /// "12 PM" on the hour, "7:30 PM" otherwise.

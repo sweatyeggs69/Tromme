@@ -376,8 +376,8 @@ struct ArtistDetailView: View {
 
                 ForEach(viewModel.concerts.prefix(3)) { concert in
                     ArtistConcertRowView(concert: concert) { selectedConcert = concert }
-                        .listRowInsets(EdgeInsets(top: 6, leading: AppStyle.Spacing.pageHorizontal, bottom: 6, trailing: AppStyle.Spacing.pageHorizontal))
-                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
+                        .listRowSeparator(concert.id == viewModel.concerts.prefix(3).last?.id ? .hidden : .visible, edges: .bottom)
                         .listRowBackground(backdropColor)
                 }
             }

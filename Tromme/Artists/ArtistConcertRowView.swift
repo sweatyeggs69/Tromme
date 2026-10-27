@@ -28,6 +28,8 @@ struct ArtistConcertRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Separator starts under the text, past the date tile (48) and its spacing (12).
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 60 }
     }
 }
 
