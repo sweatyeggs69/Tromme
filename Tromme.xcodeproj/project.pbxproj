@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		016DC6E1EC7FFAD4B974DF49 /* TicketmasterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DD31804385D28CA7D9756F5 /* TicketmasterService.swift */; };
+		792E216D9C11653E2F0725EC /* TicketmasterEventsResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB61C1155F4B1F1422507C99 /* TicketmasterEventsResponse.swift */; };
+		09E77F518A1F15406849070C /* ConcertEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43658A2397996BDE150D7820 /* ConcertEvent.swift */; };
+		441E9C85CB76D5530B6B188B /* ArtistConcertsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ADC10B1CF41174A925A0A05 /* ArtistConcertsListView.swift */; };
+		14053F34316038CC4F9D8FEB /* ArtistConcertRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7811ACACDF0FC1C55D8C90A5 /* ArtistConcertRowView.swift */; };
 		01BB7050DB36FBB5F64B091F /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311B274B9F165FE0F81E54FD /* SafariView.swift */; };
 		02EFFE2FF9FE8142805B0263 /* LibraryMemory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F650499E82802A9919E16B4 /* LibraryMemory.swift */; };
 		058696F1DA760ECE4C73F2FA /* AppIconOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFF4CF2474855912FA0144CE /* AppIconOption.swift */; };
@@ -205,6 +210,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		7DD31804385D28CA7D9756F5 /* TicketmasterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketmasterService.swift; sourceTree = "<group>"; };
+		FB61C1155F4B1F1422507C99 /* TicketmasterEventsResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TicketmasterEventsResponse.swift; sourceTree = "<group>"; };
+		43658A2397996BDE150D7820 /* ConcertEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertEvent.swift; sourceTree = "<group>"; };
+		1ADC10B1CF41174A925A0A05 /* ArtistConcertsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistConcertsListView.swift; sourceTree = "<group>"; };
+		7811ACACDF0FC1C55D8C90A5 /* ArtistConcertRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistConcertRowView.swift; sourceTree = "<group>"; };
 		00850707551A1867A1CF2554 /* QueueRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueRow.swift; sourceTree = "<group>"; };
 		019577AF9B0380B0299C4853 /* AnimatedArtworkClipDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedArtworkClipDownloader.swift; sourceTree = "<group>"; };
 		027A7D088859EBB533071650 /* AlbumRecommendationGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumRecommendationGridView.swift; sourceTree = "<group>"; };
@@ -540,6 +550,8 @@
 				C834C29A06A38700E1BDD9FA /* Styling */,
 				0E91C64E2F91B03000775275 /* AppContext.swift */,
 				0E52132F3040EE8300583BF3 /* LastFMService.swift */,
+				7DD31804385D28CA7D9756F5 /* TicketmasterService.swift */,
+				FB61C1155F4B1F1422507C99 /* TicketmasterEventsResponse.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -701,6 +713,8 @@
 				BDE40D554EFCEE41D1E72442 /* ArtistDetailViewModel.swift */,
 				8989B39C0A84F1DA3F68D18E /* ArtistAllTracksListView.swift */,
 				E684118EDEBCCF7366979A6A /* SimilarArtistsGridView.swift */,
+				1ADC10B1CF41174A925A0A05 /* ArtistConcertsListView.swift */,
+				7811ACACDF0FC1C55D8C90A5 /* ArtistConcertRowView.swift */,
 				EA6AE1E51014CF06E7AB54BC /* ArtistHeroControlsView.swift */,
 				A61C01CE07051C54D488443F /* ArtistSidePanelView.swift */,
 				D534D62317612ECD7B86995C /* ArtistHeroHeaderView.swift */,
@@ -756,6 +770,7 @@
 			isa = PBXGroup;
 			children = (
 				B623A478C645C8F080FAC864 /* PlexTag.swift */,
+				43658A2397996BDE150D7820 /* ConcertEvent.swift */,
 				31FA3EB408C385CC4EE920B5 /* PlexStream.swift */,
 				0DA977C8D66B3B5DDC5329C5 /* PlexServer.swift */,
 				DB88B09B3AED24590E9DBC4B /* PlexResponse.swift */,
@@ -877,6 +892,8 @@
 				72FDB61684229D88B316C5A8 /* ArtworkAnimationSlot.swift in Sources */,
 				56EA4759C85A6A4583929185 /* SongSortOrder.swift in Sources */,
 				5594A0034FF6923C02CE4AAD /* SimilarArtistsGridView.swift in Sources */,
+				441E9C85CB76D5530B6B188B /* ArtistConcertsListView.swift in Sources */,
+				14053F34316038CC4F9D8FEB /* ArtistConcertRowView.swift in Sources */,
 				A981CA7D0E064840E4E10C9F /* NowPlayingBarsView.swift in Sources */,
 				380C4E76A4C3553A27183702 /* FeaturedCarouselView.swift in Sources */,
 				8D58AE6CF97EBCFC142AEE3B /* FeaturedBannerSize.swift in Sources */,
@@ -901,6 +918,7 @@
 				841CE9A85DDFA98C34EC9D7E /* PlexAPIError.swift in Sources */,
 				A6652054F4BE0754BAD00805 /* Notification.Name+Tromme.swift in Sources */,
 				17534FB93B7F6DB0EAADDD58 /* PlexTag.swift in Sources */,
+				09E77F518A1F15406849070C /* ConcertEvent.swift in Sources */,
 				42E99EC0CCD221F15D6CAAAE /* PlexStream.swift in Sources */,
 				8CEE55B7AA21FEC31C93F816 /* PlexServer.swift in Sources */,
 				397EFCF0A38132248F3086F3 /* PlexResponse.swift in Sources */,
@@ -985,6 +1003,8 @@
 				65BE712C4B25685082310E7A /* ArtworkView.swift in Sources */,
 				65BE712C4B25685082310AA2 /* SectionIndexBar.swift in Sources */,
 				0E5213303040EE8300583BF3 /* LastFMService.swift in Sources */,
+				016DC6E1EC7FFAD4B974DF49 /* TicketmasterService.swift in Sources */,
+				792E216D9C11653E2F0725EC /* TicketmasterEventsResponse.swift in Sources */,
 				277F53ED9EB6AF4188D15B0A /* AudioPlayerService.swift in Sources */,
 				0E5213363040F42900583BF3 /* OfflineSettingsView.swift in Sources */,
 				923A24CEED84D646FA58FBA3 /* CachedAPIClient.swift in Sources */,

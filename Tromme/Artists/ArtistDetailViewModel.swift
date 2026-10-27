@@ -14,6 +14,7 @@ final class ArtistDetailViewModel {
     private(set) var artistAlbums: [PlexMetadata]
     private(set) var appearsOnAlbums: [PlexMetadata]
     private(set) var similarArtists: [PlexMetadata]
+    private(set) var concerts: [ConcertEvent] = []
     private(set) var contentReady = false
 
     init(artist: PlexMetadata, previewData: ArtistDetailView.PreviewData? = nil) {
@@ -79,6 +80,13 @@ final class ArtistDetailViewModel {
             topTracks = Self.topTracks(from: fetchedAllTracks)
             contentReady = true
         }
+    }
+
+    /// Upcoming concerts load on their own so a slow lookup never holds up the page.
+    func loadConcerts(isConnected: Bool) async {
+        guard !isPreviewMode, isConnected else { return }
+        let fetched = await TicketmasterService.fetchConcerts(artist: artist.title)
+        withAnimation(.easeIn(duration: 0.25)) { concerts = fetched }
     }
 
     /// Re-reads the artist after its photo changed, so the page picks up the new thumb. The sheet

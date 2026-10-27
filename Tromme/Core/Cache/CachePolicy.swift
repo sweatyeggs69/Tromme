@@ -25,6 +25,9 @@ enum CachePolicy: Sendable {
     /// Last.fm artist top-tracks — changes very slowly.
     /// Memory: 4 hours, Disk: 7 days.
     case lastFM
+    /// Upcoming concerts — dates shift and sell out, but not hourly.
+    /// Memory: 2 hours, Disk: 12 hours.
+    case concerts
 
     var memoryTTL: TimeInterval {
         switch self {
@@ -35,6 +38,7 @@ enum CachePolicy: Sendable {
         case .homeContent: return 1800      // 30 min
         case .search:      return 600       // 10 min
         case .lastFM:      return 14400     // 4 hours
+        case .concerts:    return 7200      // 2 hours
         }
     }
 
@@ -47,6 +51,7 @@ enum CachePolicy: Sendable {
         case .homeContent:  return 1800      // 30 min — always stale on cold launch
         case .search:       return 14400     // 4 hours
         case .lastFM:       return 604_800   // 7 days
+        case .concerts:     return 43_200    // 12 hours
         }
     }
 }

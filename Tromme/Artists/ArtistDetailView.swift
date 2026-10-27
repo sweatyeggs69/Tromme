@@ -14,6 +14,7 @@ struct ArtistDetailView: View {
     @State private var selectedSimilarArtist: PlexMetadata?
     @State private var showsAllSimilarArtists = false
     @State private var showsAllTracks = false
+    @State private var showsAllConcerts = false
     @State private var heroIsHidden = false
     /// Set once the backdrop color lookup has finished, found or not, so the loading
     /// spinner never outlives a failed or offline fetch.
@@ -369,6 +370,17 @@ struct ArtistDetailView: View {
                 appearsOnGrid(appearsOnAlbums)
             }
 
+            if !viewModel.concerts.isEmpty {
+                sectionHeader("All Upcoming Concerts", disclosureAction: { showsAllConcerts = true })
+
+                ForEach(viewModel.concerts.prefix(3)) { concert in
+                    ArtistConcertRowView(concert: concert)
+                        .listRowInsets(EdgeInsets(top: 6, leading: AppStyle.Spacing.pageHorizontal, bottom: 6, trailing: AppStyle.Spacing.pageHorizontal))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(backdropColor)
+                }
+            }
+
             if contentReady && !similarArtists.isEmpty {
                 if !similarArtists.isEmpty {
                     sectionHeader(
@@ -459,6 +471,9 @@ struct ArtistDetailView: View {
         .navigationDestination(isPresented: $showsAllSimilarArtists) {
             SimilarArtistsGridView(artists: similarArtists)
         }
+        .navigationDestination(isPresented: $showsAllConcerts) {
+            ArtistConcertsListView(concerts: viewModel.concerts)
+        }
         .navigationDestination(isPresented: $showsAllTracks) {
             ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)
         }
@@ -500,6 +515,9 @@ struct ArtistDetailView: View {
         }
         .task(id: artist.ratingKey) {
             await viewModel.load(loadContext)
+        }
+        .task(id: artist.ratingKey) {
+            await viewModel.loadConcerts(isConnected: network.isConnected)
         }
         .sheet(isPresented: $showsChangePhotoSheet) {
             ChangeArtworkSheet(ratingKey: artist.ratingKey, subject: "artist") {

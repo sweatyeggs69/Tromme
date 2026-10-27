@@ -8,4 +8,7 @@ enum CacheKey {
     static func lastFMTopTracks(artist: String) -> String {
         "lastfm_toptracks_\(artist.lowercased())"
     }
+    static func concerts(artist: String) -> String {
+        "concerts_v1_\(artist.lowercased())"
+    }
 }
