@@ -3,6 +3,7 @@ import SwiftUI
 /// One concert: calendar tile, city, then venue, weekday and time. Opens the ticket page.
 struct ArtistConcertRowView: View {
     let concert: ConcertEvent
+    var includesDate = false
     let onSelect: () -> Void
 
     var body: some View {
@@ -15,7 +16,7 @@ struct ArtistConcertRowView: View {
                         .font(.title3)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
-                    Text(concert.detailText)
+                    Text(concert.detailText(includesDate: includesDate))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

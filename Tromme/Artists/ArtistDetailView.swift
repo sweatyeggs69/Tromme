@@ -473,7 +473,7 @@ struct ArtistDetailView: View {
             SimilarArtistsGridView(artists: similarArtists)
         }
         .navigationDestination(isPresented: $showsAllConcerts) {
-            ArtistConcertsListView(concerts: viewModel.concerts) { selectedConcert = $0 }
+            ArtistConcertsListView(artist: displayArtist, concerts: viewModel.concerts) { selectedConcert = $0 }
         }
         .navigationDestination(item: $selectedConcert) { concert in
             ArtistConcertDetailView(

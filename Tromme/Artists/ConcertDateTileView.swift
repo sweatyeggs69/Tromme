@@ -12,13 +12,13 @@ struct ConcertDateTileView: View {
                 .foregroundStyle(.red)
             Text(concert.dayText)
                 .font(.system(size: size * 0.5, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
         }
         .frame(width: size, height: size)
-        .background(Color.black.opacity(0.7), in: RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 0.5)
         )
     }
 }

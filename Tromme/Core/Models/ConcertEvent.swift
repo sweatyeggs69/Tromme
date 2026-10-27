@@ -39,11 +39,18 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     var monthText: String { Self.format("MMM", date) }
     var dayText: String { Self.format("d", date) }
 
-    /// "Venue · Fri · 12:00 PM"
-    var detailText: String {
-        var parts = [venue, Self.format("EEE", date)]
-        if hasTime { parts.append(Self.format("h:mm a", date)) }
+    /// "Venue · Fri · 12 PM", or "Venue · Fri, Jan 15 · 12 PM" with `includesDate`.
+    func detailText(includesDate: Bool = false) -> String {
+        var parts = [venue, Self.format(includesDate ? "EEEMMMd" : "EEE", date)]
+        if hasTime { parts.append(shortTimeText) }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// "12 PM" on the hour, "7:30 PM" otherwise.
+    private var shortTimeText: String {
+        var gmt = Calendar(identifier: .gregorian)
+        gmt.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        return Self.format(gmt.component(.minute, from: date) == 0 ? "j" : "jmm", date)
     }
 
     private static func format(_ pattern: String, _ date: Date) -> String {
