@@ -40,12 +40,16 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                if plus.isGrandfathered {
-                    Button("Support Tromme") { showPaywall = true }
-                } else if plus.isPlus {
-                    Button("Manage Tromme +") { showManageSubscription = true }
-                } else {
-                    Button("Get Tromme +") { showPaywall = true }
+                Button {
+                    if plus.isPlus && !plus.isGrandfathered {
+                        showManageSubscription = true
+                    } else {
+                        showPaywall = true
+                    }
+                } label: {
+                    Text("Tromme +")
+                        .bold()
+                        .foregroundStyle(.primary)
                 }
             }
         }
