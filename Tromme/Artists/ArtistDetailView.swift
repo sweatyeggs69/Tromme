@@ -372,7 +372,7 @@ struct ArtistDetailView: View {
             }
 
             if !viewModel.concerts.isEmpty {
-                sectionHeader("All Upcoming Concerts", disclosureAction: { showsAllConcerts = true })
+                sectionHeader("Upcoming Concerts", disclosureAction: { showsAllConcerts = true })
 
                 ForEach(viewModel.concerts.prefix(3)) { concert in
                     ArtistConcertRowView(
