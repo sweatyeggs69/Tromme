@@ -378,6 +378,7 @@ struct ArtistDetailView: View {
                     ArtistConcertRowView(concert: concert) { selectedConcert = concert }
                         .listRowInsets(EdgeInsets(top: 8, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
                         .listRowSeparator(concert.id == viewModel.concerts.prefix(3).last?.id ? .hidden : .visible, edges: .bottom)
+                        .listRowSeparatorTint(.white.opacity(0.25))
                         .listRowBackground(backdropColor)
                 }
             }
@@ -473,7 +474,12 @@ struct ArtistDetailView: View {
             SimilarArtistsGridView(artists: similarArtists)
         }
         .navigationDestination(isPresented: $showsAllConcerts) {
-            ArtistConcertsListView(artist: displayArtist, concerts: viewModel.concerts) { selectedConcert = $0 }
+            ArtistConcertsListView(
+                artist: displayArtist,
+                concerts: viewModel.concerts,
+                backdropColor: backdropColor,
+                onShuffle: shuffleAll
+            )
         }
         .navigationDestination(item: $selectedConcert) { concert in
             ArtistConcertDetailView(

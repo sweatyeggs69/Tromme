@@ -3,7 +3,10 @@ import SwiftUI
 struct ArtistConcertsListView: View {
     let artist: PlexMetadata
     let concerts: [ConcertEvent]
-    let onSelect: (ConcertEvent) -> Void
+    let backdropColor: Color
+    let onShuffle: () -> Void
+
+    @State private var selectedConcert: ConcertEvent?
 
     var body: some View {
         List {
@@ -26,13 +29,16 @@ struct ArtistConcertsListView: View {
                 .listRowSeparator(.hidden)
 
             ForEach(concerts) { concert in
-                ArtistConcertRowView(concert: concert, includesDate: true) { onSelect(concert) }
+                ArtistConcertRowView(concert: concert, includesDate: true) { selectedConcert = concert }
                     .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                     .listRowSeparator(concert.id == concerts.last?.id ? .hidden : .visible, edges: .bottom)
             }
         }
         .listStyle(.plain)
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedConcert) { concert in
+            ArtistConcertDetailView(concert: concert, artist: artist, backdropColor: backdropColor, onShuffle: onShuffle)
+        }
     }
 }
 
@@ -42,6 +48,6 @@ struct ArtistConcertsListView: View {
             ConcertEvent(id: "1", city: "Mesa", region: "AZ", venue: "Mesa Amphitheatre",
             address: "263 N Center St", date: Date(), instant: nil, hasTime: true, url: nil),
             ConcertEvent(id: "2", city: "Denver", region: "CO", venue: "Red Rocks", address: nil, date: Date().addingTimeInterval(86_400 * 9), instant: nil, hasTime: false, url: nil)
-        ], onSelect: { _ in })
+        ], backdropColor: .brown, onShuffle: {})
     }
 }
