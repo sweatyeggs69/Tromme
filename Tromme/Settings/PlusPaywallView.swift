@@ -13,7 +13,7 @@ struct PlusPaywallView: View {
                     .foregroundStyle(.tint)
                 Text("Tromme +")
                     .font(.largeTitle.bold())
-                Text("Get access to the premium icons, animated artwork, advanced playback options and support ongoing development of Tromme.")
+                Text("Get access to the premium icons, animated artwork, advanced playback and download options and support ongoing development of Tromme.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
