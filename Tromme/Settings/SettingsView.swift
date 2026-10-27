@@ -49,8 +49,8 @@ struct SettingsView: View {
                 } label: {
                     Text("Tromme +")
                         .bold()
-                        .foregroundStyle(.primary)
                 }
+                .tint(.primary)
             }
         }
         .sheet(isPresented: $showPaywall) { PlusPaywallView() }
