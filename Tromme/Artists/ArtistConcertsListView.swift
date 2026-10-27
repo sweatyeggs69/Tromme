@@ -29,9 +29,12 @@ struct ArtistConcertsListView: View {
                 .listRowSeparator(.hidden)
 
             ForEach(concerts) { concert in
-                ArtistConcertRowView(concert: concert, includesDate: true) { selectedConcert = concert }
-                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                    .listRowSeparator(concert.id == concerts.last?.id ? .hidden : .visible, edges: .bottom)
+                ArtistConcertRowView(
+                    concert: concert,
+                    includesDate: true,
+                    showsDivider: concert.id != concerts.last?.id
+                ) { selectedConcert = concert }
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             }
         }
         .listStyle(.plain)

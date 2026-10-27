@@ -375,10 +375,12 @@ struct ArtistDetailView: View {
                 sectionHeader("All Upcoming Concerts", disclosureAction: { showsAllConcerts = true })
 
                 ForEach(viewModel.concerts.prefix(3)) { concert in
-                    ArtistConcertRowView(concert: concert) { selectedConcert = concert }
-                        .listRowInsets(EdgeInsets(top: 8, leading: AppStyle.Spacing.pageHorizontal, bottom: 8, trailing: AppStyle.Spacing.pageHorizontal))
-                        .listRowSeparator(concert.id == viewModel.concerts.prefix(3).last?.id ? .hidden : .visible, edges: .bottom)
-                        .listRowSeparatorTint(.white.opacity(0.25))
+                    ArtistConcertRowView(
+                        concert: concert,
+                        showsDivider: concert.id != viewModel.concerts.prefix(3).last?.id,
+                        dividerColor: .white.opacity(0.25)
+                    ) { selectedConcert = concert }
+                        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
                         .listRowBackground(backdropColor)
                 }
             }

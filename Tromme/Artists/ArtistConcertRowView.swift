@@ -2,8 +2,12 @@ import SwiftUI
 
 /// One concert: calendar tile, city, then venue, weekday and time. Opens the ticket page.
 struct ArtistConcertRowView: View {
+    @Environment(\.displayScale) private var displayScale
+
     let concert: ConcertEvent
     var includesDate = false
+    var showsDivider = true
+    var dividerColor: Color = Color(.separator)
     let onSelect: () -> Void
 
     var body: some View {
@@ -28,8 +32,18 @@ struct ArtistConcertRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Separator starts under the text, past the date tile (48) and its spacing (12).
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 60 }
+        .padding(.vertical, 8)
+        // Drawn here, not by the List, so every divider starts under the text, past the
+        // date tile (48) and its spacing (12).
+        .overlay(alignment: .bottom) {
+            if showsDivider {
+                Rectangle()
+                    .fill(dividerColor)
+                    .frame(height: 1 / displayScale)
+                    .padding(.leading, 60)
+            }
+        }
+        .listRowSeparator(.hidden)
     }
 }
 
