@@ -19,16 +19,6 @@ struct SettingsView: View {
             }
 
             Section {
-                if plus.isGrandfathered {
-                    Button("Support Tromme") { showPaywall = true }
-                } else if plus.isPlus {
-                    Button("Manage Tromme Plus") { showManageSubscription = true }
-                } else {
-                    Button("Get Tromme Plus") { showPaywall = true }
-                }
-            }
-
-            Section {
                 NavigationLink("Interface") { HomeSettingsView() }
                 NavigationLink("Playback") { PlaybackSettingsView() }
                 NavigationLink("Downloads") { OfflineSettingsView() }
@@ -48,6 +38,17 @@ struct SettingsView: View {
             .listRowBackground(Color.clear)
         }
         .navigationTitle("Settings")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if plus.isGrandfathered {
+                    Button("Support Tromme") { showPaywall = true }
+                } else if plus.isPlus {
+                    Button("Manage Tromme Plus") { showManageSubscription = true }
+                } else {
+                    Button("Get Tromme Plus") { showPaywall = true }
+                }
+            }
+        }
         .sheet(isPresented: $showPaywall) { PlusPaywallView() }
         .manageSubscriptionsSheet(isPresented: $showManageSubscription)
         .alert("Leave a Review?", isPresented: $showReviewPrompt) {
