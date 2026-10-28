@@ -206,6 +206,10 @@ final class AudioPlayerService: Sendable {
            record.fileExtension != (media?.container ?? "").lowercased() {
             return record.averageBitrateKbps ?? sourceBitrate
         }
+        // Plex metadata can lack a bitrate (e.g. a restored queue entry); the downloaded file still has one.
+        if sourceBitrate == nil, isPlayingLocalFile, let track = currentTrack {
+            return AppContext.shared.downloadManager.records[track.ratingKey]?.averageBitrateKbps
+        }
         return sourceBitrate
     }
 
