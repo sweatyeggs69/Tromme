@@ -18,17 +18,7 @@ struct VolumeSlider: View {
                     .frame(width: 16, alignment: .center)
 
                 GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(.white.opacity(0.3))
-                            .frame(height: isDragging ? 16 : 7)
-                            .frame(maxHeight: .infinity)
-                        Capsule()
-                            .fill(.white)
-                            .frame(width: max(0, geo.size.width * CGFloat(isEnabled ? volume : 0)), height: isDragging ? 16 : 7)
-                            .frame(maxHeight: .infinity, alignment: .leading)
-                    }
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
+                    SliderTrack(progress: CGFloat(isEnabled ? volume : 0), isDragging: isDragging, width: geo.size.width)
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
