@@ -25,6 +25,9 @@ extension AudioPlayerService {
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
         guard player?.currentItem != nil else { return }
         guard let track = nextAutoAdvanceTarget()?.track else { return }
+        // Downloaded FLAC/ALAC load through AVAudioPlayer on advance, never preloaded.
+        if let record = AppContext.shared.downloadManager.records[track.ratingKey],
+           Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
 
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
@@ -47,6 +50,8 @@ extension AudioPlayerService {
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             let codec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
+            // Downloaded FLAC/ALAC play through AVAudioPlayer, so they load on advance instead.
+            guard !Self.isLosslessLabel(codec) else { return }
             enqueuePreloaded(track, url: localURL, source: .local(codec: codec), detailedTrack: detailedTrack)
             return
         }

@@ -22,6 +22,7 @@ extension AudioPlayerService {
                     )
                 }
                 self.player?.volume = self.soundCheckVolume(for: self.currentTrack)
+                self.losslessPlayer?.volume = self.soundCheckVolume(for: self.currentTrack)
             }
         }
     }
@@ -92,7 +93,12 @@ extension AudioPlayerService {
             logPlayback("audio_session_reactivate_failed", "error=\(error.localizedDescription)")
             return
         }
-        if let player, let item = player.currentItem, item.status != .failed {
+        if let losslessPlayer {
+            losslessPlayer.play()
+            isPlaying = true
+            updateNowPlayingInfo()
+            reportTimelineState("playing")
+        } else if let player, let item = player.currentItem, item.status != .failed {
             player.play()
             isPlaying = true
             updateNowPlayingInfo()

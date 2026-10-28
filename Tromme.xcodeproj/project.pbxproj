@@ -210,6 +210,8 @@
 		A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0001000100000001 /* DownloadQuality.swift */; };
 		A1D0C0DE0004000400000004 /* PlexAPIClient+Downloads.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */; };
 		A1D0C0DE0006000600000006 /* PlusFeaturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */; };
+		AA10C0DE0000000000000001 /* LocalLosslessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */; };
+		AA10C0DE0000000000000003 /* AudioPlayerService+Lossless.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -420,6 +422,8 @@
 		A1D0C0DE0001000100000001 /* DownloadQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadQuality.swift; sourceTree = "<group>"; };
 		A1D0C0DE0003000300000003 /* PlexAPIClient+Downloads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PlexAPIClient+Downloads.swift"; sourceTree = "<group>"; };
 		A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusFeaturesView.swift; sourceTree = "<group>"; };
+		AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLosslessPlayer.swift; sourceTree = "<group>"; };
+		AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+Lossless.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -696,6 +700,8 @@
 				2B9D3EB55AD77BD137AC2C21 /* AudioPlayerService+Timeline.swift */,
 				BE0157898E7499F0B84BB506 /* AudioPlayerService+TimeTracking.swift */,
 				B0DAB83A17623634E3E4026D /* AudioPlayerService+Queue.swift */,
+				AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */,
+				AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */,
 				0BB218C96947E7B9837FAB14 /* AudioPlayerService+Preload.swift */,
 				665ADB8A4B8054759C2B52F8 /* AudioPlayerService+Persistence.swift */,
 				71E64048727396E142ACC350 /* AudioPlayerService+Observers.swift */,
@@ -976,6 +982,8 @@
 				C0401ED8634AE3D95934165E /* AudioPlayerService+Timeline.swift in Sources */,
 				9D27BEC4EE27F5A36C9B6323 /* AudioPlayerService+TimeTracking.swift in Sources */,
 				11213515B0095AA8B0B82291 /* AudioPlayerService+Queue.swift in Sources */,
+				AA10C0DE0000000000000003 /* AudioPlayerService+Lossless.swift in Sources */,
+				AA10C0DE0000000000000001 /* LocalLosslessPlayer.swift in Sources */,
 				BC955E550876D66E9696A59F /* AudioPlayerService+Preload.swift in Sources */,
 				7A189450B3826662AACDE09A /* AudioPlayerService+Persistence.swift in Sources */,
 				7658717E02450D74E9A603E9 /* AudioPlayerService+Observers.swift in Sources */,

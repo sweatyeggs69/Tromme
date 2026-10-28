@@ -61,6 +61,9 @@ final class AudioPlayerService: Sendable {
     }
 
     var player: AVQueuePlayer?
+    /// Set instead of `player` while a downloaded FLAC/ALAC plays through AVAudioPlayer.
+    var losslessPlayer: LocalLosslessPlayer?
+    var losslessTickTask: Task<Void, Never>?
     var timeObserver: Any?
     var statusObservation: NSKeyValueObservation?
     var timeControlObservation: NSKeyValueObservation?
@@ -376,6 +379,10 @@ final class AudioPlayerService: Sendable {
 
     func togglePlayPause() {
         logPlayback("toggle_play_pause", "isPlaying=\(isPlaying)")
+        if let losslessPlayer {
+            toggleLosslessPlayback(losslessPlayer)
+            return
+        }
         if player == nil {
             logPlayback("toggle_recover", "reason=player_nil")
             recoverAndPlayCurrentTrackIfPossible()
@@ -447,6 +454,10 @@ final class AudioPlayerService: Sendable {
 
     func playCurrent() {
         playbackIntent = true
+        if let losslessPlayer {
+            if !losslessPlayer.isPlaying { toggleLosslessPlayback(losslessPlayer) }
+            return
+        }
         if player == nil || player?.currentItem == nil || player?.currentItem?.status == .failed {
             recoverAndPlayCurrentTrackIfPossible()
             return
@@ -482,6 +493,13 @@ final class AudioPlayerService: Sendable {
     }
 
     func pauseCurrent() {
+        if let losslessPlayer {
+            losslessPlayer.pause()
+            isPlaying = false
+            playbackIntent = false
+            updateNowPlayingInfo()
+            return
+        }
         guard let player else { return }
         player.pause()
         isPlaying = false
@@ -512,6 +530,7 @@ final class AudioPlayerService: Sendable {
     }
 
     var bestKnownPlaybackSeconds: TimeInterval {
+        if let losslessPlayer { return losslessPlayer.currentTime }
         if let playerTime = player?.currentTime().seconds, playerTime.isFinite {
             return streamTimeOffset + playerTime
         }
@@ -634,6 +653,7 @@ final class AudioPlayerService: Sendable {
         }
 
         player?.pause()
+        losslessPlayer?.pause()
         isPlaying = false
         playbackIntent = false
         updateNowPlayingInfo()
@@ -665,6 +685,8 @@ final class AudioPlayerService: Sendable {
             return
         } else {
             player?.pause()
+            losslessPlayer?.pause()
+            losslessPlayer?.currentTime = 0
             isPlaying = false
             playbackIntent = false
             currentTime = 0
@@ -712,6 +734,11 @@ final class AudioPlayerService: Sendable {
 
     func seek(to time: TimeInterval) {
         let boundedTime = max(0, duration > 0 ? min(time, duration) : time)
+
+        if losslessPlayer != nil {
+            seekLossless(to: boundedTime)
+            return
+        }
 
         // Plex's live HLS transcode can't handle in-stream seeks — AVPlayer stalls
         // waiting for segments the transcoder hasn't produced yet. Restart the
@@ -871,6 +898,7 @@ final class AudioPlayerService: Sendable {
         guard let server, let client else { return }
 
         tearDownObservers()
+        stopLosslessPlayback()
         if let outgoing = player, playbackIntent, outgoing.timeControlStatus == .playing {
             // Keep the outgoing player running, muted, until the new item takes over.
             // Pausing it now leaves nothing playing while the stream is set up, and
@@ -892,6 +920,10 @@ final class AudioPlayerService: Sendable {
             localFileCodec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
             currentSessionID = nil
+            if Self.isLosslessLabel(localFileCodec),
+               startLosslessPlayback(url: localURL, resumeAt: boundedResume) {
+                return
+            }
             pendingInitialSeekTime = boundedResume
             startPlayback(url: localURL)
             return

@@ -67,6 +67,7 @@ extension AudioPlayerService {
         player?.pause()
         player?.removeAllItems()
         player = nil
+        stopLosslessPlayback()
         tearDownObservers()
         // Turn off infinite mode before clearing the queue below — otherwise its
         // didSet-driven refill would fire on the now-empty queue mid-reset.
