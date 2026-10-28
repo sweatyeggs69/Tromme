@@ -225,7 +225,9 @@ extension AudioPlayerService {
                         // Local files: 50ms tolerance — imperceptible but avoids
                         // finished=false on VBR files that have no sample at the exact time.
                         // HLS streams need more slack for playlist segment boundaries.
-                        let tolerance = self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600) : CMTime(seconds: 0.25, preferredTimescale: 600)
+                        let tolerance = self.isPlayingLocalLossless ? CMTime.zero
+                            : self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600)
+                            : CMTime(seconds: 0.25, preferredTimescale: 600)
                         self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
                             guard let self else { return }
                             Task { @MainActor [weak self] in

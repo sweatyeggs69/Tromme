@@ -181,6 +181,12 @@ final class AudioPlayerService: Sendable {
     /// True when the current track is playing from a locally downloaded file.
     var isPlayingLocalDownload: Bool { isPlayingLocalFile }
 
+    /// Downloaded FLAC/ALAC. Their headers give exact durations, but AVPlayer only
+    /// lands where it is told when it is asked for an exact seek (no seek table needed).
+    var isPlayingLocalLossless: Bool {
+        isPlayingLocalFile && ["FLAC", "ALAC"].contains(localFileCodec ?? "")
+    }
+
     /// The source file bitrate in kbps, or nil when no track is loaded.
     var activeStreamBitrate: Int? {
         guard hasTrack else { return nil }
@@ -744,7 +750,7 @@ final class AudioPlayerService: Sendable {
         // caused the player to not move while currentTime was already updated,
         // producing visible slider jumps when the time observer fired.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
-        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let tolerance = isPlayingLocalLossless ? CMTime.zero : CMTime(seconds: 0.05, preferredTimescale: 600)
         let seekGeneration = playbackGeneration
         player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
             Task { @MainActor [weak self] in
