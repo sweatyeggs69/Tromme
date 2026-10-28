@@ -48,7 +48,6 @@ struct VolumeSlider: View {
         }
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.5)
-        .defersSystemGestures(on: .bottom)
         .task {
             await observeSystemVolume()
         }
