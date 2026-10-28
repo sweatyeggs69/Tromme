@@ -20,7 +20,7 @@ struct VolumeSlider: View {
                 GeometryReader { geo in
                     SliderTrack(progress: CGFloat(isEnabled ? volume : 0), isDragging: isDragging, width: geo.size.width)
                     .contentShape(Rectangle())
-                    .gesture(
+                    .highPriorityGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { drag in
                                 if !isDragging {
