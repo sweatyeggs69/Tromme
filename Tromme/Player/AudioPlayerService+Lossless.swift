@@ -45,8 +45,15 @@ extension AudioPlayerService {
             isPlaying = false
         }
         startLosslessTicker(generation: generation)
+        // Same session setup beginTrackSession does for AVPlayer items; skipping it
+        // left the saved track and queue position stale after a quit.
         updateNowPlayingInfo()
         prefetchGainMetadata()
+        prefetchUpcomingArtwork()
+        maybeRefillInfiniteQueueIfNeeded(trigger: "start_playback")
+        syncDynamicQueueDownloads()
+        reportTimelineState(isPlaying ? "playing" : "paused")
+        savePlaybackState()
         return true
     }
 
