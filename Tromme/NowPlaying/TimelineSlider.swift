@@ -36,7 +36,7 @@ struct TimelineSlider: View {
                                     .opacity(showsBadge ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.2), value: showsBadge)
                             }
-                            .offset(y: 14)
+                            .offset(y: 12)
                     }
             } else {
                 VStack(spacing: 6) {
@@ -119,7 +119,6 @@ struct TimelineSlider: View {
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.45))
         .monospacedDigit()
-        .frame(height: 18)
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
