@@ -200,9 +200,16 @@ extension AudioPlayerService {
                     // An offset stream's asset duration only covers the remainder
                     // of the track, so keep the metadata duration in that case.
                     // Local files keep Plex metadata duration — downloaded MP3
-                    // transcodes can have corrupt Xing/VBR headers.
-                    if !self.isPlayingLocalFile, self.streamTimeOffset == 0,
+                    // transcodes can have corrupt Xing/VBR headers. Lossless files
+                    // (FLAC/ALAC) carry an exact sample count, so their asset
+                    // duration is authoritative and keeps the timeline in sync.
+                    let trustsAssetDuration = !self.isPlayingLocalFile
+                        || ["FLAC", "ALAC"].contains(self.localFileCodec ?? "")
+                    if trustsAssetDuration, self.streamTimeOffset == 0,
                        assetDuration.isFinite && assetDuration > 0 {
+                        if self.isPlayingLocalFile {
+                            self.logPlayback("local_duration", "plex=\(self.duration) asset=\(assetDuration)")
+                        }
                         self.duration = assetDuration
                     }
                     self.logPlayback("item_ready", "duration=\(self.duration) offset=\(self.streamTimeOffset)")
