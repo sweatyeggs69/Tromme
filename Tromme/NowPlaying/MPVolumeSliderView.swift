@@ -40,8 +40,6 @@ struct MPVolumeSliderView: UIViewRepresentable {
         guard isEnabled, isDragging else { return }
         for subview in uiView.subviews {
             if let slider = subview as? UISlider {
-                // Touch-down flips isDragging without changing volume; skip the redundant system write.
-                guard slider.value != volume else { return }
                 slider.setValue(volume, animated: false)
                 slider.sendActions(for: .valueChanged)
                 return
