@@ -9,7 +9,7 @@ extension AudioPlayerService {
     private nonisolated static let tailWindow: TimeInterval = 30
     private nonisolated static let headWindow: TimeInterval = 25
 
-    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+    var isAutoMixEnabled: Bool { PlusStore.cachedIsPlus && UserDefaults.standard.bool(forKey: Self.autoMixKey) }
 
     // MARK: - Planning
 

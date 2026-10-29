@@ -6,6 +6,8 @@ struct PlaybackSettingsView: View {
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("autoMixEnabled") private var autoMixEnabled = false
+    @State private var plus = PlusStore.shared
+    @State private var showPaywall = false
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
@@ -28,8 +30,19 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("Auto Mix", isOn: $autoMixEnabled)
+                Toggle("Auto Mix", isOn: autoMixBinding)
                     .tint(.green)
+                    .disabled(!plus.isPlus)
+                    .overlay {
+                        // A disabled control swallows taps, so catch them above it to offer the paywall.
+                        if !plus.isPlus {
+                            Color.clear
+                                .contentShape(.rect)
+                                .onTapGesture { showPaywall = true }
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityLabel("Auto Mix, requires Tromme +")
+                        }
+                    }
             } footer: {
                 Text("Blends songs into each other, matching tempo and beats when it can.")
             }
@@ -65,6 +78,14 @@ struct PlaybackSettingsView: View {
             }
         }
         .navigationTitle("Playback")
+        .sheet(isPresented: $showPaywall) { PlusPaywallView() }
+    }
+
+    private var autoMixBinding: Binding<Bool> {
+        Binding(
+            get: { plus.isPlus && autoMixEnabled },
+            set: { autoMixEnabled = $0 }
+        )
     }
 
     private var infiniteModeBinding: Binding<Bool> {
