@@ -16,6 +16,9 @@ struct AutoMixPlan: Sendable {
     /// A plain crossfade from the genre rules rather than a lyric-timed mix; Now Playing
     /// doesn't show the mix effect for it.
     var isPlainCrossfade = false
+    /// Outgoing minus incoming ReplayGain (dB) when Sound Check is off, so the overlap can
+    /// blend their loudness instead of jumping; nil leaves levels alone.
+    var loudnessDifference: Double?
 
     enum FilterStyle: Sendable {
         case none
@@ -31,7 +34,17 @@ struct AutoMixPlan: Sendable {
         return (Float(cos(p * .pi / 2)), Float(sin(p * .pi / 2)))
     }
 
+    /// Volume multipliers that move the louder song toward the quieter one's level across the
+    /// overlap: a louder outgoing song eases down as it fades, a louder incoming song starts
+    /// lower and reaches its own level by the end. Volume can't go above 1, so only cuts.
+    func loudnessFactors(_ progress: Double) -> (outgoing: Float, incoming: Float) {
+        guard let loudnessDifference else { return (1, 1) }
+        let difference = min(max(loudnessDifference, -12), 12)
+        let p = min(max(progress, 0), 1)
+        return (Float(pow(10, min(0, difference) * p / 20)), Float(pow(10, min(0, -difference) * (1 - p) / 20)))
+    }
+
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade)
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference)
     }
 }

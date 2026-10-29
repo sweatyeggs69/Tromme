@@ -152,6 +152,8 @@ final class AudioPlayerService: Sendable {
     var autoMixTriggerTask: Task<Void, Never>?
     var autoMixTask: Task<Void, Never>?
     var autoMixInProgress = false
+    /// The next song whose lyrics Auto Mix already started loading.
+    var autoMixLyricsPrefetchKey: String?
     /// The faded-out tracks' players, kept sounding until the overlap ends.
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?

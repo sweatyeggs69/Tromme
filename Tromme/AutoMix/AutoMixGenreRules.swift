@@ -43,4 +43,14 @@ enum AutoMixGenreRules {
         let itemMoods = (item.mood ?? []).compactMap(\.tag)
         return itemMoods.first { moods.contains($0.lowercased()) }.map { "mood:\($0)" }
     }
+
+    /// Live albums and DJ mixes already flow from track to track (crowd noise, segues), so
+    /// their songs are never mixed, even out of album order.
+    static func isLiveOrMixRelease(_ track: PlexMetadata, client: PlexAPIClient?, server: PlexServer?) async -> Bool {
+        guard let client, let server, let albumKey = track.parentRatingKey,
+              let album = try? await client.cachedMetadata(server: server, ratingKey: albumKey) else { return false }
+        return (album.subformat ?? []).compactMap { $0.tag?.lowercased() }.contains { format in
+            format.contains("live") || format.contains("dj") || (format.contains("mix") && !format.contains("remix") && !format.contains("mixtape"))
+        }
+    }
 }

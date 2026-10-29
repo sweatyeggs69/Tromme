@@ -7,7 +7,6 @@ extension AudioPlayerService {
 
     private static let planningLeadTime: TimeInterval = 150
 
-    /// True while a mix is fading between two tracks.
     /// True while a lyric-timed mix plays (not a plain crossfade), for the timeline effect.
     /// Set before the next song loads.
     var isAutoMixing: Bool { autoMixInProgress }
@@ -19,6 +18,7 @@ extension AudioPlayerService {
     /// Called from the playback tick; reads both songs' lyrics timing shortly before the
     /// end, then waits for the planned start.
     func maybePlanAutoMix() {
+        prefetchAutoMixLyrics()
         guard isAutoMixEnabled, repeatMode == .off,
               autoMixTask == nil, autoMixPlanTask == nil, autoMixTriggerTask == nil,
               duration > 20, duration - currentTime <= Self.planningLeadTime,
@@ -45,26 +45,38 @@ extension AudioPlayerService {
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
         let generation = playbackGeneration
         let client = client, server = server
+        let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
 
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
             async let outgoingRule = AutoMixGenreRules.crossfadeReason(current, client: client, server: server)
             async let incomingRule = AutoMixGenreRules.crossfadeReason(incoming, client: client, server: server)
+            async let outgoingLive = AutoMixGenreRules.isLiveOrMixRelease(current, client: client, server: server)
+            async let incomingLive = AutoMixGenreRules.isLiveOrMixRelease(incoming, client: client, server: server)
+            async let loudness = Self.loudnessDifference(current, incoming, soundCheckOn: soundCheckOn, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             let (outgoingReason, incomingReason) = await (outgoingRule, incomingRule)
+            let isLiveOrMix = await outgoingLive || incomingLive
+            let loudnessDifference = await loudness
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
+            if isLiveOrMix {
+                self.logPlayback("automix_skipped", "reason=live_or_mix_album")
+                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                return
+            }
             // Songs matched by the genre rules (or with no tags) get a plain crossfade.
             if outgoingReason != nil || incomingReason != nil {
-                let plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
+                var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
+                plan.loudnessDifference = loudnessDifference
                 self.logPlayback("automix_planned", "crossfade=true reason=\(outgoingReason ?? "-")/\(incomingReason ?? "-") start=\(plan.startTime)")
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
                 return
             }
-            guard let plan = AutoMixPlanner.plan(
+            guard var plan = AutoMixPlanner.plan(
                 outgoingKey: current.ratingKey,
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
@@ -77,10 +89,35 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
+            plan.loudnessDifference = loudnessDifference
             self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
+    }
+
+    /// Loads the next song's lyrics as soon as it is up next, so the plan never waits on them.
+    private func prefetchAutoMixLyrics() {
+        guard isAutoMixEnabled, let next = nextAutoAdvanceTarget()?.track,
+              autoMixLyricsPrefetchKey != next.ratingKey else { return }
+        autoMixLyricsPrefetchKey = next.ratingKey
+        Task(priority: .utility) { _ = await LyricsService.vocalSpan(for: next) }
+    }
+
+    /// Outgoing minus incoming track gain (dB), only when Sound Check is off (it already
+    /// evens out levels when on). Nil when either song has no ReplayGain data.
+    private nonisolated static func loudnessDifference(_ outgoing: PlexMetadata, _ incoming: PlexMetadata, soundCheckOn: Bool,
+                                                       client: PlexAPIClient?, server: PlexServer?) async -> Double? {
+        guard !soundCheckOn, let client, let server else { return nil }
+        func gain(_ track: PlexMetadata) async -> Double? {
+            let detailed = try? await client.cachedMetadata(server: server, ratingKey: track.ratingKey)
+            let stream = (detailed ?? track).media?.first?.part?.first?.stream?.first { $0.streamType == 2 }
+            return stream?.gain ?? stream?.albumGain
+        }
+        async let outgoingGain = gain(outgoing)
+        async let incomingGain = gain(incoming)
+        guard let o = await outgoingGain, let i = await incomingGain else { return nil }
+        return o - i
     }
 
     /// End of the audible content for the track that is playing: its duration or stop marker.
@@ -193,38 +230,47 @@ extension AudioPlayerService {
     }
 
     private func runAutoMixFade(_ original: AutoMixPlan, generation: Int, outgoingEnd: TimeInterval) {
-        let beganAt = Date()
         autoMixTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var plan = original
+            var beganAt = Date()
 
             // Hold the outgoing song at full volume until the new one is audible, so a slow
             // start never leaves a gap. The overlap shrinks to what is left.
             while !Task.isCancelled {
-                guard self.playbackGeneration == generation, self.playbackIntent else {
+                guard self.playbackGeneration == generation else {
                     self.finishAutoMix()
                     return
+                }
+                if !self.playbackIntent {
+                    beganAt += await self.holdMixWhilePaused(generation: generation)
+                    continue
                 }
                 if self.isIncomingPlaying
                     || Date().timeIntervalSince(beganAt) > 8
                     || self.outgoingRemaining(until: outgoingEnd) < 0.4 { break }
                 try? await Task.sleep(for: .milliseconds(30))
             }
-            let startedAt = Date()
+            var startedAt = Date()
             let remaining = self.outgoingRemaining(until: outgoingEnd)
             if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
 
             while !Task.isCancelled {
-                guard self.playbackGeneration == generation, self.playbackIntent else {
+                guard self.playbackGeneration == generation else {
                     self.finishAutoMix()
                     return
+                }
+                if !self.playbackIntent {
+                    startedAt += await self.holdMixWhilePaused(generation: generation)
+                    continue
                 }
                 let progress = min(1, Date().timeIntervalSince(startedAt) / plan.overlap)
 
                 let gains = AutoMixPlan.gains(progress)
-                self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing
-                self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing
-                self.mixIncomingGain = gains.incoming
+                let loudness = plan.loudnessFactors(progress)
+                self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
+                self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
+                self.mixIncomingGain = gains.incoming * loudness.incoming
                 self.applyIncomingVolume()
 
                 self.applyMixFilters(plan.filter, progress: Float(progress))
@@ -236,6 +282,22 @@ extension AudioPlayerService {
                 try? await Task.sleep(for: .milliseconds(40))
             }
         }
+    }
+
+    /// Pausing during a mix pauses the outgoing song too and resumes it with the new one, so
+    /// the blend picks up where it stopped. Returns how long the mix was paused.
+    private func holdMixWhilePaused(generation: Int) async -> TimeInterval {
+        let pausedAt = Date()
+        mixOutgoingPlayer?.pause()
+        mixOutgoingLossless?.pause()
+        while !Task.isCancelled, playbackGeneration == generation, !playbackIntent {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        if !Task.isCancelled, playbackGeneration == generation {
+            mixOutgoingPlayer?.play()
+            mixOutgoingLossless?.play()
+        }
+        return Date().timeIntervalSince(pausedAt)
     }
 
     private var isIncomingPlaying: Bool {
