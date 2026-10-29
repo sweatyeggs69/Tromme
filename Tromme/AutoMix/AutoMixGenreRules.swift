@@ -11,8 +11,7 @@ enum AutoMixGenreRules {
         "screamo", "djent", "thrash", "sludge", "doom", "industrial",
     ]
     private static let moods: Set<String> = [
-        "angry", "brash", "hostile", "menacing", "visceral", "harsh", "volatile",
-        "confrontational", "raucous", "fiery",
+        "angry", "hostile", "menacing", "visceral", "harsh", "volatile", "confrontational",
     ]
 
     /// Why the song should crossfade ("genre:Metalcore", "mood:Brash", "untagged"), or nil to
