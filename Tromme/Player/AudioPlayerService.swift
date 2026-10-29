@@ -245,7 +245,7 @@ final class AudioPlayerService: Sendable {
             .first(where: { $0.streamType == 2 })
         let raw = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
         switch raw {
-        case "flac": return losslessPlayer != nil ? "FLAC" : "ALAC"  // HLS fallback transcodes FLAC to ALAC
+        case "flac": return "ALAC"  // FLAC is losslessly transcoded to ALAC via HLS
         case .some(let c): return c.uppercased()
         case nil: return nil
         }
@@ -994,35 +994,6 @@ final class AudioPlayerService: Sendable {
             pendingInitialSeekTime = boundedResume
             logPlayback("load_direct_stream", "codec=\(sourceCodec ?? "?")")
             startPlayback(url: directURL)
-            return
-        }
-        // FLAC: fetch the original file and play it with AVAudioPlayer (exact seeking).
-        // Cellular-constrained playback and any failure fall back to the ALAC HLS path.
-        if !forceHLS, !shouldConstrainForNetwork, sourceCodec == "flac",
-           let partKey = track.media?.first?.part?.first?.key,
-           let directURL = client.directStreamURL(server: server, partKey: partKey) {
-            discardPreloadedNext()
-            isDirectStreamAttempt = true
-            isConstrainedPlaybackPath = false
-            currentSessionID = nil
-            logPlayback("load_flac_direct")
-            let generation = playbackGeneration
-            let nextKey = nextAutoAdvanceTarget()?.track.ratingKey
-            playbackLoadTask?.cancel()
-            playbackLoadTask = Task {
-                do {
-                    let file = try await StreamedLosslessCache.shared.file(
-                        for: track.ratingKey, from: directURL, keeping: nextKey.map { [$0] } ?? [])
-                    guard !Task.isCancelled, self.playbackGeneration == generation else { return }
-                    if !self.startLosslessPlayback(url: file, resumeAt: boundedResume) {
-                        self.handlePlaybackFailure("flac_open_failed")
-                    }
-                } catch {
-                    guard !Task.isCancelled, self.playbackGeneration == generation else { return }
-                    self.logPlayback("flac_fetch_failed", "error=\(error.localizedDescription)")
-                    self.handlePlaybackFailure("flac_fetch_failed")
-                }
-            }
             return
         }
         isDirectStreamAttempt = false
