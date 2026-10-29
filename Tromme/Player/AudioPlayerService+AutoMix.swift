@@ -130,24 +130,18 @@ extension AudioPlayerService {
         guard repeatMode == .off, playbackIntent, let target = nextAutoAdvanceTarget(),
               target.track.ratingKey == original.incomingKey else {
             logPlayback("automix_skipped", "reason=queue_changed")
+            abandonAutoMix()
             return
         }
-
-        // Past the planned start (a seek, or lyrics that arrived late): mix from now.
-        var plan = original
-        if lateness > 1.5 {
-            // The planned window may be gone (a shortened outro planned late), but the song
-            // itself usually still has room for a quick mix.
-            let now = bestKnownPlaybackSeconds
-            let songLeft = (currentTrack.map { autoMixEnd(for: $0) } ?? duration) - now
-            guard songLeft > 1.5 else {
-                logPlayback("automix_skipped", "reason=too_late song_left=\(songLeft)")
-                return
-            }
-            let plannedLeft = original.startTime + original.overlap - now
-            let overlap = min(max(plannedLeft, min(original.overlap, 6)), songLeft - 0.3)
-            plan = original.starting(at: now, overlap: overlap)
+        // Past the planned start, almost always because the user seeked into or past the mix:
+        // they chose where to listen, so the song ends normally instead.
+        guard lateness <= 1.5 else {
+            logPlayback("automix_skipped", "reason=past_start late=\(lateness)")
+            abandonAutoMix()
+            autoMixPlan = AutoMixPlan(outgoingKey: original.outgoingKey, incomingKey: original.incomingKey, startTime: .infinity, overlap: 0)
+            return
         }
+        var plan = original
 
         // Hand the playing output over: the new track loads through the normal path while
         // these keep sounding until the fade completes.

@@ -31,8 +31,4 @@ struct AutoMixPlan: Sendable {
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
         AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter)
     }
-
-    func starting(at time: TimeInterval, overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: time, overlap: overlap, introStart: introStart, filter: filter)
-    }
 }
