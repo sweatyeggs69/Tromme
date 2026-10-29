@@ -80,8 +80,10 @@ struct LoopingVideoView: UIViewRepresentable {
 
         private func disableAudio(of item: AVPlayerItem) {
             tracksObservation = item.observe(\.tracks, options: [.initial, .new]) { item, _ in
-                for track in item.tracks where track.assetTrack?.mediaType == .audio {
-                    track.isEnabled = false
+                Task { @MainActor in
+                    for track in item.tracks where track.assetTrack?.mediaType == .audio {
+                        track.isEnabled = false
+                    }
                 }
             }
         }
