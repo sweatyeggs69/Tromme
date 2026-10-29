@@ -97,7 +97,9 @@ final class LyricsService {
 
     /// When the vocals start and end, from synced lyrics (cached, or resolved once without retries).
     /// Auto Mix uses it to tell an instrumental intro or outro from sung parts.
-    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval)? {
+    /// `lastLineMostlySung` is 75% of the way through the last line (before any repeated
+    /// outro), the earliest point a mix may begin.
+    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineMostlySung: TimeInterval)? {
         let artist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
@@ -118,12 +120,20 @@ final class LyricsService {
         // The closing music note row marks exactly where the last line ends.
         // A song that ends on one line (or a pair) sung over and over treats the repeats after
         // the second as its outro.
-        if let outroStart = repeatedOutroStart(sung) { return (first.time, outroStart) }
+        func mostlySung(_ start: TimeInterval, _ end: TimeInterval) -> TimeInterval {
+            start + max(0, end - start) * 0.75
+        }
+        if let outroStart = repeatedOutroStart(sung) {
+            let line = sung.last { $0.time < outroStart } ?? first
+            return (first.time, outroStart, mostlySung(line.time, line.lastWordEnd ?? outroStart))
+        }
         // Line-synced lyrics only estimate how long the last line is sung, and held notes and
         // echoes run past the final word, so leave a margin before calling the vocals done.
         let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
-        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time + margin) }
-        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin)
+        let lastLineEnd = last.lastWordEnd ?? parsed.last.flatMap { $0.isBreak ? $0.time : nil } ?? last.time + 4
+        let floor = mostlySung(last.time, lastLineEnd)
+        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time + margin, floor) }
+        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, floor)
     }
 
     /// Start of the third repetition when the lyrics end with the same one or two lines

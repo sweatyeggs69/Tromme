@@ -32,6 +32,7 @@ enum AutoMixPlanner {
         outgoingOutroStart: TimeInterval?,
         incoming: AutoMixWindowAnalysis?,
         outgoingVocalEnd: TimeInterval?,
+        outgoingLastLyricMostlySung: TimeInterval?,
         incomingVocalStart: TimeInterval?,
         isContinuousAlbum: Bool
     ) -> AutoMixPlan? {
@@ -100,9 +101,12 @@ enum AutoMixPlanner {
         if let outgoingVocalEnd {
             startTime = max(startTime, min(outgoingVocalEnd, audibleEnd - minimumVocalTail))
         }
-        overlap = audibleEnd - startTime
+        // The last lyric is always at least 75% sung before anything changes, even when that
+        // leaves only a very short mix at the end of the song.
+        if let floor = outgoingLastLyricMostlySung { startTime = max(startTime, floor) }
+        overlap = max(audibleEnd - startTime, 1.5)
         // Where the outgoing song has faded out completely.
-        var mixEnd = audibleEnd
+        var mixEnd = startTime + overlap
 
         // The mix finishes before the incoming song's first lyric. A mix squeezed by that keeps
         // its start and simply ends sooner, cutting the outgoing tail, rather than being pushed

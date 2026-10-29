@@ -68,6 +68,7 @@ extension AudioPlayerService {
                 outgoingOutroStart: outgoing?.outroStart,
                 incoming: incomingAnalysis,
                 outgoingVocalEnd: outgoingSpan?.end,
+                outgoingLastLyricMostlySung: outgoingSpan?.lastLineMostlySung,
                 incomingVocalStart: incomingSpan?.start,
                 isContinuousAlbum: isContinuousAlbum
             ) else {
