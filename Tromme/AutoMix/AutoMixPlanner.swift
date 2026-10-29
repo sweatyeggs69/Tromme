@@ -6,6 +6,8 @@ enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 12
     private static let minimumOverlap: TimeInterval = 2.5
+    /// The next song's first lyric within this many seconds of its start means a plain crossfade.
+    private static let basicCrossfadeIntro: TimeInterval = 4
     private static let minimumVocalTail: TimeInterval = 3
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
@@ -104,7 +106,10 @@ enum AutoMixPlanner {
         // to the very end of the song.
         var vocalLimit: TimeInterval?
         var squeezed = false
-        if let incomingVocalStart {
+        // Singing starts almost immediately: no room for a clean mix, so do a plain crossfade
+        // with no filter or tempo change instead of squeezing one in.
+        let basicCrossfade = incomingVocalStart.map { $0 - firstAudible < basicCrossfadeIntro } ?? false
+        if let incomingVocalStart, !basicCrossfade {
             let limit = max(incomingVocalStart - firstAudible - 1, 1.5)
             vocalLimit = limit
             if overlap > limit {
@@ -125,7 +130,7 @@ enum AutoMixPlanner {
         }
 
         var tempo: AutoMixPlan.Tempo?
-        if let outgoingGrid = outgoing?.edgeBeat, let incomingGrid = incoming?.edgeBeat,
+        if !basicCrossfade, let outgoingGrid = outgoing?.edgeBeat, let incomingGrid = incoming?.edgeBeat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
             // Snap forward so vocal gaps chosen above are kept.
             let snapped = outgoingGrid.beat(atOrAfter: startTime)
@@ -147,8 +152,8 @@ enum AutoMixPlanner {
             introStart: introStart,
             tempo: tempo,
             incomingFadesIn: incomingFadesIn,
-            filter: filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd),
-            curve: AutoMixPlan.Curve.allCases.randomElement() ?? .equalPower
+            filter: basicCrossfade ? .none : filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd),
+            curve: basicCrossfade ? .equalPower : (AutoMixPlan.Curve.allCases.randomElement() ?? .equalPower)
         )
     }
 
