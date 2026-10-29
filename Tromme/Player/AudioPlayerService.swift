@@ -155,6 +155,8 @@ final class AudioPlayerService: Sendable {
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?
     var mixOutgoingVolume: Float = 1
+    /// Stream offset of the outgoing item, to turn its player time into track time.
+    var mixOutgoingOffset: TimeInterval = 0
     /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
     var mixIncomingGain: Float = 1
     /// Set each time a mix begins; Now Playing animates on it.
@@ -269,6 +271,7 @@ final class AudioPlayerService: Sendable {
     }
 
     init() {
+        AutoMixSourceCache.prune(keeping: [])
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()

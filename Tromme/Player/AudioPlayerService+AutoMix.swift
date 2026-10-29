@@ -5,7 +5,7 @@ import AVFoundation
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
 
-    private nonisolated static let analysisLeadTime: TimeInterval = 75
+    private nonisolated static let analysisLeadTime: TimeInterval = 110
     private nonisolated static let tailWindow: TimeInterval = 30
     private nonisolated static let headWindow: TimeInterval = 25
 
@@ -38,13 +38,14 @@ extension AudioPlayerService {
             return
         }
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
-        let outgoingURL = autoMixAnalysisURL(for: current)
-        let incomingURL = autoMixAnalysisURL(for: incoming)
+        let outgoingSource = autoMixAnalysisSource(for: current)
+        let incomingSource = autoMixAnalysisSource(for: incoming)
         let generation = playbackGeneration
+        AutoMixSourceCache.prune(keeping: [current.ratingKey, incoming.ratingKey])
 
         autoMixPlanTask = Task { [weak self] in
-            async let tail = Self.analyzeTail(url: outgoingURL, end: end)
-            async let head = Self.analyzeHead(url: incomingURL, from: incomingBaseStart)
+            async let tail = Self.analyzeTail(source: outgoingSource, end: end)
+            async let head = Self.analyzeHead(source: incomingSource, from: incomingBaseStart)
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
             let (outgoing, incomingAnalysis) = await (tail, head)
@@ -78,34 +79,54 @@ extension AudioPlayerService {
         return min(duration, stop ?? duration)
     }
 
-    /// A file AVAssetReader can decode: the download, or the direct stream for non-FLAC
-    /// sources off cellular. Transcoded HLS sessions can't be read this way.
-    private func autoMixAnalysisURL(for track: PlexMetadata) -> URL? {
-        if let local = AppContext.shared.downloadManager.localURL(for: track.ratingKey) { return local }
-        guard !isCellular, sourceAudioCodec(for: track) != "flac",
-              let server, let client,
-              let partKey = track.media?.first?.part?.first?.key else { return nil }
-        return client.directStreamURL(server: server, partKey: partKey)
+    /// Where a track's audio can be read from: the download, or a temporary copy of the
+    /// original file off cellular (the HLS transcode itself can't be read this way).
+    struct AnalysisSource: Sendable {
+        let url: URL
+        let isTemporary: Bool
+        let key: String
+        let fileExtension: String
     }
 
-    private nonisolated static func analyzeTail(url: URL?, end: TimeInterval) async -> AutoMixWindowAnalysis? {
-        guard let url else { return nil }
+    private func autoMixAnalysisSource(for track: PlexMetadata) -> AnalysisSource? {
+        if let local = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
+            return AnalysisSource(url: local, isTemporary: false, key: track.ratingKey, fileExtension: local.pathExtension)
+        }
+        guard !isCellular, let server, let client,
+              let partKey = track.media?.first?.part?.first?.key,
+              let url = client.directStreamURL(server: server, partKey: partKey) else { return nil }
+        let container = (track.media?.first?.container ?? "mp3").lowercased()
+        return AnalysisSource(url: url, isTemporary: true, key: track.ratingKey, fileExtension: container)
+    }
+
+    private nonisolated static func readableURL(_ source: AnalysisSource?) async -> URL? {
+        guard let source else { return nil }
+        guard source.isTemporary else { return source.url }
+        return await AutoMixSourceCache.localCopy(of: source.url, key: source.key, fileExtension: source.fileExtension)
+    }
+
+    private nonisolated static func analyzeTail(source: AnalysisSource?, end: TimeInterval) async -> AutoMixWindowAnalysis? {
+        guard let url = await readableURL(source) else { return nil }
         let start = max(0, end - tailWindow)
         return await AutoMixAnalyzer.analyze(url: url, from: start, length: tailWindow + 2, edge: .end)
     }
 
-    private nonisolated static func analyzeHead(url: URL?, from start: TimeInterval) async -> AutoMixWindowAnalysis? {
-        guard let url else { return nil }
+    private nonisolated static func analyzeHead(source: AnalysisSource?, from start: TimeInterval) async -> AutoMixWindowAnalysis? {
+        guard let url = await readableURL(source) else { return nil }
         return await AutoMixAnalyzer.analyze(url: url, from: start, length: headWindow, edge: .start)
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
+        // A streamed song takes a moment to start, so begin loading it a little early.
+        // Beat-matched mixes keep the exact planned moment.
+        let isLocal = AppContext.shared.downloadManager.localURL(for: plan.incomingKey) != nil
+        let lead: TimeInterval = plan.tempo == nil && !isLocal ? 1.5 : 0.02
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
                 let wait = plan.startTime - self.bestKnownPlaybackSeconds
-                if self.isPlaying, !self.isSeeking, wait <= 0.02 {
-                    self.beginAutoMix(plan, lateBy: -wait)
+                if self.isPlaying, !self.isSeeking, wait <= lead {
+                    self.beginAutoMix(plan, lateBy: max(0, -wait))
                     return
                 }
                 let nap = self.isPlaying ? min(max(wait, 0.02), 0.25) : 0.25
@@ -154,6 +175,7 @@ extension AudioPlayerService {
         mixOutgoingPlayer = player
         mixOutgoingLossless = losslessPlayer
         mixOutgoingVolume = player?.volume ?? losslessPlayer?.volume ?? 1
+        mixOutgoingOffset = streamTimeOffset
         player = nil
         losslessPlayer = nil
         losslessTickTask?.cancel()
@@ -165,15 +187,36 @@ extension AudioPlayerService {
         loadAndPlay(target.track, resumeAt: plan.introStart)
         autoMixPlan = plan
         autoMixTransition = AutoMixTransition(duration: plan.overlap, isBeatMatched: plan.isBeatMatched)
-        runAutoMixFade(plan, generation: playbackGeneration)
+        runAutoMixFade(plan, generation: playbackGeneration, outgoingEnd: plan.startTime + plan.overlap)
     }
 
-    private func runAutoMixFade(_ plan: AutoMixPlan, generation: Int) {
-        let startedAt = Date()
+    private func runAutoMixFade(_ original: AutoMixPlan, generation: Int, outgoingEnd: TimeInterval) {
+        let beganAt = Date()
         autoMixTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var plan = original
+            var startedAt = beganAt
+
+            // Without beat matching, hold the outgoing song at full volume until the new one is
+            // audible, so a slow start never leaves a gap. The overlap shrinks to what is left.
+            if plan.tempo == nil {
+                while !Task.isCancelled {
+                    guard self.playbackGeneration == generation, self.playbackIntent else {
+                        self.finishAutoMix()
+                        return
+                    }
+                    if self.isIncomingPlaying
+                        || Date().timeIntervalSince(beganAt) > 8
+                        || self.outgoingRemaining(until: outgoingEnd) < 0.4 { break }
+                    try? await Task.sleep(for: .milliseconds(30))
+                }
+                startedAt = Date()
+                let remaining = self.outgoingRemaining(until: outgoingEnd)
+                if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
+            }
+
             var aligned = plan.tempo == nil
             while !Task.isCancelled {
-                guard let self else { return }
                 guard self.playbackGeneration == generation, self.playbackIntent else {
                     self.finishAutoMix()
                     return
@@ -213,6 +256,27 @@ extension AudioPlayerService {
                 try? await Task.sleep(for: .milliseconds(40))
             }
         }
+    }
+
+    private var isIncomingPlaying: Bool {
+        if let losslessPlayer { return losslessPlayer.isPlaying }
+        guard let player else { return false }
+        return player.timeControlStatus == .playing && pendingInitialSeekTime == nil && isReadyToPlay
+    }
+
+    /// Seconds of the outgoing song left before `end` (track time).
+    private func outgoingRemaining(until end: TimeInterval) -> TimeInterval {
+        let time: TimeInterval
+        if let outgoing = mixOutgoingPlayer {
+            let seconds = outgoing.currentTime().seconds
+            guard seconds.isFinite else { return .infinity }
+            time = mixOutgoingOffset + seconds
+        } else if let lossless = mixOutgoingLossless {
+            time = lossless.currentTime
+        } else {
+            return .infinity
+        }
+        return max(0, end - time)
     }
 
     /// A streamed track starts a little after the planned moment; jump it forward by the
