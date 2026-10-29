@@ -19,7 +19,7 @@ enum AutoMixPlanner {
     /// The mix completes this long before the incoming song's first lyric.
     private static let lyricLead: TimeInterval = 1
     /// Mixes this long or longer get a low-pass sweep; shorter ones are a plain crossfade.
-    private static let filteredOverlap: TimeInterval = 6
+    private static let filteredOverlap: TimeInterval = 3
     /// Mixes shorter than this sound like a glitch, so the songs change normally instead.
     private static let shortestMix: TimeInterval = 3
     /// Length of the plain crossfade used for songs matched by `AutoMixGenreRules`.
