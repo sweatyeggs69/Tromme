@@ -112,8 +112,11 @@ final class LyricsService {
             return nil
         }
         guard let synced = lyrics.syncedLyrics else { return nil }
-        let sung = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 }).filter { !$0.isBreak }
+        let parsed = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 })
+        let sung = parsed.filter { !$0.isBreak }
         guard let first = sung.first, let last = sung.last else { return nil }
+        // The closing music note row marks exactly where the last line ends.
+        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time) }
         return (first.time, last.lastWordEnd ?? last.time + 4)
     }
 
