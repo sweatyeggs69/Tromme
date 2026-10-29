@@ -116,11 +116,35 @@ final class LyricsService {
         let sung = parsed.filter { !$0.isBreak }
         guard let first = sung.first, let last = sung.last else { return nil }
         // The closing music note row marks exactly where the last line ends.
+        // A song that ends on one line (or a pair) sung over and over treats the repeats after
+        // the second as its outro.
+        if let outroStart = repeatedOutroStart(sung) { return (first.time, outroStart) }
         // Line-synced lyrics only estimate how long the last line is sung, and held notes and
         // echoes run past the final word, so leave a margin before calling the vocals done.
         let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
         if let closing = parsed.last, closing.isBreak { return (first.time, closing.time + margin) }
         return (first.time, (last.lastWordEnd ?? last.time + 4) + margin)
+    }
+
+    /// Start of the third repetition when the lyrics end with the same one or two lines
+    /// repeated at least three times.
+    private nonisolated static func repeatedOutroStart(_ lines: [LyricsLine]) -> TimeInterval? {
+        func key(_ line: LyricsLine) -> String {
+            line.text.lowercased().filter { $0.isLetter || $0.isNumber }
+        }
+        let keys = lines.map(key)
+        for period in 1...2 where keys.count >= period * 3 {
+            let block = Array(keys.suffix(period))
+            guard !block.contains(where: \.isEmpty) else { continue }
+            var start = keys.count - period
+            var repeats = 1
+            while start - period >= 0, Array(keys[(start - period)..<start]) == block {
+                start -= period
+                repeats += 1
+            }
+            if repeats >= 3 { return lines[start + period * 2].time }
+        }
+        return nil
     }
 
     /// An empty result right at track start is often a slow or not-yet-ready connection, not a
