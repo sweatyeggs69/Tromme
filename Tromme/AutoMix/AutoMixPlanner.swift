@@ -20,6 +20,8 @@ enum AutoMixPlanner {
     private static let lyricLead: TimeInterval = 1
     /// Mixes this long or longer get a low-pass sweep; shorter ones are a plain crossfade.
     private static let filteredOverlap: TimeInterval = 3
+    /// Shortest fade-in for a song whose lyrics start almost straight away.
+    private static let quickestFadeIn: TimeInterval = 0.5
     /// Mixes shorter than this sound like a glitch, so the songs change normally instead.
     private static let shortestMix: TimeInterval = 3
     /// Default length of the plain crossfade (free tier and songs matched by `AutoMixGenreRules`).
@@ -67,15 +69,17 @@ enum AutoMixPlanner {
             overlap = max(mixEnd - startTime, minimumOverlap)
         }
 
-        // Incoming side: the mix completes about a second before the first lyric. A long intro
-        // is joined part-way through so it lines up; a short one shortens the mix instead.
+        // Incoming side: the new song is at full volume about a second before its first lyric.
+        // A long intro is joined part-way through so the mix ends there; with a short one the
+        // new song comes up quickly and the outgoing outro tails off underneath it.
         var introStart: TimeInterval?
+        var incomingFade: TimeInterval?
         if let vocalStart = incomingVocalStart {
             let room = vocalStart - lyricLead - incomingBaseStart
             if room > overlap + 0.5 {
                 introStart = vocalStart - lyricLead - overlap
-            } else {
-                overlap = max(min(overlap, room), minimumOverlap)
+            } else if room < overlap {
+                incomingFade = max(room, quickestFadeIn)
             }
         }
 
@@ -87,7 +91,8 @@ enum AutoMixPlanner {
             startTime: startTime,
             overlap: overlap,
             introStart: introStart,
-            filter: overlap >= filteredOverlap ? .mellow : .none
+            filter: overlap >= filteredOverlap ? .mellow : .none,
+            incomingFade: incomingFade
         )
     }
 

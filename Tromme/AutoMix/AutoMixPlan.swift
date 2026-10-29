@@ -19,6 +19,9 @@ struct AutoMixPlan: Sendable {
     /// Outgoing minus incoming ReplayGain (dB) when Sound Check is off, so the overlap can
     /// blend their loudness instead of jumping; nil leaves levels alone.
     var loudnessDifference: Double?
+    /// When the incoming song's lyrics come in before the overlap ends, it reaches full volume
+    /// after this many seconds instead, and the outgoing outro tails off underneath it.
+    var incomingFade: TimeInterval?
 
     enum FilterStyle: Sendable {
         case none
@@ -28,23 +31,38 @@ struct AutoMixPlan: Sendable {
         case mellow
     }
 
-    /// Equal-power volumes of the outgoing and incoming song `progress` (0...1) into the mix.
-    static func gains(_ progress: Double) -> (outgoing: Float, incoming: Float) {
-        let p = min(max(progress, 0), 1)
-        return (Float(cos(p * .pi / 2)), Float(sin(p * .pi / 2)))
+    /// How far each song is through its fade (0...1) `elapsed` seconds into the mix.
+    func progress(at elapsed: TimeInterval) -> (outgoing: Double, incoming: Double) {
+        let outgoing = min(max(elapsed / overlap, 0), 1)
+        guard let incomingFade, incomingFade < overlap else { return (outgoing, outgoing) }
+        return (outgoing, min(max(elapsed / incomingFade, 0), 1))
+    }
+
+    /// Equal-power volumes for the given progress. With a short `incomingFade`, the outgoing
+    /// song drops to half volume while the incoming one comes up, then tails out under it.
+    func gains(_ progress: (outgoing: Double, incoming: Double)) -> (outgoing: Float, incoming: Float) {
+        let incoming = Float(sin(progress.incoming * .pi / 2))
+        guard let incomingFade, incomingFade < overlap else {
+            return (Float(cos(progress.outgoing * .pi / 2)), incoming)
+        }
+        let split = incomingFade / overlap
+        let outgoing = progress.outgoing < split
+            ? cos(progress.outgoing / split * .pi / 3)
+            : 0.5 * cos((progress.outgoing - split) / (1 - split) * .pi / 2)
+        return (Float(outgoing), incoming)
     }
 
     /// Volume multipliers that move the louder song toward the quieter one's level across the
     /// overlap: a louder outgoing song eases down as it fades, a louder incoming song starts
     /// lower and reaches its own level by the end. Volume can't go above 1, so only cuts.
-    func loudnessFactors(_ progress: Double) -> (outgoing: Float, incoming: Float) {
+    func loudnessFactors(_ progress: (outgoing: Double, incoming: Double)) -> (outgoing: Float, incoming: Float) {
         guard let loudnessDifference else { return (1, 1) }
         let difference = min(max(loudnessDifference, -12), 12)
-        let p = min(max(progress, 0), 1)
-        return (Float(pow(10, min(0, difference) * p / 20)), Float(pow(10, min(0, -difference) * (1 - p) / 20)))
+        return (Float(pow(10, min(0, difference) * progress.outgoing / 20)),
+                Float(pow(10, min(0, -difference) * (1 - progress.incoming) / 20)))
     }
 
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference)
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade.map { min($0, overlap) })
     }
 }

@@ -280,18 +280,18 @@ extension AudioPlayerService {
                     startedAt += await self.holdMixWhilePaused(generation: generation)
                     continue
                 }
-                let progress = min(1, Date().timeIntervalSince(startedAt) / plan.overlap)
+                let progress = plan.progress(at: Date().timeIntervalSince(startedAt))
 
-                let gains = AutoMixPlan.gains(progress)
+                let gains = plan.gains(progress)
                 let loudness = plan.loudnessFactors(progress)
                 self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
                 self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
                 self.mixIncomingGain = gains.incoming * loudness.incoming
                 self.applyIncomingVolume()
 
-                self.applyMixFilters(plan.filter, progress: Float(progress))
+                self.applyMixFilters(plan.filter, outgoing: Float(progress.outgoing), incoming: Float(progress.incoming))
 
-                if progress >= 1 {
+                if progress.outgoing >= 1 {
                     self.finishAutoMix()
                     return
                 }
@@ -421,21 +421,21 @@ extension AudioPlayerService {
         player?.currentItem.flatMap { mixTaps.object(forKey: $0) }
     }
 
-    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, progress: Float) {
+    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, outgoing outgoingProgress: Float, incoming incomingProgress: Float) {
         guard style != .none else { return }
-        func sweep(_ from: Float, _ to: Float) -> Float { from * pow(to / from, progress) }
+        func sweep(_ from: Float, _ to: Float, _ progress: Float) -> Float { from * pow(to / from, progress) }
         let outgoing = mixTap(for: mixOutgoingPlayer)
         let incoming = mixTap(for: player)
-        let incomingDone = progress >= 0.97
+        let incomingDone = incomingProgress >= 0.97
         switch style {
         case .none:
             break
         case .energetic:
-            outgoing?.set(.highPass, cutoff: sweep(40, 900))
-            incoming?.set(incomingDone ? .off : .lowPass, cutoff: sweep(500, 18_000))
+            outgoing?.set(.highPass, cutoff: sweep(40, 900, outgoingProgress))
+            incoming?.set(incomingDone ? .off : .lowPass, cutoff: sweep(500, 18_000, incomingProgress))
         case .mellow:
-            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500))
-            incoming?.set(incomingDone ? .off : .highPass, cutoff: sweep(900, 30))
+            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500, outgoingProgress))
+            incoming?.set(incomingDone ? .off : .highPass, cutoff: sweep(900, 30, incomingProgress))
         }
     }
 }
