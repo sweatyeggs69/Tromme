@@ -69,6 +69,13 @@ struct AutoMixPlan: Sendable {
         )
     }
 
+    func withoutTempo() -> AutoMixPlan {
+        AutoMixPlan(
+            outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap,
+            introStart: introStart, tempo: nil, incomingFadesIn: incomingFadesIn, filter: filter, curve: curve
+        )
+    }
+
     var isBeatMatched: Bool { tempo != nil }
 
     /// Incoming track media seconds played after `elapsed` seconds of overlap.

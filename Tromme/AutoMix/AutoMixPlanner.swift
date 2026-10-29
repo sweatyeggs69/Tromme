@@ -6,7 +6,7 @@ enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 12
     private static let minimumOverlap: TimeInterval = 2.5
-    private static let minimumVocalTail: TimeInterval = 1.2
+    private static let minimumVocalTail: TimeInterval = 3
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
     /// An outro longer than this after the last lyric is shortened: it plays for

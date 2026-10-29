@@ -157,6 +157,8 @@ final class AudioPlayerService: Sendable {
     var mixOutgoingVolume: Float = 1
     /// The next song's already-loaded asset (an item can't move between players, its asset can).
     var mixReusableAsset: AVAsset?
+    /// The next song, already loaded and silent, ready to start with the mix.
+    var mixPrepared: PreparedMixIncoming?
     /// Stream offset of the outgoing item, to turn its player time into track time.
     var mixOutgoingOffset: TimeInterval = 0
     /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
@@ -1124,7 +1126,9 @@ final class AudioPlayerService: Sendable {
         logPlayback("start_playback", "path=\(url.path)")
         let reusable = mixReusableAsset.flatMap { ($0 as? AVURLAsset)?.url == url ? $0 : nil }
         mixReusableAsset = nil
-        let item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset, asset: reusable)
+        let prepared = mixPrepared.flatMap { $0.url == url && $0.ratingKey == currentTrack?.ratingKey ? $0 : nil }
+        mixPrepared = nil
+        let item = prepared?.item ?? makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset, asset: reusable)
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {
@@ -1132,7 +1136,9 @@ final class AudioPlayerService: Sendable {
         }
         player?.pause()
         player?.removeAllItems()
-        let queuePlayer = AVQueuePlayer(playerItem: item)
+        let queuePlayer = prepared?.player ?? AVQueuePlayer(playerItem: item)
+        // A prepared song was already moved to its start point.
+        if prepared != nil { pendingInitialSeekTime = nil }
         // Only advance on item end while a gapless next item is enqueued; otherwise
         // keep the finished item. .none (not .pause) leaves the player in the playing
         // state through the gap before the next track loads, so CarPlay never shows

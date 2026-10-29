@@ -125,6 +125,7 @@ extension AudioPlayerService {
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
                 let wait = plan.startTime - self.bestKnownPlaybackSeconds
+                if wait <= 12 { self.prepareMixIncoming(plan) }
                 if self.isPlaying, !self.isSeeking, wait <= lead {
                     self.beginAutoMix(plan, lateBy: max(0, -wait))
                     return
@@ -168,7 +169,7 @@ extension AudioPlayerService {
         // these keep sounding until the fade completes.
         tearDownObservers()
         if let preloaded = preloadedNext, let outgoing = player, outgoing.currentItem !== preloaded.item {
-            outgoing.remove(preloaded.item)
+            if outgoing.items().contains(preloaded.item) { outgoing.remove(preloaded.item) }
             // Its asset is already loaded, which saves the new song a round trip.
             if preloaded.ratingKey == target.track.ratingKey { mixReusableAsset = preloaded.item.asset }
         }
@@ -186,7 +187,14 @@ extension AudioPlayerService {
         mixIncomingGain = 0
         currentIndex = target.index
         logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) beat=\(plan.isBeatMatched)")
-        loadAndPlay(target.track, resumeAt: plan.introStart)
+        // A streamed transcode can't start part-way without a new session, which would lose
+        // the prepared song, so those start from the top without beat matching.
+        var resume = plan.introStart
+        if case .hls? = preloadedNext?.source {
+            resume = nil
+            plan = plan.withoutTempo()
+        }
+        loadAndPlay(target.track, resumeAt: resume)
         mixReusableAsset = nil
         autoMixPlan = plan
         autoMixTransition = AutoMixTransition(duration: plan.overlap, isBeatMatched: plan.isBeatMatched)
@@ -320,6 +328,39 @@ extension AudioPlayerService {
         if let player, player.timeControlStatus == .playing, player.rate != 1 {
             player.rate = 1
         }
+    }
+
+    // MARK: - Preparing
+
+    /// Loads the next song silently ahead of the mix, at its start point, on its own player.
+    private func prepareMixIncoming(_ plan: AutoMixPlan) {
+        guard mixPrepared?.ratingKey != plan.incomingKey,
+              let preloaded = preloadedNext, preloaded.ratingKey == plan.incomingKey,
+              let outgoing = player,
+              let track = nextAutoAdvanceTarget()?.track, track.ratingKey == plan.incomingKey else { return }
+
+        if outgoing.currentItem !== preloaded.item, outgoing.items().contains(preloaded.item) {
+            outgoing.remove(preloaded.item)
+        }
+        outgoing.actionAtItemEnd = .none
+
+        let item = makePlayerItem(url: preloaded.streamURL, trimmedTo: track, asset: preloaded.item.asset)
+        if case .local = preloaded.source {} else {
+            item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: Double(track.duration ?? 0) / 1000)
+        }
+        if case .hls = preloaded.source {} else {
+            let start = plan.introStart ?? AppContext.shared.trackMarkers.start(for: track.ratingKey)
+            if let start, start > 0 {
+                let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+                item.seek(to: CMTime(seconds: start, preferredTimescale: 600), toleranceBefore: tolerance, toleranceAfter: tolerance, completionHandler: nil)
+            }
+        }
+        let prepared = AVQueuePlayer(playerItem: item)
+        prepared.actionAtItemEnd = .none
+        prepared.automaticallyWaitsToMinimizeStalling = false
+        prepared.volume = 0
+        mixPrepared = PreparedMixIncoming(ratingKey: plan.incomingKey, url: preloaded.streamURL, player: prepared, item: item)
+        logPlayback("automix_prepared", "track=\(plan.incomingKey)")
     }
 
     // MARK: - Filters
