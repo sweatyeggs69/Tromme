@@ -207,9 +207,16 @@ extension AudioPlayerService {
                     // An offset stream's asset duration only covers the remainder
                     // of the track, so keep the metadata duration in that case.
                     // Local files keep Plex metadata duration — downloaded MP3
-                    // transcodes can have corrupt Xing/VBR headers.
-                    if !self.isPlayingLocalFile, self.streamTimeOffset == 0,
+                    // transcodes can have corrupt Xing/VBR headers. Lossless files
+                    // (FLAC/ALAC) carry an exact sample count, so their asset
+                    // duration is authoritative and keeps the timeline in sync.
+                    let trustsAssetDuration = !self.isPlayingLocalFile
+                        || ["FLAC", "ALAC"].contains(self.localFileCodec ?? "")
+                    if trustsAssetDuration, self.streamTimeOffset == 0,
                        assetDuration.isFinite && assetDuration > 0 {
+                        if self.isPlayingLocalFile {
+                            self.logPlayback("local_duration", "plex=\(self.duration) asset=\(assetDuration)")
+                        }
                         self.duration = assetDuration
                     }
                     self.logPlayback("item_ready", "duration=\(self.duration) offset=\(self.streamTimeOffset)")
@@ -225,7 +232,8 @@ extension AudioPlayerService {
                         // Local files: 50ms tolerance — imperceptible but avoids
                         // finished=false on VBR files that have no sample at the exact time.
                         // HLS streams need more slack for playlist segment boundaries.
-                        let tolerance = self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600)
+                        let tolerance = self.isPlayingLocalLossless ? CMTime.zero
+                            : self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600)
                             : CMTime(seconds: 0.25, preferredTimescale: 600)
                         self.player?.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
                             guard let self else { return }

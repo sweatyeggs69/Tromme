@@ -61,12 +61,9 @@ final class AudioPlayerService: Sendable {
     }
 
     var player: AVQueuePlayer?
-    /// Set instead of `player` while a track plays through the Core Audio engine.
+    /// Set instead of `player` while a downloaded FLAC/ALAC plays through AVAudioPlayer.
     var losslessPlayer: LocalLosslessPlayer?
     var losslessTickTask: Task<Void, Never>?
-    /// The next track queued on the Core Audio engine for gapless playback.
-    var engineQueued: (index: Int, track: PlexMetadata)?
-    var engineQueueTask: Task<Void, Never>?
     var timeObserver: Any?
     var statusObservation: NSKeyValueObservation?
     var timeControlObservation: NSKeyValueObservation?
@@ -205,6 +202,12 @@ final class AudioPlayerService: Sendable {
     /// True when the current track is playing from a locally downloaded file.
     var isPlayingLocalDownload: Bool { isPlayingLocalFile }
 
+    /// Downloaded FLAC/ALAC. Their headers give exact durations, but AVPlayer only
+    /// lands where it is told when it is asked for an exact seek (no seek table needed).
+    var isPlayingLocalLossless: Bool {
+        isPlayingLocalFile && ["FLAC", "ALAC"].contains(localFileCodec ?? "")
+    }
+
     /// The source file bitrate in kbps, or nil when no track is loaded.
     var activeStreamBitrate: Int? {
         guard hasTrack else { return nil }
@@ -241,7 +244,6 @@ final class AudioPlayerService: Sendable {
             .flatMap { $0.stream ?? [] }
             .first(where: { $0.streamType == 2 })
         let raw = (audioStream?.codec ?? media?.audioCodec)?.lowercased()
-        if losslessPlayer != nil, let raw { return raw.uppercased() }
         switch raw {
         case "flac": return "ALAC"  // FLAC is losslessly transcoded to ALAC via HLS
         case .some(let c): return c.uppercased()
@@ -803,7 +805,7 @@ final class AudioPlayerService: Sendable {
         // caused the player to not move while currentTime was already updated,
         // producing visible slider jumps when the time observer fired.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
-        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let tolerance = isPlayingLocalLossless ? CMTime.zero : CMTime(seconds: 0.05, preferredTimescale: 600)
         let seekGeneration = playbackGeneration
         player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
             Task { @MainActor [weak self] in
@@ -950,10 +952,12 @@ final class AudioPlayerService: Sendable {
             localFileCodec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
             currentSessionID = nil
-            loadCoreAudioTrack(url: localURL, resumeAt: boundedResume) { [weak self] in
-                self?.pendingInitialSeekTime = boundedResume
-                self?.startPlayback(url: localURL)
+            if Self.isLosslessLabel(localFileCodec),
+               startLosslessPlayback(url: localURL, resumeAt: boundedResume) {
+                return
             }
+            pendingInitialSeekTime = boundedResume
+            startPlayback(url: localURL)
             return
         }
 
@@ -974,19 +978,22 @@ final class AudioPlayerService: Sendable {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularTranscodeBitrate } ?? true
         let shouldConstrainForNetwork = isConstrainedNetworkPath && sourceExceedsTarget
 
-        // Every direct stream goes through the Core Audio engine with range requests.
-        // Cellular-constrained playback and failures fall back to PMS's HLS transcode.
-        if !forceHLS, !shouldConstrainForNetwork,
+        // Direct stream for non-FLAC content — bypasses PMS's HLS transcode/remux
+        // entirely. That remux path is fragile against source files with
+        // malformed VBR/Xing headers (this library has some), which produces
+        // outright playback failures rather than just an imprecise duration.
+        // FLAC (needs lossless ALAC) and cellular-bitrate-constrained playback
+        // still require PMS's transcode, so they fall through to HLS below.
+        if !forceHLS, !shouldConstrainForNetwork, sourceCodec != "flac",
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
             discardPreloadedNext()
             isDirectStreamAttempt = true
             isConstrainedPlaybackPath = false
             currentSessionID = nil
-            logPlayback("load_core_audio_stream", "codec=\(sourceCodec ?? "?")")
-            loadCoreAudioTrack(url: directURL, resumeAt: boundedResume) { [weak self] in
-                self?.handlePlaybackFailure("core_audio_open_failed")
-            }
+            pendingInitialSeekTime = boundedResume
+            logPlayback("load_direct_stream", "codec=\(sourceCodec ?? "?")")
+            startPlayback(url: directURL)
             return
         }
         isDirectStreamAttempt = false

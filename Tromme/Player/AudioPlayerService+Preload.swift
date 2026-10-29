@@ -25,6 +25,10 @@ extension AudioPlayerService {
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
         guard player?.currentItem != nil else { return }
         guard let track = nextAutoAdvanceTarget()?.track else { return }
+        // Downloaded FLAC/ALAC load through AVAudioPlayer on advance, never preloaded.
+        if let record = AppContext.shared.downloadManager.records[track.ratingKey],
+           Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
+
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
         }
@@ -43,8 +47,14 @@ extension AudioPlayerService {
             : nil
         guard !Task.isCancelled else { return }
 
-        // Downloaded files and direct streams load on the Core Audio engine when they start.
-        if AppContext.shared.downloadManager.localURL(for: track.ratingKey) != nil { return }
+        if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
+            let codec = AppContext.shared.downloadManager.records[track.ratingKey]?
+                .codecLabel(source: track.media?.first)
+            // Downloaded FLAC/ALAC play through AVAudioPlayer, so they load on advance instead.
+            guard !Self.isLosslessLabel(codec) else { return }
+            enqueuePreloaded(track, url: localURL, source: .local(codec: codec), detailedTrack: detailedTrack)
+            return
+        }
 
         let playbackPath = resolvedPlaybackPath(for: server)
         let disableCellularTranscoding = UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
@@ -56,7 +66,12 @@ extension AudioPlayerService {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularBitrate } ?? true
         let shouldConstrain = isConstrainedNetworkPath && sourceExceedsTarget
 
-        if !shouldConstrain { return }
+        if !shouldConstrain, sourceAudioCodec(for: track) != "flac",
+           let partKey = track.media?.first?.part?.first?.key,
+           let directURL = client.directStreamURL(server: server, partKey: partKey) {
+            enqueuePreloaded(track, url: directURL, source: .direct, detailedTrack: detailedTrack)
+            return
+        }
 
         // Only the HLS path costs a PMS transcode session up front.
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
@@ -163,7 +178,6 @@ extension AudioPlayerService {
     }
 
     func discardPreloadedNext() {
-        discardEngineQueue()
         nextTrackPreloadTask?.cancel()
         nextTrackPreloadTask = nil
         if let preloaded = preloadedNext {
