@@ -145,6 +145,24 @@ final class AudioPlayerService: Sendable {
     var magicMixSeedArtistKey: String? = nil
     var infiniteRefillTask: Task<Void, Never>?
     var preloadedNext: PreloadedNextTrack?
+    var autoMixPlan: AutoMixPlan?
+    /// Filter taps by item, for the Auto Mix filter sweeps.
+    let mixTaps = NSMapTable<AVPlayerItem, AutoMixFilterTap>.weakToStrongObjects()
+    var autoMixPlanTask: Task<Void, Never>?
+    var autoMixTriggerTask: Task<Void, Never>?
+    var autoMixTask: Task<Void, Never>?
+    /// The faded-out tracks' players, kept sounding until the overlap ends.
+    var mixOutgoingPlayer: AVQueuePlayer?
+    var mixOutgoingLossless: LocalLosslessPlayer?
+    var mixOutgoingVolume: Float = 1
+    /// The next song's already-loaded asset (an item can't move between players, its asset can).
+    var mixReusableAsset: AVAsset?
+    /// The next song, already loaded and silent, ready to start with the mix.
+    var mixPrepared: PreparedMixIncoming?
+    /// Stream offset of the outgoing item, to turn its player time into track time.
+    var mixOutgoingOffset: TimeInterval = 0
+    /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
+    var mixIncomingGain: Float = 1
     var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
     /// AVPlayerItemDidPlayToEndTime notifications that race with seek callbacks.
@@ -255,6 +273,12 @@ final class AudioPlayerService: Sendable {
     }
 
     init() {
+        // Earlier builds kept copies of streamed songs and song analyses for Auto Mix.
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AutoMix", isDirectory: true))
+        try? fileManager.removeItem(at: fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MixProfiles", isDirectory: true))
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()
@@ -812,6 +836,8 @@ final class AudioPlayerService: Sendable {
         networkRecoveryTask?.cancel()
         nextTrackPreloadTask?.cancel()
         heldSeekTask?.cancel()
+        cancelAutoMixPlanning()
+        finishAutoMix()
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
         gainPrefetchTask = nil
@@ -829,8 +855,9 @@ final class AudioPlayerService: Sendable {
 
     /// `trimmedTo` ends playback at that track's stop marker. Offset HLS streams skip it
     /// because their item timeline isn't the track timeline.
-    func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0) -> AVPlayerItem {
-        let item = AVPlayerItem(url: url)
+    func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0, asset: AVAsset? = nil) -> AVPlayerItem {
+        let item = asset.map { AVPlayerItem(asset: $0) } ?? AVPlayerItem(url: url)
+        attachMixFilter(to: item, url: url)
         if let track, streamOffset == 0,
            let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {
             item.forwardPlaybackEndTime = CMTime(seconds: stop, preferredTimescale: 600)
@@ -865,6 +892,7 @@ final class AudioPlayerService: Sendable {
         pendingInitialSeekTime = nil
         streamTimeOffset = 0
         pendingStreamOffsetCalibration = false
+        cancelAutoMixPlanning()
         if let resumeAt {
             logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count) resume_at=\(resumeAt)")
         } else {
@@ -1097,7 +1125,11 @@ final class AudioPlayerService: Sendable {
 
     func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
-        let item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset)
+        let reusable = mixReusableAsset.flatMap { ($0 as? AVURLAsset)?.url == url ? $0 : nil }
+        mixReusableAsset = nil
+        let prepared = mixPrepared.flatMap { $0.url == url && $0.ratingKey == currentTrack?.ratingKey ? $0 : nil }
+        mixPrepared = nil
+        let item = prepared?.item ?? makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset, asset: reusable)
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {
@@ -1105,7 +1137,9 @@ final class AudioPlayerService: Sendable {
         }
         player?.pause()
         player?.removeAllItems()
-        let queuePlayer = AVQueuePlayer(playerItem: item)
+        let queuePlayer = prepared?.player ?? AVQueuePlayer(playerItem: item)
+        // A prepared song was already moved to its start point.
+        if prepared != nil { pendingInitialSeekTime = nil }
         // Only advance on item end while a gapless next item is enqueued; otherwise
         // keep the finished item. .none (not .pause) leaves the player in the playing
         // state through the gap before the next track loads, so CarPlay never shows

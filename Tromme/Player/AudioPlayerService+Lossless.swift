@@ -81,6 +81,7 @@ extension AudioPlayerService {
                     return
                 }
                 self.maybePingTimeline()
+                self.maybePlanAutoMix()
             }
         }
     }

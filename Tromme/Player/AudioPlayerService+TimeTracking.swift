@@ -50,6 +50,7 @@ extension AudioPlayerService {
 
                 self.maybePingTimeline()
                 self.maybePreloadNextTrack()
+                self.maybePlanAutoMix()
             }
         }
     }
