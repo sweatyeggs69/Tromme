@@ -20,8 +20,8 @@ enum AutoMixPlanner {
     private static let lyricLead: TimeInterval = 1
     /// Mixes this long or longer get a low-pass sweep; shorter ones are a plain crossfade.
     private static let filteredOverlap: TimeInterval = 6
-    /// Heavy songs keep their whole intro and outro; the mix is a short crossfade at the seam.
-    private static let heavyOverlap: TimeInterval = 3
+    /// Songs that keep their whole intro or outro get only a short crossfade at the seam.
+    private static let seamOverlap: TimeInterval = 3
 
     /// - Parameters:
     ///   - outgoingEnd: Track time where the outgoing track stops (duration or stop marker).
@@ -29,8 +29,8 @@ enum AutoMixPlanner {
     ///   - outgoingVocalEnd: Where the outgoing song's outro begins, from its lyrics.
     ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix never starts before it.
     ///   - incomingVocalStart: The incoming song's first lyric.
-    ///   - outgoingIsHeavy: Keep the outgoing song's outro whole.
-    ///   - incomingIsHeavy: Keep the incoming song's intro whole.
+    ///   - keepOutgoingOutro: Keep the outgoing song's outro whole (see `AutoMixGenreRules`).
+    ///   - keepIncomingIntro: Keep the incoming song's intro whole.
     /// - Returns: nil when the lyrics run too close to either song's edge to mix.
     static func plan(
         outgoingKey: String,
@@ -40,8 +40,8 @@ enum AutoMixPlanner {
         outgoingVocalEnd: TimeInterval?,
         outgoingLastLyricEnd: TimeInterval?,
         incomingVocalStart: TimeInterval?,
-        outgoingIsHeavy: Bool,
-        incomingIsHeavy: Bool
+        keepOutgoingOutro: Bool,
+        keepIncomingIntro: Bool
     ) -> AutoMixPlan? {
         if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
         if let vocalStart = incomingVocalStart, vocalStart - incomingBaseStart < minimumIntroRoom { return nil }
@@ -52,7 +52,7 @@ enum AutoMixPlanner {
         var overlap = defaultOverlap
         if let vocalEnd = outgoingVocalEnd {
             let outro = max(0, outgoingEnd - vocalEnd)
-            if outro > longOutro, !outgoingIsHeavy {
+            if outro > longOutro, !keepOutgoingOutro {
                 mixEnd = vocalEnd + shortenedOutro
                 overlap = shortenedOverlap
             } else {
@@ -60,7 +60,7 @@ enum AutoMixPlanner {
             }
         }
 
-        if outgoingIsHeavy || incomingIsHeavy { overlap = min(overlap, heavyOverlap) }
+        if keepOutgoingOutro || keepIncomingIntro { overlap = min(overlap, seamOverlap) }
 
         // The last lyric is sung in full, plus a little room for it to ring out, before
         // anything changes; a short outro gives up some of that room for the mix itself.
@@ -75,7 +75,7 @@ enum AutoMixPlanner {
         var introStart: TimeInterval?
         if let vocalStart = incomingVocalStart {
             let room = vocalStart - lyricLead - incomingBaseStart
-            if room > overlap + 0.5, !incomingIsHeavy {
+            if room > overlap + 0.5, !keepIncomingIntro {
                 introStart = vocalStart - lyricLead - overlap
             } else {
                 overlap = max(min(overlap, room), minimumOverlap)

@@ -47,13 +47,18 @@ extension AudioPlayerService {
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
-            async let outgoingHeavy = HeavyGenre.matches(current, client: client, server: server)
-            async let incomingHeavy = HeavyGenre.matches(incoming, client: client, server: server)
+            async let outgoingRule = AutoMixGenreRules.treatment(for: current, client: client, server: server)
+            async let incomingRule = AutoMixGenreRules.treatment(for: incoming, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
-            let (outgoingIsHeavy, incomingIsHeavy) = await (outgoingHeavy, incomingHeavy)
+            let (outgoingTreatment, incomingTreatment) = await (outgoingRule, incomingRule)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
+            if outgoingTreatment == .noMix || incomingTreatment == .noMix {
+                self.logPlayback("automix_skipped", "reason=genre")
+                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                return
+            }
             guard let plan = AutoMixPlanner.plan(
                 outgoingKey: current.ratingKey,
                 incomingKey: incoming.ratingKey,
@@ -62,14 +67,14 @@ extension AudioPlayerService {
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
                 incomingVocalStart: incomingSpan?.start,
-                outgoingIsHeavy: outgoingIsHeavy,
-                incomingIsHeavy: incomingIsHeavy
+                keepOutgoingOutro: outgoingTreatment == .keepIntroAndOutro,
+                keepIncomingIntro: incomingTreatment == .keepIntroAndOutro
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) heavy=\(outgoingIsHeavy)/\(incomingIsHeavy)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) genre=\(String(describing: outgoingTreatment))/\(String(describing: incomingTreatment))")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
