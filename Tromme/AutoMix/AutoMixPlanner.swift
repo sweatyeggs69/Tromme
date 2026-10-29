@@ -8,6 +8,9 @@ enum AutoMixPlanner {
     private static let minimumOverlap: TimeInterval = 2.5
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
+    /// An outro longer than this after the last lyric is shortened to `shortenedOutro`.
+    private static let longOutro: TimeInterval = 25
+    private static let shortenedOutro: TimeInterval = 15
     private static let maximumTempoShift = 0.08
 
     /// - Parameters:
@@ -20,7 +23,7 @@ enum AutoMixPlanner {
         incomingKey: String,
         outgoingEnd: TimeInterval,
         incomingBaseStart: TimeInterval,
-        outgoing: AutoMixWindowAnalysis?,
+        outgoing outgoingAnalysis: AutoMixWindowAnalysis?,
         incoming: AutoMixWindowAnalysis?,
         outgoingVocalEnd: TimeInterval?,
         incomingVocalStart: TimeInterval?,
@@ -28,10 +31,20 @@ enum AutoMixPlanner {
     ) -> AutoMixPlan? {
         var audibleEnd = outgoingEnd
         var fadeStart: TimeInterval?
-        if let outgoing {
-            let measured = tail(of: outgoing, until: outgoingEnd)
-            audibleEnd = measured.audibleEnd
-            fadeStart = measured.fadeStart
+        // A long instrumental outro is cut short: the mix ends a little after the last
+        // lyric instead of waiting for the whole outro. The analysed window (the last 30
+        // seconds) no longer describes the new mix point, so it isn't used then.
+        let outgoing: AutoMixWindowAnalysis?
+        if let outgoingVocalEnd, outgoingEnd - outgoingVocalEnd > longOutro {
+            audibleEnd = outgoingVocalEnd + shortenedOutro
+            outgoing = nil
+        } else {
+            outgoing = outgoingAnalysis
+            if let outgoing {
+                let measured = tail(of: outgoing, until: outgoingEnd)
+                audibleEnd = measured.audibleEnd
+                fadeStart = measured.fadeStart
+            }
         }
         // Tracks in order on the same album are never mixed; they stay gapless.
         if isContinuousAlbum { return nil }
