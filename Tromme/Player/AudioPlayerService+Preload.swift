@@ -29,6 +29,9 @@ extension AudioPlayerService {
         if let record = AppContext.shared.downloadManager.records[track.ratingKey],
            Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
 
+        // Streamed FLAC is fetched as a file when it starts, not preloaded into AVPlayer.
+        if sourceAudioCodec(for: track) == "flac" { return }
+
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
         }
