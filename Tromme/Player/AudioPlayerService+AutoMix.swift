@@ -57,7 +57,8 @@ extension AudioPlayerService {
             async let loudness = Self.loudnessDifference(current, incoming, soundCheckOn: soundCheckOn, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             let (outgoingReason, incomingReason) = await (outgoingRule, incomingRule)
-            let isLiveOrMix = await outgoingLive || incomingLive
+            let (outgoingIsLive, incomingIsLive) = await (outgoingLive, incomingLive)
+            let isLiveOrMix = outgoingIsLive || incomingIsLive
             let loudnessDifference = await loudness
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
