@@ -48,17 +48,17 @@ extension AudioPlayerService {
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
-            async let outgoingRule = AutoMixGenreRules.wantsCrossfade(current, client: client, server: server)
-            async let incomingRule = AutoMixGenreRules.wantsCrossfade(incoming, client: client, server: server)
+            async let outgoingRule = AutoMixGenreRules.crossfadeReason(current, client: client, server: server)
+            async let incomingRule = AutoMixGenreRules.crossfadeReason(incoming, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
-            let (outgoingCrossfades, incomingCrossfades) = await (outgoingRule, incomingRule)
+            let (outgoingReason, incomingReason) = await (outgoingRule, incomingRule)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
             // Songs matched by the genre rules (or with no tags) get a plain crossfade.
-            if outgoingCrossfades || incomingCrossfades {
+            if outgoingReason != nil || incomingReason != nil {
                 let plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
-                self.logPlayback("automix_planned", "crossfade=true genre=\(outgoingCrossfades)/\(incomingCrossfades) start=\(plan.startTime)")
+                self.logPlayback("automix_planned", "crossfade=true reason=\(outgoingReason ?? "-")/\(incomingReason ?? "-") start=\(plan.startTime)")
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
                 return
