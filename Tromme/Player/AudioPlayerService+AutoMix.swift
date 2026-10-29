@@ -30,8 +30,13 @@ extension AudioPlayerService {
         let isContinuousAlbum = current.parentRatingKey != nil
             && current.parentRatingKey == incoming.parentRatingKey
             && (current.index ?? -1) + 1 == incoming.index
-        // Tracks in order on the same album are never mixed; they stay gapless.
-        if isContinuousAlbum {
+        // Tracks in order on the same album, and songs with trim markers, are never mixed:
+        // they keep a plain gapless change at exactly the point the user set.
+        let markers = AppContext.shared.trackMarkers
+        let isTrimmed = [current.ratingKey, incoming.ratingKey].contains {
+            markers.start(for: $0) != nil || markers.stop(for: $0) != nil
+        }
+        if isContinuousAlbum || isTrimmed {
             autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
             return
         }
