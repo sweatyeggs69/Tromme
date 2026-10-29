@@ -947,15 +947,10 @@ final class AudioPlayerService: Sendable {
             localFileCodec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
             currentSessionID = nil
-            if Self.isLosslessLabel(localFileCodec) {
-                loadCoreAudioTrack(url: localURL, resumeAt: boundedResume) { [weak self] in
-                    self?.pendingInitialSeekTime = boundedResume
-                    self?.startPlayback(url: localURL)
-                }
-                return
+            loadCoreAudioTrack(url: localURL, resumeAt: boundedResume) { [weak self] in
+                self?.pendingInitialSeekTime = boundedResume
+                self?.startPlayback(url: localURL)
             }
-            pendingInitialSeekTime = boundedResume
-            startPlayback(url: localURL)
             return
         }
 
@@ -976,9 +971,9 @@ final class AudioPlayerService: Sendable {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularTranscodeBitrate } ?? true
         let shouldConstrainForNetwork = isConstrainedNetworkPath && sourceExceedsTarget
 
-        // Codecs AVPlayer handles poorly (FLAC, Opus, Vorbis) stream through the Core Audio
-        // engine with range requests; cellular-constrained playback and failures use HLS.
-        if !forceHLS, !shouldConstrainForNetwork, Self.isLosslessLabel(sourceCodec),
+        // Every direct stream goes through the Core Audio engine with range requests.
+        // Cellular-constrained playback and failures fall back to PMS's HLS transcode.
+        if !forceHLS, !shouldConstrainForNetwork,
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
             discardPreloadedNext()
@@ -989,25 +984,6 @@ final class AudioPlayerService: Sendable {
             loadCoreAudioTrack(url: directURL, resumeAt: boundedResume) { [weak self] in
                 self?.handlePlaybackFailure("core_audio_open_failed")
             }
-            return
-        }
-
-        // Direct stream for non-FLAC content — bypasses PMS's HLS transcode/remux
-        // entirely. That remux path is fragile against source files with
-        // malformed VBR/Xing headers (this library has some), which produces
-        // outright playback failures rather than just an imprecise duration.
-        // FLAC (needs lossless ALAC) and cellular-bitrate-constrained playback
-        // still require PMS's transcode, so they fall through to HLS below.
-        if !forceHLS, !shouldConstrainForNetwork, !Self.isLosslessLabel(sourceCodec),
-           let partKey = track.media?.first?.part?.first?.key,
-           let directURL = client.directStreamURL(server: server, partKey: partKey) {
-            discardPreloadedNext()
-            isDirectStreamAttempt = true
-            isConstrainedPlaybackPath = false
-            currentSessionID = nil
-            pendingInitialSeekTime = boundedResume
-            logPlayback("load_direct_stream", "codec=\(sourceCodec ?? "?")")
-            startPlayback(url: directURL)
             return
         }
         isDirectStreamAttempt = false

@@ -3,11 +3,6 @@ import AVFoundation
 // FLAC, ALAC, Opus and Vorbis playback through the Core Audio engine (SFBAudioEngine),
 // from a downloaded file or streamed with HTTP range requests.
 extension AudioPlayerService {
-    /// Codec labels (uppercased) that play through the Core Audio engine instead of AVPlayer.
-    static func isLosslessLabel(_ codec: String?) -> Bool {
-        ["FLAC", "ALAC", "OPUS", "VORBIS"].contains(codec?.uppercased() ?? "")
-    }
-
     /// Opens the track off the main thread, then starts it. Calls `onFailure` if it can't be opened.
     func loadCoreAudioTrack(url: URL, resumeAt: TimeInterval?, onFailure: @escaping () -> Void) {
         let generation = playbackGeneration
@@ -44,9 +39,11 @@ extension AudioPlayerService {
         lossless.volume = soundCheckVolume(for: currentTrack)
         losslessPlayer = lossless
         isReadyToPlay = true
-        // The file header holds the exact length, unlike Plex's rounded metadata.
+        // The decoder's length is exact, unlike Plex's rounded metadata. MP3s keep the
+        // metadata duration since some files have corrupt Xing/VBR headers.
         logPlayback("lossless_duration", "plex=\(duration) file=\(lossless.duration)")
-        duration = lossless.duration
+        let isMP3 = (currentTrack.flatMap(sourceAudioCodec(for:)) ?? localFileCodec?.lowercased()) == "mp3"
+        if !isMP3, lossless.duration > 0 { duration = lossless.duration }
 
         if let resumeAt, resumeAt > 0 {
             let upper = duration > 1 ? duration - 1 : resumeAt
