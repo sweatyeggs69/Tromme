@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AC0000000000000000007104 /* AutoMixReportSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007104 /* AutoMixReportSender.swift */; };
 		AC0000000000000000007103 /* AutoMixReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007103 /* AutoMixReportView.swift */; };
 		AC0000000000000000007102 /* AutoMixReportViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007102 /* AutoMixReportViewModel.swift */; };
 		AC0000000000000000007101 /* AutoMixIssueType.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007101 /* AutoMixIssueType.swift */; };
@@ -227,6 +228,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AB0000000000000000007104 /* AutoMixReportSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportSender.swift; sourceTree = "<group>"; };
 		AB0000000000000000007103 /* AutoMixReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportView.swift; sourceTree = "<group>"; };
 		AB0000000000000000007102 /* AutoMixReportViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportViewModel.swift; sourceTree = "<group>"; };
 		AB0000000000000000007101 /* AutoMixIssueType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixIssueType.swift; sourceTree = "<group>"; };
@@ -468,6 +470,7 @@
 				A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */,
 				AB0000000000000000007101 /* AutoMixIssueType.swift */,
 				AB0000000000000000007100 /* AutoMixRecord.swift */,
+				AB0000000000000000007104 /* AutoMixReportSender.swift */,
 				9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */,
 			);
 			path = AutoMix;
@@ -943,6 +946,7 @@
 				079DC0CDC83878CE7886B28C /* AutoMixPlan.swift in Sources */,
 				AC0000000000000000007101 /* AutoMixIssueType.swift in Sources */,
 				AC0000000000000000007100 /* AutoMixRecord.swift in Sources */,
+				AC0000000000000000007104 /* AutoMixReportSender.swift in Sources */,
 				A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */,
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
 				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,

@@ -35,13 +35,38 @@ struct AutoMixReportView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    ShareLink(item: viewModel.reportText, subject: Text(viewModel.subject)) {
-                        Text("Send")
+                    if viewModel.sendState == .sending {
+                        ProgressView()
+                    } else {
+                        Button("Send") {
+                            Task { await viewModel.send() }
+                        }
+                        .disabled(!viewModel.canSend)
                     }
-                    .disabled(!viewModel.canSend)
                 }
             }
+            .alert("Report Sent", isPresented: sentBinding) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Thanks, this helps tune Auto Mix.")
+            }
+            .alert("Couldn't Send", isPresented: failedBinding) {
+                Button("OK") { viewModel.sendState = .idle }
+            } message: {
+                if case .failed(let message) = viewModel.sendState { Text(message) }
+            }
         }
+    }
+
+    private var sentBinding: Binding<Bool> {
+        Binding(get: { viewModel.sendState == .sent }, set: { _ in })
+    }
+
+    private var failedBinding: Binding<Bool> {
+        Binding(
+            get: { if case .failed = viewModel.sendState { true } else { false } },
+            set: { if !$0 { viewModel.sendState = .idle } }
+        )
     }
 
     private func songRow(_ label: String, _ track: PlexMetadata?) -> some View {

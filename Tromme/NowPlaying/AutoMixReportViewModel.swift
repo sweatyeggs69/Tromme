@@ -4,12 +4,20 @@ import Observation
 
 @Observable @MainActor
 final class AutoMixReportViewModel {
+    enum SendState: Equatable {
+        case idle
+        case sending
+        case sent
+        case failed(String)
+    }
+
     let previous: PlexMetadata?
     let current: PlexMetadata?
     private let record: AutoMixRecord?
 
     var issue: AutoMixIssueType = .startedTooEarly
     var details = ""
+    var sendState: SendState = .idle
 
     init(player: AudioPlayerService) {
         let current = player.currentTrack
@@ -25,32 +33,48 @@ final class AutoMixReportViewModel {
         }
     }
 
-    var canSend: Bool { previous != nil && current != nil }
+    var canSend: Bool { previous != nil && current != nil && sendState != .sending }
 
-    var subject: String { "Tromme Auto Mix report" }
-
-    /// The report as plain text, with the mix plan values so a bad mix can be reproduced.
-    var reportText: String {
-        func describe(_ track: PlexMetadata?) -> String {
-            guard let track else { return "none" }
-            return "\(track.title) by \(track.artistDisplayName) [\(track.ratingKey)]"
-        }
-        var lines = [
-            "Issue: \(issue.rawValue)",
-            "Details: \(details.trimmingCharacters(in: .whitespacesAndNewlines))",
-            "",
-            "Previous: \(describe(previous))",
-            "Current: \(describe(current))",
-            "Result: \(record?.outcome ?? "no mix recorded for this pair")"
-        ]
-        for (key, value) in (record?.values ?? [:]).sorted(by: { $0.key < $1.key }) {
-            lines.append("\(key): \(value)")
-        }
+    /// Sends the report with the mix plan values so a bad mix can be reproduced.
+    func send() async {
+        guard let previous, let current else { return }
+        sendState = .sending
         let info = Bundle.main.infoDictionary
-        lines.append("")
-        lines.append("Tromme \(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))")
-        lines.append("\(UIDevice.current.model), iOS \(UIDevice.current.systemVersion)")
-        lines.append("Plus: \(PlusStore.cachedIsPlus)")
-        return lines.joined(separator: "\n")
+        let version = "\(info?["CFBundleShortVersionString"] as? String ?? "0") (\(info?["CFBundleVersion"] as? String ?? "0"))"
+        var values = record?.values ?? [:]
+        if record == nil { values["recorded"] = "no" }
+        let report = AutoMixReportSender.Report(
+            installId: Self.installID,
+            issue: issue.rawValue,
+            details: details.trimmingCharacters(in: .whitespacesAndNewlines),
+            previous: Self.song(previous),
+            current: Self.song(current),
+            result: record?.outcome ?? "no mix recorded for this pair",
+            values: values,
+            app: version,
+            device: UIDevice.current.model,
+            plus: PlusStore.cachedIsPlus
+        )
+        do {
+            try await AutoMixReportSender.send(report)
+            sendState = .sent
+        } catch .rateLimited {
+            sendState = .failed("You've sent a few reports recently. Try again later.")
+        } catch {
+            sendState = .failed("The report couldn't be sent. Check your connection and try again.")
+        }
+    }
+
+    private static func song(_ track: PlexMetadata) -> AutoMixReportSender.Song {
+        .init(key: track.ratingKey, title: track.title, artist: track.artistDisplayName)
+    }
+
+    /// Anonymous per-install ID, only used to rate limit reports.
+    private static var installID: String {
+        let key = "autoMixReportInstallID"
+        if let stored = UserDefaults.standard.string(forKey: key) { return stored }
+        let new = UUID().uuidString
+        UserDefaults.standard.set(new, forKey: key)
+        return new
     }
 }
