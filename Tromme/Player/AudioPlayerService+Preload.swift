@@ -18,10 +18,10 @@ extension AudioPlayerService {
         return nil
     }
 
-    func maybePreloadNextTrack() {
+    func maybePreloadNextTrack(within lead: TimeInterval = 25) {
         guard duration > 0 else { return }
         let remaining = duration - currentTime
-        guard remaining > 0, remaining <= 25 else { return }
+        guard remaining > 0, remaining <= lead else { return }
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
         guard player?.currentItem != nil else { return }
         guard let track = nextAutoAdvanceTarget()?.track else { return }

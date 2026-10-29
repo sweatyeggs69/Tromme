@@ -1,21 +1,20 @@
 import AVFoundation
 
-/// Decodes a slice of a track into memory and measures loudness and beats.
+/// Decodes a whole track into memory and measures its loudness, beats and outro.
 enum AutoMixAnalyzer {
     private static let sampleRate = 22_050.0
-    private static let frameDuration = 0.05
-    private static let edgeLength = 12.0
 
     /// Which end of the window the transition uses.
     enum Edge { case start, end }
 
-    /// Returns nil when the asset can't be read (for example an HLS stream).
-    static func analyze(url: URL, from start: TimeInterval, length: TimeInterval, edge: Edge) async -> AutoMixWindowAnalysis? {
-        await Task.detached(priority: .utility) { () -> AutoMixWindowAnalysis? in
-            guard let samples = await decode(url: url, from: max(0, start), length: length), !samples.isEmpty else {
+    /// Decodes the whole song and builds its profile. Returns nil when the file can't be read.
+    static func profile(url: URL) async -> TrackMixProfile? {
+        await Task.detached(priority: .utility) { () -> TrackMixProfile? in
+            guard let length = await assetDuration(of: url),
+                  let samples = await decode(url: url, from: 0, length: length + 1), !samples.isEmpty else {
                 return nil
             }
-            return measure(samples, startTime: max(0, start), edge: edge)
+            return makeProfile(samples)
         }.value
     }
 
@@ -67,35 +66,70 @@ enum AutoMixAnalyzer {
         return reader.status == .completed ? samples : nil
     }
 
-    private static func measure(_ samples: [Float], startTime: TimeInterval, edge: Edge) -> AutoMixWindowAnalysis {
-        let frameSize = Int(sampleRate * frameDuration)
-        let frameCount = samples.count / frameSize
-        var levels = [Float]()
-        levels.reserveCapacity(frameCount)
-        for f in 0..<frameCount {
+    private static func makeProfile(_ samples: [Float]) -> TrackMixProfile {
+        let duration = Double(samples.count) / sampleRate
+        let frameSize = Int(sampleRate * TrackMixProfile.frameDuration)
+        var levels = [Int8]()
+        levels.reserveCapacity(samples.count / frameSize)
+        for f in 0..<(samples.count / frameSize) {
             var sum: Float = 0
             for i in (f * frameSize)..<((f + 1) * frameSize) { sum += samples[i] * samples[i] }
-            let rms = (sum / Float(frameSize)).squareRoot()
-            levels.append(20 * log10(max(rms, 1e-6)))
+            let decibels = 20 * log10(max((sum / Float(frameSize)).squareRoot(), 1e-6))
+            levels.append(Int8(max(-127, min(0, decibels.rounded()))))
         }
-        let beat = BeatEstimator.estimate(samples: samples, sampleRate: sampleRate, startTime: startTime)
-        let edgeCount = Int(sampleRate * edgeLength)
-        let edgeBeat: BeatGrid?
-        if samples.count > edgeCount {
-            switch edge {
-            case .start:
-                edgeBeat = BeatEstimator.estimate(samples: Array(samples.prefix(edgeCount)), sampleRate: sampleRate, startTime: startTime)
-            case .end:
-                let offset = samples.count - edgeCount
-                edgeBeat = BeatEstimator.estimate(
-                    samples: Array(samples.suffix(edgeCount)),
-                    sampleRate: sampleRate,
-                    startTime: startTime + Double(offset) / sampleRate
-                )
-            }
-        } else {
-            edgeBeat = beat
+
+        var beats = [TrackMixProfile.WindowBeat]()
+        var start: TimeInterval = 0
+        while start + TrackMixProfile.beatWindow <= duration {
+            let lower = Int(start * sampleRate)
+            let upper = min(samples.count, Int((start + TrackMixProfile.beatWindow) * sampleRate))
+            let grid = BeatEstimator.estimate(samples: Array(samples[lower..<upper]), sampleRate: sampleRate, startTime: start)
+            beats.append(.init(start: start, bpm: grid?.bpm, referenceBeat: grid?.referenceBeat))
+            start += TrackMixProfile.beatHop
         }
-        return AutoMixWindowAnalysis(windowStart: startTime, frameDuration: frameDuration, levels: levels, beat: beat, edgeBeat: edgeBeat)
+
+        return TrackMixProfile(
+            version: TrackMixProfile.currentVersion,
+            duration: duration,
+            levels: levels,
+            beats: beats,
+            outroStart: outroStart(levels: levels, beats: beats, duration: duration)
+        )
+    }
+
+    /// The start of a closing run of 5 s blocks that lost the beat (in a song that has one)
+    /// or sit at least 6 dB under the song's body, when that run lasts 20 s or more.
+    private static func outroStart(levels: [Int8], beats: [TrackMixProfile.WindowBeat], duration: TimeInterval) -> TimeInterval? {
+        let block: TimeInterval = 5
+        let framesPerBlock = Int(block / TrackMixProfile.frameDuration)
+        let blockCount = levels.count / framesPerBlock
+        guard blockCount >= 8, !beats.isEmpty else { return nil }
+
+        let blockLevels: [Float] = (0..<blockCount).map { k in
+            let audible = levels[(k * framesPerBlock)..<((k + 1) * framesPerBlock)].filter { $0 > -50 }
+            guard !audible.isEmpty else { return -100 }
+            return Float(audible.reduce(0) { $0 + Int($1) }) / Float(audible.count)
+        }
+        let loud = blockLevels.filter { $0 > -60 }.sorted()
+        guard !loud.isEmpty else { return nil }
+        let body = loud[loud.count * 3 / 4]
+        let songHasBeat = beats.filter { $0.bpm != nil }.count * 2 >= beats.count
+
+        func hasBeat(_ k: Int) -> Bool {
+            beats.last { $0.start <= Double(k) * block + 0.1 }?.bpm != nil
+        }
+        func isOutroLike(_ k: Int) -> Bool {
+            (songHasBeat && !hasBeat(k)) || blockLevels[k] < body - 6
+        }
+
+        // Skip the silence at the very end, then walk back through the outro.
+        var last = blockCount - 1
+        while last > 0, blockLevels[last] < -45 { last -= 1 }
+        var k = last
+        while k >= 0, isOutroLike(k) { k -= 1 }
+        let runStart = k + 1
+        guard runStart <= last, runStart > blockCount / 2,
+              Double(last - runStart + 1) * block >= 20 else { return nil }
+        return Double(runStart) * block
     }
 }

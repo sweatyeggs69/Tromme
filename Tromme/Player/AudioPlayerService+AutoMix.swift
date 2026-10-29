@@ -40,15 +40,20 @@ extension AudioPlayerService {
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
         let outgoingSource = autoMixAnalysisSource(for: current)
         let incomingSource = autoMixAnalysisSource(for: incoming)
+        let outgoingDuration = Double(current.duration ?? 0) / 1000
+        let incomingDuration = Double(incoming.duration ?? 0) / 1000
         let generation = playbackGeneration
         AutoMixSourceCache.prune(keeping: [current.ratingKey, incoming.ratingKey])
 
         autoMixPlanTask = Task { [weak self] in
-            async let tail = Self.analyzeTail(source: outgoingSource, end: end)
-            async let head = Self.analyzeHead(source: incomingSource, from: incomingBaseStart)
+            async let outgoingProfile = Self.mixProfile(key: current.ratingKey, duration: outgoingDuration, source: outgoingSource)
+            async let incomingProfile = Self.mixProfile(key: incoming.ratingKey, duration: incomingDuration, source: incomingSource)
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
-            let (outgoing, incomingAnalysis) = await (tail, head)
+            let (outgoing, incomingProfileResult) = await (outgoingProfile, incomingProfile)
+            let incomingAnalysis = incomingProfileResult?.window(
+                from: incomingBaseStart, to: incomingBaseStart + Self.headWindow, edge: .start
+            )
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
@@ -57,7 +62,10 @@ extension AudioPlayerService {
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
-                outgoing: outgoing,
+                outgoingWindow: { mixPoint in
+                    outgoing?.window(from: mixPoint - Self.tailWindow, to: mixPoint + 2, edge: .end)
+                },
+                outgoingOutroStart: outgoing?.outroStart,
                 incoming: incomingAnalysis,
                 outgoingVocalEnd: outgoingSpan?.end,
                 incomingVocalStart: incomingSpan?.start,
@@ -67,7 +75,7 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
                 return
             }
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) profiles=\(outgoing != nil)/\(incomingProfileResult != nil) outro=\(outgoing?.outroStart ?? -1) curve=\(plan.curve) filter=\(plan.filter)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
@@ -105,15 +113,14 @@ extension AudioPlayerService {
         return await AutoMixSourceCache.localCopy(of: source.url, key: source.key, fileExtension: source.fileExtension)
     }
 
-    private nonisolated static func analyzeTail(source: AnalysisSource?, end: TimeInterval) async -> AutoMixWindowAnalysis? {
-        guard let url = await readableURL(source) else { return nil }
-        let start = max(0, end - tailWindow)
-        return await AutoMixAnalyzer.analyze(url: url, from: start, length: tailWindow + 2, edge: .end)
-    }
-
-    private nonisolated static func analyzeHead(source: AnalysisSource?, from start: TimeInterval) async -> AutoMixWindowAnalysis? {
-        guard let url = await readableURL(source) else { return nil }
-        return await AutoMixAnalyzer.analyze(url: url, from: start, length: headWindow, edge: .start)
+    /// The song's cached analysis, or a fresh one (reading a temporary copy when streamed)
+    /// that is saved for every later mix.
+    private nonisolated static func mixProfile(key: String, duration: TimeInterval, source: AnalysisSource?) async -> TrackMixProfile? {
+        if let cached = TrackMixProfileStore.load(key: key, duration: duration) { return cached }
+        guard let url = await readableURL(source),
+              let profile = await AutoMixAnalyzer.profile(url: url) else { return nil }
+        TrackMixProfileStore.save(profile, key: key)
+        return profile
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
@@ -125,6 +132,9 @@ extension AudioPlayerService {
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
                 let wait = plan.startTime - self.bestKnownPlaybackSeconds
+                // A mix planned well before the end (a shortened outro) needs the next song
+                // loaded sooner than the usual gapless preload.
+                if wait <= 30 { self.maybePreloadNextTrack(within: .infinity) }
                 if wait <= 12 { self.prepareMixIncoming(plan) }
                 if self.isPlaying, !self.isSeeking, wait <= lead {
                     self.beginAutoMix(plan, lateBy: max(0, -wait))
@@ -257,18 +267,16 @@ extension AudioPlayerService {
 
                 self.applyMixFilters(plan.filter, progress: Float(progress))
 
+                // One rate change on the fading song, never a continuous ramp: every rate
+                // change restarts the time-stretch, which is heard as warble.
                 if let tempo = plan.tempo {
-                    let shared = tempo.blended(at: progress)
                     if let outgoing = self.mixOutgoingPlayer, outgoing.timeControlStatus == .playing {
-                        Self.setRate(outgoing, Float(shared / tempo.outgoing))
+                        Self.setRate(outgoing, tempo.outgoingRate)
                     }
                     if let incoming = self.player, self.pendingInitialSeekTime == nil,
-                       incoming.timeControlStatus == .playing {
-                        Self.setRate(incoming, Float(shared / tempo.incoming))
-                        if !aligned {
-                            aligned = true
-                            self.alignIncoming(incoming, plan: plan, elapsed: elapsed)
-                        }
+                       incoming.timeControlStatus == .playing, !aligned {
+                        aligned = true
+                        self.alignIncoming(incoming, plan: plan, elapsed: elapsed)
                     }
                 }
 
@@ -305,7 +313,7 @@ extension AudioPlayerService {
     /// A streamed track starts a little after the planned moment; jump it forward by the
     /// delay so its beats still land on the outgoing track's.
     private func alignIncoming(_ incoming: AVQueuePlayer, plan: AutoMixPlan, elapsed: TimeInterval) {
-        let expected = (plan.introStart ?? currentTrackStartTime) + plan.incomingMediaElapsed(elapsed)
+        let expected = (plan.introStart ?? currentTrackStartTime) + elapsed
         let actual = incoming.currentTime().seconds
         guard actual.isFinite, expected - actual > 0.05, expected - actual < 3 else { return }
         logPlayback("automix_align", "skip=\(expected - actual)")

@@ -15,7 +15,8 @@ enum AutoMixPlanner {
     /// `shortenedOutro` minus the overlap, then the mix covers the rest.
     private static let longOutro: TimeInterval = 20
     private static let shortenedOutro: TimeInterval = 14
-    private static let maximumTempoShift = 0.08
+    /// Larger tempo gaps aren't stretched: the time-stretch becomes audible as warble.
+    private static let maximumTempoShift = 0.04
 
     /// - Parameters:
     ///   - outgoingEnd: Track time where the outgoing track stops (duration or stop marker).
@@ -27,7 +28,8 @@ enum AutoMixPlanner {
         incomingKey: String,
         outgoingEnd: TimeInterval,
         incomingBaseStart: TimeInterval,
-        outgoing outgoingAnalysis: AutoMixWindowAnalysis?,
+        outgoingWindow: (TimeInterval) -> AutoMixWindowAnalysis?,
+        outgoingOutroStart: TimeInterval?,
         incoming: AutoMixWindowAnalysis?,
         outgoingVocalEnd: TimeInterval?,
         incomingVocalStart: TimeInterval?,
@@ -35,17 +37,18 @@ enum AutoMixPlanner {
     ) -> AutoMixPlan? {
         var audibleEnd = outgoingEnd
         var fadeStart: TimeInterval?
-        // A long instrumental outro is cut short: the mix ends a little after the last
-        // lyric instead of waiting for the whole outro. The analysed window (the last 30
-        // seconds) no longer describes the new mix point, so it isn't used then.
+        // A long instrumental outro is cut short: the mix ends a little into it instead of
+        // waiting for the whole outro. Lyrics mark where it starts; without them the audio
+        // analysis does (the beat drops out or the level falls).
+        let outroFrom = outgoingVocalEnd ?? outgoingOutroStart
         let outgoing: AutoMixWindowAnalysis?
         var shortened = false
-        if let outgoingVocalEnd, outgoingEnd - outgoingVocalEnd > longOutro {
-            audibleEnd = outgoingVocalEnd + shortenedOutro
+        if let outroFrom, outgoingEnd - outroFrom > longOutro {
+            audibleEnd = outroFrom + shortenedOutro
             shortened = true
-            outgoing = nil
+            outgoing = outgoingWindow(audibleEnd)
         } else {
-            outgoing = outgoingAnalysis
+            outgoing = outgoingWindow(outgoingEnd)
             if let outgoing {
                 let measured = tail(of: outgoing, until: outgoingEnd)
                 audibleEnd = measured.audibleEnd
@@ -59,7 +62,7 @@ enum AutoMixPlanner {
         if let fadeStart { overlap = min(max(audibleEnd - fadeStart, 3), maximumOverlap) }
         // With no beat left at the end (drums dropped out, ambient or guitar wash), nothing
         // rhythmic can clash, so blend longer and without tempo changes.
-        let beatlessTail = outgoing.map { $0.edgeBeat == nil } ?? false
+        let beatlessTail = !shortened && (outgoing.map { $0.edgeBeat == nil } ?? false)
         if beatlessTail { overlap = max(overlap, 8) }
         if shortened { overlap = 6 }
         overlap = min(overlap, max(2, outgoingEnd * 0.3))
@@ -82,8 +85,8 @@ enum AutoMixPlanner {
 
         // Vocals: an instrumental outro can be overlapped for longer, and an instrumental
         // intro can sit under the outgoing tail. Either way keep the two vocals apart.
-        if !shortened, let outgoingVocalEnd, audibleEnd - outgoingVocalEnd >= instrumentalSpan {
-            startTime = min(startTime, max(outgoingVocalEnd + 0.5, audibleEnd - maximumOverlap))
+        if !shortened, let outroFrom, audibleEnd - outroFrom >= instrumentalSpan {
+            startTime = min(startTime, max(outroFrom + 0.5, audibleEnd - maximumOverlap))
         }
         if let incomingVocalStart {
             let intro = incomingVocalStart - firstAudible
@@ -119,23 +122,14 @@ enum AutoMixPlanner {
             }
         }
 
-        // Vary the length from mix to mix. Only starting later is safe: every limit above
-        // (vocals, fade-ins, outros) holds for a shorter overlap.
-        if !squeezed {
-            let shrunk = max(minimumOverlap, overlap * Double.random(in: 0.65...1.0))
-            if shrunk < overlap {
-                overlap = shrunk
-                startTime = mixEnd - overlap
-            }
-        }
-
         var tempo: AutoMixPlan.Tempo?
         if !basicCrossfade, let outgoingGrid = outgoing?.edgeBeat, let incomingGrid = incoming?.edgeBeat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
             // Snap forward so vocal gaps chosen above are kept.
             let snapped = outgoingGrid.beat(atOrAfter: startTime)
             let beats = max(4, (overlap / outgoingGrid.period / 4).rounded() * 4)
-            let snappedOverlap = min(beats * outgoingGrid.period, (mixEnd - snapped) / (1 + maximumTempoShift), vocalLimit ?? .infinity)
+            let incomingPeriod = 60 / match.bpm
+            let snappedOverlap = min(beats * incomingPeriod, (mixEnd - snapped) / (1 + maximumTempoShift), vocalLimit ?? .infinity)
             if snapped >= 0, snappedOverlap >= 2.5 {
                 startTime = snapped
                 overlap = snappedOverlap
@@ -153,8 +147,16 @@ enum AutoMixPlanner {
             tempo: tempo,
             incomingFadesIn: incomingFadesIn,
             filter: basicCrossfade ? .none : filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd),
-            curve: basicCrossfade ? .equalPower : (AutoMixPlan.Curve.allCases.randomElement() ?? .equalPower)
+            curve: curve(basicCrossfade: basicCrossfade, beatMatched: tempo != nil, naturalFade: fadeStart != nil || incomingFadesIn)
         )
+    }
+
+    /// Beat-matched mixes swap mostly in the middle, like a DJ; songs that fade on their own
+    /// stay up together longer; everything else keeps constant loudness.
+    private static func curve(basicCrossfade: Bool, beatMatched: Bool, naturalFade: Bool) -> AutoMixPlan.Curve {
+        if basicCrossfade { return .equalPower }
+        if beatMatched { return .smooth }
+        return naturalFade ? .overlapping : .equalPower
     }
 
     /// Fast, loud songs get a high-pass sweep; slower or quieter ones a low-pass sweep.
@@ -176,10 +178,8 @@ enum AutoMixPlanner {
             }
         }
         if outgoing?.edgeBeat == nil, outgoing != nil { return .mellow }
-        // Clear cases follow the mood, but sometimes skip the filter so repeats differ.
-        if Int.random(in: 0..<4) == 0 { return .none }
-        if score == 0 { return Bool.random() ? .energetic : .mellow }
-        return score >= 1 ? .energetic : .mellow
+        if score == 0 { return .none }
+        return score > 0 ? .energetic : .mellow
     }
 
     /// The incoming grid, possibly at half or double tempo, when it is within reach of the outgoing one.

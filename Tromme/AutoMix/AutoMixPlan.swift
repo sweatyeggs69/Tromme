@@ -12,7 +12,8 @@ struct AutoMixPlan: Sendable {
     let overlap: TimeInterval
     /// Track time the incoming track starts from; nil keeps its normal start.
     let introStart: TimeInterval?
-    /// Outgoing and incoming tempos (BPM) when beat matching applies.
+    /// Outgoing and incoming tempos (BPM) when beat matching applies. The outgoing song is
+    /// set to the incoming tempo once, for the whole overlap; the incoming song is never stretched.
     let tempo: Tempo?
     /// The incoming track fades in on its own, so it needs less help from the mix.
     var incomingFadesIn = false
@@ -21,7 +22,7 @@ struct AutoMixPlan: Sendable {
     /// Shape of the volume crossfade.
     var curve: Curve = .equalPower
 
-    enum Curve: Sendable, CaseIterable {
+    enum Curve: Sendable {
         /// Constant combined loudness.
         case equalPower
         /// Eases in and out, so the swap happens mostly in the middle.
@@ -56,10 +57,8 @@ struct AutoMixPlan: Sendable {
         let outgoing: Double
         let incoming: Double
 
-        /// Shared tempo `progress` (0...1) of the way through the overlap.
-        func blended(at progress: Double) -> Double {
-            outgoing + (incoming - outgoing) * progress
-        }
+        /// Playback rate that brings the outgoing song to the incoming tempo.
+        var outgoingRate: Float { Float(incoming / outgoing) }
     }
 
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
@@ -78,11 +77,4 @@ struct AutoMixPlan: Sendable {
 
     var isBeatMatched: Bool { tempo != nil }
 
-    /// Incoming track media seconds played after `elapsed` seconds of overlap.
-    func incomingMediaElapsed(_ elapsed: TimeInterval) -> TimeInterval {
-        guard let tempo else { return elapsed }
-        let s = min(elapsed, overlap)
-        let area = tempo.outgoing * s + (tempo.incoming - tempo.outgoing) * s * s / (2 * overlap)
-        return area / tempo.incoming + max(0, elapsed - overlap)
-    }
 }
