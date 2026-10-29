@@ -42,11 +42,15 @@ extension AudioPlayerService {
         }
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
         let generation = playbackGeneration
+        let client = client, server = server
 
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
+            async let outgoingHeavy = HeavyGenre.matches(current, client: client, server: server)
+            async let incomingHeavy = HeavyGenre.matches(incoming, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
+            let (outgoingIsHeavy, incomingIsHeavy) = await (outgoingHeavy, incomingHeavy)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
@@ -57,13 +61,15 @@ extension AudioPlayerService {
                 incomingBaseStart: incomingBaseStart,
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
-                incomingVocalStart: incomingSpan?.start
+                incomingVocalStart: incomingSpan?.start,
+                outgoingIsHeavy: outgoingIsHeavy,
+                incomingIsHeavy: incomingIsHeavy
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) heavy=\(outgoingIsHeavy)/\(incomingIsHeavy)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }

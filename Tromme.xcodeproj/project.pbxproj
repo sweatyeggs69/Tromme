@@ -219,6 +219,7 @@
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
 		C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */; };
 		B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */; };
+		EAA3296CD346818A5FD0DCE3 /* HeavyGenre.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971191A0B93BC32824EF5992 /* HeavyGenre.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -438,6 +439,7 @@
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
 		B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixFilterTap.swift; sourceTree = "<group>"; };
 		74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparedMixIncoming.swift; sourceTree = "<group>"; };
+		971191A0B93BC32824EF5992 /* HeavyGenre.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeavyGenre.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -453,6 +455,7 @@
 			isa = PBXGroup;
 			children = (
 				74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */,
+				971191A0B93BC32824EF5992 /* HeavyGenre.swift */,
 				B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */,
 				A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */,
 				9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */,
@@ -930,6 +933,7 @@
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
 				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,
 				B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */,
+				EAA3296CD346818A5FD0DCE3 /* HeavyGenre.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
 				8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */,
 				4EF1AB66E4C346F4DDD503E2 /* QueueRow.swift in Sources */,
