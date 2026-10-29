@@ -59,8 +59,6 @@ struct NowPlayingView: View {
     private var iPadBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadBottomActionsExtraPadding }
 
     private var artworkPath: String? { player.currentTrack?.parentThumb ?? player.currentTrack?.thumb }
-    /// Titles crossfade when Auto Mix blends into the next song; other changes are instant.
-    private var mixCrossfade: Animation? { player.isAutoMixing ? .easeInOut(duration: 1.2) : nil }
     private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
     private var portraitArtworkBottomPadding: CGFloat { AppStyle.NowPlaying.portraitArtworkBottomPadding }
     private var portraitTrackInfoBottomPadding: CGFloat { AppStyle.NowPlaying.portraitTrackInfoBottomPadding }
@@ -428,7 +426,6 @@ struct NowPlayingView: View {
 
             VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
-                    .contentTransition(.opacity)
                     .font(.title3.bold())
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -437,7 +434,6 @@ struct NowPlayingView: View {
                     goToArtist()
                 } label: {
                     Text(player.currentTrack?.artistDisplayName ?? "")
-                        .contentTransition(.opacity)
                         .font(.title3)
                         .foregroundStyle(Color.white.opacity(0.6))
                         .lineLimit(1)
@@ -446,7 +442,6 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)
-            .animation(mixCrossfade, value: player.currentTrack?.ratingKey)
 
             HStack(spacing: 10) {
                 Button {
