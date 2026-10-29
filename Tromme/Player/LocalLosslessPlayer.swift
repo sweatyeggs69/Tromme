@@ -15,8 +15,12 @@ final class LocalLosslessPlayer: NSObject, AudioPlayer.Delegate {
     private var started = false
     private var finished = false
 
-    let duration: TimeInterval
+    private(set) var duration: TimeInterval
+    private var queuedDecoderID: ObjectIdentifier?
+    private var queuedDuration: TimeInterval = 0
     var onFinish: (() -> Void)?
+    /// Called when the gapless-queued track starts rendering; `duration` is then the new track's.
+    var onAdvance: (() -> Void)?
 
     /// Opens the file or remote URL off the main thread and reads its exact length.
     static func open(url: URL) async throws -> LocalLosslessPlayer {
@@ -68,6 +72,22 @@ final class LocalLosslessPlayer: NSObject, AudioPlayer.Delegate {
         }
     }
 
+    /// Queues the next track behind the current one for gapless playback.
+    func enqueueNext(url: URL) async throws {
+        let opened = try await Task.detached { try OpenedDecoder(url: url) }.value
+        guard started, !finished else { throw CancellationError() }
+        let rate = opened.decoder.processingFormat.sampleRate
+        try player.enqueue(opened.decoder)
+        queuedDecoderID = ObjectIdentifier(opened.decoder)
+        queuedDuration = rate > 0 ? Double(opened.decoder.length) / rate : 0
+    }
+
+    func clearQueue() {
+        guard queuedDecoderID != nil else { return }
+        player.clearQueue()
+        queuedDecoderID = nil
+    }
+
     func pause() {
         if started { _ = player.pause() }
     }
@@ -77,6 +97,17 @@ final class LocalLosslessPlayer: NSObject, AudioPlayer.Delegate {
         player.delegate = nil
         player.stop()
         decoder = nil
+    }
+
+    nonisolated func audioPlayer(_ audioPlayer: AudioPlayer, nowPlayingChanged nowPlaying: (any PCMDecoding)?) {
+        guard let nowPlaying else { return }
+        let id = ObjectIdentifier(nowPlaying as AnyObject)
+        Task { @MainActor [weak self] in
+            guard let self, self.queuedDecoderID == id else { return }
+            self.queuedDecoderID = nil
+            self.duration = self.queuedDuration
+            self.onAdvance?()
+        }
     }
 
     nonisolated func audioPlayerEndOfAudio(_ audioPlayer: AudioPlayer) {

@@ -58,9 +58,17 @@ extension AudioPlayerService {
         } else {
             isPlaying = false
         }
+        lossless.onAdvance = { [weak self, weak lossless] in
+            guard let self, let lossless, self.losslessPlayer === lossless else { return }
+            self.advanceToQueuedEngineTrack(lossless)
+        }
         startLosslessTicker(generation: generation)
-        // Same session setup beginTrackSession does for AVPlayer items; skipping it
-        // left the saved track and queue position stale after a quit.
+        beginLosslessSession()
+    }
+
+    /// Same session setup beginTrackSession does for AVPlayer items; skipping it
+    /// left the saved track and queue position stale after a quit.
+    private func beginLosslessSession() {
         updateNowPlayingInfo()
         prefetchGainMetadata()
         prefetchUpcomingArtwork()
@@ -70,7 +78,98 @@ extension AudioPlayerService {
         savePlaybackState()
     }
 
+    // MARK: - Gapless
+
+    /// Queues the next track on the engine when the current one is nearly done.
+    func maybeQueueNextEngineTrack(within lead: TimeInterval = 25) {
+        guard let lossless = losslessPlayer, engineQueued == nil, engineQueueTask == nil else { return }
+        guard duration > 0, duration - currentTime <= lead else { return }
+        guard let target = nextAutoAdvanceTarget(), let url = engineURL(for: target.track) else { return }
+        let generation = playbackGeneration
+        engineQueueTask = Task { @MainActor [weak self] in
+            defer { self?.engineQueueTask = nil }
+            do {
+                try await lossless.enqueueNext(url: url)
+                guard let self, !Task.isCancelled, self.playbackGeneration == generation,
+                      self.losslessPlayer === lossless else {
+                    lossless.clearQueue()
+                    return
+                }
+                self.engineQueued = target
+                self.logPlayback("engine_queue_complete", "track=\(target.track.ratingKey)")
+            } catch {
+                self?.logPlayback("engine_queue_failed", "error=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func discardEngineQueue() {
+        engineQueueTask?.cancel()
+        engineQueueTask = nil
+        engineQueued = nil
+        losslessPlayer?.clearQueue()
+    }
+
+    /// The URL the engine reads for a track: its download, or the original over range
+    /// requests. Nil when cellular playback must use the HLS transcode instead.
+    private func engineURL(for track: PlexMetadata) -> URL? {
+        if let local = AppContext.shared.downloadManager.localURL(for: track.ratingKey) { return local }
+        guard let server, let client else { return nil }
+        let constrainedPath: Bool = switch resolvedPlaybackPath(for: server) {
+        case .cellular, .wan, .relay: !UserDefaults.standard.bool(forKey: Self.disableCellularTranscodingKey)
+        case .lan: false
+        }
+        let exceeds = sourceBitrate(for: track).map { $0 > Self.cellularTranscodeBitrateKbps } ?? true
+        guard !(constrainedPath && exceeds),
+              let partKey = track.media?.first?.part?.first?.key else { return nil }
+        return client.directStreamURL(server: server, partKey: partKey)
+    }
+
+    /// Moves app state onto the track the engine just started playing without a gap.
+    private func advanceToQueuedEngineTrack(_ lossless: LocalLosslessPlayer) {
+        guard let target = engineQueued else { return }
+        engineQueued = nil
+        reportTimelineState("stopped", continuing: true)
+        consumeRepeatOnce()
+
+        let track = target.track
+        currentIndex = target.index
+        currentTrack = track
+        recoveryTrackRatingKey = track.ratingKey
+        recoveryAttemptsForTrack = 0
+        playbackGeneration += 1
+        pendingInitialSeekTime = nil
+        streamTimeOffset = 0
+        pendingStreamOffsetCalibration = false
+        detailedTrackForSoundCheck = nil
+        currentSessionID = nil
+        isConstrainedPlaybackPath = false
+        let record = AppContext.shared.downloadManager.records[track.ratingKey]
+        isPlayingLocalFile = record != nil
+        localFileCodec = record?.codecLabel(source: track.media?.first)
+        isDirectStreamAttempt = record == nil
+
+        duration = Double(track.duration ?? 0) / 1000.0
+        let isMP3 = (sourceAudioCodec(for: track) ?? localFileCodec?.lowercased()) == "mp3"
+        if !isMP3, lossless.duration > 0 { duration = lossless.duration }
+        currentTime = 0
+        lossless.volume = soundCheckVolume(for: track)
+        isReadyToPlay = true
+        logPlayback("engine_gapless_advance", "to=\(track.ratingKey) index=\(target.index)")
+
+        let generation = playbackGeneration
+        lossless.onFinish = { [weak self] in
+            guard let self, self.playbackGeneration == generation else { return }
+            self.handleLosslessFinished()
+        }
+        startLosslessTicker(generation: generation)
+        beginLosslessSession()
+    }
+
     func stopLosslessPlayback() {
+        engineQueueTask?.cancel()
+        engineQueueTask = nil
+        engineQueued = nil
         losslessTickTask?.cancel()
         losslessTickTask = nil
         losslessPlayer?.stop()
@@ -95,6 +194,7 @@ extension AudioPlayerService {
                 }
                 self.maybePingTimeline()
                 self.maybePlanAutoMix()
+                self.maybeQueueNextEngineTrack()
             }
         }
     }

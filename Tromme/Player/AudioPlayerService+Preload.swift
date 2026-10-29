@@ -163,6 +163,7 @@ extension AudioPlayerService {
     }
 
     func discardPreloadedNext() {
+        discardEngineQueue()
         nextTrackPreloadTask?.cancel()
         nextTrackPreloadTask = nil
         if let preloaded = preloadedNext {

@@ -64,6 +64,9 @@ final class AudioPlayerService: Sendable {
     /// Set instead of `player` while a track plays through the Core Audio engine.
     var losslessPlayer: LocalLosslessPlayer?
     var losslessTickTask: Task<Void, Never>?
+    /// The next track queued on the Core Audio engine for gapless playback.
+    var engineQueued: (index: Int, track: PlexMetadata)?
+    var engineQueueTask: Task<Void, Never>?
     var timeObserver: Any?
     var statusObservation: NSKeyValueObservation?
     var timeControlObservation: NSKeyValueObservation?
