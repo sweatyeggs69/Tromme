@@ -1,20 +1,16 @@
 import Foundation
 
-/// Every genre rule for Auto Mix in one place: songs whose Plex genre, style or mood tags match
+/// Every genre rule for Auto Mix in one place: songs whose Plex genre or style tags match
 /// these lists get a plain crossfade instead of a lyric-timed mix, so their intros and outros
-/// play whole. Genre and style keywords match any part of a tag ("hardcore" covers
-/// post-hardcore); moods match whole, since words like "intense" are too broad to share.
-/// Matching is case-insensitive. Songs with no tags at all crossfade too.
+/// play whole. Keywords match any part of a tag ("hardcore" covers post-hardcore), ignoring
+/// case. Songs with no tags at all crossfade too.
 enum AutoMixGenreRules {
     private static let genres = [
         "metal", "hardcore", "metalcore", "deathcore", "mathcore", "grindcore", "crunkcore",
         "screamo", "djent", "thrash", "sludge", "doom", "industrial",
     ]
-    private static let moods: Set<String> = [
-        "angry", "hostile", "menacing", "visceral", "harsh", "volatile", "confrontational",
-    ]
 
-    /// Why the song should crossfade ("genre:Metalcore", "mood:Brash", "untagged"), or nil to
+    /// Why the song should crossfade ("genre:Metalcore", "untagged"), or nil to
     /// mix it normally. Checks the track's tags, then its album's, then its artist's. A song with
     /// no tags anywhere (brand new, or missing metadata) also crossfades, since nothing says a
     /// mix suits it.
@@ -40,8 +36,7 @@ enum AutoMixGenreRules {
         if let tag = tags.first(where: { tag in genres.contains { tag.lowercased().contains($0) } }) {
             return "genre:\(tag)"
         }
-        let itemMoods = (item.mood ?? []).compactMap(\.tag)
-        return itemMoods.first { moods.contains($0.lowercased()) }.map { "mood:\($0)" }
+        return nil
     }
 
     /// Live albums and DJ mixes already flow from track to track (crowd noise, segues), so
