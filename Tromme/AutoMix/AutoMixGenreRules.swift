@@ -11,7 +11,7 @@ enum AutoMixGenreRules {
         "screamo", "djent", "thrash", "sludge", "doom", "industrial",
     ]
     private static let moods: Set<String> = [
-        "aggressive", "angry", "brash", "hostile", "menacing", "visceral", "harsh", "volatile",
+        "angry", "brash", "hostile", "menacing", "visceral", "harsh", "volatile",
         "confrontational", "raucous", "fiery",
     ]
 
