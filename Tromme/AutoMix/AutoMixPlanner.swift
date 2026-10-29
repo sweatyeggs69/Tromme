@@ -5,8 +5,10 @@ enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 12
     private static let minimumOverlap: TimeInterval = 1.5
-    /// Room needed after the last lyric to wait for it to finish completely.
-    private static let minimumFullLyricMix: TimeInterval = 2.5
+    /// Lyrics closer than this to the end of the outgoing song leave no room for a mix.
+    private static let minimumOutroRoom: TimeInterval = 3
+    /// Lyrics closer than this to the start of the incoming song leave no room for a mix.
+    private static let minimumIntroRoom: TimeInterval = 1
     /// An outro longer than this after the last lyric is shortened: it plays for
     /// `shortenedOutro` minus `shortenedOverlap`, then the mix covers the rest.
     private static let longOutro: TimeInterval = 20
@@ -21,9 +23,9 @@ enum AutoMixPlanner {
     ///   - outgoingEnd: Track time where the outgoing track stops (duration or stop marker).
     ///   - incomingBaseStart: The incoming track's start marker, or 0.
     ///   - outgoingVocalEnd: Where the outgoing song's outro begins, from its lyrics.
-    ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix waits for it when it can.
-    ///   - outgoingLastLyricMostlySung: The earliest the mix may start (75% into the last lyric).
+    ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix never starts before it.
     ///   - incomingVocalStart: The incoming song's first lyric.
+    /// - Returns: nil when the lyrics run too close to either song's edge to mix.
     static func plan(
         outgoingKey: String,
         incomingKey: String,
@@ -31,9 +33,11 @@ enum AutoMixPlanner {
         incomingBaseStart: TimeInterval,
         outgoingVocalEnd: TimeInterval?,
         outgoingLastLyricEnd: TimeInterval?,
-        outgoingLastLyricMostlySung: TimeInterval?,
         incomingVocalStart: TimeInterval?
-    ) -> AutoMixPlan {
+    ) -> AutoMixPlan? {
+        if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
+        if let vocalStart = incomingVocalStart, vocalStart - incomingBaseStart < minimumIntroRoom { return nil }
+
         // Outgoing side: the outro sets the length. A short outro gets a short mix; a long one
         // is cut short so the next song comes in a little after the last lyric.
         var mixEnd = outgoingEnd
@@ -48,15 +52,9 @@ enum AutoMixPlanner {
             }
         }
 
-        // The last lyric is sung in full before anything changes when the song leaves room for
-        // a mix after it; otherwise it is at least 75% sung, even if that leaves a short mix.
+        // The last lyric is always sung in full before anything changes.
         var startTime = max(0, mixEnd - overlap)
-        let floor: TimeInterval? = if let lyricEnd = outgoingLastLyricEnd, mixEnd - lyricEnd >= minimumFullLyricMix {
-            lyricEnd
-        } else {
-            outgoingLastLyricMostlySung
-        }
-        if let floor, startTime < floor {
+        if let floor = outgoingLastLyricEnd, startTime < floor {
             startTime = floor
             overlap = max(mixEnd - startTime, minimumOverlap)
         }

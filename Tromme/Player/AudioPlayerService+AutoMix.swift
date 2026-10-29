@@ -50,16 +50,19 @@ extension AudioPlayerService {
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
-            let plan = AutoMixPlanner.plan(
+            guard let plan = AutoMixPlanner.plan(
                 outgoingKey: current.ratingKey,
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
-                outgoingLastLyricMostlySung: outgoingSpan?.lastLineMostlySung,
                 incomingVocalStart: incomingSpan?.start
-            )
+            ) else {
+                self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
+                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                return
+            }
             self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
