@@ -193,8 +193,7 @@ extension AudioPlayerService {
     /// Watches the player item's status. Once .readyToPlay fires, loads the
     /// authoritative duration from the parsed STREAMINFO / container header.
     func observeItemStatus(_ item: AVPlayerItem) {
-        // .initial so an item that is already ready (a reused, pre-buffered one) is handled too.
-        statusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] observedItem, _ in
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] observedItem, _ in
             let status = observedItem.status
             let assetDuration = observedItem.duration.seconds
             let errorDesc = observedItem.error?.localizedDescription

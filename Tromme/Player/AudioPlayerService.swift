@@ -155,8 +155,8 @@ final class AudioPlayerService: Sendable {
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?
     var mixOutgoingVolume: Float = 1
-    /// The next song's pre-buffered item, handed from the outgoing queue to the new player.
-    var mixReusableItem: AVPlayerItem?
+    /// The next song's already-loaded asset (an item can't move between players, its asset can).
+    var mixReusableAsset: AVAsset?
     /// Stream offset of the outgoing item, to turn its player time into track time.
     var mixOutgoingOffset: TimeInterval = 0
     /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
@@ -850,8 +850,8 @@ final class AudioPlayerService: Sendable {
 
     /// `trimmedTo` ends playback at that track's stop marker. Offset HLS streams skip it
     /// because their item timeline isn't the track timeline.
-    func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0) -> AVPlayerItem {
-        let item = AVPlayerItem(url: url)
+    func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0, asset: AVAsset? = nil) -> AVPlayerItem {
+        let item = asset.map { AVPlayerItem(asset: $0) } ?? AVPlayerItem(url: url)
         // Auto Mix speeds tracks up or down slightly; keep their pitch.
         item.audioTimePitchAlgorithm = .spectral
         attachMixFilter(to: item, url: url)
@@ -1122,14 +1122,9 @@ final class AudioPlayerService: Sendable {
 
     func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
-        let item: AVPlayerItem
-        if let reusable = mixReusableItem, reusable.status != .failed,
-           (reusable.asset as? AVURLAsset)?.url == url {
-            item = reusable
-        } else {
-            item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset)
-        }
-        mixReusableItem = nil
+        let reusable = mixReusableAsset.flatMap { ($0 as? AVURLAsset)?.url == url ? $0 : nil }
+        mixReusableAsset = nil
+        let item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset, asset: reusable)
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {
