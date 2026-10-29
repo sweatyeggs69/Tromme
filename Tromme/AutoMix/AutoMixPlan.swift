@@ -13,6 +13,9 @@ struct AutoMixPlan: Sendable {
     var introStart: TimeInterval?
     /// Filter sweep across the overlap.
     var filter: FilterStyle = .none
+    /// A plain crossfade from the genre rules rather than a lyric-timed mix; Now Playing
+    /// doesn't show the mix effect for it.
+    var isPlainCrossfade = false
 
     enum FilterStyle: Sendable {
         case none
@@ -29,6 +32,6 @@ struct AutoMixPlan: Sendable {
     }
 
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter)
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade)
     }
 }

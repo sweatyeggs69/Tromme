@@ -93,7 +93,8 @@ enum AutoMixPlanner {
             outgoingKey: outgoingKey,
             incomingKey: incomingKey,
             startTime: max(0, outgoingEnd - crossfadeLength),
-            overlap: crossfadeLength
+            overlap: crossfadeLength,
+            isPlainCrossfade: true
         )
     }
 }

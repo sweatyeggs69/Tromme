@@ -8,7 +8,8 @@ extension AudioPlayerService {
     private static let planningLeadTime: TimeInterval = 150
 
     /// True while a mix is fading between two tracks.
-    /// Set before the next song loads, so Now Playing can crossfade to it.
+    /// True while a lyric-timed mix plays (not a plain crossfade), for the timeline effect.
+    /// Set before the next song loads.
     var isAutoMixing: Bool { autoMixInProgress }
 
     var isAutoMixEnabled: Bool { PlusStore.cachedIsPlus && UserDefaults.standard.bool(forKey: Self.autoMixKey) }
@@ -184,7 +185,7 @@ extension AudioPlayerService {
         // the prepared song, so it starts from the top; the mix still ends before its lyrics.
         var resume = plan.introStart
         if case .hls? = preloadedNext?.source { resume = nil }
-        autoMixInProgress = true
+        autoMixInProgress = !plan.isPlainCrossfade
         loadAndPlay(target.track, resumeAt: resume)
         mixReusableAsset = nil
         autoMixPlan = plan
