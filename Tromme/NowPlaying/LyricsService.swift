@@ -117,9 +117,13 @@ final class LyricsService {
         let parsed = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 })
         let sung = parsed.filter { !$0.isBreak }
         guard var first = sung.first, let last = sung.last else { return nil }
-        // A lone line near the start followed by a long instrumental stretch is a count-in or
-        // spoken intro, not where the singing starts.
-        if sung.count > 2, first.time < 15, sung[1].time - first.time >= 8 { first = sung[1] }
+        // A lone line near the start followed by a music note row (an instrumental stretch) is
+        // a count-in or spoken intro, not where the singing starts.
+        if sung.count > 2, first.time < 15,
+           let index = parsed.firstIndex(where: { !$0.isBreak }),
+           parsed.indices.contains(index + 1), parsed[index + 1].isBreak {
+            first = sung[1]
+        }
         func mostlySung(_ start: TimeInterval, _ end: TimeInterval) -> TimeInterval {
             start + max(0, end - start) * 0.75
         }
