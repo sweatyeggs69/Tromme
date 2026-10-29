@@ -59,7 +59,7 @@ struct NowPlayingView: View {
     private var iPadBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadBottomActionsExtraPadding }
 
     private var artworkPath: String? { player.currentTrack?.parentThumb ?? player.currentTrack?.thumb }
-    /// Artwork and titles crossfade when Auto Mix blends into the next song; other changes are instant.
+    /// Titles crossfade when Auto Mix blends into the next song; other changes are instant.
     private var mixCrossfade: Animation? { player.isAutoMixing ? .easeInOut(duration: 1.2) : nil }
     private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
     private var portraitArtworkBottomPadding: CGFloat { AppStyle.NowPlaying.portraitArtworkBottomPadding }
@@ -135,16 +135,11 @@ struct NowPlayingView: View {
                             VStack(spacing: 0) {
                                 Spacer(minLength: 0)
 
-                                ZStack {
-                                    ArtworkView(
-                                        thumbPath: artworkPath,
-                                        size: landscapeArtworkSize,
-                                        cornerRadius: AppStyle.Radius.card
-                                    )
-                                    .id(artworkPath)
-                                    .transition(.opacity)
-                                }
-                                .animation(mixCrossfade, value: artworkPath)
+                                ArtworkView(
+                                    thumbPath: artworkPath,
+                                    size: landscapeArtworkSize,
+                                    cornerRadius: AppStyle.Radius.card
+                                )
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 // After the shadows, so the video doesn't cast a second one.
@@ -271,19 +266,14 @@ struct NowPlayingView: View {
                                 return fullRect
                             }()
 
-                            ZStack {
-                                ArtworkView(
-                                    thumbPath: artworkPath,
-                                    size: targetRect.width,
-                                    cornerRadius: isCompact ? 4 : 6,
-                                    // Keep requesting the full-size image in the compact slot too, so
-                                    // shrinking never swaps to a different size that may not be loaded yet.
-                                    minimumTranscodePx: ArtworkView.maxTranscodePx
-                                )
-                                .id(artworkPath)
-                                .transition(.opacity)
-                            }
-                            .animation(mixCrossfade, value: artworkPath)
+                            ArtworkView(
+                                thumbPath: artworkPath,
+                                size: targetRect.width,
+                                cornerRadius: isCompact ? 4 : 6,
+                                // Keep requesting the full-size image in the compact slot too, so
+                                // shrinking never swaps to a different size that may not be loaded yet.
+                                minimumTranscodePx: ArtworkView.maxTranscodePx
+                            )
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .position(x: targetRect.midX, y: targetRect.midY)
