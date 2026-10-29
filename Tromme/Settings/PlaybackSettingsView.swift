@@ -44,7 +44,7 @@ struct PlaybackSettingsView: View {
                         }
                     }
             } footer: {
-                Text("Blends songs into each other, matching tempo and beats when it can.")
+                Text("Blends songs into each other, timed around their lyrics.")
             }
 
             if supportsCellularSettings {

@@ -1,13 +1,11 @@
 import AVFoundation
 
-// Auto Mix: overlaps the end of one track with the start of the next, with a
-// loudness-aware fade and, when both tracks have a steady beat, matched tempo and beats.
+// Auto Mix: overlaps the end of one track with the start of the next, timed from their
+// synced lyrics so the outro and intro carry the mix.
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
 
-    private nonisolated static let analysisLeadTime: TimeInterval = 150
-    private nonisolated static let tailWindow: TimeInterval = 30
-    private nonisolated static let headWindow: TimeInterval = 25
+    private static let planningLeadTime: TimeInterval = 150
 
     /// True while a mix is fading between two tracks.
     var isAutoMixing: Bool { autoMixTask != nil }
@@ -16,12 +14,12 @@ extension AudioPlayerService {
 
     // MARK: - Planning
 
-    /// Called from the playback tick; analyses the current and next tracks shortly
-    /// before the end, then waits for the planned start.
+    /// Called from the playback tick; reads both songs' lyrics timing shortly before the
+    /// end, then waits for the planned start.
     func maybePlanAutoMix() {
         guard isAutoMixEnabled, repeatMode == .off,
               autoMixTask == nil, autoMixPlanTask == nil, autoMixTriggerTask == nil,
-              duration > 20, duration - currentTime <= Self.analysisLeadTime,
+              duration > 20, duration - currentTime <= Self.planningLeadTime,
               playbackIntent, isPlaying,
               let current = currentTrack, let target = nextAutoAdvanceTarget(),
               target.track.ratingKey != current.ratingKey,
@@ -32,50 +30,30 @@ extension AudioPlayerService {
         let isContinuousAlbum = current.parentRatingKey != nil
             && current.parentRatingKey == incoming.parentRatingKey
             && (current.index ?? -1) + 1 == incoming.index
-        // Tracks in order on the same album stay gapless, so there is nothing to analyse.
+        // Tracks in order on the same album are never mixed; they stay gapless.
         if isContinuousAlbum {
-            autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
+            autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
             return
         }
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
-        let outgoingFile = AppContext.shared.downloadManager.localURL(for: current.ratingKey)
-        let incomingFile = AppContext.shared.downloadManager.localURL(for: incoming.ratingKey)
-        let outgoingDuration = Double(current.duration ?? 0) / 1000
-        let incomingDuration = Double(incoming.duration ?? 0) / 1000
         let generation = playbackGeneration
 
         autoMixPlanTask = Task { [weak self] in
-            async let outgoingProfile = Self.mixProfile(key: current.ratingKey, duration: outgoingDuration, localURL: outgoingFile)
-            async let incomingProfile = Self.mixProfile(key: incoming.ratingKey, duration: incomingDuration, localURL: incomingFile)
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
-            let (outgoing, incomingProfileResult) = await (outgoingProfile, incomingProfile)
-            let incomingAnalysis = incomingProfileResult?.window(
-                from: incomingBaseStart, to: incomingBaseStart + Self.headWindow, edge: .start
-            )
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
-            guard let plan = AutoMixPlanner.plan(
+            let plan = AutoMixPlanner.plan(
                 outgoingKey: current.ratingKey,
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
-                outgoingWindow: { mixPoint in
-                    outgoing?.window(from: mixPoint - Self.tailWindow, to: mixPoint + 2, edge: .end)
-                },
-                outgoingOutroStart: outgoing?.outroStart,
-                incoming: incomingAnalysis,
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricMostlySung: outgoingSpan?.lastLineMostlySung,
-                incomingVocalStart: incomingSpan?.start,
-                isContinuousAlbum: isContinuousAlbum
-            ) else {
-                self.logPlayback("automix_skipped", "reason=continuous_album")
-                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
-                return
-            }
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) profiles=\(outgoing != nil)/\(incomingProfileResult != nil) outro=\(outgoing?.outroStart ?? -1) curve=\(plan.curve) filter=\(plan.filter)")
+                incomingVocalStart: incomingSpan?.start
+            )
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
@@ -87,20 +65,10 @@ extension AudioPlayerService {
         return min(duration, stop ?? duration)
     }
 
-    /// The song's cached analysis, or a fresh one from its download. Streamed songs are
-    /// never copied to disk for this, so they plan from lyrics and timing alone.
-    private nonisolated static func mixProfile(key: String, duration: TimeInterval, localURL: URL?) async -> TrackMixProfile? {
-        if let cached = TrackMixProfileStore.load(key: key, duration: duration) { return cached }
-        guard let localURL, let profile = await AutoMixAnalyzer.profile(url: localURL) else { return nil }
-        TrackMixProfileStore.save(profile, key: key)
-        return profile
-    }
-
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
         // A streamed song takes a moment to start, so begin loading it a little early.
-        // Beat-matched mixes keep the exact planned moment.
         let isLocal = AppContext.shared.downloadManager.localURL(for: plan.incomingKey) != nil
-        let lead: TimeInterval = plan.tempo == nil && !isLocal ? 1.5 : 0.02
+        let lead: TimeInterval = isLocal ? 0.02 : 1.5
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
@@ -137,8 +105,7 @@ extension AudioPlayerService {
             return
         }
 
-        // Past the planned start (a seek, or analysis that finished late): mix from now,
-        // and drop the beat match because its phase no longer lines up.
+        // Past the planned start (a seek, or lyrics that arrived late): mix from now.
         var plan = original
         if lateness > 1.5 {
             // The planned window may be gone (a shortened outro planned late), but the song
@@ -151,12 +118,7 @@ extension AudioPlayerService {
             }
             let plannedLeft = original.startTime + original.overlap - now
             let overlap = min(max(plannedLeft, min(original.overlap, 6)), songLeft - 0.3)
-            plan = AutoMixPlan(
-                outgoingKey: original.outgoingKey, incomingKey: original.incomingKey,
-                startTime: now, overlap: overlap,
-                introStart: original.introStart, tempo: nil,
-                incomingFadesIn: original.incomingFadesIn, filter: original.filter, curve: original.curve
-            )
+            plan = original.starting(at: now, overlap: overlap)
         }
 
         // Hand the playing output over: the new track loads through the normal path while
@@ -168,7 +130,6 @@ extension AudioPlayerService {
             if preloaded.ratingKey == target.track.ratingKey { mixReusableAsset = preloaded.item.asset }
         }
         player?.actionAtItemEnd = .none
-        player?.currentItem?.audioTimePitchAlgorithm = .spectral
         mixOutgoingPlayer = player
         mixOutgoingLossless = losslessPlayer
         mixOutgoingVolume = player?.volume ?? losslessPlayer?.volume ?? 1
@@ -180,18 +141,14 @@ extension AudioPlayerService {
 
         mixIncomingGain = 0
         currentIndex = target.index
-        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) beat=\(plan.isBeatMatched)")
+        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap)")
         // A streamed transcode can't start part-way without a new session, which would lose
-        // the prepared song, so those start from the top without beat matching.
+        // the prepared song, so it starts from the top; the mix still ends before its lyrics.
         var resume = plan.introStart
-        if case .hls? = preloadedNext?.source {
-            resume = nil
-            plan = plan.withoutTempo()
-        }
+        if case .hls? = preloadedNext?.source { resume = nil }
         loadAndPlay(target.track, resumeAt: resume)
         mixReusableAsset = nil
         autoMixPlan = plan
-        autoMixTransition = AutoMixTransition(duration: plan.overlap, isBeatMatched: plan.isBeatMatched)
         runAutoMixFade(plan, generation: playbackGeneration, outgoingEnd: plan.startTime + plan.overlap)
     }
 
@@ -200,58 +157,37 @@ extension AudioPlayerService {
         autoMixTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var plan = original
-            var startedAt = beganAt
 
-            // Without beat matching, hold the outgoing song at full volume until the new one is
-            // audible, so a slow start never leaves a gap. The overlap shrinks to what is left.
-            if plan.tempo == nil {
-                while !Task.isCancelled {
-                    guard self.playbackGeneration == generation, self.playbackIntent else {
-                        self.finishAutoMix()
-                        return
-                    }
-                    if self.isIncomingPlaying
-                        || Date().timeIntervalSince(beganAt) > 8
-                        || self.outgoingRemaining(until: outgoingEnd) < 0.4 { break }
-                    try? await Task.sleep(for: .milliseconds(30))
-                }
-                startedAt = Date()
-                let remaining = self.outgoingRemaining(until: outgoingEnd)
-                if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
-            }
-
-            var aligned = plan.tempo == nil
+            // Hold the outgoing song at full volume until the new one is audible, so a slow
+            // start never leaves a gap. The overlap shrinks to what is left.
             while !Task.isCancelled {
                 guard self.playbackGeneration == generation, self.playbackIntent else {
                     self.finishAutoMix()
                     return
                 }
-                let elapsed = Date().timeIntervalSince(startedAt)
-                let progress = min(1, elapsed / plan.overlap)
+                if self.isIncomingPlaying
+                    || Date().timeIntervalSince(beganAt) > 8
+                    || self.outgoingRemaining(until: outgoingEnd) < 0.4 { break }
+                try? await Task.sleep(for: .milliseconds(30))
+            }
+            let startedAt = Date()
+            let remaining = self.outgoingRemaining(until: outgoingEnd)
+            if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
 
-                let gains = plan.curve.gains(progress)
+            while !Task.isCancelled {
+                guard self.playbackGeneration == generation, self.playbackIntent else {
+                    self.finishAutoMix()
+                    return
+                }
+                let progress = min(1, Date().timeIntervalSince(startedAt) / plan.overlap)
+
+                let gains = AutoMixPlan.gains(progress)
                 self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing
                 self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing
-                // A song that fades in by itself reaches full level early so it isn't faded twice.
-                self.mixIncomingGain = plan.incomingFadesIn
-                    ? AutoMixPlan.Curve.equalPower.gains(min(1, progress / 0.35)).incoming
-                    : gains.incoming
+                self.mixIncomingGain = gains.incoming
                 self.applyIncomingVolume()
 
                 self.applyMixFilters(plan.filter, progress: Float(progress))
-
-                // One rate change on the fading song, never a continuous ramp: every rate
-                // change restarts the time-stretch, which is heard as warble.
-                if let tempo = plan.tempo {
-                    if let outgoing = self.mixOutgoingPlayer, outgoing.timeControlStatus == .playing {
-                        Self.setRate(outgoing, tempo.outgoingRate)
-                    }
-                    if let incoming = self.player, self.pendingInitialSeekTime == nil,
-                       incoming.timeControlStatus == .playing, !aligned {
-                        aligned = true
-                        self.alignIncoming(incoming, plan: plan, elapsed: elapsed)
-                    }
-                }
 
                 if progress >= 1 {
                     self.finishAutoMix()
@@ -283,29 +219,13 @@ extension AudioPlayerService {
         return max(0, end - time)
     }
 
-    /// A streamed track starts a little after the planned moment; jump it forward by the
-    /// delay so its beats still land on the outgoing track's.
-    private func alignIncoming(_ incoming: AVQueuePlayer, plan: AutoMixPlan, elapsed: TimeInterval) {
-        let expected = (plan.introStart ?? currentTrackStartTime) + elapsed
-        let actual = incoming.currentTime().seconds
-        guard actual.isFinite, expected - actual > 0.05, expected - actual < 3 else { return }
-        logPlayback("automix_align", "skip=\(expected - actual)")
-        let tolerance = CMTime(seconds: 0.02, preferredTimescale: 600)
-        incoming.seek(to: CMTime(seconds: expected, preferredTimescale: 600), toleranceBefore: tolerance, toleranceAfter: tolerance, completionHandler: { _ in })
-    }
-
-    private static func setRate(_ player: AVPlayer, _ rate: Float) {
-        guard abs(player.rate - rate) > 0.002 else { return }
-        player.rate = rate
-    }
-
     func applyIncomingVolume() {
         let volume = soundCheckVolume(for: currentTrack)
         player?.volume = volume
         losslessPlayer?.volume = volume
     }
 
-    /// Releases the faded-out track and returns the new one to normal volume and speed.
+    /// Releases the faded-out track and returns the new one to normal volume.
     func finishAutoMix() {
         autoMixTask?.cancel()
         autoMixTask = nil
@@ -317,9 +237,6 @@ extension AudioPlayerService {
         mixIncomingGain = 1
         applyIncomingVolume()
         mixTap(for: player)?.set(.off, cutoff: 1000)
-        if let player, player.timeControlStatus == .playing, player.rate != 1 {
-            player.rate = 1
-        }
     }
 
     // MARK: - Preparing

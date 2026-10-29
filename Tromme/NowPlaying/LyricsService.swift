@@ -116,13 +116,16 @@ final class LyricsService {
         guard let synced = lyrics.syncedLyrics else { return nil }
         let parsed = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 })
         let sung = parsed.filter { !$0.isBreak }
-        guard let first = sung.first, let last = sung.last else { return nil }
-        // The closing music note row marks exactly where the last line ends.
-        // A song that ends on one line (or a pair) sung over and over treats the repeats after
-        // the second as its outro.
+        guard var first = sung.first, let last = sung.last else { return nil }
+        // A lone line near the start followed by a long instrumental stretch is a count-in or
+        // spoken intro, not where the singing starts.
+        if sung.count > 2, first.time < 15, sung[1].time - first.time >= 8 { first = sung[1] }
         func mostlySung(_ start: TimeInterval, _ end: TimeInterval) -> TimeInterval {
             start + max(0, end - start) * 0.75
         }
+        // The closing music note row marks exactly where the last line ends.
+        // A song that ends on one line (or a pair) sung over and over treats the repeats after
+        // the second as its outro.
         if let outroStart = repeatedOutroStart(sung) {
             let line = sung.last { $0.time < outroStart } ?? first
             return (first.time, outroStart, mostlySung(line.time, line.lastWordEnd ?? outroStart))

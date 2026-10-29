@@ -163,8 +163,6 @@ final class AudioPlayerService: Sendable {
     var mixOutgoingOffset: TimeInterval = 0
     /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
     var mixIncomingGain: Float = 1
-    /// Set each time a mix begins; Now Playing animates on it.
-    var autoMixTransition: AutoMixTransition?
     var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
     /// AVPlayerItemDidPlayToEndTime notifications that race with seek callbacks.
@@ -275,9 +273,12 @@ final class AudioPlayerService: Sendable {
     }
 
     init() {
-        // Earlier builds kept temporary copies of streamed songs here for Auto Mix.
-        try? FileManager.default.removeItem(at: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        // Earlier builds kept copies of streamed songs and song analyses for Auto Mix.
+        let fileManager = FileManager.default
+        try? fileManager.removeItem(at: fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AutoMix", isDirectory: true))
+        try? fileManager.removeItem(at: fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("MixProfiles", isDirectory: true))
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()
@@ -856,8 +857,6 @@ final class AudioPlayerService: Sendable {
     /// because their item timeline isn't the track timeline.
     func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0, asset: AVAsset? = nil) -> AVPlayerItem {
         let item = asset.map { AVPlayerItem(asset: $0) } ?? AVPlayerItem(url: url)
-        // Auto Mix speeds tracks up or down slightly; keep their pitch.
-        item.audioTimePitchAlgorithm = .spectral
         attachMixFilter(to: item, url: url)
         if let track, streamOffset == 0,
            let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {

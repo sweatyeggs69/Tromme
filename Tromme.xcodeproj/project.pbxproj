@@ -214,16 +214,9 @@
 		AA10C0DE0000000000000001 /* LocalLosslessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */; };
 		AA10C0DE0000000000000003 /* AudioPlayerService+Lossless.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */; };
 		079DC0CDC83878CE7886B28C /* AutoMixPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */; };
-		12583EF1AB7829BF2903629B /* AutoMixWindowAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = 507EFAF4E64D66313ED066F7 /* AutoMixWindowAnalysis.swift */; };
-		59A0B4101D450A1D1AB6770C /* BeatGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F5C39E45EEBE488D36FBAE /* BeatGrid.swift */; };
-		92C452E9427E207E0971CBB1 /* BeatEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1723E0D2539943C9D0B12EF4 /* BeatEstimator.swift */; };
-		6304C8D6121F3A7455BE22E7 /* AutoMixAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13A58E94A695DFE048497D41 /* AutoMixAnalyzer.swift */; };
 		A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */; };
-		02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */; };
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
 		C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */; };
-		8D3B576732E94ECBF26AB6B5 /* TrackMixProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */; };
-		5C0F30354CDB4AD1AC59BA9F /* TrackMixProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */; };
 		B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */; };
 /* End PBXBuildFile section */
 
@@ -439,16 +432,9 @@
 		AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLosslessPlayer.swift; sourceTree = "<group>"; };
 		AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+Lossless.swift"; sourceTree = "<group>"; };
 		A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlan.swift; sourceTree = "<group>"; };
-		507EFAF4E64D66313ED066F7 /* AutoMixWindowAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixWindowAnalysis.swift; sourceTree = "<group>"; };
-		66F5C39E45EEBE488D36FBAE /* BeatGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatGrid.swift; sourceTree = "<group>"; };
-		1723E0D2539943C9D0B12EF4 /* BeatEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BeatEstimator.swift; sourceTree = "<group>"; };
-		13A58E94A695DFE048497D41 /* AutoMixAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixAnalyzer.swift; sourceTree = "<group>"; };
 		9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlanner.swift; sourceTree = "<group>"; };
-		44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixTransition.swift; sourceTree = "<group>"; };
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
 		B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixFilterTap.swift; sourceTree = "<group>"; };
-		BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMixProfileStore.swift; sourceTree = "<group>"; };
-		F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMixProfile.swift; sourceTree = "<group>"; };
 		74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparedMixIncoming.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -465,16 +451,9 @@
 			isa = PBXGroup;
 			children = (
 				74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */,
-				BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */,
-				F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */,
 				B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */,
 				A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */,
-				507EFAF4E64D66313ED066F7 /* AutoMixWindowAnalysis.swift */,
-				66F5C39E45EEBE488D36FBAE /* BeatGrid.swift */,
-				1723E0D2539943C9D0B12EF4 /* BeatEstimator.swift */,
-				13A58E94A695DFE048497D41 /* AutoMixAnalyzer.swift */,
 				9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */,
-				44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */,
 			);
 			path = AutoMix;
 			sourceTree = "<group>";
@@ -944,16 +923,9 @@
 				830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */,
 				A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */,
 				079DC0CDC83878CE7886B28C /* AutoMixPlan.swift in Sources */,
-				12583EF1AB7829BF2903629B /* AutoMixWindowAnalysis.swift in Sources */,
-				59A0B4101D450A1D1AB6770C /* BeatGrid.swift in Sources */,
-				92C452E9427E207E0971CBB1 /* BeatEstimator.swift in Sources */,
-				6304C8D6121F3A7455BE22E7 /* AutoMixAnalyzer.swift in Sources */,
 				A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */,
-				02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */,
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
 				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,
-				8D3B576732E94ECBF26AB6B5 /* TrackMixProfileStore.swift in Sources */,
-				5C0F30354CDB4AD1AC59BA9F /* TrackMixProfile.swift in Sources */,
 				B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
 				8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */,
