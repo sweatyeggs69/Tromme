@@ -6,6 +6,7 @@ enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 12
     private static let minimumOverlap: TimeInterval = 2.5
+    private static let minimumVocalTail: TimeInterval = 1.2
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
     /// An outro longer than this after the last lyric is shortened: it plays for
@@ -86,10 +87,14 @@ enum AutoMixPlanner {
             let intro = incomingVocalStart - firstAudible
             if intro >= instrumentalSpan {
                 startTime = min(startTime, audibleEnd - min(intro, maximumOverlap))
-                if let outgoingVocalEnd { startTime = max(startTime, outgoingVocalEnd - intro + 0.5) }
             }
         }
         startTime = max(0, min(startTime, audibleEnd - minimumOverlap))
+        // Never fade the outgoing song while it is still being sung. A song that ends right
+        // after its last lyric gets a short mix instead.
+        if let outgoingVocalEnd {
+            startTime = max(startTime, min(outgoingVocalEnd, audibleEnd - minimumVocalTail))
+        }
         overlap = audibleEnd - startTime
 
         // The mix finishes before the incoming song's first lyric.
