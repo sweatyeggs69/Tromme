@@ -75,7 +75,7 @@ struct TimelineSlider: View {
         let progress = duration > 0 ? sliderValue / duration : 0
 
         return GeometryReader { geo in
-            SliderTrack(progress: CGFloat(progress), isDragging: isDragging, width: geo.size.width, isMixing: player.isAutoMixing)
+            SliderTrack(progress: CGFloat(progress), isDragging: isDragging, width: geo.size.width)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -96,9 +96,8 @@ struct TimelineSlider: View {
         }
         .frame(height: 28)
         .disabled(!isReady)
-        .opacity(isReady ? (isDragging || player.isAutoMixing ? 1.0 : 0.55) : 0.3)
+        .opacity(isReady ? (isDragging ? 1.0 : 0.55) : 0.3)
         .animation(.easeInOut(duration: 0.2), value: isDragging)
-        .animation(.easeInOut(duration: 0.5), value: player.isAutoMixing)
     }
 
     private func timeLabels(displayValue: TimeInterval, duration: TimeInterval) -> some View {

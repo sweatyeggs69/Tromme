@@ -1,14 +1,15 @@
 import SwiftUI
 
-struct QueueActionPill<Label: View>: View {
+struct QueueActionPill: View {
+    let systemImage: String
     let isActive: Bool
     let action: () -> Void
-    @ViewBuilder let label: Label
 
     var body: some View {
         Button(action: action) {
-            label
+            Image(systemName: systemImage)
                 .foregroundStyle(isActive ? .white : .white.opacity(0.7))
+                .contentTransition(.symbolEffect(.replace))
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background {
                     Capsule(style: .continuous)
@@ -16,13 +17,5 @@ struct QueueActionPill<Label: View>: View {
                 }
         }
         .buttonStyle(.plain)
-    }
-}
-
-extension QueueActionPill where Label == AnyView {
-    init(systemImage: String, isActive: Bool, action: @escaping () -> Void) {
-        self.init(isActive: isActive, action: action) {
-            AnyView(Image(systemName: systemImage).contentTransition(.symbolEffect(.replace)))
-        }
     }
 }
