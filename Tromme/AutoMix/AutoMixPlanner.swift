@@ -13,8 +13,8 @@ enum AutoMixPlanner {
     private static let minimumIntroRoom: TimeInterval = 1
     /// An outro longer than this after the last lyric is shortened: it plays for
     /// `shortenedOutro` minus `shortenedOverlap`, then the mix covers the rest.
-    private static let longOutro: TimeInterval = 20
-    private static let shortenedOutro: TimeInterval = 14
+    private static let longOutro: TimeInterval = 28
+    private static let shortenedOutro: TimeInterval = 22
     private static let shortenedOverlap: TimeInterval = 8
     /// The mix completes this long before the incoming song's first lyric.
     private static let lyricLead: TimeInterval = 1

@@ -124,9 +124,9 @@ final class LyricsService {
             first = sung[1]
         }
         // The closing music note row marks exactly where the last line ends.
-        // A song that ends on one line or a short refrain (up to four lines) sung over and over
-        // treats the repeats after the second as its outro; a refrain sung just twice is still
-        // part of the song.
+        // A song that ends on one line sung over and over treats the repeats after the second as
+        // its outro; one that ends on a short refrain (two to four lines) sung again treats
+        // everything from the second time through as outro.
         if let outroStart = repeatedOutroStart(sung) {
             let line = sung.last { $0.time < outroStart } ?? first
             return (first.time, outroStart, line.lastWordEnd ?? outroStart)
@@ -139,14 +139,16 @@ final class LyricsService {
         return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, lastLineEnd)
     }
 
-    /// Start of the third time through when the lyrics end with the same one to four lines
-    /// repeated at least three times.
+    /// Where a repeated ending starts: the third time through for a single line repeated at
+    /// least three times, or the second time through for a refrain of two to four lines.
     private nonisolated static func repeatedOutroStart(_ lines: [LyricsLine]) -> TimeInterval? {
         func key(_ line: LyricsLine) -> String {
             line.text.lowercased().filter { $0.isLetter || $0.isNumber }
         }
         let keys = lines.map(key)
-        for period in 1...4 where keys.count >= period * 3 {
+        for period in 1...4 {
+            let neededRepeats = period == 1 ? 3 : 2
+            guard keys.count >= period * neededRepeats else { continue }
             let block = Array(keys.suffix(period))
             guard !block.contains(where: \.isEmpty) else { continue }
             var start = keys.count - period
@@ -155,7 +157,7 @@ final class LyricsService {
                 start -= period
                 repeats += 1
             }
-            if repeats >= 3 { return lines[start + period * 2].time }
+            if repeats >= neededRepeats { return lines[start + period * (neededRepeats - 1)].time }
         }
         return nil
     }
