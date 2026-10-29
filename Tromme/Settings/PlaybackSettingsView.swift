@@ -8,6 +8,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
+    @AppStorage(AudioPlayerService.crossfadeLengthKey) private var crossfadeSeconds = AutoMixPlanner.defaultCrossfadeLength
 
     var body: some View {
         Form {
@@ -24,6 +25,16 @@ struct PlaybackSettingsView: View {
                 }
             } footer: {
                 Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track.")
+            }
+
+            Section {
+                Picker("Crossfade", selection: $crossfadeSeconds) {
+                    ForEach([2.0, 3, 4, 5, 6, 8, 10, 12], id: \.self) { seconds in
+                        Text("\(Int(seconds)) sec").tag(seconds)
+                    }
+                }
+            } footer: {
+                Text("How long songs overlap when Auto Mix crossfades between them.")
             }
 
             if supportsCellularSettings {

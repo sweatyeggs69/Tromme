@@ -22,8 +22,8 @@ enum AutoMixPlanner {
     private static let filteredOverlap: TimeInterval = 3
     /// Mixes shorter than this sound like a glitch, so the songs change normally instead.
     private static let shortestMix: TimeInterval = 3
-    /// Length of the plain crossfade used for songs matched by `AutoMixGenreRules`.
-    private static let crossfadeLength: TimeInterval = 3
+    /// Default length of the plain crossfade (free tier and songs matched by `AutoMixGenreRules`).
+    static let defaultCrossfadeLength: TimeInterval = 3
 
     /// - Parameters:
     ///   - outgoingEnd: Track time where the outgoing track stops (duration or stop marker).
@@ -93,12 +93,12 @@ enum AutoMixPlanner {
 
     /// A plain crossfade over the outgoing song's last seconds: both songs play whole, with no
     /// lyric timing, intro skip or filter.
-    static func crossfade(outgoingKey: String, incomingKey: String, outgoingEnd: TimeInterval) -> AutoMixPlan {
+    static func crossfade(outgoingKey: String, incomingKey: String, outgoingEnd: TimeInterval, length: TimeInterval) -> AutoMixPlan {
         AutoMixPlan(
             outgoingKey: outgoingKey,
             incomingKey: incomingKey,
-            startTime: max(0, outgoingEnd - crossfadeLength),
-            overlap: crossfadeLength,
+            startTime: max(0, outgoingEnd - length),
+            overlap: length,
             isPlainCrossfade: true
         )
     }

@@ -4,6 +4,7 @@ import AVFoundation
 // synced lyrics so the outro and intro carry the mix.
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
+    static let crossfadeLengthKey = "crossfadeSeconds"
 
     private static let planningLeadTime: TimeInterval = 150
 
@@ -51,6 +52,8 @@ extension AudioPlayerService {
         let client = client, server = server
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
         let isPlus = PlusStore.cachedIsPlus
+        let storedLength = UserDefaults.standard.double(forKey: Self.crossfadeLengthKey)
+        let crossfadeLength = storedLength > 0 ? min(storedLength, 12) : AutoMixPlanner.defaultCrossfadeLength
 
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = Self.vocalSpan(current, if: isPlus)
@@ -76,7 +79,7 @@ extension AudioPlayerService {
             // Without Plus, and for songs matched by the genre rules (or with no tags), it's a
             // plain crossfade.
             if !isPlus || outgoingReason != nil || incomingReason != nil {
-                var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
+                var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
                 let reason = isPlus ? "\(outgoingReason ?? "-")/\(incomingReason ?? "-")" : "no_plus"
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
