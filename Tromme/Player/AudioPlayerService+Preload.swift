@@ -207,6 +207,10 @@ extension AudioPlayerService {
     /// playback levels, even though the underlying signal's spectrum is unchanged.
     /// Uses detailed track metadata (fetched before playback) for stream-level gain values.
     func soundCheckVolume(for track: PlexMetadata?) -> Float {
+        min(max(baseSoundCheckVolume(for: track), 0), 1) * mixIncomingGain
+    }
+
+    private func baseSoundCheckVolume(for track: PlexMetadata?) -> Float {
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey) else { return 1.0 }
         let source = detailedTrackForSoundCheck ?? track
         guard let stream = source?.media?.first?.part?.first?.stream?.first(where: { $0.streamType == 2 }) else {

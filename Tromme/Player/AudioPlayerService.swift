@@ -145,6 +145,18 @@ final class AudioPlayerService: Sendable {
     var magicMixSeedArtistKey: String? = nil
     var infiniteRefillTask: Task<Void, Never>?
     var preloadedNext: PreloadedNextTrack?
+    var autoMixPlan: AutoMixPlan?
+    var autoMixPlanTask: Task<Void, Never>?
+    var autoMixTriggerTask: Task<Void, Never>?
+    var autoMixTask: Task<Void, Never>?
+    /// The faded-out tracks' players, kept sounding until the overlap ends.
+    var mixOutgoingPlayer: AVQueuePlayer?
+    var mixOutgoingLossless: LocalLosslessPlayer?
+    var mixOutgoingVolume: Float = 1
+    /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
+    var mixIncomingGain: Float = 1
+    /// Set each time a mix begins; Now Playing animates on it.
+    var autoMixTransition: AutoMixTransition?
     var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
     /// AVPlayerItemDidPlayToEndTime notifications that race with seek callbacks.
@@ -812,6 +824,8 @@ final class AudioPlayerService: Sendable {
         networkRecoveryTask?.cancel()
         nextTrackPreloadTask?.cancel()
         heldSeekTask?.cancel()
+        cancelAutoMixPlanning()
+        finishAutoMix()
         playbackLoadTask = nil
         nowPlayingArtworkTask = nil
         gainPrefetchTask = nil
@@ -831,6 +845,8 @@ final class AudioPlayerService: Sendable {
     /// because their item timeline isn't the track timeline.
     func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0) -> AVPlayerItem {
         let item = AVPlayerItem(url: url)
+        // Auto Mix speeds tracks up or down slightly; keep their pitch.
+        item.audioTimePitchAlgorithm = .spectral
         if let track, streamOffset == 0,
            let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {
             item.forwardPlaybackEndTime = CMTime(seconds: stop, preferredTimescale: 600)
@@ -865,6 +881,7 @@ final class AudioPlayerService: Sendable {
         pendingInitialSeekTime = nil
         streamTimeOffset = 0
         pendingStreamOffsetCalibration = false
+        cancelAutoMixPlanning()
         if let resumeAt {
             logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count) resume_at=\(resumeAt)")
         } else {

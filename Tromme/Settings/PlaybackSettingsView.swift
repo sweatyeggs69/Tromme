@@ -5,6 +5,7 @@ struct PlaybackSettingsView: View {
 
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
+    @AppStorage("autoMixEnabled") private var autoMixEnabled = false
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
@@ -24,6 +25,13 @@ struct PlaybackSettingsView: View {
                 }
             } footer: {
                 Text("Magic Mix blends the playing artist with similar artists. This sets how many of the playing artist's tracks it adds for each similar artist track.")
+            }
+
+            Section {
+                Toggle("Auto Mix", isOn: $autoMixEnabled)
+                    .tint(.green)
+            } footer: {
+                Text("Blends songs into each other, matching tempo and beats when it can.")
             }
 
             if supportsCellularSettings {

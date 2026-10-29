@@ -13,6 +13,7 @@ final class SettingsSync {
         "playbackBadgeMode",
         "disableCellularTranscoding",
         "magicMixSeedCap",
+        "autoMixEnabled",
         "autoDownloadEnabled",
         "autoDownloadMode",
         "dynamicDownloadLimit",

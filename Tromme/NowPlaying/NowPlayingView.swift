@@ -142,6 +142,7 @@ struct NowPlayingView: View {
                                 .overlay {
                                     AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                                 }
+                                .overlay { MixTransitionEffect(cornerRadius: AppStyle.Radius.card) }
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
                                 .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
 
@@ -270,6 +271,7 @@ struct NowPlayingView: View {
                                 // shrinking never swaps to a different size that may not be loaded yet.
                                 minimumTranscodePx: ArtworkView.maxTranscodePx
                             )
+                            .overlay { if !isCompact { MixTransitionEffect(cornerRadius: 6) } }
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .position(x: targetRect.midX, y: targetRect.midY)
