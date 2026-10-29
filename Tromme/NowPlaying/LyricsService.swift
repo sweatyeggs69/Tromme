@@ -116,8 +116,11 @@ final class LyricsService {
         let sung = parsed.filter { !$0.isBreak }
         guard let first = sung.first, let last = sung.last else { return nil }
         // The closing music note row marks exactly where the last line ends.
-        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time) }
-        return (first.time, last.lastWordEnd ?? last.time + 4)
+        // Line-synced lyrics only estimate how long the last line is sung, and held notes and
+        // echoes run past the final word, so leave a margin before calling the vocals done.
+        let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
+        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time + margin) }
+        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin)
     }
 
     /// An empty result right at track start is often a slow or not-yet-ready connection, not a
