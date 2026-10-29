@@ -47,16 +47,19 @@ extension AudioPlayerService {
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
-            async let outgoingRule = AutoMixGenreRules.treatment(for: current, client: client, server: server)
-            async let incomingRule = AutoMixGenreRules.treatment(for: incoming, client: client, server: server)
+            async let outgoingRule = AutoMixGenreRules.wantsCrossfade(current, client: client, server: server)
+            async let incomingRule = AutoMixGenreRules.wantsCrossfade(incoming, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
-            let (outgoingTreatment, incomingTreatment) = await (outgoingRule, incomingRule)
+            let (outgoingCrossfades, incomingCrossfades) = await (outgoingRule, incomingRule)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
-            if outgoingTreatment == .noMix || incomingTreatment == .noMix {
-                self.logPlayback("automix_skipped", "reason=genre")
-                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+            // Songs matched by the genre rules (or with no tags) get a plain crossfade.
+            if outgoingCrossfades || incomingCrossfades {
+                let plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
+                self.logPlayback("automix_planned", "crossfade=true genre=\(outgoingCrossfades)/\(incomingCrossfades) start=\(plan.startTime)")
+                self.autoMixPlan = plan
+                self.scheduleAutoMixTrigger(plan, generation: generation)
                 return
             }
             guard let plan = AutoMixPlanner.plan(
@@ -66,15 +69,13 @@ extension AudioPlayerService {
                 incomingBaseStart: incomingBaseStart,
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
-                incomingVocalStart: incomingSpan?.start,
-                keepOutgoingOutro: outgoingTreatment == .keepIntroAndOutro,
-                keepIncomingIntro: incomingTreatment == .keepIntroAndOutro
+                incomingVocalStart: incomingSpan?.start
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil) genre=\(String(describing: outgoingTreatment))/\(String(describing: incomingTreatment))")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
