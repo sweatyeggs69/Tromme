@@ -42,6 +42,8 @@ struct LoopingVideoView: UIViewRepresentable {
         private var player: AVQueuePlayer?
         private var looper: AVPlayerLooper?
         private var statusObservation: NSKeyValueObservation?
+        private var itemObservation: NSKeyValueObservation?
+        private var tracksObservation: NSKeyValueObservation?
         private var frameTask: Task<Void, Never>?
         var onFrame: ((UIImage) -> Void)?
         private var isPlaying = false
@@ -67,7 +69,21 @@ struct LoopingVideoView: UIViewRepresentable {
                     self?.captureFrame()
                 }
             }
+            // The clip is silent, so its audio never joins the audio session: a second
+            // audio-capable player starting and stopping alongside the song can glitch it.
+            itemObservation = player.observe(\.currentItem, options: [.initial, .new]) { [weak self] player, _ in
+                guard let item = player.currentItem else { return }
+                Task { @MainActor in self?.disableAudio(of: item) }
+            }
             if isPlaying, !isHeld { player.play() }
+        }
+
+        private func disableAudio(of item: AVPlayerItem) {
+            tracksObservation = item.observe(\.tracks, options: [.initial, .new]) { item, _ in
+                for track in item.tracks where track.assetTrack?.mediaType == .audio {
+                    track.isEnabled = false
+                }
+            }
         }
 
         func setPlaying(_ playing: Bool, held: Bool) {
@@ -124,6 +140,8 @@ struct LoopingVideoView: UIViewRepresentable {
             frameTask?.cancel()
             frameTask = nil
             statusObservation = nil
+            itemObservation = nil
+            tracksObservation = nil
             player?.pause()
             looper?.disableLooping()
             player = nil
