@@ -53,7 +53,7 @@ extension AudioPlayerService {
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
         let isPlus = PlusStore.cachedIsPlus
         let storedLength = UserDefaults.standard.double(forKey: Self.crossfadeLengthKey)
-        let crossfadeLength = storedLength > 0 ? min(storedLength, 12) : AutoMixPlanner.defaultCrossfadeLength
+        let crossfadeLength = storedLength > 0 ? min(storedLength, 10) : AutoMixPlanner.defaultCrossfadeLength
 
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = Self.vocalSpan(current, if: isPlus)

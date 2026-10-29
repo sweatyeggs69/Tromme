@@ -29,7 +29,7 @@ struct PlaybackSettingsView: View {
 
             Section {
                 Picker("Crossfade", selection: $crossfadeSeconds) {
-                    ForEach([2.0, 3, 4, 5, 6, 8, 10, 12], id: \.self) { seconds in
+                    ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
                         Text("\(Int(seconds)) sec").tag(seconds)
                     }
                 }
