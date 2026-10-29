@@ -7,6 +7,8 @@ enum AutoMixPlanner {
     private static let minimumOverlap: TimeInterval = 1.5
     /// Lyrics closer than this to the end of the outgoing song leave no room for a mix.
     private static let minimumOutroRoom: TimeInterval = 3
+    /// Held notes and echoes ring past the last timed word, so the mix waits this much longer.
+    private static let lastLyricPadding: TimeInterval = 2.5
     /// Lyrics closer than this to the start of the incoming song leave no room for a mix.
     private static let minimumIntroRoom: TimeInterval = 1
     /// An outro longer than this after the last lyric is shortened: it plays for
@@ -52,10 +54,11 @@ enum AutoMixPlanner {
             }
         }
 
-        // The last lyric is always sung in full before anything changes.
+        // The last lyric is sung in full, plus a little room for it to ring out, before
+        // anything changes; a short outro gives up some of that room for the mix itself.
         var startTime = max(0, mixEnd - overlap)
-        if let floor = outgoingLastLyricEnd, startTime < floor {
-            startTime = floor
+        if let lyricEnd = outgoingLastLyricEnd, startTime < lyricEnd + lastLyricPadding {
+            startTime = max(startTime, min(lyricEnd + lastLyricPadding, mixEnd - minimumOverlap))
             overlap = max(mixEnd - startTime, minimumOverlap)
         }
 
