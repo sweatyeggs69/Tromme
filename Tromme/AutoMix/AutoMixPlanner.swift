@@ -9,7 +9,7 @@ enum AutoMixPlanner {
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
     /// An outro longer than this after the last lyric is shortened to `shortenedOutro`.
-    private static let longOutro: TimeInterval = 10
+    private static let longOutro: TimeInterval = 20
     private static let shortenedOutro: TimeInterval = 8
     private static let maximumTempoShift = 0.08
 
