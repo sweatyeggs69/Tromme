@@ -39,20 +39,26 @@ enum AutoMixAnalyzer {
             AVSampleRateKey: sampleRate,
             AVNumberOfChannelsKey: 1
         ])
-        guard reader.canAdd(output) else { return nil }
-        reader.add(output)
-        guard reader.startReading() else { return nil }
+        let provider = reader.outputProvider(for: output)
+        do { try reader.start() } catch { return nil }
 
         var samples = [Float]()
         samples.reserveCapacity(Int(sampleRate * length))
-        while let buffer = output.copyNextSampleBuffer() {
-            guard let block = CMSampleBufferGetDataBuffer(buffer) else { continue }
-            let byteCount = CMBlockBufferGetDataLength(block)
-            var chunk = [Float](repeating: 0, count: byteCount / MemoryLayout<Float>.size)
-            let status = chunk.withUnsafeMutableBytes { raw in
-                CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: byteCount, destination: raw.baseAddress!)
+        do {
+            while let ready = try await provider.next() {
+                let chunk: [Float] = ready.withUnsafeSampleBuffer { buffer in
+                    guard let block = CMSampleBufferGetDataBuffer(buffer) else { return [] }
+                    let byteCount = CMBlockBufferGetDataLength(block)
+                    var values = [Float](repeating: 0, count: byteCount / MemoryLayout<Float>.size)
+                    let status = values.withUnsafeMutableBytes { raw in
+                        CMBlockBufferCopyDataBytes(block, atOffset: 0, dataLength: byteCount, destination: raw.baseAddress!)
+                    }
+                    return status == kCMBlockBufferNoErr ? values : []
+                }
+                samples.append(contentsOf: chunk)
             }
-            if status == kCMBlockBufferNoErr { samples.append(contentsOf: chunk) }
+        } catch {
+            return nil
         }
         return reader.status == .completed ? samples : nil
     }
