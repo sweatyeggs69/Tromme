@@ -160,8 +160,22 @@ final class LyricsService {
             }
             if repeats >= neededRepeats { return lines[start + period * (neededRepeats - 1)].time }
         }
+        // An ending that mixes and ad-libs its refrain (Adore You) never repeats exactly, so a
+        // closing stretch where several lines were already sung moments earlier counts as outro
+        // from the first of them.
+        guard let lastTime = lines.last?.time else { return nil }
+        var seen = Set<String>()
+        var repeated: [Int] = []
+        for index in lines.indices where lines[index].time >= lastTime - looseRepeatWindow && !keys[index].isEmpty {
+            if !seen.insert(keys[index]).inserted { repeated.append(index) }
+        }
+        if repeated.count >= looseRepeatCount, let first = repeated.first { return lines[first].time }
         return nil
     }
+
+    /// How far back from the last line the loose repeat check looks, and how many repeated lines it needs.
+    private nonisolated static let looseRepeatWindow: TimeInterval = 30
+    private nonisolated static let looseRepeatCount = 3
 
     /// An empty result right at track start is often a slow or not-yet-ready connection, not a
     /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
