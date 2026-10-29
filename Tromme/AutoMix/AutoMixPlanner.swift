@@ -8,9 +8,10 @@ enum AutoMixPlanner {
     private static let minimumOverlap: TimeInterval = 2.5
     /// An instrumental intro or outro at least this long can sit under the other track.
     private static let instrumentalSpan: TimeInterval = 6
-    /// An outro longer than this after the last lyric is shortened to `shortenedOutro`.
+    /// An outro longer than this after the last lyric is shortened: it plays for
+    /// `shortenedOutro` minus the overlap, then the mix covers the rest.
     private static let longOutro: TimeInterval = 20
-    private static let shortenedOutro: TimeInterval = 8
+    private static let shortenedOutro: TimeInterval = 14
     private static let maximumTempoShift = 0.08
 
     /// - Parameters:
@@ -35,8 +36,10 @@ enum AutoMixPlanner {
         // lyric instead of waiting for the whole outro. The analysed window (the last 30
         // seconds) no longer describes the new mix point, so it isn't used then.
         let outgoing: AutoMixWindowAnalysis?
+        var shortened = false
         if let outgoingVocalEnd, outgoingEnd - outgoingVocalEnd > longOutro {
             audibleEnd = outgoingVocalEnd + shortenedOutro
+            shortened = true
             outgoing = nil
         } else {
             outgoing = outgoingAnalysis
@@ -55,6 +58,7 @@ enum AutoMixPlanner {
         // rhythmic can clash, so blend longer and without tempo changes.
         let beatlessTail = outgoing.map { $0.edgeBeat == nil } ?? false
         if beatlessTail { overlap = max(overlap, 8) }
+        if shortened { overlap = 6 }
         overlap = min(overlap, max(2, outgoingEnd * 0.3))
         var startTime = max(0, audibleEnd - overlap)
 
@@ -75,7 +79,7 @@ enum AutoMixPlanner {
 
         // Vocals: an instrumental outro can be overlapped for longer, and an instrumental
         // intro can sit under the outgoing tail. Either way keep the two vocals apart.
-        if let outgoingVocalEnd, audibleEnd - outgoingVocalEnd >= instrumentalSpan {
+        if !shortened, let outgoingVocalEnd, audibleEnd - outgoingVocalEnd >= instrumentalSpan {
             startTime = min(startTime, max(outgoingVocalEnd + 0.5, audibleEnd - maximumOverlap))
         }
         if let incomingVocalStart {
