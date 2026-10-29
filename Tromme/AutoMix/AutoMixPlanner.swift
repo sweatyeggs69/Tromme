@@ -9,6 +9,8 @@ enum AutoMixPlanner {
     private static let minimumOutroRoom: TimeInterval = 3
     /// Held notes and echoes ring past the last timed word, so the mix waits this much longer.
     private static let lastLyricPadding: TimeInterval = 2.5
+    /// Shorter wait when the lyrics mark exactly where the singing stops (a closing blank row).
+    private static let markedLastLyricPadding: TimeInterval = 1
     /// Lyrics closer than this to the start of the incoming song leave no room for a mix.
     private static let minimumIntroRoom: TimeInterval = 1
     /// An outro longer than this after the last lyric is shortened: it plays for
@@ -34,6 +36,7 @@ enum AutoMixPlanner {
     ///   - incomingBaseStart: The incoming track's start marker, or 0.
     ///   - outgoingVocalEnd: Where the outgoing song's outro begins, from its lyrics.
     ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix never starts before it.
+    ///   - outgoingLastLyricMarked: The lyrics mark that end exactly, so less padding is needed.
     ///   - incomingVocalStart: The incoming song's first lyric.
     /// - Returns: nil when the lyrics run too close to either song's edge to mix, or leave
     ///   room only for a mix shorter than `shortestMix`.
@@ -44,6 +47,7 @@ enum AutoMixPlanner {
         incomingBaseStart: TimeInterval,
         outgoingVocalEnd: TimeInterval?,
         outgoingLastLyricEnd: TimeInterval?,
+        outgoingLastLyricMarked: Bool = false,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
         if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
@@ -66,8 +70,9 @@ enum AutoMixPlanner {
         // The last lyric is sung in full, plus a little room for it to ring out, before
         // anything changes; a short outro gives up some of that room for the mix itself.
         var startTime = max(0, mixEnd - overlap)
-        if let lyricEnd = outgoingLastLyricEnd, startTime < lyricEnd + lastLyricPadding {
-            startTime = max(startTime, min(lyricEnd + lastLyricPadding, mixEnd - minimumOverlap))
+        let padding = outgoingLastLyricMarked ? markedLastLyricPadding : lastLyricPadding
+        if let lyricEnd = outgoingLastLyricEnd, startTime < lyricEnd + padding {
+            startTime = max(startTime, min(lyricEnd + padding, mixEnd - minimumOverlap))
             overlap = max(mixEnd - startTime, minimumOverlap)
         }
 

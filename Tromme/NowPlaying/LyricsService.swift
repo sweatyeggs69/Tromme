@@ -97,8 +97,9 @@ final class LyricsService {
 
     /// When the vocals start and end, from synced lyrics (cached, or resolved once without retries).
     /// Auto Mix uses it to tell an instrumental intro or outro from sung parts.
-    /// `lastLineEnd` is where the last line (before any repeated outro) finishes.
-    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval)? {
+    /// `lastLineEnd` is where the last line (before any repeated outro) finishes; `endIsMarked`
+    /// when a closing blank or music note row says exactly when the singing stops.
+    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool)? {
         let artist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
@@ -129,14 +130,14 @@ final class LyricsService {
         // everything from the second time through as outro.
         if let outroStart = repeatedOutroStart(sung) {
             let line = sung.last { $0.time < outroStart } ?? first
-            return (first.time, outroStart, line.lastWordEnd ?? outroStart)
+            return (first.time, outroStart, line.lastWordEnd ?? outroStart, false)
         }
         // Line-synced lyrics only estimate how long the last line is sung, and held notes and
         // echoes run past the final word, so leave a margin before calling the vocals done.
         let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
         let lastLineEnd = last.lastWordEnd ?? parsed.last.flatMap { $0.isBreak ? $0.time : nil } ?? last.time + 4
-        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time + margin, lastLineEnd) }
-        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, lastLineEnd)
+        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time, lastLineEnd, true) }
+        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, lastLineEnd, false)
     }
 
     /// Where a repeated ending starts: the third time through for a single line repeated at
