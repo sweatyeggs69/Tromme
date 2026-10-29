@@ -72,13 +72,24 @@ enum AutoMixPlanner {
         startTime = max(0, min(startTime, audibleEnd - minimumOverlap))
         overlap = audibleEnd - startTime
 
+        // The mix finishes before the incoming song's first lyric.
+        var vocalLimit: TimeInterval?
+        if let incomingVocalStart {
+            let limit = max(incomingVocalStart - firstAudible - 1, 1.5)
+            vocalLimit = limit
+            if overlap > limit {
+                overlap = limit
+                startTime = audibleEnd - overlap
+            }
+        }
+
         var tempo: AutoMixPlan.Tempo?
         if let outgoingGrid = outgoing?.beat, let incomingGrid = incoming?.beat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
             // Snap forward so vocal gaps chosen above are kept.
             let snapped = outgoingGrid.beat(atOrAfter: startTime)
             let beats = max(4, (overlap / outgoingGrid.period / 4).rounded() * 4)
-            let snappedOverlap = min(beats * outgoingGrid.period, (audibleEnd - snapped) / (1 + maximumTempoShift))
+            let snappedOverlap = min(beats * outgoingGrid.period, (audibleEnd - snapped) / (1 + maximumTempoShift), vocalLimit ?? .infinity)
             if snapped >= 0, snappedOverlap >= 2.5 {
                 startTime = snapped
                 overlap = snappedOverlap
