@@ -1139,8 +1139,16 @@ final class AudioPlayerService: Sendable {
         player?.pause()
         player?.removeAllItems()
         let queuePlayer = prepared?.player ?? AVQueuePlayer(playerItem: item)
-        // A prepared song was already moved to its start point.
-        if prepared != nil { pendingInitialSeekTime = nil }
+        // A prepared song was usually moved to its start point already, but a seek issued
+        // before its item is ready can be dropped; then the normal on-ready seek still runs.
+        if let prepared {
+            let position = prepared.item.currentTime().seconds
+            if let target = pendingInitialSeekTime, !(position.isFinite && abs(position - target) < 0.5) {
+                logPlayback("automix_prepared_seek_missed", "at=\(position) target=\(target)")
+            } else {
+                pendingInitialSeekTime = nil
+            }
+        }
         // Only advance on item end while a gapless next item is enqueued; otherwise
         // keep the finished item. .none (not .pause) leaves the player in the playing
         // state through the gap before the next track loads, so CarPlay never shows
