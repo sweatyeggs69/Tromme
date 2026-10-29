@@ -5,7 +5,7 @@ import AVFoundation
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
 
-    private nonisolated static let analysisLeadTime: TimeInterval = 110
+    private nonisolated static let analysisLeadTime: TimeInterval = 150
     private nonisolated static let tailWindow: TimeInterval = 30
     private nonisolated static let headWindow: TimeInterval = 25
 
@@ -67,7 +67,7 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
                 return
             }
-            self.logPlayback("automix_planned", "start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
@@ -149,17 +149,28 @@ extension AudioPlayerService {
     private func beginAutoMix(_ original: AutoMixPlan, lateBy lateness: TimeInterval) {
         autoMixTriggerTask = nil
         guard repeatMode == .off, playbackIntent, let target = nextAutoAdvanceTarget(),
-              target.track.ratingKey == original.incomingKey else { return }
+              target.track.ratingKey == original.incomingKey else {
+            logPlayback("automix_skipped", "reason=queue_changed")
+            return
+        }
 
         // Past the planned start (a seek, or analysis that finished late): mix from now,
         // and drop the beat match because its phase no longer lines up.
         var plan = original
         if lateness > 1.5 {
-            let remaining = original.startTime + original.overlap - bestKnownPlaybackSeconds
-            guard remaining > 1.5 else { return }
+            // The planned window may be gone (a shortened outro planned late), but the song
+            // itself usually still has room for a quick mix.
+            let now = bestKnownPlaybackSeconds
+            let songLeft = (currentTrack.map { autoMixEnd(for: $0) } ?? duration) - now
+            guard songLeft > 1.5 else {
+                logPlayback("automix_skipped", "reason=too_late song_left=\(songLeft)")
+                return
+            }
+            let plannedLeft = original.startTime + original.overlap - now
+            let overlap = min(max(plannedLeft, min(original.overlap, 6)), songLeft - 0.3)
             plan = AutoMixPlan(
                 outgoingKey: original.outgoingKey, incomingKey: original.incomingKey,
-                startTime: bestKnownPlaybackSeconds, overlap: min(original.overlap, remaining),
+                startTime: now, overlap: overlap,
                 introStart: original.introStart, tempo: nil,
                 incomingFadesIn: original.incomingFadesIn, filter: original.filter, curve: original.curve
             )
