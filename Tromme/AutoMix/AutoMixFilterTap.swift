@@ -2,8 +2,9 @@ import AVFoundation
 import MediaToolbox
 
 /// A low-pass or high-pass filter on one player item's audio, adjustable while it plays.
-/// Auto Mix sweeps its cutoff during a transition. Works on file and progressive streams;
-/// HLS items can't be tapped.
+/// Auto Mix sweeps its cutoff during a transition. It also meters how much bass and treble
+/// the song has, now and on average, so the sweep can suit how the ending sounds.
+/// Works on file and progressive streams; HLS items can't be tapped.
 final class AutoMixFilterTap: @unchecked Sendable {
     enum Mode: Int32 {
         case off, lowPass, highPass
@@ -14,6 +15,16 @@ final class AutoMixFilterTap: @unchecked Sendable {
         var cutoff: Float = 1000
     }
 
+    /// Share of the signal's energy below ~200 Hz and above ~2.5 kHz, over the last few
+    /// seconds and over the song so far.
+    struct Tonality {
+        var recentLow: Float = 0
+        var recentHigh: Float = 0
+        var songLow: Float = 0
+        var songHigh: Float = 0
+        var seconds: Float = 0
+    }
+
     private static let maxChannels = 8
     private static let stagesPerChannel = 2
 
@@ -21,6 +32,10 @@ final class AutoMixFilterTap: @unchecked Sendable {
     // render pass only moves the sweep by a few milliseconds.
     private let control = UnsafeMutablePointer<Control>.allocate(capacity: 1)
     private let state = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels * stagesPerChannel * 2)
+    // Written on the audio thread, read on the main thread when a mix begins.
+    private let meter = UnsafeMutablePointer<Tonality>.allocate(capacity: 1)
+    private var lowBand: Float = 0
+    private var midBand: Float = 0
 
     private var sampleRate: Float = 44_100
     private var isFloat = false
@@ -31,17 +46,21 @@ final class AutoMixFilterTap: @unchecked Sendable {
 
     init() {
         control.initialize(to: Control())
+        meter.initialize(to: Tonality())
         state.initialize(repeating: 0, count: Self.maxChannels * Self.stagesPerChannel * 2)
     }
 
     deinit {
         control.deallocate()
+        meter.deallocate()
         state.deallocate()
     }
 
     func set(_ mode: Mode, cutoff: Float) {
         control.pointee = Control(mode: mode.rawValue, cutoff: cutoff)
     }
+
+    var tonality: Tonality { meter.pointee }
 
     /// Mix parameters that route the track's audio through this filter.
     func parameters(for track: AVAssetTrack) -> AVMutableAudioMixInputParameters? {
@@ -85,6 +104,7 @@ final class AutoMixFilterTap: @unchecked Sendable {
     }
 
     private func process(_ bufferList: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
+        if isFloat { measure(bufferList, frames: frames) }
         let mode = control.pointee.mode
         guard isFloat, mode != 0 else {
             if appliedMode != 0 {
@@ -128,6 +148,41 @@ final class AutoMixFilterTap: @unchecked Sendable {
             }
             channelIndex += channels
         }
+    }
+
+    /// Splits the first channel with two one-pole filters and folds the band shares of this
+    /// buffer into a ~3 s and a whole-song average. Silent buffers are skipped.
+    private func measure(_ bufferList: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
+        let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+        guard let buffer = buffers.first, let data = buffer.mData?.assumingMemoryBound(to: Float.self) else { return }
+        let stride = isNonInterleaved ? 1 : max(Int(buffer.mNumberChannels), 1)
+        let count = min(frames, Int(buffer.mDataByteSize) / (MemoryLayout<Float>.size * stride))
+        guard count > 0 else { return }
+        let lowCoefficient = 1 - exp(-2 * Float.pi * 200 / sampleRate)
+        let midCoefficient = 1 - exp(-2 * Float.pi * 2500 / sampleRate)
+        var total: Float = 0, low: Float = 0, high: Float = 0
+        var index = 0
+        for _ in 0..<count {
+            let x = data[index]
+            lowBand += lowCoefficient * (x - lowBand)
+            midBand += midCoefficient * (x - midBand)
+            let treble = x - midBand
+            total += x * x
+            low += lowBand * lowBand
+            high += treble * treble
+            index += stride
+        }
+        guard total / Float(count) > 1e-5 else { return }
+        let duration = Float(count) / sampleRate
+        let recent = 1 - exp(-duration / 3)
+        var value = meter.pointee
+        value.seconds += duration
+        let song = duration / value.seconds
+        value.recentLow += recent * (low / total - value.recentLow)
+        value.recentHigh += recent * (high / total - value.recentHigh)
+        value.songLow += song * (low / total - value.songLow)
+        value.songHigh += song * (high / total - value.songHigh)
+        meter.pointee = value
     }
 
     /// RBJ biquad with Butterworth Q; two cascaded stages give a 24 dB/octave slope.

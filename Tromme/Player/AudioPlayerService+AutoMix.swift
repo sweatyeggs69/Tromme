@@ -139,9 +139,12 @@ extension AudioPlayerService {
         losslessTickTask?.cancel()
         losslessTickTask = nil
 
+        if plan.filter != .none, let tonality = mixTap(for: mixOutgoingPlayer)?.tonality {
+            plan.filter = Self.filterStyle(for: tonality)
+        }
         mixIncomingGain = 0
         currentIndex = target.index
-        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap)")
+        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) filter=\(plan.filter)")
         // A streamed transcode can't start part-way without a new session, which would lose
         // the prepared song, so it starts from the top; the mix still ends before its lyrics.
         var resume = plan.introStart
@@ -287,6 +290,15 @@ extension AudioPlayerService {
             mix.inputParameters = [parameters]
             item.audioMix = mix
         }
+    }
+
+    /// An ending that has lost its low end (a telephone or radio sound) is thinned further
+    /// with a high-pass; one that has lost its top, or anything else, darkens with a low-pass.
+    private static func filterStyle(for tonality: AutoMixFilterTap.Tonality) -> AutoMixPlan.FilterStyle {
+        guard tonality.seconds > 20, tonality.songLow > 0, tonality.songHigh > 0 else { return .mellow }
+        let lowKept = tonality.recentLow / tonality.songLow
+        let highKept = tonality.recentHigh / tonality.songHigh
+        return lowKept < 0.4 && lowKept < highKept ? .energetic : .mellow
     }
 
     private func mixTap(for player: AVPlayer?) -> AutoMixFilterTap? {
