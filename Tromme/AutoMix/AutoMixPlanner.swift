@@ -4,6 +4,10 @@ import Foundation
 enum AutoMixPlanner {
     private static let silenceFloor: Float = -50
     private static let defaultOverlap: TimeInterval = 5
+    private static let maximumOverlap: TimeInterval = 12
+    private static let minimumOverlap: TimeInterval = 2.5
+    /// An instrumental intro or outro at least this long can sit under the other track.
+    private static let instrumentalSpan: TimeInterval = 6
     private static let maximumTempoShift = 0.08
 
     /// - Parameters:
@@ -18,6 +22,8 @@ enum AutoMixPlanner {
         incomingBaseStart: TimeInterval,
         outgoing: AutoMixWindowAnalysis?,
         incoming: AutoMixWindowAnalysis?,
+        outgoingVocalEnd: TimeInterval?,
+        incomingVocalStart: TimeInterval?,
         isContinuousAlbum: Bool
     ) -> AutoMixPlan? {
         var audibleEnd = outgoingEnd
@@ -32,21 +38,45 @@ enum AutoMixPlanner {
         if isContinuousAlbum, !fadesOut { return nil }
 
         var overlap = defaultOverlap
-        if let fadeStart { overlap = min(max(audibleEnd - fadeStart, 3), 10) }
+        if let fadeStart { overlap = min(max(audibleEnd - fadeStart, 3), maximumOverlap) }
         overlap = min(overlap, max(2, outgoingEnd * 0.3))
         var startTime = max(0, audibleEnd - overlap)
 
         var introStart: TimeInterval?
         var firstAudible = incomingBaseStart
-        if let incoming, let first = firstAudibleTime(in: incoming) {
-            firstAudible = max(incomingBaseStart, first)
-            if firstAudible > incomingBaseStart + 0.25 { introStart = firstAudible }
+        var incomingFadesIn = false
+        if let incoming {
+            if let first = firstAudibleTime(in: incoming) {
+                firstAudible = max(incomingBaseStart, first)
+                if firstAudible > incomingBaseStart + 0.25 { introStart = firstAudible }
+            }
+            if let fadeIn = fadeInLength(of: incoming, from: firstAudible) {
+                incomingFadesIn = true
+                // Let the outgoing tail run under the whole fade-in.
+                startTime = min(startTime, audibleEnd - min(fadeIn, maximumOverlap))
+            }
         }
+
+        // Vocals: an instrumental outro can be overlapped for longer, and an instrumental
+        // intro can sit under the outgoing tail. Either way keep the two vocals apart.
+        if let outgoingVocalEnd, audibleEnd - outgoingVocalEnd >= instrumentalSpan {
+            startTime = min(startTime, max(outgoingVocalEnd + 0.5, audibleEnd - maximumOverlap))
+        }
+        if let incomingVocalStart {
+            let intro = incomingVocalStart - firstAudible
+            if intro >= instrumentalSpan {
+                startTime = min(startTime, audibleEnd - min(intro, maximumOverlap))
+                if let outgoingVocalEnd { startTime = max(startTime, outgoingVocalEnd - intro + 0.5) }
+            }
+        }
+        startTime = max(0, min(startTime, audibleEnd - minimumOverlap))
+        overlap = audibleEnd - startTime
 
         var tempo: AutoMixPlan.Tempo?
         if let outgoingGrid = outgoing?.beat, let incomingGrid = incoming?.beat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
-            let snapped = outgoingGrid.nearestBeat(to: startTime)
+            // Snap forward so vocal gaps chosen above are kept.
+            let snapped = outgoingGrid.beat(atOrAfter: startTime)
             let beats = max(4, (overlap / outgoingGrid.period / 4).rounded() * 4)
             let snappedOverlap = min(beats * outgoingGrid.period, (audibleEnd - snapped) / (1 + maximumTempoShift))
             if snapped >= 0, snappedOverlap >= 2.5 {
@@ -63,7 +93,8 @@ enum AutoMixPlanner {
             startTime: startTime,
             overlap: overlap,
             introStart: introStart,
-            tempo: tempo
+            tempo: tempo,
+            incomingFadesIn: incomingFadesIn
         )
     }
 
@@ -73,6 +104,27 @@ enum AutoMixPlanner {
         return candidates
             .filter { abs($0.bpm / outgoing.bpm - 1) <= maximumTempoShift }
             .min { abs($0.bpm / outgoing.bpm - 1) < abs($1.bpm / outgoing.bpm - 1) }
+    }
+
+    /// How long a fade-in lasts: from the first audible moment until the level is within
+    /// 6 dB of the song's body. Nil when the song starts at full strength.
+    private static func fadeInLength(of analysis: AutoMixWindowAnalysis, from start: TimeInterval) -> TimeInterval? {
+        let loud = analysis.levels.filter { $0 > silenceFloor }.sorted()
+        guard loud.count > 40 else { return nil }
+        let body = loud[loud.count * 3 / 4]
+        let startIndex = max(0, Int((start - analysis.windowStart) / analysis.frameDuration))
+        guard startIndex + 20 < analysis.levels.count else { return nil }
+        // Smooth over half a second so a single beat doesn't look like the body.
+        let smoothing = 10
+        guard analysis.levels[startIndex..<(startIndex + smoothing)].reduce(0, +) / Float(smoothing) < body - 12 else { return nil }
+        for index in startIndex..<(analysis.levels.count - smoothing) {
+            let average = analysis.levels[index..<(index + smoothing)].reduce(0, +) / Float(smoothing)
+            if average >= body - 6 {
+                let length = analysis.time(ofFrame: index) - start
+                return length >= 3 ? length : nil
+            }
+        }
+        return nil
     }
 
     private static func firstAudibleTime(in analysis: AutoMixWindowAnalysis) -> TimeInterval? {

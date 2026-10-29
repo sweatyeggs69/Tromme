@@ -9,6 +9,9 @@ extension AudioPlayerService {
     private nonisolated static let tailWindow: TimeInterval = 30
     private nonisolated static let headWindow: TimeInterval = 25
 
+    /// True while a mix is fading between two tracks.
+    var isAutoMixing: Bool { autoMixTask != nil }
+
     var isAutoMixEnabled: Bool { PlusStore.cachedIsPlus && UserDefaults.standard.bool(forKey: Self.autoMixKey) }
 
     // MARK: - Planning
@@ -37,7 +40,10 @@ extension AudioPlayerService {
         autoMixPlanTask = Task { [weak self] in
             async let tail = Self.analyzeTail(url: outgoingURL, end: end)
             async let head = Self.analyzeHead(url: incomingURL, from: incomingBaseStart)
+            async let outgoingVocals = LyricsService.vocalSpan(for: current)
+            async let incomingVocals = LyricsService.vocalSpan(for: incoming)
             let (outgoing, incomingAnalysis) = await (tail, head)
+            let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard let plan = AutoMixPlanner.plan(
@@ -47,13 +53,15 @@ extension AudioPlayerService {
                 incomingBaseStart: incomingBaseStart,
                 outgoing: outgoing,
                 incoming: incomingAnalysis,
+                outgoingVocalEnd: outgoingSpan?.end,
+                incomingVocalStart: incomingSpan?.start,
                 isContinuousAlbum: isContinuousAlbum
             ) else {
                 self.logPlayback("automix_skipped", "reason=continuous_album")
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
                 return
             }
-            self.logPlayback("automix_planned", "start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched)")
+            self.logPlayback("automix_planned", "start=\(plan.startTime) overlap=\(plan.overlap) beat=\(plan.isBeatMatched) fadeIn=\(plan.incomingFadesIn) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
@@ -125,7 +133,8 @@ extension AudioPlayerService {
             plan = AutoMixPlan(
                 outgoingKey: original.outgoingKey, incomingKey: original.incomingKey,
                 startTime: bestKnownPlaybackSeconds, overlap: min(original.overlap, remaining),
-                introStart: original.introStart, tempo: nil
+                introStart: original.introStart, tempo: nil,
+                incomingFadesIn: original.incomingFadesIn
             )
         }
 
@@ -170,7 +179,9 @@ extension AudioPlayerService {
                 // Equal-power curves keep the combined loudness steady through the overlap.
                 self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * Float(cos(progress * .pi / 2))
                 self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * Float(cos(progress * .pi / 2))
-                self.mixIncomingGain = Float(sin(progress * .pi / 2))
+                // A song that fades in by itself reaches full level early so it isn't faded twice.
+                let incomingProgress = plan.incomingFadesIn ? min(1, progress / 0.35) : progress
+                self.mixIncomingGain = Float(sin(incomingProgress * .pi / 2))
                 self.applyIncomingVolume()
 
                 if let tempo = plan.tempo {

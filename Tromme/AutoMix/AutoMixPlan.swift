@@ -14,6 +14,8 @@ struct AutoMixPlan: Sendable {
     let introStart: TimeInterval?
     /// Outgoing and incoming tempos (BPM) when beat matching applies.
     let tempo: Tempo?
+    /// The incoming track fades in on its own, so it needs less help from the mix.
+    var incomingFadesIn = false
 
     struct Tempo: Sendable {
         let outgoing: Double

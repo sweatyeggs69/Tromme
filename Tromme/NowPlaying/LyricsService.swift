@@ -95,6 +95,28 @@ final class LyricsService {
         isLoading = false
     }
 
+    /// When the vocals start and end, from synced lyrics (cached, or resolved once without retries).
+    /// Auto Mix uses it to tell an instrumental intro or outro from sung parts.
+    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval)? {
+        let artist = track.artistDisplayName
+        let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
+        let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
+        let lyrics: ResolvedLyrics
+        if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: lyricsTTL),
+           cached.value.hasSynced, isAllowed(cached.value, blocked: blocked) {
+            lyrics = cached.value
+        } else if let fetched = await resolve(track: track, artist: artist, blocked: blocked), fetched.lyrics.hasSynced {
+            if fetched.isFinal { await ExternalContentCache.shared.set(fetched.lyrics, forKey: cacheKey) }
+            lyrics = fetched.lyrics
+        } else {
+            return nil
+        }
+        guard let synced = lyrics.syncedLyrics else { return nil }
+        let sung = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 }).filter { !$0.isBreak }
+        guard let first = sung.first, let last = sung.last else { return nil }
+        return (first.time, last.lastWordEnd ?? last.time + 4)
+    }
+
     /// An empty result right at track start is often a slow or not-yet-ready connection, not a
     /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
     private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
