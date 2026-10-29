@@ -44,6 +44,7 @@ extension AudioPlayerService {
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
+            guard self.isAutoMixEnabled else { return }
             let plan = AutoMixPlanner.plan(
                 outgoingKey: current.ratingKey,
                 incomingKey: incoming.ratingKey,
@@ -73,6 +74,11 @@ extension AudioPlayerService {
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
+                // Turned off after the mix was planned: back to a normal gapless ending.
+                guard self.isAutoMixEnabled else {
+                    self.abandonAutoMix()
+                    return
+                }
                 let wait = plan.startTime - self.bestKnownPlaybackSeconds
                 // A mix planned well before the end (a shortened outro) needs the next song
                 // loaded sooner than the usual gapless preload.
@@ -94,6 +100,19 @@ extension AudioPlayerService {
         autoMixTriggerTask?.cancel()
         autoMixTriggerTask = nil
         autoMixPlan = nil
+    }
+
+    /// Drops a planned mix and the next song prepared for it. The gapless preload was taken
+    /// off the queue for the mix, so it is discarded and the next tick preloads it again.
+    private func abandonAutoMix() {
+        logPlayback("automix_abandoned")
+        cancelAutoMixPlanning()
+        if let prepared = mixPrepared {
+            prepared.player.pause()
+            prepared.player.removeAllItems()
+            mixPrepared = nil
+            discardPreloadedNext()
+        }
     }
 
     // MARK: - Mixing
