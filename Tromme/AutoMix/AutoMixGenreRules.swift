@@ -14,6 +14,7 @@ enum AutoMixGenreRules {
     }
 
     /// Checked in order; the first rule that matches wins.
+    /// Songs with no tags at all are also `.noMix`; see `treatment(for:client:server:)`.
     private static let rules: [(treatment: Treatment, genres: [String], moods: [String])] = [
         (.noMix, [], []),
         (.keepIntroAndOutro,
@@ -22,17 +23,24 @@ enum AutoMixGenreRules {
           "confrontational", "raucous", "fiery"]),
     ]
 
-    /// The treatment for the track's genres, styles and moods, falling back to its album's, then its artist's.
+    /// The treatment for the track's genres, styles and moods, falling back to its album's, then
+    /// its artist's. A song with no tags anywhere (brand new, or missing metadata) isn't mixed,
+    /// since nothing says whether a mix suits it.
     static func treatment(for track: PlexMetadata, client: PlexAPIClient?, server: PlexServer?) async -> Treatment? {
+        var sawTags = hasTags(track)
         if let match = treatment(forTagsOf: track) { return match }
-        guard let client, let server else { return nil }
-        for key in [track.parentRatingKey, track.grandparentRatingKey].compactMap({ $0 }) {
-            if let parent = try? await client.cachedMetadata(server: server, ratingKey: key),
-               let match = treatment(forTagsOf: parent) {
-                return match
+        if let client, let server {
+            for key in [track.parentRatingKey, track.grandparentRatingKey].compactMap({ $0 }) {
+                guard let parent = try? await client.cachedMetadata(server: server, ratingKey: key) else { continue }
+                sawTags = sawTags || hasTags(parent)
+                if let match = treatment(forTagsOf: parent) { return match }
             }
         }
-        return nil
+        return sawTags ? nil : .noMix
+    }
+
+    private static func hasTags(_ item: PlexMetadata) -> Bool {
+        ((item.genre ?? []) + (item.style ?? []) + (item.mood ?? [])).contains { !($0.tag ?? "").isEmpty }
     }
 
     private static func treatment(forTagsOf item: PlexMetadata) -> Treatment? {
