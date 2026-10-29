@@ -50,6 +50,7 @@ extension AudioPlayerService {
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
                 outgoingVocalEnd: outgoingSpan?.end,
+                outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
                 outgoingLastLyricMostlySung: outgoingSpan?.lastLineMostlySung,
                 incomingVocalStart: incomingSpan?.start
             )

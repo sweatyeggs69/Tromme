@@ -5,6 +5,8 @@ enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 12
     private static let minimumOverlap: TimeInterval = 1.5
+    /// Room needed after the last lyric to wait for it to finish completely.
+    private static let minimumFullLyricMix: TimeInterval = 2.5
     /// An outro longer than this after the last lyric is shortened: it plays for
     /// `shortenedOutro` minus `shortenedOverlap`, then the mix covers the rest.
     private static let longOutro: TimeInterval = 20
@@ -19,6 +21,7 @@ enum AutoMixPlanner {
     ///   - outgoingEnd: Track time where the outgoing track stops (duration or stop marker).
     ///   - incomingBaseStart: The incoming track's start marker, or 0.
     ///   - outgoingVocalEnd: Where the outgoing song's outro begins, from its lyrics.
+    ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix waits for it when it can.
     ///   - outgoingLastLyricMostlySung: The earliest the mix may start (75% into the last lyric).
     ///   - incomingVocalStart: The incoming song's first lyric.
     static func plan(
@@ -27,6 +30,7 @@ enum AutoMixPlanner {
         outgoingEnd: TimeInterval,
         incomingBaseStart: TimeInterval,
         outgoingVocalEnd: TimeInterval?,
+        outgoingLastLyricEnd: TimeInterval?,
         outgoingLastLyricMostlySung: TimeInterval?,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan {
@@ -44,10 +48,15 @@ enum AutoMixPlanner {
             }
         }
 
-        // The last lyric is always at least 75% sung before anything changes, even when that
-        // leaves only a short mix at the very end.
+        // The last lyric is sung in full before anything changes when the song leaves room for
+        // a mix after it; otherwise it is at least 75% sung, even if that leaves a short mix.
         var startTime = max(0, mixEnd - overlap)
-        if let floor = outgoingLastLyricMostlySung, startTime < floor {
+        let floor: TimeInterval? = if let lyricEnd = outgoingLastLyricEnd, mixEnd - lyricEnd >= minimumFullLyricMix {
+            lyricEnd
+        } else {
+            outgoingLastLyricMostlySung
+        }
+        if let floor, startTime < floor {
             startTime = floor
             overlap = max(mixEnd - startTime, minimumOverlap)
         }
