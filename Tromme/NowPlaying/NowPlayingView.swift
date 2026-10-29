@@ -57,6 +57,10 @@ struct NowPlayingView: View {
     private var controlTintOpacity: Double { AppStyle.NowPlaying.controlTintOpacity }
     private var bottomActionIconSize: CGFloat { AppStyle.NowPlaying.bottomActionIconSize }
     private var iPadBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadBottomActionsExtraPadding }
+
+    private var artworkPath: String? { player.currentTrack?.parentThumb ?? player.currentTrack?.thumb }
+    /// Artwork and titles crossfade when Auto Mix blends into the next song; other changes are instant.
+    private var mixCrossfade: Animation? { player.isAutoMixing ? .easeInOut(duration: 1.2) : nil }
     private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
     private var portraitArtworkBottomPadding: CGFloat { AppStyle.NowPlaying.portraitArtworkBottomPadding }
     private var portraitTrackInfoBottomPadding: CGFloat { AppStyle.NowPlaying.portraitTrackInfoBottomPadding }
@@ -131,11 +135,16 @@ struct NowPlayingView: View {
                             VStack(spacing: 0) {
                                 Spacer(minLength: 0)
 
-                                ArtworkView(
-                                    thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                                    size: landscapeArtworkSize,
-                                    cornerRadius: AppStyle.Radius.card
-                                )
+                                ZStack {
+                                    ArtworkView(
+                                        thumbPath: artworkPath,
+                                        size: landscapeArtworkSize,
+                                        cornerRadius: AppStyle.Radius.card
+                                    )
+                                    .id(artworkPath)
+                                    .transition(.opacity)
+                                }
+                                .animation(mixCrossfade, value: artworkPath)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
                                 .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
                                 // After the shadows, so the video doesn't cast a second one.
@@ -262,14 +271,19 @@ struct NowPlayingView: View {
                                 return fullRect
                             }()
 
-                            ArtworkView(
-                                thumbPath: (player.currentTrack?.parentThumb ?? player.currentTrack?.thumb),
-                                size: targetRect.width,
-                                cornerRadius: isCompact ? 4 : 6,
-                                // Keep requesting the full-size image in the compact slot too, so
-                                // shrinking never swaps to a different size that may not be loaded yet.
-                                minimumTranscodePx: ArtworkView.maxTranscodePx
-                            )
+                            ZStack {
+                                ArtworkView(
+                                    thumbPath: artworkPath,
+                                    size: targetRect.width,
+                                    cornerRadius: isCompact ? 4 : 6,
+                                    // Keep requesting the full-size image in the compact slot too, so
+                                    // shrinking never swaps to a different size that may not be loaded yet.
+                                    minimumTranscodePx: ArtworkView.maxTranscodePx
+                                )
+                                .id(artworkPath)
+                                .transition(.opacity)
+                            }
+                            .animation(mixCrossfade, value: artworkPath)
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .position(x: targetRect.midX, y: targetRect.midY)
@@ -424,6 +438,7 @@ struct NowPlayingView: View {
 
             VStack(alignment: .leading) {
                 Text(player.currentTrack?.title ?? "Not Playing")
+                    .contentTransition(.opacity)
                     .font(.title3.bold())
                     .foregroundStyle(.white)
                     .lineLimit(1)
@@ -432,6 +447,7 @@ struct NowPlayingView: View {
                     goToArtist()
                 } label: {
                     Text(player.currentTrack?.artistDisplayName ?? "")
+                        .contentTransition(.opacity)
                         .font(.title3)
                         .foregroundStyle(Color.white.opacity(0.6))
                         .lineLimit(1)
@@ -440,6 +456,7 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)
+            .animation(mixCrossfade, value: player.currentTrack?.ratingKey)
 
             HStack(spacing: 10) {
                 Button {

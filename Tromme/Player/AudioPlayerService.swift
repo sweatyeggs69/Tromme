@@ -151,6 +151,7 @@ final class AudioPlayerService: Sendable {
     var autoMixPlanTask: Task<Void, Never>?
     var autoMixTriggerTask: Task<Void, Never>?
     var autoMixTask: Task<Void, Never>?
+    var autoMixInProgress = false
     /// The faded-out tracks' players, kept sounding until the overlap ends.
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?
