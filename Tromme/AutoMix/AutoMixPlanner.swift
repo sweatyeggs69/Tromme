@@ -22,6 +22,8 @@ enum AutoMixPlanner {
     private static let filteredOverlap: TimeInterval = 3
     /// Shortest fade-in for a song whose lyrics start almost straight away.
     private static let quickestFadeIn: TimeInterval = 0.5
+    /// Longest the outgoing outro keeps sounding once the new song is at full volume.
+    private static let longestTail: TimeInterval = 4
     /// Mixes shorter than this sound like a glitch, so the songs change normally instead.
     private static let shortestMix: TimeInterval = 3
     /// Default length of the plain crossfade (free tier and songs matched by `AutoMixGenreRules`).
@@ -79,7 +81,10 @@ enum AutoMixPlanner {
             if room > overlap + 0.5 {
                 introStart = vocalStart - lyricLead - overlap
             } else if room < overlap {
-                incomingFade = max(room, quickestFadeIn)
+                let fade = max(room, quickestFadeIn)
+                incomingFade = fade
+                // The outro only tails under the new song's vocals briefly.
+                overlap = min(overlap, fade + longestTail)
             }
         }
 
