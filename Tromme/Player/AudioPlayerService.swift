@@ -1148,6 +1148,7 @@ final class AudioPlayerService: Sendable {
             if let target = pendingInitialSeekTime, !(position.isFinite && abs(position - target) < 0.5) {
                 logPlayback("automix_prepared_seek_missed", "at=\(position) target=\(target)")
             } else {
+                logPlayback("automix_prepared_start", "at=\(position)")
                 pendingInitialSeekTime = nil
             }
         }
