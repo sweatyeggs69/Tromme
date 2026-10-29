@@ -146,6 +146,8 @@ final class AudioPlayerService: Sendable {
     var infiniteRefillTask: Task<Void, Never>?
     var preloadedNext: PreloadedNextTrack?
     var autoMixPlan: AutoMixPlan?
+    /// Plans and outcomes of the last few mixes, for Report AutoMix Issue.
+    var autoMixRecords: [AutoMixRecord] = []
     /// Filter taps by item, for the Auto Mix filter sweeps.
     let mixTaps = NSMapTable<AVPlayerItem, AutoMixFilterTap>.weakToStrongObjects()
     var autoMixPlanTask: Task<Void, Never>?

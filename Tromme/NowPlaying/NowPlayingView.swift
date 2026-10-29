@@ -24,6 +24,8 @@ struct NowPlayingView: View {
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var metadataRequest: MetadataSheetRequest?
+    @State private var showingAutoMixReport = false
+    @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @State private var isRating = false
     /// Square Tromme+ animated artwork for the current album, when it has one.
     @State private var animatedArtworkURL: URL?
@@ -327,6 +329,9 @@ struct NowPlayingView: View {
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
+        .sheet(isPresented: $showingAutoMixReport) {
+            AutoMixReportView(player: player)
+        }
     }
 
     @ViewBuilder
@@ -559,6 +564,13 @@ struct NowPlayingView: View {
                 metadataRequest = .trackInfo(track)
             } label: {
                 Label("Track Info", systemImage: "info.circle")
+            }
+            if showQueue && autoMixEnabled {
+                Button {
+                    showingAutoMixReport = true
+                } label: {
+                    Label("Report AutoMix Issue", systemImage: "exclamationmark.bubble")
+                }
             }
             if showLyrics {
                 Divider()

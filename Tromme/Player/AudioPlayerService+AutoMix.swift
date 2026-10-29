@@ -44,6 +44,7 @@ extension AudioPlayerService {
             markers.start(for: $0) != nil || markers.stop(for: $0) != nil
         }
         if isContinuousAlbum || isTrimmed {
+            recordAutoMix(current, incoming, "skipped: \(isContinuousAlbum ? "album order" : "trim markers")")
             autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
             return
         }
@@ -73,6 +74,7 @@ extension AudioPlayerService {
             guard self.isAutoMixEnabled else { return }
             if isLiveOrMix {
                 self.logPlayback("automix_skipped", "reason=live_or_mix_album")
+                self.recordAutoMix(current, incoming, "skipped: live or mix album")
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
@@ -83,6 +85,9 @@ extension AudioPlayerService {
                 plan.loudnessDifference = loudnessDifference
                 let reason = isPlus ? "\(outgoingReason ?? "-")/\(incomingReason ?? "-")" : "no_plus"
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
+                self.recordAutoMix(current, incoming, "planned: plain crossfade", [
+                    "reason": reason, "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap)
+                ])
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
                 return
@@ -98,14 +103,50 @@ extension AudioPlayerService {
                 incomingVocalStart: incomingSpan?.start
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
+                self.recordAutoMix(current, incoming, "skipped: lyrics too close to the edge", [
+                    "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.lastLineEnd) } ?? "none",
+                    "outgoingVocalEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
+                    "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
+                    "outgoingEnd": Self.seconds(end)
+                ])
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
             plan.loudnessDifference = loudnessDifference
             self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
+            self.recordAutoMix(current, incoming, "planned: lyric mix", [
+                "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap),
+                "incomingStart": plan.introStart.map(Self.seconds) ?? "top", "filter": "\(plan.filter)",
+                "incomingFade": plan.incomingFade.map(Self.seconds) ?? "none",
+                "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.lastLineEnd) } ?? "none",
+                "outgoingVocalEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
+                "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
+                "outgoingEnd": Self.seconds(end),
+                "loudnessDifferenceDb": plan.loudnessDifference.map(Self.seconds) ?? "none"
+            ])
             self.autoMixPlan = plan
             self.scheduleAutoMixTrigger(plan, generation: generation)
         }
+    }
+
+    // MARK: - Report records
+
+    private static func seconds(_ value: TimeInterval) -> String {
+        value.isFinite ? String(format: "%.1f", value) : "never"
+    }
+
+    /// Keeps the plan and outcome of recent mixes for Report AutoMix Issue.
+    private func recordAutoMix(_ outgoing: PlexMetadata, _ incoming: PlexMetadata, _ outcome: String, _ values: [String: String] = [:]) {
+        autoMixRecords.removeAll { $0.outgoing.ratingKey == outgoing.ratingKey && $0.incoming.ratingKey == incoming.ratingKey }
+        autoMixRecords.append(AutoMixRecord(outgoing: outgoing, incoming: incoming, outcome: outcome, values: values))
+        if autoMixRecords.count > 4 { autoMixRecords.removeFirst(autoMixRecords.count - 4) }
+    }
+
+    /// Adds what happened when the planned mix came due.
+    private func noteAutoMix(incomingKey: String, _ outcome: String, _ values: [String: String] = [:]) {
+        guard let index = autoMixRecords.lastIndex(where: { $0.incoming.ratingKey == incomingKey }) else { return }
+        autoMixRecords[index].outcome = outcome
+        autoMixRecords[index].values.merge(values) { _, new in new }
     }
 
     /// Loads the next song's lyrics as soon as it is up next, so the plan never waits on them.
@@ -198,6 +239,7 @@ extension AudioPlayerService {
         guard repeatMode == .off, playbackIntent, let target = nextAutoAdvanceTarget(),
               target.track.ratingKey == original.incomingKey else {
             logPlayback("automix_skipped", "reason=queue_changed")
+            noteAutoMix(incomingKey: original.incomingKey, "skipped: queue changed before the mix")
             abandonAutoMix()
             return
         }
@@ -205,6 +247,7 @@ extension AudioPlayerService {
         // they chose where to listen, so the song ends normally instead.
         guard lateness <= 1.5 else {
             logPlayback("automix_skipped", "reason=past_start late=\(lateness)")
+            noteAutoMix(incomingKey: original.incomingKey, "skipped: seeked past the mix start", ["lateBy": Self.seconds(lateness)])
             abandonAutoMix()
             autoMixPlan = AutoMixPlan(outgoingKey: original.outgoingKey, incomingKey: original.incomingKey, startTime: .infinity, overlap: 0)
             return
@@ -235,6 +278,9 @@ extension AudioPlayerService {
         mixIncomingGain = 0
         currentIndex = target.index
         logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) filter=\(plan.filter)")
+        noteAutoMix(incomingKey: target.track.ratingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
+            "lateBy": Self.seconds(lateness), "filterUsed": "\(plan.filter)", "overlapUsed": Self.seconds(plan.overlap)
+        ])
         // A streamed transcode can't start part-way without a new session, which would lose
         // the prepared song, so it starts from the top; the mix still ends before its lyrics.
         var resume = plan.introStart

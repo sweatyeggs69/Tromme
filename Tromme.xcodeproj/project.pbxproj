@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AC0000000000000000007103 /* AutoMixReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007103 /* AutoMixReportView.swift */; };
+		AC0000000000000000007102 /* AutoMixReportViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007102 /* AutoMixReportViewModel.swift */; };
+		AC0000000000000000007101 /* AutoMixIssueType.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007101 /* AutoMixIssueType.swift */; };
+		AC0000000000000000007100 /* AutoMixRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007100 /* AutoMixRecord.swift */; };
 		81EACDF35984235534DEE088 /* ConcertCalendarEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */; };
 		9F4ACACE99186E4E157D6AE7 /* ConcertDateTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */; };
 		ABD5557FF0132948AEA96FDF /* ArtistConcertDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */; };
@@ -223,6 +227,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AB0000000000000000007103 /* AutoMixReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportView.swift; sourceTree = "<group>"; };
+		AB0000000000000000007102 /* AutoMixReportViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportViewModel.swift; sourceTree = "<group>"; };
+		AB0000000000000000007101 /* AutoMixIssueType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixIssueType.swift; sourceTree = "<group>"; };
+		AB0000000000000000007100 /* AutoMixRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixRecord.swift; sourceTree = "<group>"; };
 		73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertCalendarEditor.swift; sourceTree = "<group>"; };
 		92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcertDateTileView.swift; sourceTree = "<group>"; };
 		8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistConcertDetailView.swift; sourceTree = "<group>"; };
@@ -458,6 +466,8 @@
 				971191A0B93BC32824EF5992 /* AutoMixGenreRules.swift */,
 				B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */,
 				A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */,
+				AB0000000000000000007101 /* AutoMixIssueType.swift */,
+				AB0000000000000000007100 /* AutoMixRecord.swift */,
 				9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */,
 			);
 			path = AutoMix;
@@ -474,6 +484,8 @@
 				00850707551A1867A1CF2554 /* QueueRow.swift */,
 				C667FBB31EC71EB233DEEA6A /* QueueActionPill.swift */,
 				ED436BA1018DBD5CCC98F146 /* AutoMixGlyph.swift */,
+				AB0000000000000000007103 /* AutoMixReportView.swift */,
+				AB0000000000000000007102 /* AutoMixReportViewModel.swift */,
 				366E625E6C3721CA53C387E2 /* MPVolumeSliderView.swift */,
 				097DA34698E1A55F4950B626 /* LyricsWord.swift */,
 				44F2FA04146E9D658503C954 /* LyricsLine.swift */,
@@ -929,6 +941,8 @@
 				830B4EEEE8D25FD54F85C2C4 /* AutoDownloadMode.swift in Sources */,
 				A1D0C0DE0002000200000002 /* DownloadQuality.swift in Sources */,
 				079DC0CDC83878CE7886B28C /* AutoMixPlan.swift in Sources */,
+				AC0000000000000000007101 /* AutoMixIssueType.swift in Sources */,
+				AC0000000000000000007100 /* AutoMixRecord.swift in Sources */,
 				A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */,
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
 				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,
@@ -939,6 +953,8 @@
 				4EF1AB66E4C346F4DDD503E2 /* QueueRow.swift in Sources */,
 				1D0303894B38D9FC97DB871F /* QueueActionPill.swift in Sources */,
 				85BEB28D806A07DA20E073E4 /* AutoMixGlyph.swift in Sources */,
+				AC0000000000000000007103 /* AutoMixReportView.swift in Sources */,
+				AC0000000000000000007102 /* AutoMixReportViewModel.swift in Sources */,
 				640D9EF45FDD2FA948E90BBF /* MPVolumeSliderView.swift in Sources */,
 				178782157E69E3E8770434AA /* LyricsWord.swift in Sources */,
 				25B1D72BB8040F669072D2B3 /* LyricsLine.swift in Sources */,
