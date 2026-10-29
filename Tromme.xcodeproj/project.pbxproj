@@ -222,7 +222,6 @@
 		02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */; };
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
 		C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */; };
-		7F9DB8165F195B34B6A7E160 /* AutoMixSourceCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 488E44857F85EACA320736C3 /* AutoMixSourceCache.swift */; };
 		8D3B576732E94ECBF26AB6B5 /* TrackMixProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */; };
 		5C0F30354CDB4AD1AC59BA9F /* TrackMixProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */; };
 		B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */; };
@@ -448,7 +447,6 @@
 		44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixTransition.swift; sourceTree = "<group>"; };
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
 		B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixFilterTap.swift; sourceTree = "<group>"; };
-		488E44857F85EACA320736C3 /* AutoMixSourceCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixSourceCache.swift; sourceTree = "<group>"; };
 		BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMixProfileStore.swift; sourceTree = "<group>"; };
 		F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMixProfile.swift; sourceTree = "<group>"; };
 		74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparedMixIncoming.swift; sourceTree = "<group>"; };
@@ -467,7 +465,6 @@
 			isa = PBXGroup;
 			children = (
 				74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */,
-				488E44857F85EACA320736C3 /* AutoMixSourceCache.swift */,
 				BA588AE3FB671922BC2EFABC /* TrackMixProfileStore.swift */,
 				F237FB44379FE864CC9E7FCC /* TrackMixProfile.swift */,
 				B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */,
@@ -955,7 +952,6 @@
 				02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */,
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
 				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,
-				7F9DB8165F195B34B6A7E160 /* AutoMixSourceCache.swift in Sources */,
 				8D3B576732E94ECBF26AB6B5 /* TrackMixProfileStore.swift in Sources */,
 				5C0F30354CDB4AD1AC59BA9F /* TrackMixProfile.swift in Sources */,
 				B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */,

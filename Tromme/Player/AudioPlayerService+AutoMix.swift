@@ -38,16 +38,15 @@ extension AudioPlayerService {
             return
         }
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
-        let outgoingSource = autoMixAnalysisSource(for: current)
-        let incomingSource = autoMixAnalysisSource(for: incoming)
+        let outgoingFile = AppContext.shared.downloadManager.localURL(for: current.ratingKey)
+        let incomingFile = AppContext.shared.downloadManager.localURL(for: incoming.ratingKey)
         let outgoingDuration = Double(current.duration ?? 0) / 1000
         let incomingDuration = Double(incoming.duration ?? 0) / 1000
         let generation = playbackGeneration
-        AutoMixSourceCache.prune(keeping: [current.ratingKey, incoming.ratingKey])
 
         autoMixPlanTask = Task { [weak self] in
-            async let outgoingProfile = Self.mixProfile(key: current.ratingKey, duration: outgoingDuration, source: outgoingSource)
-            async let incomingProfile = Self.mixProfile(key: incoming.ratingKey, duration: incomingDuration, source: incomingSource)
+            async let outgoingProfile = Self.mixProfile(key: current.ratingKey, duration: outgoingDuration, localURL: outgoingFile)
+            async let incomingProfile = Self.mixProfile(key: incoming.ratingKey, duration: incomingDuration, localURL: incomingFile)
             async let outgoingVocals = LyricsService.vocalSpan(for: current)
             async let incomingVocals = LyricsService.vocalSpan(for: incoming)
             let (outgoing, incomingProfileResult) = await (outgoingProfile, incomingProfile)
@@ -88,38 +87,11 @@ extension AudioPlayerService {
         return min(duration, stop ?? duration)
     }
 
-    /// Where a track's audio can be read from: the download, or a temporary copy of the
-    /// original file off cellular (the HLS transcode itself can't be read this way).
-    struct AnalysisSource: Sendable {
-        let url: URL
-        let isTemporary: Bool
-        let key: String
-        let fileExtension: String
-    }
-
-    private func autoMixAnalysisSource(for track: PlexMetadata) -> AnalysisSource? {
-        if let local = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
-            return AnalysisSource(url: local, isTemporary: false, key: track.ratingKey, fileExtension: local.pathExtension)
-        }
-        guard !isCellular, let server, let client,
-              let partKey = track.media?.first?.part?.first?.key,
-              let url = client.directStreamURL(server: server, partKey: partKey) else { return nil }
-        let container = (track.media?.first?.container ?? "mp3").lowercased()
-        return AnalysisSource(url: url, isTemporary: true, key: track.ratingKey, fileExtension: container)
-    }
-
-    private nonisolated static func readableURL(_ source: AnalysisSource?) async -> URL? {
-        guard let source else { return nil }
-        guard source.isTemporary else { return source.url }
-        return await AutoMixSourceCache.localCopy(of: source.url, key: source.key, fileExtension: source.fileExtension)
-    }
-
-    /// The song's cached analysis, or a fresh one (reading a temporary copy when streamed)
-    /// that is saved for every later mix.
-    private nonisolated static func mixProfile(key: String, duration: TimeInterval, source: AnalysisSource?) async -> TrackMixProfile? {
+    /// The song's cached analysis, or a fresh one from its download. Streamed songs are
+    /// never copied to disk for this, so they plan from lyrics and timing alone.
+    private nonisolated static func mixProfile(key: String, duration: TimeInterval, localURL: URL?) async -> TrackMixProfile? {
         if let cached = TrackMixProfileStore.load(key: key, duration: duration) { return cached }
-        guard let url = await readableURL(source),
-              let profile = await AutoMixAnalyzer.profile(url: url) else { return nil }
+        guard let localURL, let profile = await AutoMixAnalyzer.profile(url: localURL) else { return nil }
         TrackMixProfileStore.save(profile, key: key)
         return profile
     }

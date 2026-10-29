@@ -275,7 +275,9 @@ final class AudioPlayerService: Sendable {
     }
 
     init() {
-        AutoMixSourceCache.prune(keeping: [])
+        // Earlier builds kept temporary copies of streamed songs here for Auto Mix.
+        try? FileManager.default.removeItem(at: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AutoMix", isDirectory: true))
         setupAudioSession()
         setupRemoteCommands()
         restorePlaybackState()
