@@ -72,7 +72,7 @@ final class AutoMixFilterTap: @unchecked Sendable {
             return nil
         }
         let parameters = AVMutableAudioMixInputParameters(track: track)
-        parameters.audioProcessingTap = tap
+        parameters.audioTapProcessor = tap
         return parameters
     }
 
