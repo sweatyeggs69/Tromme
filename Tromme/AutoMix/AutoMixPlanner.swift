@@ -33,9 +33,8 @@ enum AutoMixPlanner {
             audibleEnd = measured.audibleEnd
             fadeStart = measured.fadeStart
         }
-        let fadesOut = fadeStart != nil
-        // Albums that run straight into each other stay gapless unless the song fades out.
-        if isContinuousAlbum, !fadesOut { return nil }
+        // Tracks in order on the same album are never mixed; they stay gapless.
+        if isContinuousAlbum { return nil }
 
         var overlap = defaultOverlap
         if let fadeStart { overlap = min(max(audibleEnd - fadeStart, 3), maximumOverlap) }

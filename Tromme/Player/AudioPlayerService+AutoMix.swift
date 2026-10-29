@@ -32,6 +32,11 @@ extension AudioPlayerService {
         let isContinuousAlbum = current.parentRatingKey != nil
             && current.parentRatingKey == incoming.parentRatingKey
             && (current.index ?? -1) + 1 == incoming.index
+        // Tracks in order on the same album stay gapless, so there is nothing to analyse.
+        if isContinuousAlbum {
+            autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0, introStart: nil, tempo: nil)
+            return
+        }
         let incomingBaseStart = AppContext.shared.trackMarkers.start(for: incoming.ratingKey) ?? 0
         let outgoingURL = autoMixAnalysisURL(for: current)
         let incomingURL = autoMixAnalysisURL(for: incoming)
