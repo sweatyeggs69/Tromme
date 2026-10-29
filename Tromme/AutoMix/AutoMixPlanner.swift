@@ -20,6 +20,8 @@ enum AutoMixPlanner {
     private static let lyricLead: TimeInterval = 1
     /// Mixes this long or longer get a low-pass sweep; shorter ones are a plain crossfade.
     private static let filteredOverlap: TimeInterval = 6
+    /// Mixes shorter than this sound like a glitch, so the songs change normally instead.
+    private static let shortestMix: TimeInterval = 3
     /// Length of the plain crossfade used for songs matched by `AutoMixGenreRules`.
     private static let crossfadeLength: TimeInterval = 3
 
@@ -29,7 +31,8 @@ enum AutoMixPlanner {
     ///   - outgoingVocalEnd: Where the outgoing song's outro begins, from its lyrics.
     ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix never starts before it.
     ///   - incomingVocalStart: The incoming song's first lyric.
-    /// - Returns: nil when the lyrics run too close to either song's edge to mix.
+    /// - Returns: nil when the lyrics run too close to either song's edge to mix, or leave
+    ///   room only for a mix shorter than `shortestMix`.
     static func plan(
         outgoingKey: String,
         incomingKey: String,
@@ -75,6 +78,8 @@ enum AutoMixPlanner {
                 overlap = max(min(overlap, room), minimumOverlap)
             }
         }
+
+        guard overlap >= shortestMix else { return nil }
 
         return AutoMixPlan(
             outgoingKey: outgoingKey,
