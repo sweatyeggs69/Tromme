@@ -29,6 +29,9 @@ extension AudioPlayerService {
         if let record = AppContext.shared.downloadManager.records[track.ratingKey],
            Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
 
+        // Streamed FLAC, Opus and Vorbis open on the Core Audio engine when they start.
+        if Self.isLosslessLabel(sourceAudioCodec(for: track)) { return }
+
         nextTrackPreloadTask = Task { [weak self] in
             await self?.performPreload(track)
         }

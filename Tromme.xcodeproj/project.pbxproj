@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA10C0DE0000000000000022 /* SFBAudioEngine in Frameworks */ = {isa = PBXBuildFile; productRef = AA10C0DE0000000000000023 /* SFBAudioEngine */; };
 		81EACDF35984235534DEE088 /* ConcertCalendarEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A30EFAF7E60A9FF97027C6 /* ConcertCalendarEditor.swift */; };
 		9F4ACACE99186E4E157D6AE7 /* ConcertDateTileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DC5804687AD4FDAC16350E /* ConcertDateTileView.swift */; };
 		ABD5557FF0132948AEA96FDF /* ArtistConcertDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E66A5DE87B8D8C87F6A014F /* ArtistConcertDetailView.swift */; };
@@ -448,6 +449,17 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		AA10C0DE0000000000000021 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA10C0DE0000000000000022 /* SFBAudioEngine in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		E76E344614E8506188BF35DF /* AutoMix */ = {
 			isa = PBXGroup;
@@ -848,6 +860,7 @@
 			buildConfigurationList = EC4A285C2CE3C06C23F1EB81 /* Build configuration list for PBXNativeTarget "Tromme" */;
 			buildPhases = (
 				7F282480DA2807687E825D44 /* Sources */,
+				AA10C0DE0000000000000021 /* Frameworks */,
 				8F067F852AC84A0276FFDD21 /* Resources */,
 			);
 			buildRules = (
@@ -859,6 +872,7 @@
 			);
 			name = Tromme;
 			packageProductDependencies = (
+				AA10C0DE0000000000000023 /* SFBAudioEngine */,
 			);
 			productName = Tromme;
 			productReference = 9C10F5F41B11002D20F2A7CD /* Tromme.app */;
@@ -887,6 +901,9 @@
 			);
 			mainGroup = 921559876514E7BA771BBEE0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				AA10C0DE0000000000000024 /* XCRemoteSwiftPackageReference "SFBAudioEngine" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 5C7D86059CB6E9BBDEA3D94B /* Products */;
 			projectDirPath = "";
@@ -1312,6 +1329,25 @@
 			name = Debug;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA10C0DE0000000000000024 /* XCRemoteSwiftPackageReference "SFBAudioEngine" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sweatyeggs69/SFBAudioEngine";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA10C0DE0000000000000023 /* SFBAudioEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA10C0DE0000000000000024 /* XCRemoteSwiftPackageReference "SFBAudioEngine" */;
+			productName = SFBAudioEngine;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		063E4CDB73FF7CA88043F602 /* Build configuration list for PBXProject "Tromme" */ = {

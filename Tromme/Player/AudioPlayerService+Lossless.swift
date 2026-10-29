@@ -1,18 +1,35 @@
 import AVFoundation
 
-// Downloaded FLAC/ALAC playback through AVAudioPlayer.
+// FLAC, ALAC, Opus and Vorbis playback through the Core Audio engine (SFBAudioEngine),
+// from a downloaded file or streamed with HTTP range requests.
 extension AudioPlayerService {
+    /// Codec labels (uppercased) that play through the Core Audio engine instead of AVPlayer.
     static func isLosslessLabel(_ codec: String?) -> Bool {
-        ["FLAC", "ALAC"].contains(codec ?? "")
+        ["FLAC", "ALAC", "OPUS", "VORBIS"].contains(codec?.uppercased() ?? "")
     }
 
-    /// Replaces the AVQueuePlayer pipeline with a LocalLosslessPlayer for this track.
-    /// Returns false (so the caller falls back to AVPlayer) if the file can't be opened.
-    func startLosslessPlayback(url: URL, resumeAt: TimeInterval?) -> Bool {
-        guard let lossless = try? LocalLosslessPlayer(url: url) else {
-            logPlayback("lossless_open_failed")
-            return false
+    /// Opens the track off the main thread, then starts it. Calls `onFailure` if it can't be opened.
+    func loadCoreAudioTrack(url: URL, resumeAt: TimeInterval?, onFailure: @escaping () -> Void) {
+        let generation = playbackGeneration
+        playbackLoadTask?.cancel()
+        playbackLoadTask = Task { @MainActor in
+            do {
+                let lossless = try await LocalLosslessPlayer.open(url: url)
+                guard !Task.isCancelled, self.playbackGeneration == generation else {
+                    lossless.stop()
+                    return
+                }
+                self.startLosslessPlayback(lossless, resumeAt: resumeAt)
+            } catch {
+                guard !Task.isCancelled, self.playbackGeneration == generation else { return }
+                self.logPlayback("lossless_open_failed", "error=\(error.localizedDescription)")
+                onFailure()
+            }
         }
+    }
+
+    /// Replaces the AVQueuePlayer pipeline with the opened player for this track.
+    private func startLosslessPlayback(_ lossless: LocalLosslessPlayer, resumeAt: TimeInterval?) {
         tearDownObservers()
         player?.pause()
         player?.removeAllItems()
@@ -54,7 +71,6 @@ extension AudioPlayerService {
         syncDynamicQueueDownloads()
         reportTimelineState(isPlaying ? "playing" : "paused")
         savePlaybackState()
-        return true
     }
 
     func stopLosslessPlayback() {
