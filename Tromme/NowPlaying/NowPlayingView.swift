@@ -60,7 +60,6 @@ struct NowPlayingView: View {
 
     private var artworkPath: String? { player.currentTrack?.parentThumb ?? player.currentTrack?.thumb }
     private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
-    private var portraitArtworkBottomPadding: CGFloat { AppStyle.NowPlaying.portraitArtworkBottomPadding }
     private var portraitTrackInfoBottomPadding: CGFloat { AppStyle.NowPlaying.portraitTrackInfoBottomPadding }
     private var portraitBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.portraitBottomControlsHeightFraction }
     private var landscapeBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.landscapeBottomControlsHeightFraction }
@@ -190,12 +189,10 @@ struct NowPlayingView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 6)
 
-                    Spacer(minLength: 16)
-
                     // Reserves the full-size artwork's resting spot; the real artwork
                     // is rendered once, floating, and positioned over this spot (or
                     // the small one in trackInfo) via the anchor overlay below.
-                    ZStack {
+                    ZStack(alignment: .top) {
                         Color.clear
                             .frame(width: artworkSize, height: artworkSize)
                             .anchorPreference(key: ArtworkSlotAnchorsKey.self, value: .bounds) { [.full: $0] }
@@ -205,8 +202,10 @@ struct NowPlayingView: View {
                             .opacity(isCompact ? 1 : 0)
                     }
                     .frame(maxWidth: .infinity)
-                    .frame(maxHeight: .infinity)
-                    .padding(.bottom, portraitArtworkBottomPadding)
+                    // Hugs the artwork so the title sits right under it; lyrics and queue
+                    // take the full height once the artwork shrinks to its compact slot.
+                    .frame(maxHeight: isCompact ? .infinity : artworkSize)
+                    .padding(.bottom, 6)
                     .zIndex(1)
 
                     // Bottom controls — pinned to bottom
@@ -225,7 +224,8 @@ struct NowPlayingView: View {
                     }
                     .frame(maxWidth: controlsContainerWidth)
                     .frame(maxWidth: .infinity)
-                    .frame(height: bottomControlsHeight)
+                    .frame(height: isCompact ? bottomControlsHeight : nil)
+                    .frame(maxHeight: isCompact ? nil : .infinity)
                     .padding(.bottom, bottomScreenPadding)
                 }
                 // Shadow lives behind the content so it never draws over the track and artist text.
