@@ -59,10 +59,8 @@ struct NowPlayingView: View {
     private var iPadBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadBottomActionsExtraPadding }
 
     private var artworkPath: String? { player.currentTrack?.parentThumb ?? player.currentTrack?.thumb }
-    private var iPadLandscapeBottomActionsExtraPadding: CGFloat { AppStyle.NowPlaying.iPadLandscapeBottomActionsExtraPadding }
     private var portraitTrackInfoBottomPadding: CGFloat { AppStyle.NowPlaying.portraitTrackInfoBottomPadding }
     private var portraitBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.portraitBottomControlsHeightFraction }
-    private var landscapeBottomControlsHeightFraction: CGFloat { AppStyle.NowPlaying.landscapeBottomControlsHeightFraction }
     private var bottomActionsTopPadding: CGFloat { AppStyle.NowPlaying.bottomActionsTopPadding }
     private var bottomScreenPaddingWithSafeArea: CGFloat { AppStyle.NowPlaying.bottomScreenPaddingWithSafeArea }
     private var bottomScreenPaddingWithoutSafeArea: CGFloat { AppStyle.NowPlaying.bottomScreenPaddingWithoutSafeArea }
@@ -86,7 +84,6 @@ struct NowPlayingView: View {
         GeometryReader { geo in
             let width = geo.size.width > 100 ? geo.size.width : geoSize.width
             let height = geo.size.height > 100 ? geo.size.height : geoSize.height
-            let isPortrait = height >= width
             let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
@@ -94,10 +91,7 @@ struct NowPlayingView: View {
             let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && height > width
             let controlsContainerWidth = artworkSize
             let controlsHorizontalPadding: CGFloat = 0
-            let bottomControlsHeightFraction = isPortrait
-                ? portraitBottomControlsHeightFraction
-                : landscapeBottomControlsHeightFraction
-            let bottomControlsHeight = height * bottomControlsHeightFraction
+            let bottomControlsHeight = height * portraitBottomControlsHeightFraction
             let landscapeOuterHorizontalPadding: CGFloat = 24
             let landscapeColumnSpacing: CGFloat = 24
             let landscapeContentWidth = max(0.0, width - (landscapeOuterHorizontalPadding * 2))
@@ -107,16 +101,10 @@ struct NowPlayingView: View {
             // The Duo layout extends into the bottom safe area (see below), so it sets its own small inset.
             let landscapeBottomInsetPadding = isDuoOpen ? 14 : bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
-            let landscapeBottomActionsHeight: CGFloat = bottomActionIconSize + iPadLandscapeBottomActionsExtraPadding
-            let landscapeMainHeight = max(
-                0.0,
-                height - landscapeHandleHeight - landscapeBottomActionsHeight - landscapeBottomInsetPadding
-            )
-            let landscapeArtworkControlsSpacing: CGFloat = 20
-            let landscapePlayerControlsHeight = landscapeMainHeight * portraitBottomControlsHeightFraction
-            let landscapeArtworkAreaHeight = max(96.0, landscapeMainHeight - landscapePlayerControlsHeight - landscapeArtworkControlsSpacing)
-            let landscapeArtworkSize = max(96.0, landscapeArtworkAreaHeight - 16)
-            let landscapeLeftWidth = max(96.0, landscapeArtworkAreaHeight)
+            let landscapeMainHeight = max(0.0, height - landscapeHandleHeight - landscapeBottomInsetPadding)
+            // Left column mirrors the portrait layout: artwork, track info, controls, bottom buttons.
+            let landscapeLeftWidth = max(96.0, min(landscapeContentWidth * 0.45, landscapeMainHeight * 0.62))
+            let landscapeArtworkSize = max(96.0, min(landscapeLeftWidth, landscapeMainHeight * 0.5))
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
 
             let _ = applyInitialLandscapeLyrics(isPadLandscape: isPadLandscape)
@@ -128,37 +116,33 @@ struct NowPlayingView: View {
                         .padding(.bottom, 6)
 
                     HStack(alignment: .top, spacing: landscapeColumnSpacing) {
-                        VStack(spacing: landscapeArtworkControlsSpacing) {
-                            VStack(spacing: 0) {
-                                Spacer(minLength: 0)
-
-                                ArtworkView(
-                                    thumbPath: artworkPath,
-                                    size: landscapeArtworkSize,
-                                    cornerRadius: AppStyle.Radius.card
-                                )
-                                .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
-                                .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
-                                // After the shadows, so the video doesn't cast a second one.
-                                .overlay {
-                                    AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
-                                }
-                                .scaleEffect(player.isPlaying ? 1.0 : 0.85)
-                                .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
-
-                                Spacer(minLength: 0)
+                        VStack(spacing: 0) {
+                            ArtworkView(
+                                thumbPath: artworkPath,
+                                size: landscapeArtworkSize,
+                                cornerRadius: AppStyle.Radius.card
+                            )
+                            .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
+                            .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
+                            // After the shadows, so the video doesn't cast a second one.
+                            .overlay {
+                                AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                             }
-                            .frame(height: landscapeArtworkAreaHeight)
+                            .scaleEffect(player.isPlaying ? 1.0 : 0.85)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
+                            .padding(.bottom, 6)
 
                             trackAndPlaybackControls(
                                 horizontalPadding: 0,
                                 isPadPortrait: false,
-                                trackInfoBottomPadding: 10
+                                trackInfoBottomPadding: portraitTrackInfoBottomPadding
                             )
-                            .frame(width: landscapeArtworkSize)
-                            .frame(height: landscapePlayerControlsHeight)
+                            .frame(maxHeight: .infinity)
+
+                            bottomActions
+                                .padding(.top, bottomActionsTopPadding)
                         }
-                        .frame(width: landscapeLeftWidth)
+                        .frame(width: landscapeLeftWidth, height: landscapeMainHeight)
 
                         if showLyrics || showQueue {
                             lyricsQueueContent(isPadLandscape: true)
@@ -173,12 +157,6 @@ struct NowPlayingView: View {
                     }
                     .frame(height: landscapeMainHeight)
                     .padding(.horizontal, landscapeOuterHorizontalPadding)
-
-                    landscapeBottomActionsRow
-                        .fixedSize(horizontal: false, vertical: true)
-                        .layoutPriority(1)
-                        .padding(.horizontal, landscapeOuterHorizontalPadding)
-                        .padding(.bottom, iPadLandscapeBottomActionsExtraPadding)
                 }
                 .padding(.bottom, landscapeBottomInsetPadding)
                 .animation(.easeInOut(duration: 0.25), value: showLyrics)
@@ -691,38 +669,6 @@ struct NowPlayingView: View {
     }
 
     // MARK: - Bottom Actions
-
-    private var landscapeBottomActionsRow: some View {
-        HStack {
-            AirPlayButton(
-                tintOpacity: CGFloat(controlTintOpacity),
-                activeTintOpacity: CGFloat(actionIconActiveOpacity)
-            )
-            .frame(width: bottomActionIconSize, height: bottomActionIconSize)
-
-            Spacer()
-
-            HStack(spacing: 10) {
-                Button {
-                    toggleLyricsPanel()
-                } label: {
-                    panelToggleIcon(systemName: "quote.bubble", isActive: showLyrics)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    toggleQueuePanel()
-                } label: {
-                    panelToggleIcon(systemName: "list.bullet", isActive: showQueue)
-                        .overlay(alignment: .topTrailing) {
-                            if player.isShuffled && !showQueue { shuffleBadge }
-                        }
-                }
-                .buttonStyle(.plain)
-            }
-            .font(.title3.weight(.semibold))
-        }
-    }
 
     private var bottomActions: some View {
         HStack {
