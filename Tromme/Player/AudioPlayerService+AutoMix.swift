@@ -160,7 +160,7 @@ extension AudioPlayerService {
                 outgoingKey: original.outgoingKey, incomingKey: original.incomingKey,
                 startTime: bestKnownPlaybackSeconds, overlap: min(original.overlap, remaining),
                 introStart: original.introStart, tempo: nil,
-                incomingFadesIn: original.incomingFadesIn, filter: original.filter
+                incomingFadesIn: original.incomingFadesIn, filter: original.filter, curve: original.curve
             )
         }
 
@@ -224,12 +224,13 @@ extension AudioPlayerService {
                 let elapsed = Date().timeIntervalSince(startedAt)
                 let progress = min(1, elapsed / plan.overlap)
 
-                // Equal-power curves keep the combined loudness steady through the overlap.
-                self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * Float(cos(progress * .pi / 2))
-                self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * Float(cos(progress * .pi / 2))
+                let gains = plan.curve.gains(progress)
+                self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing
+                self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing
                 // A song that fades in by itself reaches full level early so it isn't faded twice.
-                let incomingProgress = plan.incomingFadesIn ? min(1, progress / 0.35) : progress
-                self.mixIncomingGain = Float(sin(incomingProgress * .pi / 2))
+                self.mixIncomingGain = plan.incomingFadesIn
+                    ? AutoMixPlan.Curve.equalPower.gains(min(1, progress / 0.35)).incoming
+                    : gains.incoming
                 self.applyIncomingVolume()
 
                 self.applyMixFilters(plan.filter, progress: Float(progress))

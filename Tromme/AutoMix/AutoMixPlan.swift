@@ -18,6 +18,31 @@ struct AutoMixPlan: Sendable {
     var incomingFadesIn = false
     /// Filter sweep that suits the song's mood.
     var filter: FilterStyle = .none
+    /// Shape of the volume crossfade.
+    var curve: Curve = .equalPower
+
+    enum Curve: Sendable, CaseIterable {
+        /// Constant combined loudness.
+        case equalPower
+        /// Eases in and out, so the swap happens mostly in the middle.
+        case smooth
+        /// Both songs are loud together for longer.
+        case overlapping
+
+        /// Volumes of the outgoing and incoming song `progress` (0...1) into the mix.
+        func gains(_ progress: Double) -> (outgoing: Float, incoming: Float) {
+            let p = min(max(progress, 0), 1)
+            switch self {
+            case .equalPower:
+                return (Float(cos(p * .pi / 2)), Float(sin(p * .pi / 2)))
+            case .smooth:
+                let eased = p * p * (3 - 2 * p)
+                return (Float(cos(eased * .pi / 2)), Float(sin(eased * .pi / 2)))
+            case .overlapping:
+                return (Float(cos(pow(p, 1.8) * .pi / 2)), Float(sin(pow(p, 0.6) * .pi / 2)))
+            }
+        }
+    }
 
     enum FilterStyle: Sendable {
         case none
@@ -40,7 +65,7 @@ struct AutoMixPlan: Sendable {
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
         AutoMixPlan(
             outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap,
-            introStart: introStart, tempo: tempo, incomingFadesIn: incomingFadesIn, filter: filter
+            introStart: introStart, tempo: tempo, incomingFadesIn: incomingFadesIn, filter: filter, curve: curve
         )
     }
 

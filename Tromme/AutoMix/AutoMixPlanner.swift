@@ -103,6 +103,14 @@ enum AutoMixPlanner {
             }
         }
 
+        // Vary the length from mix to mix. Only starting later is safe: every limit above
+        // (vocals, fade-ins, outros) holds for a shorter overlap.
+        let shrunk = max(minimumOverlap, overlap * Double.random(in: 0.65...1.0))
+        if shrunk < overlap {
+            overlap = min(overlap, shrunk)
+            startTime = audibleEnd - overlap
+        }
+
         var tempo: AutoMixPlan.Tempo?
         if let outgoingGrid = outgoing?.edgeBeat, let incomingGrid = incoming?.edgeBeat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
@@ -126,7 +134,8 @@ enum AutoMixPlanner {
             introStart: introStart,
             tempo: tempo,
             incomingFadesIn: incomingFadesIn,
-            filter: filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd)
+            filter: filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd),
+            curve: AutoMixPlan.Curve.allCases.randomElement() ?? .equalPower
         )
     }
 
@@ -149,6 +158,9 @@ enum AutoMixPlanner {
             }
         }
         if outgoing?.edgeBeat == nil, outgoing != nil { return .mellow }
+        // Clear cases follow the mood, but sometimes skip the filter so repeats differ.
+        if Int.random(in: 0..<4) == 0 { return .none }
+        if score == 0 { return Bool.random() ? .energetic : .mellow }
         return score >= 1 ? .energetic : .mellow
     }
 
