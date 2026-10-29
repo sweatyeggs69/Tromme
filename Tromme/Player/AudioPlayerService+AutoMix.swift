@@ -11,7 +11,11 @@ extension AudioPlayerService {
     /// Set before the next song loads.
     var isAutoMixing: Bool { autoMixInProgress }
 
-    var isAutoMixEnabled: Bool { PlusStore.cachedIsPlus && UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+    /// The queue toggle, open to everyone. Without Tromme Plus it gives a plain crossfade;
+    /// lyric-timed mixes are a Plus feature.
+    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+
+    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
 
     // MARK: - Planning
 
@@ -46,10 +50,11 @@ extension AudioPlayerService {
         let generation = playbackGeneration
         let client = client, server = server
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
+        let isPlus = PlusStore.cachedIsPlus
 
         autoMixPlanTask = Task { [weak self] in
-            async let outgoingVocals = LyricsService.vocalSpan(for: current)
-            async let incomingVocals = LyricsService.vocalSpan(for: incoming)
+            async let outgoingVocals = Self.vocalSpan(current, if: isPlus)
+            async let incomingVocals = Self.vocalSpan(incoming, if: isPlus)
             async let outgoingRule = AutoMixGenreRules.crossfadeReason(current, client: client, server: server)
             async let incomingRule = AutoMixGenreRules.crossfadeReason(incoming, client: client, server: server)
             async let outgoingLive = AutoMixGenreRules.isLiveOrMixRelease(current, client: client, server: server)
@@ -68,11 +73,13 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            // Songs matched by the genre rules (or with no tags) get a plain crossfade.
-            if outgoingReason != nil || incomingReason != nil {
+            // Without Plus, and for songs matched by the genre rules (or with no tags), it's a
+            // plain crossfade.
+            if !isPlus || outgoingReason != nil || incomingReason != nil {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end)
                 plan.loudnessDifference = loudnessDifference
-                self.logPlayback("automix_planned", "crossfade=true reason=\(outgoingReason ?? "-")/\(incomingReason ?? "-") start=\(plan.startTime)")
+                let reason = isPlus ? "\(outgoingReason ?? "-")/\(incomingReason ?? "-")" : "no_plus"
+                self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
                 return
@@ -99,10 +106,15 @@ extension AudioPlayerService {
 
     /// Loads the next song's lyrics as soon as it is up next, so the plan never waits on them.
     private func prefetchAutoMixLyrics() {
-        guard isAutoMixEnabled, let next = nextAutoAdvanceTarget()?.track,
+        guard isFullAutoMixEnabled, let next = nextAutoAdvanceTarget()?.track,
               autoMixLyricsPrefetchKey != next.ratingKey else { return }
         autoMixLyricsPrefetchKey = next.ratingKey
         Task(priority: .utility) { _ = await LyricsService.vocalSpan(for: next) }
+    }
+
+    private nonisolated static func vocalSpan(_ track: PlexMetadata, if enabled: Bool) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval)? {
+        guard enabled else { return nil }
+        return await LyricsService.vocalSpan(for: track)
     }
 
     /// Outgoing minus incoming track gain (dB), only when Sound Check is off (it already
@@ -380,7 +392,7 @@ extension AudioPlayerService {
 
     /// Routes a file or progressive stream through a filter tap. HLS items can't be tapped.
     func attachMixFilter(to item: AVPlayerItem, url: URL) {
-        guard isAutoMixEnabled, url.isFileURL || !url.path.contains("transcode") else { return }
+        guard isFullAutoMixEnabled, url.isFileURL || !url.path.contains("transcode") else { return }
         let tap = AutoMixFilterTap()
         mixTaps.setObject(tap, forKey: item)
         Task { [weak item] in
