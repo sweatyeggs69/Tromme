@@ -96,24 +96,32 @@ enum AutoMixPlanner {
             startTime = max(startTime, min(outgoingVocalEnd, audibleEnd - minimumVocalTail))
         }
         overlap = audibleEnd - startTime
+        // Where the outgoing song has faded out completely.
+        var mixEnd = audibleEnd
 
-        // The mix finishes before the incoming song's first lyric.
+        // The mix finishes before the incoming song's first lyric. A mix squeezed by that keeps
+        // its start and simply ends sooner, cutting the outgoing tail, rather than being pushed
+        // to the very end of the song.
         var vocalLimit: TimeInterval?
+        var squeezed = false
         if let incomingVocalStart {
             let limit = max(incomingVocalStart - firstAudible - 1, 1.5)
             vocalLimit = limit
             if overlap > limit {
                 overlap = limit
-                startTime = audibleEnd - overlap
+                mixEnd = startTime + overlap
+                squeezed = true
             }
         }
 
         // Vary the length from mix to mix. Only starting later is safe: every limit above
         // (vocals, fade-ins, outros) holds for a shorter overlap.
-        let shrunk = max(minimumOverlap, overlap * Double.random(in: 0.65...1.0))
-        if shrunk < overlap {
-            overlap = min(overlap, shrunk)
-            startTime = audibleEnd - overlap
+        if !squeezed {
+            let shrunk = max(minimumOverlap, overlap * Double.random(in: 0.65...1.0))
+            if shrunk < overlap {
+                overlap = shrunk
+                startTime = mixEnd - overlap
+            }
         }
 
         var tempo: AutoMixPlan.Tempo?
@@ -122,7 +130,7 @@ enum AutoMixPlanner {
             // Snap forward so vocal gaps chosen above are kept.
             let snapped = outgoingGrid.beat(atOrAfter: startTime)
             let beats = max(4, (overlap / outgoingGrid.period / 4).rounded() * 4)
-            let snappedOverlap = min(beats * outgoingGrid.period, (audibleEnd - snapped) / (1 + maximumTempoShift), vocalLimit ?? .infinity)
+            let snappedOverlap = min(beats * outgoingGrid.period, (mixEnd - snapped) / (1 + maximumTempoShift), vocalLimit ?? .infinity)
             if snapped >= 0, snappedOverlap >= 2.5 {
                 startTime = snapped
                 overlap = snappedOverlap
