@@ -155,6 +155,8 @@ final class AudioPlayerService: Sendable {
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?
     var mixOutgoingVolume: Float = 1
+    /// The next song's pre-buffered item, handed from the outgoing queue to the new player.
+    var mixReusableItem: AVPlayerItem?
     /// Stream offset of the outgoing item, to turn its player time into track time.
     var mixOutgoingOffset: TimeInterval = 0
     /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
@@ -1120,7 +1122,14 @@ final class AudioPlayerService: Sendable {
 
     func startPlayback(url: URL) {
         logPlayback("start_playback", "path=\(url.path)")
-        let item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset)
+        let item: AVPlayerItem
+        if let reusable = mixReusableItem, reusable.status != .failed,
+           (reusable.asset as? AVURLAsset)?.url == url {
+            item = reusable
+        } else {
+            item = makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset)
+        }
+        mixReusableItem = nil
         // Network streams need a buffer headroom hint and stall-minimization;
         // local files are already on disk so neither applies.
         if !isPlayingLocalFile {

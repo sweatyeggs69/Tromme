@@ -169,6 +169,8 @@ extension AudioPlayerService {
         tearDownObservers()
         if let preloaded = preloadedNext, let outgoing = player, outgoing.currentItem !== preloaded.item {
             outgoing.remove(preloaded.item)
+            // Already buffered, so the new song can start without waiting on the network.
+            if preloaded.ratingKey == target.track.ratingKey { mixReusableItem = preloaded.item }
         }
         player?.actionAtItemEnd = .none
         player?.currentItem?.audioTimePitchAlgorithm = .spectral
@@ -185,6 +187,7 @@ extension AudioPlayerService {
         currentIndex = target.index
         logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) beat=\(plan.isBeatMatched)")
         loadAndPlay(target.track, resumeAt: plan.introStart)
+        mixReusableItem = nil
         autoMixPlan = plan
         autoMixTransition = AutoMixTransition(duration: plan.overlap, isBeatMatched: plan.isBeatMatched)
         runAutoMixFade(plan, generation: playbackGeneration, outgoingEnd: plan.startTime + plan.overlap)
