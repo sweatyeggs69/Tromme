@@ -39,6 +39,10 @@ enum AutoMixPlanner {
 
         var overlap = defaultOverlap
         if let fadeStart { overlap = min(max(audibleEnd - fadeStart, 3), maximumOverlap) }
+        // With no beat left at the end (drums dropped out, ambient or guitar wash), nothing
+        // rhythmic can clash, so blend longer and without tempo changes.
+        let beatlessTail = outgoing.map { $0.edgeBeat == nil } ?? false
+        if beatlessTail { overlap = max(overlap, 8) }
         overlap = min(overlap, max(2, outgoingEnd * 0.3))
         var startTime = max(0, audibleEnd - overlap)
 
@@ -84,7 +88,7 @@ enum AutoMixPlanner {
         }
 
         var tempo: AutoMixPlan.Tempo?
-        if let outgoingGrid = outgoing?.beat, let incomingGrid = incoming?.beat,
+        if let outgoingGrid = outgoing?.edgeBeat, let incomingGrid = incoming?.edgeBeat,
            let match = matchedIncomingGrid(outgoing: outgoingGrid, incoming: incomingGrid) {
             // Snap forward so vocal gaps chosen above are kept.
             let snapped = outgoingGrid.beat(atOrAfter: startTime)
@@ -128,6 +132,7 @@ enum AutoMixPlanner {
                 score += body > -14 ? 1 : (body < -22 ? -1 : 0)
             }
         }
+        if outgoing?.edgeBeat == nil, outgoing != nil { return .mellow }
         return score >= 1 ? .energetic : .mellow
     }
 

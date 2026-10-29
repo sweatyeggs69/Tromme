@@ -86,12 +86,12 @@ extension AudioPlayerService {
     private nonisolated static func analyzeTail(url: URL?, end: TimeInterval) async -> AutoMixWindowAnalysis? {
         guard let url else { return nil }
         let start = max(0, end - tailWindow)
-        return await AutoMixAnalyzer.analyze(url: url, from: start, length: tailWindow + 2)
+        return await AutoMixAnalyzer.analyze(url: url, from: start, length: tailWindow + 2, edge: .end)
     }
 
     private nonisolated static func analyzeHead(url: URL?, from start: TimeInterval) async -> AutoMixWindowAnalysis? {
         guard let url else { return nil }
-        return await AutoMixAnalyzer.analyze(url: url, from: start, length: headWindow)
+        return await AutoMixAnalyzer.analyze(url: url, from: start, length: headWindow, edge: .start)
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {

@@ -9,6 +9,9 @@ struct AutoMixWindowAnalysis: Sendable {
     /// RMS level of each frame in dBFS.
     let levels: [Float]
     let beat: BeatGrid?
+    /// Beat measured only in the part used for the transition (the last or first seconds);
+    /// nil when the drums drop out there, even if the rest of the window had a beat.
+    let edgeBeat: BeatGrid?
 
     func time(ofFrame index: Int) -> TimeInterval {
         windowStart + Double(index) * frameDuration

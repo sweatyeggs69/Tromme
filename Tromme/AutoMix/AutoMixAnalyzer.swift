@@ -4,14 +4,18 @@ import AVFoundation
 enum AutoMixAnalyzer {
     private static let sampleRate = 22_050.0
     private static let frameDuration = 0.05
+    private static let edgeLength = 12.0
+
+    /// Which end of the window the transition uses.
+    enum Edge { case start, end }
 
     /// Returns nil when the asset can't be read (for example an HLS stream).
-    static func analyze(url: URL, from start: TimeInterval, length: TimeInterval) async -> AutoMixWindowAnalysis? {
+    static func analyze(url: URL, from start: TimeInterval, length: TimeInterval, edge: Edge) async -> AutoMixWindowAnalysis? {
         await Task.detached(priority: .utility) { () -> AutoMixWindowAnalysis? in
             guard let samples = await decode(url: url, from: max(0, start), length: length), !samples.isEmpty else {
                 return nil
             }
-            return measure(samples, startTime: max(0, start))
+            return measure(samples, startTime: max(0, start), edge: edge)
         }.value
     }
 
@@ -63,7 +67,7 @@ enum AutoMixAnalyzer {
         return reader.status == .completed ? samples : nil
     }
 
-    private static func measure(_ samples: [Float], startTime: TimeInterval) -> AutoMixWindowAnalysis {
+    private static func measure(_ samples: [Float], startTime: TimeInterval, edge: Edge) -> AutoMixWindowAnalysis {
         let frameSize = Int(sampleRate * frameDuration)
         let frameCount = samples.count / frameSize
         var levels = [Float]()
@@ -75,6 +79,23 @@ enum AutoMixAnalyzer {
             levels.append(20 * log10(max(rms, 1e-6)))
         }
         let beat = BeatEstimator.estimate(samples: samples, sampleRate: sampleRate, startTime: startTime)
-        return AutoMixWindowAnalysis(windowStart: startTime, frameDuration: frameDuration, levels: levels, beat: beat)
+        let edgeCount = Int(sampleRate * edgeLength)
+        let edgeBeat: BeatGrid?
+        if samples.count > edgeCount {
+            switch edge {
+            case .start:
+                edgeBeat = BeatEstimator.estimate(samples: Array(samples.prefix(edgeCount)), sampleRate: sampleRate, startTime: startTime)
+            case .end:
+                let offset = samples.count - edgeCount
+                edgeBeat = BeatEstimator.estimate(
+                    samples: Array(samples.suffix(edgeCount)),
+                    sampleRate: sampleRate,
+                    startTime: startTime + Double(offset) / sampleRate
+                )
+            }
+        } else {
+            edgeBeat = beat
+        }
+        return AutoMixWindowAnalysis(windowStart: startTime, frameDuration: frameDuration, levels: levels, beat: beat, edgeBeat: edgeBeat)
     }
 }
