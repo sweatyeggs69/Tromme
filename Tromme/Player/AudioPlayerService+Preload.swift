@@ -25,7 +25,7 @@ extension AudioPlayerService {
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
         guard player?.currentItem != nil else { return }
         guard let track = nextAutoAdvanceTarget()?.track else { return }
-        // Downloaded FLAC/ALAC load through AVAudioPlayer on advance, never preloaded.
+        // Downloaded FLAC/ALAC/Opus/Vorbis load through the Core Audio engine on advance, never preloaded.
         if let record = AppContext.shared.downloadManager.records[track.ratingKey],
            Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
 
@@ -53,7 +53,7 @@ extension AudioPlayerService {
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             let codec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
-            // Downloaded FLAC/ALAC play through AVAudioPlayer, so they load on advance instead.
+            // Core Audio engine codecs load on advance instead.
             guard !Self.isLosslessLabel(codec) else { return }
             enqueuePreloaded(track, url: localURL, source: .local(codec: codec), detailedTrack: detailedTrack)
             return
@@ -69,7 +69,7 @@ extension AudioPlayerService {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularBitrate } ?? true
         let shouldConstrain = isConstrainedNetworkPath && sourceExceedsTarget
 
-        if !shouldConstrain, sourceAudioCodec(for: track) != "flac",
+        if !shouldConstrain, !Self.isLosslessLabel(sourceAudioCodec(for: track)),
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
             enqueuePreloaded(track, url: directURL, source: .direct, detailedTrack: detailedTrack)
