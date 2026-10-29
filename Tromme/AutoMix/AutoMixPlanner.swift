@@ -94,8 +94,30 @@ enum AutoMixPlanner {
             overlap: overlap,
             introStart: introStart,
             tempo: tempo,
-            incomingFadesIn: incomingFadesIn
+            incomingFadesIn: incomingFadesIn,
+            filter: filterStyle(outgoing: outgoing, incoming: incoming, end: outgoingEnd)
         )
+    }
+
+    /// Fast, loud songs get a high-pass sweep; slower or quieter ones a low-pass sweep.
+    private static func filterStyle(outgoing: AutoMixWindowAnalysis?, incoming: AutoMixWindowAnalysis?, end: TimeInterval) -> AutoMixPlan.FilterStyle {
+        guard outgoing != nil || incoming != nil else { return .none }
+        var score = 0
+        if let bpm = outgoing?.beat?.bpm ?? incoming?.beat?.bpm {
+            score += bpm >= 108 ? 1 : (bpm < 92 ? -1 : 0)
+        }
+        if let outgoing {
+            let loud = outgoing.levels.indices
+                .filter { outgoing.time(ofFrame: $0) < end }
+                .map { outgoing.levels[$0] }
+                .filter { $0 > silenceFloor }
+                .sorted()
+            if loud.count > 40 {
+                let body = loud[loud.count * 3 / 4]
+                score += body > -14 ? 1 : (body < -22 ? -1 : 0)
+            }
+        }
+        return score >= 1 ? .energetic : .mellow
     }
 
     /// The incoming grid, possibly at half or double tempo, when it is within reach of the outgoing one.

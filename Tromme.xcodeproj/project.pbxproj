@@ -221,6 +221,7 @@
 		A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */; };
 		02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */; };
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
+		C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -442,6 +443,7 @@
 		9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlanner.swift; sourceTree = "<group>"; };
 		44845B7BC3C0FFA251FF467B /* AutoMixTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixTransition.swift; sourceTree = "<group>"; };
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
+		B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixFilterTap.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -456,6 +458,7 @@
 		E76E344614E8506188BF35DF /* AutoMix */ = {
 			isa = PBXGroup;
 			children = (
+				B73C4473CC85B4AE614435EF /* AutoMixFilterTap.swift */,
 				A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */,
 				507EFAF4E64D66313ED066F7 /* AutoMixWindowAnalysis.swift */,
 				66F5C39E45EEBE488D36FBAE /* BeatGrid.swift */,
@@ -939,6 +942,7 @@
 				A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */,
 				02644A0AA553E9B541F91A98 /* AutoMixTransition.swift in Sources */,
 				57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */,
+				C3F6E2B1B05B450F3EE7CDCF /* AutoMixFilterTap.swift in Sources */,
 				7FF8550CD66F24B529C4A880 /* VolumeHUDSuppressor.swift in Sources */,
 				8F7E2858F2E7569B9F2608A4 /* ResolvedLyrics.swift in Sources */,
 				4EF1AB66E4C346F4DDD503E2 /* QueueRow.swift in Sources */,

@@ -95,10 +95,31 @@ struct TimelineSlider: View {
             )
         }
         .frame(height: 28)
+        .overlay {
+            if player.isAutoMixing {
+                mixingBadge
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: player.isAutoMixing)
         .disabled(!isReady)
         .opacity(isReady ? (isDragging || player.isAutoMixing ? 1.0 : 0.55) : 0.3)
         .animation(.easeInOut(duration: 0.2), value: isDragging)
         .animation(.easeInOut(duration: 0.5), value: player.isAutoMixing)
+    }
+
+    private var mixingBadge: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "waveform")
+                .symbolEffect(.variableColor.iterative.reversing)
+            Text("Mixing")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .glassEffect(.regular, in: Capsule())
+        .allowsHitTesting(false)
     }
 
     private func timeLabels(displayValue: TimeInterval, duration: TimeInterval) -> some View {

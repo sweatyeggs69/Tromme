@@ -16,6 +16,16 @@ struct AutoMixPlan: Sendable {
     let tempo: Tempo?
     /// The incoming track fades in on its own, so it needs less help from the mix.
     var incomingFadesIn = false
+    /// Filter sweep that suits the song's mood.
+    var filter: FilterStyle = .none
+
+    enum FilterStyle: Sendable {
+        case none
+        /// Driving songs: the outgoing track thins out (high-pass) while the incoming opens up.
+        case energetic
+        /// Calm songs: the outgoing track darkens (low-pass) while the incoming fills in.
+        case mellow
+    }
 
     struct Tempo: Sendable {
         let outgoing: Double

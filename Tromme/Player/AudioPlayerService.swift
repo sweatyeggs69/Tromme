@@ -146,6 +146,8 @@ final class AudioPlayerService: Sendable {
     var infiniteRefillTask: Task<Void, Never>?
     var preloadedNext: PreloadedNextTrack?
     var autoMixPlan: AutoMixPlan?
+    /// Filter taps by item, for the Auto Mix filter sweeps.
+    let mixTaps = NSMapTable<AVPlayerItem, AutoMixFilterTap>.weakToStrongObjects()
     var autoMixPlanTask: Task<Void, Never>?
     var autoMixTriggerTask: Task<Void, Never>?
     var autoMixTask: Task<Void, Never>?
@@ -847,6 +849,7 @@ final class AudioPlayerService: Sendable {
         let item = AVPlayerItem(url: url)
         // Auto Mix speeds tracks up or down slightly; keep their pitch.
         item.audioTimePitchAlgorithm = .spectral
+        attachMixFilter(to: item, url: url)
         if let track, streamOffset == 0,
            let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {
             item.forwardPlaybackEndTime = CMTime(seconds: stop, preferredTimescale: 600)

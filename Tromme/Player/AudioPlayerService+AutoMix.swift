@@ -134,7 +134,7 @@ extension AudioPlayerService {
                 outgoingKey: original.outgoingKey, incomingKey: original.incomingKey,
                 startTime: bestKnownPlaybackSeconds, overlap: min(original.overlap, remaining),
                 introStart: original.introStart, tempo: nil,
-                incomingFadesIn: original.incomingFadesIn
+                incomingFadesIn: original.incomingFadesIn, filter: original.filter
             )
         }
 
@@ -183,6 +183,8 @@ extension AudioPlayerService {
                 let incomingProgress = plan.incomingFadesIn ? min(1, progress / 0.35) : progress
                 self.mixIncomingGain = Float(sin(incomingProgress * .pi / 2))
                 self.applyIncomingVolume()
+
+                self.applyMixFilters(plan.filter, progress: Float(progress))
 
                 if let tempo = plan.tempo {
                     let shared = tempo.blended(at: progress)
@@ -241,8 +243,48 @@ extension AudioPlayerService {
         mixOutgoingLossless = nil
         mixIncomingGain = 1
         applyIncomingVolume()
+        mixTap(for: player)?.set(.off, cutoff: 1000)
         if let player, player.timeControlStatus == .playing, player.rate != 1 {
             player.rate = 1
+        }
+    }
+
+    // MARK: - Filters
+
+    /// Routes a file or progressive stream through a filter tap. HLS items can't be tapped.
+    func attachMixFilter(to item: AVPlayerItem, url: URL) {
+        guard isAutoMixEnabled, url.isFileURL || !url.path.contains("transcode") else { return }
+        let tap = AutoMixFilterTap()
+        mixTaps.setObject(tap, forKey: item)
+        Task { [weak item] in
+            guard let item,
+                  let track = try? await item.asset.loadTracks(withMediaType: .audio).first,
+                  let parameters = tap.parameters(for: track) else { return }
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [parameters]
+            item.audioMix = mix
+        }
+    }
+
+    private func mixTap(for player: AVPlayer?) -> AutoMixFilterTap? {
+        player?.currentItem.flatMap { mixTaps.object(forKey: $0) }
+    }
+
+    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, progress: Float) {
+        guard style != .none else { return }
+        func sweep(_ from: Float, _ to: Float) -> Float { from * pow(to / from, progress) }
+        let outgoing = mixTap(for: mixOutgoingPlayer)
+        let incoming = mixTap(for: player)
+        let incomingDone = progress >= 0.97
+        switch style {
+        case .none:
+            break
+        case .energetic:
+            outgoing?.set(.highPass, cutoff: sweep(40, 900))
+            incoming?.set(incomingDone ? .off : .lowPass, cutoff: sweep(500, 18_000))
+        case .mellow:
+            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500))
+            incoming?.set(incomingDone ? .off : .highPass, cutoff: sweep(900, 30))
         }
     }
 }
