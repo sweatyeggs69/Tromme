@@ -71,7 +71,12 @@ extension AudioPlayerService {
                 self.scheduleAutoMixTrigger(plan, generation: generation)
             }
             guard isPlus, let outgoingSpan else {
-                planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
+                if isPlus && !self.isCrossfadeEnabled {
+                    self.recordAutoMix(current, incoming, "skipped: no lyrics")
+                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                } else {
+                    planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
+                }
                 return
             }
             guard var plan = AutoMixPlanner.plan(
