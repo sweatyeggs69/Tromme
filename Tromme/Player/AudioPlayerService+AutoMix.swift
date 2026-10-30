@@ -124,15 +124,19 @@ extension AudioPlayerService {
     }
 
     private func recordAutoMix(_ outgoing: PlexMetadata, _ incoming: PlexMetadata, _ outcome: String, _ values: [String: String] = [:]) {
+        #if DEBUG
         autoMixRecords.removeAll { $0.outgoing.ratingKey == outgoing.ratingKey && $0.incoming.ratingKey == incoming.ratingKey }
         autoMixRecords.append(AutoMixRecord(outgoing: outgoing, incoming: incoming, outcome: outcome, values: values))
         if autoMixRecords.count > 4 { autoMixRecords.removeFirst(autoMixRecords.count - 4) }
+        #endif
     }
 
     private func noteAutoMix(incomingKey: String, _ outcome: String, _ values: [String: String] = [:]) {
+        #if DEBUG
         guard let index = autoMixRecords.lastIndex(where: { $0.incoming.ratingKey == incomingKey }) else { return }
         autoMixRecords[index].outcome = outcome
         autoMixRecords[index].values.merge(values) { _, new in new }
+        #endif
     }
 
     private func prefetchAutoMixLyrics() {

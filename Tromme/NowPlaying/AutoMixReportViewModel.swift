@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 import UIKit
 import Observation
@@ -76,3 +77,4 @@ final class AutoMixReportViewModel: Identifiable {
         return new
     }
 }
+#endif

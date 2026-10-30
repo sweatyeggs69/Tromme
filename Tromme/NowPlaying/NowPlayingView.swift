@@ -24,7 +24,9 @@ struct NowPlayingView: View {
     @State private var appliedInitialLandscapeLyrics = false
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var metadataRequest: MetadataSheetRequest?
+    #if DEBUG
     @State private var autoMixReport: AutoMixReportViewModel?
+    #endif
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @State private var isRating = false
     @State private var animatedArtworkURL: URL?
@@ -306,9 +308,11 @@ struct NowPlayingView: View {
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
+        #if DEBUG
         .sheet(item: $autoMixReport) { report in
             AutoMixReportView(viewModel: report)
         }
+        #endif
     }
 
     @ViewBuilder
@@ -540,6 +544,7 @@ struct NowPlayingView: View {
             } label: {
                 Label("Track Info", systemImage: "info.circle")
             }
+            #if DEBUG
             if showQueue && autoMixEnabled {
                 Button {
                     autoMixReport = AutoMixReportViewModel(player: player)
@@ -547,6 +552,7 @@ struct NowPlayingView: View {
                     Label("Report AutoMix Issue", systemImage: "exclamationmark.bubble")
                 }
             }
+            #endif
             if showLyrics {
                 Divider()
                 Button {

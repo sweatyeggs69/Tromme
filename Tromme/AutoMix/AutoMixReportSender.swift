@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 enum AutoMixReportSender {
@@ -43,3 +44,4 @@ enum AutoMixReportSender {
         }
     }
 }
+#endif

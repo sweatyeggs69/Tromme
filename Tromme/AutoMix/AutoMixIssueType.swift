@@ -1,3 +1,4 @@
+#if DEBUG
 import Foundation
 
 enum AutoMixIssueType: String, CaseIterable, Identifiable {
@@ -15,3 +16,4 @@ enum AutoMixIssueType: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 }
+#endif

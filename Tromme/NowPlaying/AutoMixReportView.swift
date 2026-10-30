@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct AutoMixReportView: View {
@@ -90,3 +91,4 @@ struct AutoMixReportView: View {
 #Preview {
     AutoMixReportView(viewModel: AutoMixReportViewModel(player: AudioPlayerService()))
 }
+#endif
