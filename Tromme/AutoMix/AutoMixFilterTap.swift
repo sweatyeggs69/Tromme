@@ -13,6 +13,8 @@ final class AutoMixFilterTap: @unchecked Sendable {
     private struct Control {
         var mode: Int32 = 0
         var cutoff: Float = 1000
+        /// Uptime in nanoseconds after which the filter bypasses itself; 0 never expires.
+        var expires: UInt64 = 0
     }
 
     /// Share of the signal's energy below ~200 Hz and above ~2.5 kHz, over the last few
@@ -56,8 +58,11 @@ final class AutoMixFilterTap: @unchecked Sendable {
         state.deallocate()
     }
 
-    func set(_ mode: Mode, cutoff: Float) {
-        control.pointee = Control(mode: mode.rawValue, cutoff: cutoff)
+    /// A filter set here lapses after `holdFor` seconds unless set again, so a sweep that
+    /// stops early (the mix ended or was interrupted) can never leave a song filtered.
+    func set(_ mode: Mode, cutoff: Float, holdFor seconds: Double = 0.5) {
+        let expires = mode == .off ? 0 : DispatchTime.now().uptimeNanoseconds + UInt64(seconds * 1_000_000_000)
+        control.pointee = Control(mode: mode.rawValue, cutoff: cutoff, expires: expires)
     }
 
     var tonality: Tonality { meter.pointee }
@@ -105,7 +110,9 @@ final class AutoMixFilterTap: @unchecked Sendable {
 
     private func process(_ bufferList: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         if isFloat { measure(bufferList, frames: frames) }
-        let mode = control.pointee.mode
+        let settings = control.pointee
+        let lapsed = settings.expires != 0 && DispatchTime.now().uptimeNanoseconds > settings.expires
+        let mode = lapsed ? 0 : settings.mode
         guard isFloat, mode != 0 else {
             if appliedMode != 0 {
                 state.update(repeating: 0, count: Self.maxChannels * Self.stagesPerChannel * 2)
@@ -113,7 +120,7 @@ final class AutoMixFilterTap: @unchecked Sendable {
             }
             return
         }
-        let cutoff = control.pointee.cutoff
+        let cutoff = settings.cutoff
         if mode != appliedMode || abs(cutoff - appliedCutoff) > 0.5 {
             if mode != appliedMode { state.update(repeating: 0, count: Self.maxChannels * Self.stagesPerChannel * 2) }
             updateCoefficients(mode: mode, cutoff: cutoff)
