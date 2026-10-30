@@ -2,15 +2,14 @@ import Foundation
 
 enum AutoMixPlanner {
     private static let defaultOverlap: TimeInterval = 5
-    private static let maximumOverlap: TimeInterval = 12
+    private static let maximumOverlap: TimeInterval = 10
     private static let minimumOverlap: TimeInterval = 1.5
     private static let minimumOutroRoom: TimeInterval = 3
     private static let lastLyricPadding: TimeInterval = 2.5
     private static let markedLastLyricPadding: TimeInterval = 1
-    private static let longOutro: TimeInterval = 28
-    private static let shortenedOutro: TimeInterval = 22
-    private static let shortenedOverlap: TimeInterval = 8
-    private static let playedOutOutro: TimeInterval = 60
+    private static let outroHold: TimeInterval = 26
+    private static let playedOutStart: TimeInterval = 55
+    private static let playedOutRate: TimeInterval = 1.5
     private static let lyricLead: TimeInterval = 1
     private static let filteredOverlap: TimeInterval = 3
     private static let quickestFadeIn: TimeInterval = 0.5
@@ -34,15 +33,9 @@ enum AutoMixPlanner {
         var mixEnd = outgoingEnd
         var overlap = defaultOverlap
         if let vocalEnd = outgoingVocalEnd {
-            let outro = max(0, outgoingEnd - vocalEnd)
-            if outgoingEnd - (outgoingSingingEnd ?? vocalEnd) > playedOutOutro {
-                overlap = maximumOverlap
-            } else if outro > longOutro {
-                mixEnd = vocalEnd + shortenedOutro
-                overlap = shortenedOverlap
-            } else {
-                overlap = min(max(outro, minimumOverlap), maximumOverlap)
-            }
+            let singingOutro = outgoingEnd - (outgoingSingingEnd ?? vocalEnd)
+            mixEnd = min(outgoingEnd, vocalEnd + outroHold + playedOutRate * max(0, singingOutro - playedOutStart))
+            overlap = min(max(mixEnd - vocalEnd, minimumOverlap), maximumOverlap)
         }
 
         var startTime = max(0, mixEnd - overlap)
