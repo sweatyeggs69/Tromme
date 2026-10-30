@@ -17,7 +17,11 @@ struct EditMetadataSheet: View {
         NavigationStack {
             Form {
                 MetadataFieldsSection(viewModel: viewModel)
+                if let tagsEditor = viewModel.tagsEditor, serverConnection.currentServer?.canEditMetadata == true {
+                    TagsSection(viewModel: tagsEditor)
+                }
             }
+            .task { await loadSuggestions() }
             .navigationTitle(viewModel.isTrack ? "Edit Track" : "Edit Album")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -43,6 +47,12 @@ struct EditMetadataSheet: View {
                 Text(viewModel.errorMessage ?? "")
             }
         }
+    }
+
+    private func loadSuggestions() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+        await viewModel.tagsEditor?.loadSuggestions(server: server, sectionId: sectionId, client: client)
     }
 
     private func save() {

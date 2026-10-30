@@ -16,19 +16,9 @@ struct EditTagsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                ForEach(TagKind.allCases, id: \.self) { kind in
-                    Section(kind.title) {
-                        ForEach(viewModel.tags[kind] ?? [], id: \.self) { tag in
-                            Text(tag)
-                        }
-                        .onDelete { viewModel.remove(kind, at: $0) }
-                        TextField(kind.addPrompt, text: draft(kind))
-                            .submitLabel(.done)
-                            .onSubmit { viewModel.commitDraft(kind) }
-                    }
-                }
+                TagsSection(viewModel: viewModel)
             }
-            .navigationTitle("Edit Tags")
+            .navigationTitle("Edit Artist")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -43,6 +33,7 @@ struct EditTagsSheet: View {
                     }
                 }
             }
+            .task { await loadSuggestions() }
             .interactiveDismissDisabled(viewModel.isSaving)
             .alert("Unable to Save", isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -55,11 +46,10 @@ struct EditTagsSheet: View {
         }
     }
 
-    private func draft(_ kind: TagKind) -> Binding<String> {
-        Binding(
-            get: { viewModel.drafts[kind] ?? "" },
-            set: { viewModel.drafts[kind] = $0 }
-        )
+    private func loadSuggestions() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else { return }
+        await viewModel.loadSuggestions(server: server, sectionId: sectionId, client: client)
     }
 
     private func save() {

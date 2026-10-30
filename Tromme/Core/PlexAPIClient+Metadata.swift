@@ -32,10 +32,12 @@ extension PlexAPIClient {
 
     func updateTags(
         server: PlexServer,
+        sectionId: String,
+        type: Int,
         ratingKey: String,
         changes: [(kind: TagKind, added: [String], removed: [String])]
     ) async throws {
-        var parts: [String] = []
+        var parts = ["type=\(type)", "id=\(ratingKey)"]
         for change in changes {
             let name = change.kind.rawValue
             for (index, tag) in change.added.enumerated() {
@@ -47,12 +49,27 @@ extension PlexAPIClient {
             }
             parts.append("\(name).locked=1")
         }
-        guard !parts.isEmpty else { return }
+        guard !changes.isEmpty else { return }
         _ = try await rawServerRequest(
             server: server,
-            path: "/library/metadata/\(ratingKey)?\(parts.joined(separator: "&"))",
+            path: "/library/sections/\(sectionId)/all?\(parts.joined(separator: "&"))",
             method: "PUT"
         )
+    }
+
+    func getTagSuggestions(server: PlexServer, sectionId: String, type: Int) async -> [TagKind: [String]] {
+        guard let filters: PlexTagListResponse = try? await serverRequest(
+            server: server,
+            path: "/library/sections/\(sectionId)/filters?type=\(type)"
+        ) else { return [:] }
+        var result: [TagKind: [String]] = [:]
+        for kind in TagKind.allCases {
+            guard let key = filters.mediaContainer.entries.first(where: { $0.filter == kind.rawValue })?.key,
+                  let list: PlexTagListResponse = try? await serverRequest(server: server, path: key) else { continue }
+            let names = list.mediaContainer.entries.compactMap { $0.tag ?? $0.title }
+            result[kind] = Array(Set(names)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        }
+        return result
     }
 
     private static func encodeQueryValue(_ value: String) -> String {

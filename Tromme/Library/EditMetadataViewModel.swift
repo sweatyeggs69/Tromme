@@ -5,6 +5,7 @@ import Observation
 final class EditMetadataViewModel {
     let item: PlexMetadata
     let isTrack: Bool
+    let tagsEditor: EditTagsViewModel?
 
     var title: String
     var artist: String
@@ -17,6 +18,7 @@ final class EditMetadataViewModel {
     init(item: PlexMetadata) {
         self.item = item
         isTrack = item.type == "track"
+        tagsEditor = item.type == "album" ? EditTagsViewModel(item: item) : nil
         title = item.title
         artist = (isTrack ? item.grandparentTitle : item.parentTitle) ?? ""
         album = item.parentTitle ?? ""
@@ -39,7 +41,7 @@ final class EditMetadataViewModel {
 
     private var reparents: Bool { isTrack ? (artistChanged || albumChanged) : artistChanged }
 
-    var hasChanges: Bool { titleChanged || artistChanged || albumChanged || yearChanged || trackNumberChanged }
+    var hasChanges: Bool { titleChanged || artistChanged || albumChanged || yearChanged || trackNumberChanged || tagsEditor?.hasChanges == true }
 
     var isValid: Bool {
         guard !trimmedTitle.isEmpty, !trimmedArtist.isEmpty else { return false }
@@ -80,6 +82,7 @@ final class EditMetadataViewModel {
                 ratingKey: item.ratingKey,
                 fields: fields
             )
+            try await tagsEditor?.apply(server: server, sectionId: sectionId, client: client)
         } catch {
             errorMessage = error.localizedDescription
             return nil

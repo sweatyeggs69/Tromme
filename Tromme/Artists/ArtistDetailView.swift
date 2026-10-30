@@ -521,7 +521,7 @@ struct ArtistDetailView: View {
             if previewData == nil, serverConnection.currentServer?.canEditMetadata == true {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Edit Tags", systemImage: "tag") {
+                        Button("Edit Artist", systemImage: "pencil") {
                             metadataRequest = .editTags(displayArtist)
                         }
                     } label: {

@@ -54,6 +54,7 @@
 		11213515B0095AA8B0B82291 /* AudioPlayerService+Queue.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0DAB83A17623634E3E4026D /* AudioPlayerService+Queue.swift */; };
 		11DD5D9B1A026F8AD3789871 /* AudioPlayerService+AudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1656FAF8277671F8E886CC /* AudioPlayerService+AudioSession.swift */; };
 		17011EBA4376470FF844A359 /* PlaylistRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D0CCB8AF72F235EAFE1C57D /* PlaylistRecord.swift */; };
+		C49396FF3CB3ABCA0F3E895A /* PlexTagListResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95A8A0881774A669A7BBE2A /* PlexTagListResponse.swift */; };
 		17534FB93B7F6DB0EAADDD58 /* PlexTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = B623A478C645C8F080FAC864 /* PlexTag.swift */; };
 		17833B3C843EDF0C4DED9DD4 /* TimelineOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23795A4BE1AD696F5DB35407 /* TimelineOutbox.swift */; };
 		178782157E69E3E8770434AA /* LyricsWord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097DA34698E1A55F4950B626 /* LyricsWord.swift */; };
@@ -133,6 +134,7 @@
 		A5B57F589B70FAA76BF033B7 /* TagKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79AE872BA9D486CDB97D630 /* TagKind.swift */; };
 		01C405367729086F2E3E33E1 /* EditTagsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */; };
 		9F5B8BACB655AB9FCE7C9D96 /* EditTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */; };
+		39B605A04FE6BC124BA1FCEB /* TagsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D369B1984BBC26A67A3F74B /* TagsSection.swift */; };
 		BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */; };
 		67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */; };
 		1FDDF07E00978EA25EA6AC01 /* MetadataSheetRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */; };
@@ -310,6 +312,7 @@
 		C79AE872BA9D486CDB97D630 /* TagKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagKind.swift; sourceTree = "<group>"; };
 		D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTagsViewModel.swift; sourceTree = "<group>"; };
 		8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTagsSheet.swift; sourceTree = "<group>"; };
+		9D369B1984BBC26A67A3F74B /* TagsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagsSection.swift; sourceTree = "<group>"; };
 		AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataSheet.swift; sourceTree = "<group>"; };
 		99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataViewModel.swift; sourceTree = "<group>"; };
 		D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSheetRequest.swift; sourceTree = "<group>"; };
@@ -390,6 +393,7 @@
 		B253DB5DE822A11676ACFE3B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B35DE89DF8EDC0811B015C18 /* ArtistHeroPhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistHeroPhotoView.swift; sourceTree = "<group>"; };
 		B46885400FFD3BA6EEC509AB /* PlexMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexMedia.swift; sourceTree = "<group>"; };
+		F95A8A0881774A669A7BBE2A /* PlexTagListResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexTagListResponse.swift; sourceTree = "<group>"; };
 		B623A478C645C8F080FAC864 /* PlexTag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexTag.swift; sourceTree = "<group>"; };
 		B62F8E836868871B5539E389 /* AirPlayButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AirPlayButton.swift; sourceTree = "<group>"; };
 		B698299B566F2968B70EE531 /* PlexArtworkResourceMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlexArtworkResourceMetadata.swift; sourceTree = "<group>"; };
@@ -732,6 +736,7 @@
 				C79AE872BA9D486CDB97D630 /* TagKind.swift */,
 				D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */,
 				8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */,
+				9D369B1984BBC26A67A3F74B /* TagsSection.swift */,
 				AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */,
 				99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */,
 				D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */,
@@ -840,6 +845,7 @@
 		EEEF1468766C9410290DA02C /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				F95A8A0881774A669A7BBE2A /* PlexTagListResponse.swift */,
 				B623A478C645C8F080FAC864 /* PlexTag.swift */,
 				43658A2397996BDE150D7820 /* ConcertEvent.swift */,
 				31FA3EB408C385CC4EE920B5 /* PlexStream.swift */,
@@ -1003,6 +1009,7 @@
 				AACCE9267A62A671E7A29BFD /* AlbumSortOrder.swift in Sources */,
 				841CE9A85DDFA98C34EC9D7E /* PlexAPIError.swift in Sources */,
 				A6652054F4BE0754BAD00805 /* Notification.Name+Tromme.swift in Sources */,
+				C49396FF3CB3ABCA0F3E895A /* PlexTagListResponse.swift in Sources */,
 				17534FB93B7F6DB0EAADDD58 /* PlexTag.swift in Sources */,
 				09E77F518A1F15406849070C /* ConcertEvent.swift in Sources */,
 				42E99EC0CCD221F15D6CAAAE /* PlexStream.swift in Sources */,
@@ -1155,6 +1162,7 @@
 				A5B57F589B70FAA76BF033B7 /* TagKind.swift in Sources */,
 				01C405367729086F2E3E33E1 /* EditTagsViewModel.swift in Sources */,
 				9F5B8BACB655AB9FCE7C9D96 /* EditTagsSheet.swift in Sources */,
+				39B605A04FE6BC124BA1FCEB /* TagsSection.swift in Sources */,
 				BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */,
 				67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */,
 				1FDDF07E00978EA25EA6AC01 /* MetadataSheetRequest.swift in Sources */,

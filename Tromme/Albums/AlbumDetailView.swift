@@ -774,11 +774,6 @@ struct AlbumDetailView: View {
                             metadataRequest = .edit(albumDetails)
                         }
                         .disabled(serverConnection.currentServer == nil)
-                        if serverConnection.currentServer?.canEditMetadata == true {
-                            Button("Edit Tags", systemImage: "tag") {
-                                metadataRequest = .editTags(albumDetails)
-                            }
-                        }
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
                         }
