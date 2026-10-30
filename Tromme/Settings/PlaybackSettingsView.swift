@@ -8,6 +8,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
+    @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @AppStorage(AudioPlayerService.crossfadeLengthKey) private var crossfadeSeconds = AutoMixPlanner.defaultCrossfadeLength
 
     var body: some View {
@@ -28,13 +29,17 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Picker("Crossfade", selection: $crossfadeSeconds) {
-                    ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
-                        Text("\(Int(seconds)) sec").tag(seconds)
+                Toggle("AutoMix", isOn: $autoMixEnabled)
+                    .tint(.green)
+                if autoMixEnabled {
+                    Picker("Crossfade", selection: $crossfadeSeconds) {
+                        ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
+                            Text("\(Int(seconds)) sec").tag(seconds)
+                        }
                     }
                 }
             } footer: {
-                Text("How long songs overlap when Auto Mix crossfades between them.")
+                Text("Blends songs together as they change. Crossfade sets how long they overlap.")
             }
 
             if supportsCellularSettings {
