@@ -1,27 +1,19 @@
 import AVFoundation
 
-// Auto Mix: overlaps the end of one track with the start of the next, timed from their
-// synced lyrics so the outro and intro carry the mix.
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
     static let crossfadeLengthKey = "crossfadeSeconds"
 
     private static let planningLeadTime: TimeInterval = 150
 
-    /// True while a lyric-timed mix plays (not a plain crossfade), for the timeline effect.
-    /// Set before the next song loads.
     var isAutoMixing: Bool { autoMixInProgress }
 
-    /// The queue toggle, open to everyone. Without Tromme Plus it gives a plain crossfade;
-    /// lyric-timed mixes are a Plus feature.
     var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
 
     private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
 
     // MARK: - Planning
 
-    /// Called from the playback tick; reads both songs' lyrics timing shortly before the
-    /// end, then waits for the planned start.
     func maybePlanAutoMix() {
         prefetchAutoMixLyrics()
         guard isAutoMixEnabled, repeatMode == .off,
@@ -37,8 +29,6 @@ extension AudioPlayerService {
         let isContinuousAlbum = current.parentRatingKey != nil
             && current.parentRatingKey == incoming.parentRatingKey
             && (current.index ?? -1) + 1 == incoming.index
-        // Tracks in order on the same album, and songs with trim markers, are never mixed:
-        // they keep a plain gapless change at exactly the point the user set.
         let markers = AppContext.shared.trackMarkers
         let isTrimmed = [current.ratingKey, incoming.ratingKey].contains {
             markers.start(for: $0) != nil || markers.stop(for: $0) != nil
@@ -78,8 +68,6 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            // Without Plus, for songs matched by the genre rules (or with no tags), and when the
-            // outgoing song has no synced lyrics to time from, it's a plain crossfade.
             if !isPlus || outgoingReason != nil || incomingReason != nil || outgoingSpan == nil {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
@@ -135,21 +123,18 @@ extension AudioPlayerService {
         value.isFinite ? String(format: "%.1f", value) : "never"
     }
 
-    /// Keeps the plan and outcome of recent mixes for Report AutoMix Issue.
     private func recordAutoMix(_ outgoing: PlexMetadata, _ incoming: PlexMetadata, _ outcome: String, _ values: [String: String] = [:]) {
         autoMixRecords.removeAll { $0.outgoing.ratingKey == outgoing.ratingKey && $0.incoming.ratingKey == incoming.ratingKey }
         autoMixRecords.append(AutoMixRecord(outgoing: outgoing, incoming: incoming, outcome: outcome, values: values))
         if autoMixRecords.count > 4 { autoMixRecords.removeFirst(autoMixRecords.count - 4) }
     }
 
-    /// Adds what happened when the planned mix came due.
     private func noteAutoMix(incomingKey: String, _ outcome: String, _ values: [String: String] = [:]) {
         guard let index = autoMixRecords.lastIndex(where: { $0.incoming.ratingKey == incomingKey }) else { return }
         autoMixRecords[index].outcome = outcome
         autoMixRecords[index].values.merge(values) { _, new in new }
     }
 
-    /// Loads the next song's lyrics as soon as it is up next, so the plan never waits on them.
     private func prefetchAutoMixLyrics() {
         guard isFullAutoMixEnabled, let next = nextAutoAdvanceTarget()?.track,
               autoMixLyricsPrefetchKey != next.ratingKey else { return }
@@ -162,8 +147,6 @@ extension AudioPlayerService {
         return await LyricsService.vocalSpan(for: track)
     }
 
-    /// Outgoing minus incoming track gain (dB), only when Sound Check is off (it already
-    /// evens out levels when on). Nil when either song has no ReplayGain data.
     private nonisolated static func loudnessDifference(_ outgoing: PlexMetadata, _ incoming: PlexMetadata, soundCheckOn: Bool,
                                                        client: PlexAPIClient?, server: PlexServer?) async -> Double? {
         guard !soundCheckOn, let client, let server else { return nil }
@@ -178,27 +161,22 @@ extension AudioPlayerService {
         return o - i
     }
 
-    /// End of the audible content for the track that is playing: its duration or stop marker.
     private func autoMixEnd(for track: PlexMetadata) -> TimeInterval {
         let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey)
         return min(duration, stop ?? duration)
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
-        // A streamed song takes a moment to start, so begin loading it a little early.
         let isLocal = AppContext.shared.downloadManager.localURL(for: plan.incomingKey) != nil
         let lead: TimeInterval = isLocal ? 0.02 : 1.5
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
-                // Turned off after the mix was planned: back to a normal gapless ending.
                 guard self.isAutoMixEnabled else {
                     self.abandonAutoMix()
                     return
                 }
                 let wait = plan.startTime - self.bestKnownPlaybackSeconds
-                // A mix planned well before the end (a shortened outro) needs the next song
-                // loaded sooner than the usual gapless preload.
                 if wait <= 30 { self.maybePreloadNextTrack(within: .infinity) }
                 if wait <= 12 { self.prepareMixIncoming(plan) }
                 if self.isPlaying, !self.isSeeking, wait <= lead {
@@ -219,8 +197,6 @@ extension AudioPlayerService {
         autoMixPlan = nil
     }
 
-    /// Drops a planned mix and the next song prepared for it. The gapless preload was taken
-    /// off the queue for the mix, so it is discarded and the next tick preloads it again.
     private func abandonAutoMix() {
         logPlayback("automix_abandoned")
         cancelAutoMixPlanning()
@@ -243,8 +219,6 @@ extension AudioPlayerService {
             abandonAutoMix()
             return
         }
-        // Past the planned start, almost always because the user seeked into or past the mix:
-        // they chose where to listen, so the song ends normally instead.
         guard lateness <= 1.5 else {
             logPlayback("automix_skipped", "reason=past_start late=\(lateness)")
             noteAutoMix(incomingKey: original.incomingKey, "skipped: seeked past the mix start", ["lateBy": Self.seconds(lateness)])
@@ -254,12 +228,9 @@ extension AudioPlayerService {
         }
         var plan = original
 
-        // Hand the playing output over: the new track loads through the normal path while
-        // these keep sounding until the fade completes.
         tearDownObservers()
         if let preloaded = preloadedNext, let outgoing = player, outgoing.currentItem !== preloaded.item {
             if outgoing.items().contains(preloaded.item) { outgoing.remove(preloaded.item) }
-            // Its asset is already loaded, which saves the new song a round trip.
             if preloaded.ratingKey == target.track.ratingKey { mixReusableAsset = preloaded.item.asset }
         }
         player?.actionAtItemEnd = .none
@@ -281,8 +252,6 @@ extension AudioPlayerService {
         noteAutoMix(incomingKey: target.track.ratingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
             "lateBy": Self.seconds(lateness), "filterUsed": "\(plan.filter)", "overlapUsed": Self.seconds(plan.overlap)
         ])
-        // A streamed transcode can't start part-way without a new session, which would lose
-        // the prepared song, so it starts from the top; the mix still ends before its lyrics.
         var resume = plan.introStart
         if case .hls? = preloadedNext?.source { resume = nil }
         autoMixInProgress = !plan.isPlainCrossfade
@@ -298,8 +267,6 @@ extension AudioPlayerService {
             var plan = original
             var beganAt = Date()
 
-            // Hold the outgoing song at full volume until the new one is audible, so a slow
-            // start never leaves a gap. The overlap shrinks to what is left.
             while !Task.isCancelled {
                 guard self.playbackGeneration == generation else {
                     self.finishAutoMix()
@@ -347,8 +314,6 @@ extension AudioPlayerService {
         }
     }
 
-    /// Pausing during a mix pauses the outgoing song too and resumes it with the new one, so
-    /// the blend picks up where it stopped. Returns how long the mix was paused.
     private func holdMixWhilePaused(generation: Int) async -> TimeInterval {
         let pausedAt = Date()
         mixOutgoingPlayer?.pause()
@@ -369,7 +334,6 @@ extension AudioPlayerService {
         return player.timeControlStatus == .playing && pendingInitialSeekTime == nil && isReadyToPlay
     }
 
-    /// Seconds of the outgoing song left before `end` (track time).
     private func outgoingRemaining(until end: TimeInterval) -> TimeInterval {
         let time: TimeInterval
         if let outgoing = mixOutgoingPlayer {
@@ -390,7 +354,6 @@ extension AudioPlayerService {
         losslessPlayer?.volume = volume
     }
 
-    /// Releases the faded-out track and returns the new one to normal volume.
     func finishAutoMix() {
         autoMixTask?.cancel()
         autoMixTask = nil
@@ -407,7 +370,6 @@ extension AudioPlayerService {
 
     // MARK: - Preparing
 
-    /// Loads the next song silently ahead of the mix, at its start point, on its own player.
     private func prepareMixIncoming(_ plan: AutoMixPlan) {
         guard mixPrepared?.ratingKey != plan.incomingKey,
               let preloaded = preloadedNext, preloaded.ratingKey == plan.incomingKey,
@@ -440,7 +402,6 @@ extension AudioPlayerService {
 
     // MARK: - Filters
 
-    /// Routes a file or progressive stream through a filter tap. HLS items can't be tapped.
     func attachMixFilter(to item: AVPlayerItem, url: URL) {
         guard isFullAutoMixEnabled, url.isFileURL || !url.path.contains("transcode") else { return }
         let tap = AutoMixFilterTap()
@@ -455,8 +416,6 @@ extension AudioPlayerService {
         }
     }
 
-    /// An ending that has lost its low end (a telephone or radio sound) is thinned further
-    /// with a high-pass; one that has lost its top, or anything else, darkens with a low-pass.
     private static func filterStyle(for tonality: AutoMixFilterTap.Tonality) -> AutoMixPlan.FilterStyle {
         guard tonality.seconds > 20, tonality.songLow > 0, tonality.songHigh > 0 else { return .mellow }
         let lowKept = tonality.recentLow / tonality.songLow

@@ -1,10 +1,6 @@
 import AVFoundation
 import MediaToolbox
 
-/// A low-pass or high-pass filter on one player item's audio, adjustable while it plays.
-/// Auto Mix sweeps its cutoff during a transition. It also meters how much bass and treble
-/// the song has, now and on average, so the sweep can suit how the ending sounds.
-/// Works on file and progressive streams; HLS items can't be tapped.
 final class AutoMixFilterTap: @unchecked Sendable {
     enum Mode: Int32 {
         case off, lowPass, highPass
@@ -13,12 +9,9 @@ final class AutoMixFilterTap: @unchecked Sendable {
     private struct Control {
         var mode: Int32 = 0
         var cutoff: Float = 1000
-        /// Uptime in nanoseconds after which the filter bypasses itself; 0 never expires.
         var expires: UInt64 = 0
     }
 
-    /// Share of the signal's energy below ~200 Hz and above ~2.5 kHz, over the last few
-    /// seconds and over the song so far.
     struct Tonality {
         var recentLow: Float = 0
         var recentHigh: Float = 0
@@ -30,11 +23,8 @@ final class AutoMixFilterTap: @unchecked Sendable {
     private static let maxChannels = 8
     private static let stagesPerChannel = 2
 
-    // Written from the main thread and read on the audio thread; a stale value for one
-    // render pass only moves the sweep by a few milliseconds.
     private let control = UnsafeMutablePointer<Control>.allocate(capacity: 1)
     private let state = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels * stagesPerChannel * 2)
-    // Written on the audio thread, read on the main thread when a mix begins.
     private let meter = UnsafeMutablePointer<Tonality>.allocate(capacity: 1)
     private var lowBand: Float = 0
     private var midBand: Float = 0
@@ -58,8 +48,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
         state.deallocate()
     }
 
-    /// A filter set here lapses after `holdFor` seconds unless set again, so a sweep that
-    /// stops early (the mix ended or was interrupted) can never leave a song filtered.
     func set(_ mode: Mode, cutoff: Float, holdFor seconds: Double = 0.5) {
         let expires = mode == .off ? 0 : DispatchTime.now().uptimeNanoseconds + UInt64(seconds * 1_000_000_000)
         control.pointee = Control(mode: mode.rawValue, cutoff: cutoff, expires: expires)
@@ -67,7 +55,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
 
     var tonality: Tonality { meter.pointee }
 
-    /// Mix parameters that route the track's audio through this filter.
     func parameters(for track: AVAssetTrack) -> AVMutableAudioMixInputParameters? {
         var callbacks = MTAudioProcessingTapCallbacks(
             version: kMTAudioProcessingTapCallbacksVersion_0,
@@ -157,8 +144,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
         }
     }
 
-    /// Splits the first channel with two one-pole filters and folds the band shares of this
-    /// buffer into a ~3 s and a whole-song average. Silent buffers are skipped.
     private func measure(_ bufferList: UnsafeMutablePointer<AudioBufferList>, frames: Int) {
         let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
         guard let buffer = buffers.first, let data = buffer.mData?.assumingMemoryBound(to: Float.self) else { return }
@@ -192,7 +177,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
         meter.pointee = value
     }
 
-    /// RBJ biquad with Butterworth Q; two cascaded stages give a 24 dB/octave slope.
     private func updateCoefficients(mode: Int32, cutoff: Float) {
         let frequency = min(max(cutoff, 20), sampleRate * 0.45)
         let w0 = 2 * Float.pi * frequency / sampleRate
