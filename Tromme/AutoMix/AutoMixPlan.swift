@@ -10,6 +10,7 @@ struct AutoMixPlan: Sendable {
     var isPlainCrossfade = false
     var loudnessDifference: Double?
     var incomingFade: TimeInterval?
+    var earliestStart: TimeInterval?
 
     enum FilterStyle: Sendable {
         case none
@@ -43,6 +44,10 @@ struct AutoMixPlan: Sendable {
     }
 
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade.map { min($0, overlap) })
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade.map { min($0, overlap) }, earliestStart: earliestStart)
+    }
+
+    func startingNow(at time: TimeInterval) -> AutoMixPlan {
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: time, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade, earliestStart: earliestStart)
     }
 }

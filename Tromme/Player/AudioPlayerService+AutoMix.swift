@@ -164,12 +164,23 @@ extension AudioPlayerService {
                     self.abandonAutoMix()
                     return
                 }
-                let wait = plan.startTime - self.bestKnownPlaybackSeconds
+                let now = self.bestKnownPlaybackSeconds
+                let wait = plan.startTime - now
                 if wait <= 30 { self.maybePreloadNextTrack(within: .infinity) }
                 if wait <= 12 { self.prepareMixIncoming(plan) }
                 if self.isPlaying, !self.isSeeking, wait <= lead {
                     self.beginAutoMix(plan, lateBy: max(0, -wait))
                     return
+                }
+                if self.isPlaying, !self.isSeeking, wait > lead, wait <= AutoMixPlanner.fadeSearchWindow,
+                   let earliest = plan.earliestStart, now >= earliest,
+                   self.mixTap(for: self.player)?.tonality.isFading == true {
+                    self.maybePreloadNextTrack(within: .infinity)
+                    self.prepareMixIncoming(plan)
+                    if isLocal || self.mixPrepared?.ratingKey == plan.incomingKey {
+                        self.beginAutoMix(plan.startingNow(at: now), lateBy: 0)
+                        return
+                    }
                 }
                 let nap = self.isPlaying ? min(max(wait, 0.02), 0.25) : 0.25
                 try? await Task.sleep(for: .milliseconds(Int(nap * 1000)))

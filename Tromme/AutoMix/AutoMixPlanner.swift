@@ -14,6 +14,7 @@ enum AutoMixPlanner {
     private static let quickestFadeIn: TimeInterval = 0.5
     private static let longestTail: TimeInterval = 4
     private static let shortestMix: TimeInterval = 3
+    static let fadeSearchWindow: TimeInterval = 45
     static let defaultCrossfadeLength: TimeInterval = 3
 
     static func plan(
@@ -30,7 +31,8 @@ enum AutoMixPlanner {
 
         let mixEnd = min(outgoingEnd, outgoingLyricsEnd + outroHold + playedOutRate * max(0, outro - playedOutStart))
         var overlap = min(max(mixEnd - outgoingLyricsEnd, minimumOverlap), maximumOverlap)
-        var startTime = max(mixEnd - overlap, outgoingLyricsEnd + (outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding))
+        let earliestStart = outgoingLyricsEnd + (outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding)
+        var startTime = max(mixEnd - overlap, earliestStart)
         startTime = min(startTime, mixEnd - minimumOverlap)
         overlap = mixEnd - startTime
 
@@ -57,7 +59,8 @@ enum AutoMixPlanner {
             overlap: overlap,
             introStart: introStart,
             filter: overlap >= filteredOverlap ? .mellow : .none,
-            incomingFade: incomingFade
+            incomingFade: incomingFade,
+            earliestStart: earliestStart
         )
     }
 
@@ -67,7 +70,8 @@ enum AutoMixPlanner {
             incomingKey: incomingKey,
             startTime: max(0, outgoingEnd - length),
             overlap: length,
-            isPlainCrossfade: true
+            isPlainCrossfade: true,
+            earliestStart: max(0, outgoingEnd - fadeSearchWindow)
         )
     }
 }

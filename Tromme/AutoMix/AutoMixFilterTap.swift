@@ -18,6 +18,13 @@ final class AutoMixFilterTap: @unchecked Sendable {
         var songLow: Float = 0
         var songHigh: Float = 0
         var seconds: Float = 0
+        var fastLevel: Float = 0
+        var slowLevel: Float = 0
+        var songLevel: Float = 0
+
+        var isFading: Bool {
+            seconds > 20 && songLevel > 1e-4 && fastLevel < 0.2 * songLevel && fastLevel < 0.7 * slowLevel
+        }
     }
 
     private static let maxChannels = 8
@@ -164,12 +171,19 @@ final class AutoMixFilterTap: @unchecked Sendable {
             high += treble * treble
             index += stride
         }
-        guard total / Float(count) > 1e-5 else { return }
         let duration = Float(count) / sampleRate
-        let recent = 1 - exp(-duration / 3)
+        let meanSquare = total / Float(count)
         var value = meter.pointee
+        value.fastLevel += (1 - exp(-duration)) * (meanSquare - value.fastLevel)
+        value.slowLevel += (1 - exp(-duration / 5)) * (meanSquare - value.slowLevel)
+        guard meanSquare > 1e-5 else {
+            meter.pointee = value
+            return
+        }
+        let recent = 1 - exp(-duration / 3)
         value.seconds += duration
         let song = duration / value.seconds
+        value.songLevel += song * (meanSquare - value.songLevel)
         value.recentLow += recent * (low / total - value.recentLow)
         value.recentHigh += recent * (high / total - value.recentHigh)
         value.songLow += song * (low / total - value.songLow)
