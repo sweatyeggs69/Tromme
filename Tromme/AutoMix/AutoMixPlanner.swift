@@ -4,8 +4,8 @@ enum AutoMixPlanner {
     private static let maximumOverlap: TimeInterval = 10
     private static let minimumOverlap: TimeInterval = 1.5
     private static let minimumOutroRoom: TimeInterval = 3
-    private static let lastLyricPadding: TimeInterval = 2.5
-    private static let markedLastLyricPadding: TimeInterval = 1
+    private static let lastLyricPadding: TimeInterval = 3
+    private static let markedLastLyricPadding: TimeInterval = 1.5
     private static let outroHold: TimeInterval = 26
     private static let playedOutStart: TimeInterval = 55
     private static let playedOutRate: TimeInterval = 1.5
