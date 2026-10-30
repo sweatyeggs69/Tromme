@@ -11,8 +11,6 @@ enum AutoMixPlanner {
     private static let lastLyricPadding: TimeInterval = 2.5
     /// Shorter wait when the lyrics mark exactly where the singing stops (a closing blank row).
     private static let markedLastLyricPadding: TimeInterval = 1
-    /// Lyrics closer than this to the start of the incoming song leave no room for a mix.
-    private static let minimumIntroRoom: TimeInterval = 1
     /// An outro longer than this after the last lyric is shortened: it plays for
     /// `shortenedOutro` minus `shortenedOverlap`, then the mix covers the rest.
     private static let longOutro: TimeInterval = 28
@@ -38,7 +36,7 @@ enum AutoMixPlanner {
     ///   - outgoingLastLyricEnd: Where the last lyric finishes; the mix never starts before it.
     ///   - outgoingLastLyricMarked: The lyrics mark that end exactly, so less padding is needed.
     ///   - incomingVocalStart: The incoming song's first lyric.
-    /// - Returns: nil when the lyrics run too close to either song's edge to mix, or leave
+    /// - Returns: nil when the outgoing lyrics run too close to the song's end to mix, or leave
     ///   room only for a mix shorter than `shortestMix`.
     static func plan(
         outgoingKey: String,
@@ -51,7 +49,6 @@ enum AutoMixPlanner {
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
         if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
-        if let vocalStart = incomingVocalStart, vocalStart - incomingBaseStart < minimumIntroRoom { return nil }
 
         // Outgoing side: the outro sets the length. A short outro gets a short mix; a long one
         // is cut short so the next song comes in a little after the last lyric.
@@ -77,8 +74,8 @@ enum AutoMixPlanner {
         }
 
         // Incoming side: the new song is at full volume about a second before its first lyric.
-        // A long intro is joined part-way through so the mix ends there; with a short one the
-        // new song comes up quickly and the outgoing outro tails off underneath it.
+        // A long intro is joined part-way through so the mix ends there; with a short one (or
+        // singing from the first second) the new song comes up quickly and the outgoing outro tails off underneath it.
         var introStart: TimeInterval?
         var incomingFade: TimeInterval?
         if let vocalStart = incomingVocalStart {
