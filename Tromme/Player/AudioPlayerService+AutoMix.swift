@@ -60,7 +60,7 @@ extension AudioPlayerService {
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isMixingEnabled else { return }
-            func planPlainCrossfade(reason: String) {
+            @MainActor func planPlainCrossfade(reason: String) {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
