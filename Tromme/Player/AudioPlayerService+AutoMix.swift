@@ -2,7 +2,6 @@ import AVFoundation
 
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
-    static let autoMixAllowedKey = "autoMixAllowed"
     static let crossfadeLengthKey = "crossfadeSeconds"
 
     private static let planningLeadTime: TimeInterval = 150
@@ -11,11 +10,7 @@ extension AudioPlayerService {
 
     var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
 
-    private var isAutoMixAllowed: Bool {
-        UserDefaults.standard.object(forKey: Self.autoMixAllowedKey) as? Bool ?? true
-    }
-
-    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && isAutoMixAllowed && PlusStore.cachedIsPlus }
+    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
 
     // MARK: - Planning
 
@@ -47,7 +42,7 @@ extension AudioPlayerService {
         let generation = playbackGeneration
         let client = client, server = server
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
-        let isPlus = PlusStore.cachedIsPlus && isAutoMixAllowed
+        let isPlus = PlusStore.cachedIsPlus
         let storedLength = UserDefaults.standard.double(forKey: Self.crossfadeLengthKey)
         let crossfadeLength = storedLength > 0 ? min(storedLength, 10) : AutoMixPlanner.defaultCrossfadeLength
 

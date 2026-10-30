@@ -10,7 +10,6 @@ final class SettingsSync {
         "disableCellularTranscoding",
         "magicMixSeedCap",
         "autoMixEnabled",
-        "autoMixAllowed",
         "crossfadeSeconds",
         "autoMixNoticeShown",
         "crossfadeNoticeShown",
