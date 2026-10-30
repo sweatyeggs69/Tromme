@@ -130,6 +130,9 @@
 		B1C2D3E4F5A60718293A4B5C /* MetadataFieldsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */; };
 		E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */; };
 		4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */; };
+		A5B57F589B70FAA76BF033B7 /* TagKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = C79AE872BA9D486CDB97D630 /* TagKind.swift */; };
+		01C405367729086F2E3E33E1 /* EditTagsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */; };
+		9F5B8BACB655AB9FCE7C9D96 /* EditTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */; };
 		BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */; };
 		67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */; };
 		1FDDF07E00978EA25EA6AC01 /* MetadataSheetRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */; };
@@ -304,6 +307,9 @@
 		C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataFieldsSection.swift; sourceTree = "<group>"; };
 		A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackMarkersSection.swift; sourceTree = "<group>"; };
 		32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInfoViewModel.swift; sourceTree = "<group>"; };
+		C79AE872BA9D486CDB97D630 /* TagKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagKind.swift; sourceTree = "<group>"; };
+		D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTagsViewModel.swift; sourceTree = "<group>"; };
+		8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTagsSheet.swift; sourceTree = "<group>"; };
 		AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataSheet.swift; sourceTree = "<group>"; };
 		99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditMetadataViewModel.swift; sourceTree = "<group>"; };
 		D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataSheetRequest.swift; sourceTree = "<group>"; };
@@ -723,6 +729,9 @@
 				A7DA82E2B303C7668B3EB490 /* TrackMarkersSection.swift */,
 				C2D3E4F5A60718293A4B5C6D /* MetadataFieldsSection.swift */,
 				32B858D817DED35C4AB732DB /* TrackInfoViewModel.swift */,
+				C79AE872BA9D486CDB97D630 /* TagKind.swift */,
+				D7E235FF84EC939134BF3DEA /* EditTagsViewModel.swift */,
+				8DEAB8BAD8901B0C2AB57FD3 /* EditTagsSheet.swift */,
 				AF0C6DCC18EA8F29BCF77858 /* EditMetadataSheet.swift */,
 				99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */,
 				D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */,
@@ -1143,6 +1152,9 @@
 				E44E3B4BA96AE8712E4DC69E /* TrackMarkersSection.swift in Sources */,
 				B1C2D3E4F5A60718293A4B5C /* MetadataFieldsSection.swift in Sources */,
 				4CA20235DEB00408ADD672A6 /* TrackInfoViewModel.swift in Sources */,
+				A5B57F589B70FAA76BF033B7 /* TagKind.swift in Sources */,
+				01C405367729086F2E3E33E1 /* EditTagsViewModel.swift in Sources */,
+				9F5B8BACB655AB9FCE7C9D96 /* EditTagsSheet.swift in Sources */,
 				BFDE1E41732E37DD66C084EC /* EditMetadataSheet.swift in Sources */,
 				67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */,
 				1FDDF07E00978EA25EA6AC01 /* MetadataSheetRequest.swift in Sources */,

@@ -10,6 +10,8 @@ private struct MetadataSheetsModifier: ViewModifier {
             switch request {
             case .edit(let item):
                 EditMetadataSheet(item: item, onSaved: onSaved)
+            case .editTags(let item):
+                EditTagsSheet(item: item, onSaved: onSaved)
             case .trackInfo(let track):
                 TrackInfoSheet(track: track, isEditable: isTrackEditable, onSaved: onSaved)
             }

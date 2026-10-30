@@ -91,6 +91,10 @@ final class ArtistDetailViewModel {
         resolvedArtist = fresh
     }
 
+    func applyEditedArtist(_ edited: PlexMetadata) {
+        resolvedArtist = edited
+    }
+
     private static func topTracks(from tracks: [PlexMetadata]) -> [PlexMetadata] {
         Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
     }

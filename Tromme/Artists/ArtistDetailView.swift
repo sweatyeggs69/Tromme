@@ -20,6 +20,7 @@ struct ArtistDetailView: View {
     @State private var backdropLookupFinished = false
     @State private var showsBioSheet = false
     @State private var showsChangePhotoSheet = false
+    @State private var metadataRequest: MetadataSheetRequest?
     @State private var viewWidth: CGFloat = 393
     @State private var viewHeight: CGFloat = 852
     @State private var scrollOffset: CGFloat = 0
@@ -515,6 +516,22 @@ struct ArtistDetailView: View {
         }
         .task(id: artist.ratingKey) {
             await viewModel.loadConcerts(isConnected: network.isConnected)
+        }
+        .toolbar {
+            if previewData == nil, serverConnection.currentServer?.canEditMetadata == true {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Edit Tags", systemImage: "tag") {
+                            metadataRequest = .editTags(displayArtist)
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                }
+            }
+        }
+        .metadataSheets(request: $metadataRequest) { fresh in
+            viewModel.applyEditedArtist(fresh)
         }
         .sheet(isPresented: $showsChangePhotoSheet) {
             ChangeArtworkSheet(ratingKey: artist.ratingKey, subject: "artist") {

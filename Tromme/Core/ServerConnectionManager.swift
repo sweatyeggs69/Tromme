@@ -52,6 +52,7 @@ final class ServerConnectionManager {
         let uri: String
         let machineIdentifier: String
         let connections: [PlexConnection]
+        var isOwned: Bool?
     }
 
     private static func persist(_ server: PlexServer) {
@@ -59,7 +60,8 @@ final class ServerConnectionManager {
             name: server.name,
             uri: server.uri,
             machineIdentifier: server.machineIdentifier,
-            connections: server.connections
+            connections: server.connections,
+            isOwned: server.isOwned
         )
         guard let data = try? JSONEncoder().encode(stored) else { return }
         KeychainHelper.save(server.accessToken, forKey: serverTokenKey)
@@ -95,7 +97,8 @@ final class ServerConnectionManager {
             uri: stored.uri,
             machineIdentifier: stored.machineIdentifier,
             accessToken: token,
-            connections: stored.connections
+            connections: stored.connections,
+            isOwned: stored.isOwned
         )
     }
 
@@ -183,7 +186,8 @@ final class ServerConnectionManager {
                 uri: uri,
                 machineIdentifier: machineId,
                 accessToken: token,
-                connections: connections
+                connections: connections,
+                isOwned: resource.owned
             )
 
             if let sections = try? await client.getLibrarySections(server: server),
@@ -241,7 +245,8 @@ final class ServerConnectionManager {
             uri: bestURI,
             machineIdentifier: server.machineIdentifier,
             accessToken: server.accessToken,
-            connections: server.connections
+            connections: server.connections,
+            isOwned: server.isOwned
         ))
     }
 

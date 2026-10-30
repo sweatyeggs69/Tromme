@@ -6,6 +6,9 @@ struct PlexServer: Codable, Sendable, Identifiable, Hashable {
     let machineIdentifier: String
     let accessToken: String
     let connections: [PlexConnection]
+    var isOwned: Bool? = nil
+
+    var canEditMetadata: Bool { isOwned != false }
 
     var id: String { machineIdentifier }
 

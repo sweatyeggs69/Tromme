@@ -30,6 +30,31 @@ extension PlexAPIClient {
         }
     }
 
+    func updateTags(
+        server: PlexServer,
+        ratingKey: String,
+        changes: [(kind: TagKind, added: [String], removed: [String])]
+    ) async throws {
+        var parts: [String] = []
+        for change in changes {
+            let name = change.kind.rawValue
+            for (index, tag) in change.added.enumerated() {
+                parts.append("\(name)%5B\(index)%5D.tag.tag=\(Self.encodeQueryValue(tag))")
+            }
+            if !change.removed.isEmpty {
+                let removed = change.removed.map(Self.encodeQueryValue).joined(separator: ",")
+                parts.append("\(name)%5B%5D.tag.tag-=\(removed)")
+            }
+            parts.append("\(name).locked=1")
+        }
+        guard !parts.isEmpty else { return }
+        _ = try await rawServerRequest(
+            server: server,
+            path: "/library/metadata/\(ratingKey)?\(parts.joined(separator: "&"))",
+            method: "PUT"
+        )
+    }
+
     private static func encodeQueryValue(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? value
     }
