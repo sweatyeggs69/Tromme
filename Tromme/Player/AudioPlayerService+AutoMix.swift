@@ -71,12 +71,7 @@ extension AudioPlayerService {
                 self.scheduleAutoMixTrigger(plan, generation: generation)
             }
             guard isPlus, let outgoingSpan else {
-                if isPlus && !self.isCrossfadeEnabled {
-                    self.recordAutoMix(current, incoming, "skipped: no lyrics")
-                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
-                } else {
-                    planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
-                }
+                planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
                 return
             }
             guard var plan = AutoMixPlanner.plan(
@@ -94,11 +89,7 @@ extension AudioPlayerService {
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
-                if self.isCrossfadeEnabled {
-                    planPlainCrossfade(reason: "lyrics_too_close_to_edge")
-                } else {
-                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
-                }
+                planPlainCrossfade(reason: "lyrics_too_close_to_edge")
                 return
             }
             plan.loudnessDifference = loudnessDifference
