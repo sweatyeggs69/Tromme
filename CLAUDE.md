@@ -109,6 +109,10 @@ If you are unsure whether Apple provides something, assume they do and look for 
 - Pass `colorScheme` (from `@Environment(\.colorScheme)`) when the background color is dynamic (e.g. `Color(.label)`, or anything from an environment/icon-pack accent color) so it resolves to concrete RGB first. Pass `nil` for fixed colors that don't vary with appearance (e.g. artwork-sampled colors from `ArtworkColorCache`).
 - Used today by `AlbumDetailView`, `PlaylistDetailView` (artwork-driven controls), and `ArtistDetailView` (accent-color-driven shuffle button).
 
+## Comments
+- Add a comment only when it is 100% necessary: `// MARK:` organization, or a non-obvious constraint that would cause a bug if missed (e.g. an AVPlayerItem can't move between players, a Plex API exception).
+- Never write comments that restate the code, narrate history or tuning, or explain obvious behavior. No doc comments on self-explanatory declarations.
+
 ## Logging & Diagnostics
 - All verbose diagnostics and development logs must be gated to debug builds only (`#if DEBUG`).
 - Release builds must not emit internal debug traces to the console.
