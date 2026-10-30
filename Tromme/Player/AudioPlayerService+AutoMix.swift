@@ -2,21 +2,26 @@ import AVFoundation
 
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
+    static let crossfadeEnabledKey = "crossfadeEnabled"
     static let crossfadeLengthKey = "crossfadeSeconds"
 
     private static let planningLeadTime: TimeInterval = 150
 
     var isAutoMixing: Bool { autoMixInProgress }
 
-    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) && PlusStore.cachedIsPlus }
 
-    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
+    private var isCrossfadeEnabled: Bool { UserDefaults.standard.bool(forKey: Self.crossfadeEnabledKey) }
+
+    private var isMixingEnabled: Bool { isAutoMixEnabled || isCrossfadeEnabled }
+
+    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled }
 
     // MARK: - Planning
 
     func maybePlanAutoMix() {
         prefetchAutoMixLyrics()
-        guard isAutoMixEnabled, repeatMode == .off,
+        guard isMixingEnabled, repeatMode == .off,
               autoMixTask == nil, autoMixPlanTask == nil, autoMixTriggerTask == nil,
               duration > 20, duration - currentTime <= Self.planningLeadTime,
               playbackIntent, isPlaying,
@@ -42,7 +47,7 @@ extension AudioPlayerService {
         let generation = playbackGeneration
         let client = client, server = server
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
-        let isPlus = PlusStore.cachedIsPlus
+        let isPlus = isAutoMixEnabled
         let storedLength = UserDefaults.standard.double(forKey: Self.crossfadeLengthKey)
         let crossfadeLength = storedLength > 0 ? min(storedLength, 10) : AutoMixPlanner.defaultCrossfadeLength
 
@@ -54,17 +59,19 @@ extension AudioPlayerService {
             let loudnessDifference = await loudness
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
-            guard self.isAutoMixEnabled else { return }
-            guard isPlus, let outgoingSpan else {
+            guard self.isMixingEnabled else { return }
+            func planPlainCrossfade(reason: String) {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
-                let reason = isPlus ? "no_lyrics" : "no_plus"
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.recordAutoMix(current, incoming, "planned: plain crossfade", [
                     "reason": reason, "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap)
                 ])
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
+            }
+            guard isPlus, let outgoingSpan else {
+                planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
                 return
             }
             guard var plan = AutoMixPlanner.plan(
@@ -82,7 +89,11 @@ extension AudioPlayerService {
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
-                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                if self.isCrossfadeEnabled {
+                    planPlainCrossfade(reason: "lyrics_too_close_to_edge")
+                } else {
+                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                }
                 return
             }
             plan.loudnessDifference = loudnessDifference
@@ -160,7 +171,7 @@ extension AudioPlayerService {
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
-                guard self.isAutoMixEnabled else {
+                guard self.isMixingEnabled else {
                     self.abandonAutoMix()
                     return
                 }

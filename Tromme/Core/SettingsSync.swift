@@ -10,6 +10,7 @@ final class SettingsSync {
         "disableCellularTranscoding",
         "magicMixSeedCap",
         "autoMixEnabled",
+        "crossfadeEnabled",
         "crossfadeSeconds",
         "autoDownloadEnabled",
         "autoDownloadMode",

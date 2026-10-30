@@ -3,6 +3,7 @@ import SwiftUI
 struct QueueView: View {
     var player: AudioPlayerService
     @State private var magicMixAvailable = false
+    @State private var plus = PlusStore.shared
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
 
     var body: some View {
@@ -78,12 +79,14 @@ struct QueueView: View {
             }
             .frame(maxWidth: .infinity)
 
-            QueueActionPill(isActive: autoMixEnabled) {
-                autoMixEnabled.toggle()
-            } label: {
-                AutoMixGlyph()
+            if plus.isPlus {
+                QueueActionPill(isActive: autoMixEnabled) {
+                    autoMixEnabled.toggle()
+                } label: {
+                    AutoMixGlyph()
+                }
+                .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
 
             QueueActionPill(systemImage: "wand.and.stars", isActive: player.isMagicMixActive) {
                 player.requestMagicMixRefill(freshMix: true)
