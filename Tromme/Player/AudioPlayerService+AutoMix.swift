@@ -49,29 +49,16 @@ extension AudioPlayerService {
         autoMixPlanTask = Task { [weak self] in
             async let outgoingVocals = Self.vocalSpan(current, if: isPlus)
             async let incomingVocals = Self.vocalSpan(incoming, if: isPlus)
-            async let outgoingRule = AutoMixGenreRules.crossfadeReason(current, client: client, server: server)
-            async let incomingRule = AutoMixGenreRules.crossfadeReason(incoming, client: client, server: server)
-            async let outgoingLive = AutoMixGenreRules.isLiveOrMixRelease(current, client: client, server: server)
-            async let incomingLive = AutoMixGenreRules.isLiveOrMixRelease(incoming, client: client, server: server)
             async let loudness = Self.loudnessDifference(current, incoming, soundCheckOn: soundCheckOn, client: client, server: server)
             let (outgoingSpan, incomingSpan) = await (outgoingVocals, incomingVocals)
-            let (outgoingReason, incomingReason) = await (outgoingRule, incomingRule)
-            let (outgoingIsLive, incomingIsLive) = await (outgoingLive, incomingLive)
-            let isLiveOrMix = outgoingIsLive || incomingIsLive
             let loudnessDifference = await loudness
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isAutoMixEnabled else { return }
-            if isLiveOrMix {
-                self.logPlayback("automix_skipped", "reason=live_or_mix_album")
-                self.recordAutoMix(current, incoming, "skipped: live or mix album")
-                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
-                return
-            }
-            if !isPlus || outgoingReason != nil || incomingReason != nil || outgoingSpan == nil {
+            guard isPlus, let outgoingSpan else {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
-                let reason = !isPlus ? "no_plus" : outgoingSpan == nil && outgoingReason == nil && incomingReason == nil ? "no_lyrics" : "\(outgoingReason ?? "-")/\(incomingReason ?? "-")"
+                let reason = isPlus ? "no_lyrics" : "no_plus"
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.recordAutoMix(current, incoming, "planned: plain crossfade", [
                     "reason": reason, "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap)
@@ -85,16 +72,13 @@ extension AudioPlayerService {
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
-                outgoingVocalEnd: outgoingSpan?.end,
-                outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
-                outgoingLastLyricMarked: outgoingSpan?.endIsMarked ?? false,
-                outgoingSingingEnd: outgoingSpan?.singingEnd,
+                outgoingLyricsEnd: outgoingSpan.end,
+                outgoingLyricsEndMarked: outgoingSpan.endIsMarked,
                 incomingVocalStart: incomingSpan?.start
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
                 self.recordAutoMix(current, incoming, "skipped: lyrics too close to the edge", [
-                    "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.lastLineEnd) } ?? "none",
-                    "outgoingVocalEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
+                    "outgoingLyricsEnd": Self.seconds(outgoingSpan.end),
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
@@ -102,13 +86,12 @@ extension AudioPlayerService {
                 return
             }
             plan.loudnessDifference = loudnessDifference
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=\(outgoingSpan != nil)/\(incomingSpan != nil)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=true/\(incomingSpan != nil)")
             self.recordAutoMix(current, incoming, "planned: lyric mix", [
                 "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap),
                 "incomingStart": plan.introStart.map(Self.seconds) ?? "top", "filter": "\(plan.filter)",
                 "incomingFade": plan.incomingFade.map(Self.seconds) ?? "none",
-                "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.lastLineEnd) } ?? "none",
-                "outgoingVocalEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
+                "outgoingLyricsEnd": Self.seconds(outgoingSpan.end),
                 "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                 "outgoingEnd": Self.seconds(end),
                 "loudnessDifferenceDb": plan.loudnessDifference.map(Self.seconds) ?? "none"
@@ -147,7 +130,7 @@ extension AudioPlayerService {
         Task(priority: .utility) { _ = await LyricsService.vocalSpan(for: next) }
     }
 
-    private nonisolated static func vocalSpan(_ track: PlexMetadata, if enabled: Bool) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool, singingEnd: TimeInterval)? {
+    private nonisolated static func vocalSpan(_ track: PlexMetadata, if enabled: Bool) async -> (start: TimeInterval, end: TimeInterval, endIsMarked: Bool)? {
         guard enabled else { return nil }
         return await LyricsService.vocalSpan(for: track)
     }

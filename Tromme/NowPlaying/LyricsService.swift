@@ -85,7 +85,7 @@ final class LyricsService {
         isLoading = false
     }
 
-    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool, singingEnd: TimeInterval)? {
+    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, endIsMarked: Bool)? {
         let artist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
@@ -108,51 +108,10 @@ final class LyricsService {
            parsed.indices.contains(index + 1), parsed[index + 1].isBreak {
             first = sung[1]
         }
-        if let outroStart = repeatedOutroStart(sung) {
-            let line = sung.last { $0.time < outroStart } ?? first
-            return (first.time, outroStart, line.lastWordEnd ?? outroStart, false, last.lastWordEnd ?? last.time + 4)
-        }
-        let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
-        let lastLineEnd = last.lastWordEnd ?? parsed.last.flatMap { $0.isBreak ? $0.time : nil } ?? last.time + 4
-        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time, lastLineEnd, true, closing.time) }
-        let end = (last.lastWordEnd ?? last.time + 4) + margin
-        return (first.time, end, lastLineEnd, false, end)
+        let closing = parsed.last.flatMap { $0.isBreak ? $0.time : nil }
+        let end = closing ?? last.lastWordEnd ?? last.time + 4
+        return (first.time, end, closing != nil)
     }
-
-    private nonisolated static func repeatedOutroStart(_ lines: [LyricsLine]) -> TimeInterval? {
-        func key(_ line: LyricsLine) -> String {
-            line.text.lowercased().filter { $0.isLetter || $0.isNumber }
-        }
-        let keys = lines.map(key)
-        for period in 1...4 {
-            let neededRepeats = period == 1 ? 3 : 2
-            guard keys.count >= period * neededRepeats else { continue }
-            let block = Array(keys.suffix(period))
-            guard !block.contains(where: \.isEmpty) else { continue }
-            var start = keys.count - period
-            var repeats = 1
-            while start - period >= 0, Array(keys[(start - period)..<start]) == block {
-                start -= period
-                repeats += 1
-            }
-            if repeats >= neededRepeats { return lines[start + period * (neededRepeats - 1)].time }
-            if period == 1, repeats == 2, lines[start + 1].time - lines[start].time >= separatedRepeatGap {
-                return lines[start + 1].time
-            }
-        }
-        guard let lastTime = lines.last?.time else { return nil }
-        var seen = Set<String>()
-        var repeated: [Int] = []
-        for index in lines.indices where lines[index].time >= lastTime - looseRepeatWindow && !keys[index].isEmpty {
-            if !seen.insert(keys[index]).inserted { repeated.append(index) }
-        }
-        if repeated.count >= looseRepeatCount, let first = repeated.first { return lines[first].time }
-        return nil
-    }
-
-    private nonisolated static let looseRepeatWindow: TimeInterval = 30
-    private nonisolated static let looseRepeatCount = 3
-    private nonisolated static let separatedRepeatGap: TimeInterval = 8
 
     private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         if let first = await resolve(track: track, artist: artist, blocked: blocked) { return first }

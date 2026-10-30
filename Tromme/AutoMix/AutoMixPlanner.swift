@@ -1,7 +1,6 @@
 import Foundation
 
 enum AutoMixPlanner {
-    private static let defaultOverlap: TimeInterval = 5
     private static let maximumOverlap: TimeInterval = 10
     private static let minimumOverlap: TimeInterval = 1.5
     private static let minimumOutroRoom: TimeInterval = 3
@@ -22,28 +21,18 @@ enum AutoMixPlanner {
         incomingKey: String,
         outgoingEnd: TimeInterval,
         incomingBaseStart: TimeInterval,
-        outgoingVocalEnd: TimeInterval?,
-        outgoingLastLyricEnd: TimeInterval?,
-        outgoingLastLyricMarked: Bool = false,
-        outgoingSingingEnd: TimeInterval? = nil,
+        outgoingLyricsEnd: TimeInterval,
+        outgoingLyricsEndMarked: Bool,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
-        if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
+        let outro = outgoingEnd - outgoingLyricsEnd
+        guard outro >= minimumOutroRoom else { return nil }
 
-        var mixEnd = outgoingEnd
-        var overlap = defaultOverlap
-        if let vocalEnd = outgoingVocalEnd {
-            let singingOutro = outgoingEnd - (outgoingSingingEnd ?? vocalEnd)
-            mixEnd = min(outgoingEnd, vocalEnd + outroHold + playedOutRate * max(0, singingOutro - playedOutStart))
-            overlap = min(max(mixEnd - vocalEnd, minimumOverlap), maximumOverlap)
-        }
-
-        var startTime = max(0, mixEnd - overlap)
-        let padding = outgoingLastLyricMarked ? markedLastLyricPadding : lastLyricPadding
-        if let lyricEnd = outgoingLastLyricEnd, startTime < lyricEnd + padding {
-            startTime = max(startTime, min(lyricEnd + padding, mixEnd - minimumOverlap))
-            overlap = max(mixEnd - startTime, minimumOverlap)
-        }
+        let mixEnd = min(outgoingEnd, outgoingLyricsEnd + outroHold + playedOutRate * max(0, outro - playedOutStart))
+        var overlap = min(max(mixEnd - outgoingLyricsEnd, minimumOverlap), maximumOverlap)
+        var startTime = max(mixEnd - overlap, outgoingLyricsEnd + (outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding))
+        startTime = min(startTime, mixEnd - minimumOverlap)
+        overlap = mixEnd - startTime
 
         var introStart: TimeInterval?
         var incomingFade: TimeInterval?
