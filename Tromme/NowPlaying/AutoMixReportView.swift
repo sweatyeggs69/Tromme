@@ -1,12 +1,10 @@
 import SwiftUI
 
 struct AutoMixReportView: View {
-    @State private var viewModel: AutoMixReportViewModel
+    // Built once when the menu item is tapped, so playback ticks re-rendering Now Playing
+    // don't rebuild the form while typing.
+    @Bindable var viewModel: AutoMixReportViewModel
     @Environment(\.dismiss) private var dismiss
-
-    init(player: AudioPlayerService) {
-        _viewModel = State(initialValue: AutoMixReportViewModel(player: player))
-    }
 
     var body: some View {
         NavigationStack {
@@ -92,5 +90,5 @@ struct AutoMixReportView: View {
 }
 
 #Preview {
-    AutoMixReportView(player: AudioPlayerService())
+    AutoMixReportView(viewModel: AutoMixReportViewModel(player: AudioPlayerService()))
 }

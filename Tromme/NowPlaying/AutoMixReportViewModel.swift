@@ -3,7 +3,7 @@ import UIKit
 import Observation
 
 @Observable @MainActor
-final class AutoMixReportViewModel {
+final class AutoMixReportViewModel: Identifiable {
     enum SendState: Equatable {
         case idle
         case sending
