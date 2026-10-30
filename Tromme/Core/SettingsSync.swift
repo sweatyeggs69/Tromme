@@ -11,8 +11,6 @@ final class SettingsSync {
         "magicMixSeedCap",
         "autoMixEnabled",
         "crossfadeSeconds",
-        "autoMixNoticeShown",
-        "crossfadeNoticeShown",
         "autoDownloadEnabled",
         "autoDownloadMode",
         "dynamicDownloadLimit",

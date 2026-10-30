@@ -3,12 +3,7 @@ import SwiftUI
 struct QueueView: View {
     var player: AudioPlayerService
     @State private var magicMixAvailable = false
-    @State private var plus = PlusStore.shared
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
-    @AppStorage("autoMixNoticeShown") private var autoMixNoticeShown = false
-    @AppStorage("crossfadeNoticeShown") private var crossfadeNoticeShown = false
-    @State private var showingAutoMixNotice = false
-    @State private var showingCrossfadeNotice = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,26 +64,6 @@ struct QueueView: View {
         .task(id: player.currentTrack?.grandparentRatingKey) {
             magicMixAvailable = await player.magicMixAvailable()
         }
-        .task(id: plus.isPlus) { showAutoMixNoticeIfNeeded() }
-        .alert("Auto Mix", isPresented: $showingAutoMixNotice) {
-            Button("OK") { autoMixNoticeShown = true }
-        } message: {
-            Text("Auto Mix times each blend from the songs' synced lyrics, so not every song mixes. Songs played in album order, live albums, trimmed songs, and songs whose lyrics run right to the start or end play normally. Heavier genres crossfade instead.")
-        }
-        .alert("Crossfade", isPresented: $showingCrossfadeNotice) {
-            Button("OK") { crossfadeNoticeShown = true }
-        } message: {
-            Text("Songs crossfade into each other, except songs played in album order, live albums, and trimmed songs. Set the length in Settings > Playback. Tromme Plus upgrades this to Auto Mix, timed from each song's lyrics.")
-        }
-    }
-
-    private func showAutoMixNoticeIfNeeded() {
-        guard autoMixEnabled else { return }
-        if plus.isPlus {
-            if !autoMixNoticeShown { showingAutoMixNotice = true }
-        } else if !crossfadeNoticeShown {
-            showingCrossfadeNotice = true
-        }
     }
 
     private var queueActions: some View {
@@ -105,7 +80,6 @@ struct QueueView: View {
 
             QueueActionPill(isActive: autoMixEnabled) {
                 autoMixEnabled.toggle()
-                showAutoMixNoticeIfNeeded()
             } label: {
                 AutoMixGlyph()
             }
