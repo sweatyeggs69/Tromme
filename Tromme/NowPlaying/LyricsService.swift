@@ -85,7 +85,7 @@ final class LyricsService {
         isLoading = false
     }
 
-    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool)? {
+    static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool, singingEnd: TimeInterval)? {
         let artist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
@@ -110,12 +110,13 @@ final class LyricsService {
         }
         if let outroStart = repeatedOutroStart(sung) {
             let line = sung.last { $0.time < outroStart } ?? first
-            return (first.time, outroStart, line.lastWordEnd ?? outroStart, false)
+            return (first.time, outroStart, line.lastWordEnd ?? outroStart, false, last.lastWordEnd ?? last.time + 4)
         }
         let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
         let lastLineEnd = last.lastWordEnd ?? parsed.last.flatMap { $0.isBreak ? $0.time : nil } ?? last.time + 4
-        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time, lastLineEnd, true) }
-        return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, lastLineEnd, false)
+        if let closing = parsed.last, closing.isBreak { return (first.time, closing.time, lastLineEnd, true, closing.time) }
+        let end = (last.lastWordEnd ?? last.time + 4) + margin
+        return (first.time, end, lastLineEnd, false, end)
     }
 
     private nonisolated static func repeatedOutroStart(_ lines: [LyricsLine]) -> TimeInterval? {

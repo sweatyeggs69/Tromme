@@ -26,6 +26,7 @@ enum AutoMixPlanner {
         outgoingVocalEnd: TimeInterval?,
         outgoingLastLyricEnd: TimeInterval?,
         outgoingLastLyricMarked: Bool = false,
+        outgoingSingingEnd: TimeInterval? = nil,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
         if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
@@ -34,7 +35,7 @@ enum AutoMixPlanner {
         var overlap = defaultOverlap
         if let vocalEnd = outgoingVocalEnd {
             let outro = max(0, outgoingEnd - vocalEnd)
-            if outro > playedOutOutro {
+            if outgoingEnd - (outgoingSingingEnd ?? vocalEnd) > playedOutOutro {
                 overlap = maximumOverlap
             } else if outro > longOutro {
                 mixEnd = vocalEnd + shortenedOutro
@@ -61,6 +62,7 @@ enum AutoMixPlanner {
                 let fade = max(room, quickestFadeIn)
                 incomingFade = fade
                 overlap = min(overlap, fade + longestTail)
+                startTime = max(startTime, mixEnd - overlap)
             }
         }
 

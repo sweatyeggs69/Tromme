@@ -88,6 +88,7 @@ extension AudioPlayerService {
                 outgoingVocalEnd: outgoingSpan?.end,
                 outgoingLastLyricEnd: outgoingSpan?.lastLineEnd,
                 outgoingLastLyricMarked: outgoingSpan?.endIsMarked ?? false,
+                outgoingSingingEnd: outgoingSpan?.singingEnd,
                 incomingVocalStart: incomingSpan?.start
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
@@ -146,7 +147,7 @@ extension AudioPlayerService {
         Task(priority: .utility) { _ = await LyricsService.vocalSpan(for: next) }
     }
 
-    private nonisolated static func vocalSpan(_ track: PlexMetadata, if enabled: Bool) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool)? {
+    private nonisolated static func vocalSpan(_ track: PlexMetadata, if enabled: Bool) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool, singingEnd: TimeInterval)? {
         guard enabled else { return nil }
         return await LyricsService.vocalSpan(for: track)
     }
