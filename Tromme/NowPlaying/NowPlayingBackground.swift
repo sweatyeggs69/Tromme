@@ -70,7 +70,6 @@ struct NowPlayingBackground: View {
         Image(uiImage: image)
             .resizable()
             .aspectRatio(contentMode: .fill)
-            .scaleEffect(1.3)
     }
 
     /// Blurs once at the image's own (small) size; scaled up it matches a 60 pt blur.
