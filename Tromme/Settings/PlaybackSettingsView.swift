@@ -3,6 +3,7 @@ import SwiftUI
 struct PlaybackSettingsView: View {
     @Environment(AudioPlayerService.self) private var player
 
+    @State private var plus = PlusStore.shared
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
@@ -29,15 +30,19 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("AutoMix", isOn: $autoMixAllowed)
-                    .tint(.green)
+                if plus.isPlus {
+                    Toggle("AutoMix", isOn: $autoMixAllowed)
+                        .tint(.green)
+                }
                 Picker("Crossfade", selection: $crossfadeSeconds) {
                     ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
                         Text("\(Int(seconds)) sec").tag(seconds)
                     }
                 }
             } footer: {
-                Text("Turn off to use plain crossfade only. The queue button still switches mixing on and off.")
+                Text(plus.isPlus
+                     ? "Turn off to use plain crossfade only. The queue button still switches mixing on and off."
+                     : "How long songs overlap when crossfading.")
             }
 
             if supportsCellularSettings {
