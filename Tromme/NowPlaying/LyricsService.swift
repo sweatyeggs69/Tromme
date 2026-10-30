@@ -117,6 +117,7 @@ final class LyricsService {
         if lyrics.isWordSynced {
             await ExternalContentCache.shared.setPinned(lyrics, forKey: key)
         } else {
+            await ExternalContentCache.shared.remove(forKey: key)
             await ExternalContentCache.shared.set(lyrics, forKey: key)
         }
     }
