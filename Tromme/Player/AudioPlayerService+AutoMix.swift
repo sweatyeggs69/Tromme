@@ -78,12 +78,12 @@ extension AudioPlayerService {
                 self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
-            // Without Plus, and for songs matched by the genre rules (or with no tags), it's a
-            // plain crossfade.
-            if !isPlus || outgoingReason != nil || incomingReason != nil {
+            // Without Plus, for songs matched by the genre rules (or with no tags), and when the
+            // outgoing song has no synced lyrics to time from, it's a plain crossfade.
+            if !isPlus || outgoingReason != nil || incomingReason != nil || outgoingSpan == nil {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
                 plan.loudnessDifference = loudnessDifference
-                let reason = isPlus ? "\(outgoingReason ?? "-")/\(incomingReason ?? "-")" : "no_plus"
+                let reason = !isPlus ? "no_plus" : outgoingSpan == nil && outgoingReason == nil && incomingReason == nil ? "no_lyrics" : "\(outgoingReason ?? "-")/\(incomingReason ?? "-")"
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.recordAutoMix(current, incoming, "planned: plain crossfade", [
                     "reason": reason, "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap)
