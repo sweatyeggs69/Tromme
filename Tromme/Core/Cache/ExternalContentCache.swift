@@ -6,6 +6,7 @@ actor ExternalContentCache {
 
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, CacheEntry>()
     private let diskURL: URL
+    private let pinnedURL: URL
     private let defaultTTL: TimeInterval = 1800 // 30 minutes for memory freshness
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
     private let maxDiskSize: Int = 32 * 1024 * 1024 // 32 MB
@@ -28,6 +29,8 @@ actor ExternalContentCache {
         values.isExcludedFromBackup = true
         try? dir.setResourceValues(values)
         diskURL = dir
+        pinnedURL = dir.appendingPathComponent("Pinned", isDirectory: true)
+        try? fm.createDirectory(at: pinnedURL, withIntermediateDirectories: true)
         memoryCache.countLimit = 100
         memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
         currentDiskBytes = Self.scanDiskBytes(at: diskURL)
@@ -77,8 +80,17 @@ actor ExternalContentCache {
         saveToDisk(entry: entry, key: key)
     }
 
+    func setPinned<T: Codable & Sendable>(_ value: T, forKey key: String) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        let entry = CacheEntry(data: data, timestamp: Date())
+        memoryCache.setObject(entry, forKey: key as NSString, cost: data.count)
+        guard let fileData = try? JSONEncoder().encode(entry) else { return }
+        try? fileData.write(to: pinnedURL.appendingPathComponent(key.sha256Hash), options: .atomic)
+    }
+
     func remove(forKey key: String) {
         memoryCache.removeObject(forKey: key as NSString)
+        try? FileManager.default.removeItem(at: pinnedURL.appendingPathComponent(key.sha256Hash))
         let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
         let removedSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? nil
         try? FileManager.default.removeItem(at: fileURL)
@@ -89,8 +101,10 @@ actor ExternalContentCache {
         generation += 1
         memoryCache.removeAllObjects()
         inFlightFetches.removeAll()
-        try? FileManager.default.removeItem(at: diskURL)
-        try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+        let fm = FileManager.default
+        for file in (try? fm.contentsOfDirectory(at: diskURL, includingPropertiesForKeys: nil)) ?? [] where file.lastPathComponent != pinnedURL.lastPathComponent {
+            try? fm.removeItem(at: file)
+        }
         currentDiskBytes = 0
     }
 
@@ -172,8 +186,10 @@ actor ExternalContentCache {
     // MARK: - Disk Persistence
 
     private func loadFromDisk(key: String) -> CacheEntry? {
-        let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
-        guard let fileData = try? Data(contentsOf: fileURL) else { return nil }
+        let name = key.sha256Hash
+        let fileData = (try? Data(contentsOf: pinnedURL.appendingPathComponent(name)))
+            ?? (try? Data(contentsOf: diskURL.appendingPathComponent(name)))
+        guard let fileData else { return nil }
         return try? JSONDecoder().decode(CacheEntry.self, from: fileData)
     }
 

@@ -70,7 +70,7 @@ final class LyricsService {
             result = cached.value
         } else if let fetched = await Self.resolveRetryingOnce(track: track, artist: trackArtist, blocked: blocked) {
             if fetched.lyrics.hasSynced, fetched.isFinal {
-                await ExternalContentCache.shared.set(fetched.lyrics, forKey: cacheKey)
+                await Self.cache(fetched.lyrics, forKey: cacheKey)
             }
             result = fetched.lyrics
         } else {
@@ -94,7 +94,7 @@ final class LyricsService {
            cached.value.hasSynced, isAllowed(cached.value, blocked: blocked) {
             lyrics = cached.value
         } else if let fetched = await resolve(track: track, artist: artist, blocked: blocked), fetched.lyrics.hasSynced {
-            if fetched.isFinal { await ExternalContentCache.shared.set(fetched.lyrics, forKey: cacheKey) }
+            if fetched.isFinal { await cache(fetched.lyrics, forKey: cacheKey) }
             lyrics = fetched.lyrics
         } else {
             return nil
@@ -111,6 +111,14 @@ final class LyricsService {
         let closing = parsed.last.flatMap { $0.isBreak ? $0.time : nil }
         let end = closing ?? last.lastWordEnd ?? last.time + 4
         return (first.time, end, closing != nil)
+    }
+
+    private nonisolated static func cache(_ lyrics: ResolvedLyrics, forKey key: String) async {
+        if lyrics.isWordSynced {
+            await ExternalContentCache.shared.setPinned(lyrics, forKey: key)
+        } else {
+            await ExternalContentCache.shared.set(lyrics, forKey: key)
+        }
     }
 
     private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {

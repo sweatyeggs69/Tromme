@@ -10,6 +10,11 @@ struct ResolvedLyrics: Codable, Sendable {
 
     var hasSynced: Bool { syncedLyrics?.isEmpty == false }
 
+    var isWordSynced: Bool {
+        guard let syncedLyrics, source == .lrcRed else { return false }
+        return LRCParser.parse(syncedLyrics).contains { !$0.words.isEmpty }
+    }
+
     private var text: String? {
         guard let text = hasSynced ? syncedLyrics : plainLyrics, !text.isEmpty else { return nil }
         return text
