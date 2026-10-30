@@ -41,9 +41,25 @@ final class PlusStore {
             entitled = true
             if Self.legacyProductIDs.contains(transaction.productID) { legacy = true } else { subscribed = true }
         }
+        if !entitled {
+            for id in ids {
+                guard case .verified(let transaction)? = await Transaction.latest(for: id),
+                      transaction.revocationDate == nil,
+                      transaction.expirationDate.map({ $0 > .now }) ?? true else { continue }
+                entitled = true
+                if Self.legacyProductIDs.contains(id) { legacy = true } else { subscribed = true }
+            }
+        }
         isGrandfathered = legacy && !subscribed
         hasLoaded = true
         setPlus(entitled)
+    }
+
+    func completePurchase(_ result: VerificationResult<Transaction>) async {
+        if case .verified(let transaction) = result {
+            await transaction.finish()
+        }
+        await refresh()
     }
 
     private func setPlus(_ value: Bool) {

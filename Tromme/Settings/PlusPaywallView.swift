@@ -22,8 +22,8 @@ struct PlusPaywallView: View {
         .subscriptionStoreControlStyle(.prominentPicker)
         .storeButton(.visible, for: .restorePurchases)
         .onInAppPurchaseCompletion { _, result in
-            if case .success(.success) = result {
-                await PlusStore.shared.refresh()
+            if case .success(.success(let verification)) = result {
+                await PlusStore.shared.completePurchase(verification)
                 dismiss()
             }
         }
