@@ -2,13 +2,18 @@ import AVFoundation
 
 extension AudioPlayerService {
     static let autoMixKey = "autoMixEnabled"
+    static let autoMixAllowedKey = "autoMixAllowed"
     static let crossfadeLengthKey = "crossfadeSeconds"
 
     private static let planningLeadTime: TimeInterval = 150
 
     var isAutoMixing: Bool { autoMixInProgress }
 
-    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+    var isAutoMixEnabled: Bool {
+        let defaults = UserDefaults.standard
+        let allowed = defaults.object(forKey: Self.autoMixAllowedKey) as? Bool ?? true
+        return allowed && defaults.bool(forKey: Self.autoMixKey)
+    }
 
     private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
 

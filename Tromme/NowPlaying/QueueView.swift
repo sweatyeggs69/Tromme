@@ -5,6 +5,7 @@ struct QueueView: View {
     @State private var magicMixAvailable = false
     @State private var plus = PlusStore.shared
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
+    @AppStorage(AudioPlayerService.autoMixAllowedKey) private var autoMixAllowed = true
     @AppStorage("autoMixNoticeShown") private var autoMixNoticeShown = false
     @AppStorage("crossfadeNoticeShown") private var crossfadeNoticeShown = false
     @State private var showingAutoMixNotice = false
@@ -109,6 +110,8 @@ struct QueueView: View {
             } label: {
                 AutoMixGlyph()
             }
+            .disabled(!autoMixAllowed)
+            .opacity(autoMixAllowed ? 1 : 0.45)
             .frame(maxWidth: .infinity)
 
             QueueActionPill(systemImage: "wand.and.stars", isActive: player.isMagicMixActive) {
