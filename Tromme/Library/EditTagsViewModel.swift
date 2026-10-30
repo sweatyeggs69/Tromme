@@ -5,7 +5,6 @@ import Observation
 final class EditTagsViewModel {
     let item: PlexMetadata
     var tags: [TagKind: [String]]
-    var drafts: [TagKind: String] = [:]
     private(set) var suggestions: [TagKind: [String]] = [:]
     private(set) var isSaving = false
     var errorMessage: String?
@@ -22,9 +21,7 @@ final class EditTagsViewModel {
     var libraryType: Int { item.type == "artist" ? LibraryStore.Kind.artist : LibraryStore.Kind.album }
 
     var hasChanges: Bool {
-        TagKind.allCases.contains { kind in
-            tags[kind] != original[kind] || !cleaned(drafts[kind]).isEmpty
-        }
+        tags != original
     }
 
     func availableSuggestions(for kind: TagKind) -> [String] {
@@ -39,16 +36,8 @@ final class EditTagsViewModel {
     }
 
     func add(_ value: String, to kind: TagKind) {
-        let value = cleaned(value)
-        guard !value.isEmpty,
-              !(tags[kind] ?? []).contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) else { return }
+        guard !(tags[kind] ?? []).contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) else { return }
         tags[kind, default: []].append(value)
-    }
-
-    func commitDraft(_ kind: TagKind) {
-        let value = drafts[kind] ?? ""
-        drafts[kind] = ""
-        add(value, to: kind)
     }
 
     func remove(_ kind: TagKind, at offsets: IndexSet) {
@@ -56,7 +45,6 @@ final class EditTagsViewModel {
     }
 
     func apply(server: PlexServer, sectionId: String, client: PlexAPIClient) async throws {
-        TagKind.allCases.forEach(commitDraft)
         let changes = TagKind.allCases.compactMap { kind -> (kind: TagKind, added: [String], removed: [String])? in
             let before = original[kind] ?? []
             let after = tags[kind] ?? []
@@ -92,11 +80,5 @@ final class EditTagsViewModel {
         await LibraryStore.shared.invalidateMemory(kind: libraryType, scope: scope)
         Notification.Name.postLibraryContentDidChange()
         return fresh
-    }
-
-    private func cleaned(_ value: String?) -> String {
-        (value ?? "")
-            .replacingOccurrences(of: ",", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
