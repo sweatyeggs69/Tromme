@@ -16,6 +16,9 @@ enum AutoMixPlanner {
     private static let longOutro: TimeInterval = 28
     private static let shortenedOutro: TimeInterval = 22
     private static let shortenedOverlap: TimeInterval = 8
+    /// An outro this long is a solo or jam worth hearing (Rosanna), so it plays out and the
+    /// mix covers only its last `maximumOverlap` seconds.
+    private static let playedOutOutro: TimeInterval = 60
     /// The mix completes this long before the incoming song's first lyric.
     private static let lyricLead: TimeInterval = 1
     /// Mixes this long or longer get a low-pass sweep; shorter ones are a plain crossfade.
@@ -51,12 +54,15 @@ enum AutoMixPlanner {
         if let lyricEnd = outgoingLastLyricEnd, outgoingEnd - lyricEnd < minimumOutroRoom { return nil }
 
         // Outgoing side: the outro sets the length. A short outro gets a short mix; a long one
-        // is cut short so the next song comes in a little after the last lyric.
+        // is cut short so the next song comes in a little after the last lyric, unless it is
+        // so long that it is a solo worth playing out.
         var mixEnd = outgoingEnd
         var overlap = defaultOverlap
         if let vocalEnd = outgoingVocalEnd {
             let outro = max(0, outgoingEnd - vocalEnd)
-            if outro > longOutro {
+            if outro > playedOutOutro {
+                overlap = maximumOverlap
+            } else if outro > longOutro {
                 mixEnd = vocalEnd + shortenedOutro
                 overlap = shortenedOverlap
             } else {
