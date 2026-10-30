@@ -25,9 +25,9 @@ struct AutoMixPlan: Sendable {
     }
 
     func gains(_ progress: (outgoing: Double, incoming: Double)) -> (outgoing: Float, incoming: Float) {
-        let incoming = Float(sin(pow(progress.incoming, 0.7) * .pi / 2))
+        let incoming = Float(sin(pow(progress.incoming, 0.9) * .pi / 2))
         guard let incomingFade, incomingFade < overlap else {
-            return (Float(cos(progress.outgoing * .pi / 2)), incoming)
+            return (Float(cos(pow(progress.outgoing, 0.9) * .pi / 2)), incoming)
         }
         let split = incomingFade / overlap
         let outgoing = progress.outgoing < split
