@@ -35,7 +35,7 @@ enum AutoMixGenreRules {
         guard let client, let server, let albumKey = track.parentRatingKey,
               let album = try? await client.cachedMetadata(server: server, ratingKey: albumKey) else { return false }
         return (album.subformat ?? []).compactMap { $0.tag?.lowercased() }.contains { format in
-            format.contains("live") || format.contains("dj") || (format.contains("mix") && !format.contains("remix") && !format.contains("mixtape"))
+            format.split { !$0.isLetter }.contains { ["live", "dj", "mix"].contains($0) }
         }
     }
 }
