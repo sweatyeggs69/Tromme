@@ -159,6 +159,11 @@ final class LyricsService {
                 repeats += 1
             }
             if repeats >= neededRepeats { return lines[start + period * (neededRepeats - 1)].time }
+            // A closing line sung twice with an instrumental gap between (Secrets) is a refrain,
+            // not a stutter, so its second time through is already outro.
+            if period == 1, repeats == 2, lines[start + 1].time - lines[start].time >= separatedRepeatGap {
+                return lines[start + 1].time
+            }
         }
         // An ending that mixes and ad-libs its refrain (Adore You) never repeats exactly, so a
         // closing stretch where several lines were already sung moments earlier counts as outro
@@ -176,6 +181,8 @@ final class LyricsService {
     /// How far back from the last line the loose repeat check looks, and how many repeated lines it needs.
     private nonisolated static let looseRepeatWindow: TimeInterval = 30
     private nonisolated static let looseRepeatCount = 3
+    /// Two sung repeats of a closing line this far apart count as a refrain.
+    private nonisolated static let separatedRepeatGap: TimeInterval = 8
 
     /// An empty result right at track start is often a slow or not-yet-ready connection, not a
     /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
