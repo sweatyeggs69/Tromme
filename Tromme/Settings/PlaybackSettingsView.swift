@@ -38,8 +38,6 @@ struct PlaybackSettingsView: View {
                         }
                     }
                 }
-            } footer: {
-                Text("Blends songs as they change. Used whenever AutoMix is off or cannot time a transition.")
             }
 
             if supportsCellularSettings {
