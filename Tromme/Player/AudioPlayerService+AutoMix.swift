@@ -9,13 +9,13 @@ extension AudioPlayerService {
 
     var isAutoMixing: Bool { autoMixInProgress }
 
-    var isAutoMixEnabled: Bool {
-        let defaults = UserDefaults.standard
-        let allowed = defaults.object(forKey: Self.autoMixAllowedKey) as? Bool ?? true
-        return allowed && defaults.bool(forKey: Self.autoMixKey)
+    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) }
+
+    private var isAutoMixAllowed: Bool {
+        UserDefaults.standard.object(forKey: Self.autoMixAllowedKey) as? Bool ?? true
     }
 
-    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && PlusStore.cachedIsPlus }
+    private var isFullAutoMixEnabled: Bool { isAutoMixEnabled && isAutoMixAllowed && PlusStore.cachedIsPlus }
 
     // MARK: - Planning
 
@@ -47,7 +47,7 @@ extension AudioPlayerService {
         let generation = playbackGeneration
         let client = client, server = server
         let soundCheckOn = UserDefaults.standard.bool(forKey: Self.soundCheckKey)
-        let isPlus = PlusStore.cachedIsPlus
+        let isPlus = PlusStore.cachedIsPlus && isAutoMixAllowed
         let storedLength = UserDefaults.standard.double(forKey: Self.crossfadeLengthKey)
         let crossfadeLength = storedLength > 0 ? min(storedLength, 10) : AutoMixPlanner.defaultCrossfadeLength
 

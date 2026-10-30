@@ -31,15 +31,13 @@ struct PlaybackSettingsView: View {
             Section {
                 Toggle("AutoMix", isOn: $autoMixAllowed)
                     .tint(.green)
-                if autoMixAllowed {
-                    Picker("Crossfade", selection: $crossfadeSeconds) {
-                        ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
-                            Text("\(Int(seconds)) sec").tag(seconds)
-                        }
+                Picker("Crossfade", selection: $crossfadeSeconds) {
+                    ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
+                        Text("\(Int(seconds)) sec").tag(seconds)
                     }
                 }
             } footer: {
-                Text("Turn off to never blend songs. The queue button still switches mixing on and off while this is on.")
+                Text("Turn off to use plain crossfade only. The queue button still switches mixing on and off.")
             }
 
             if supportsCellularSettings {
