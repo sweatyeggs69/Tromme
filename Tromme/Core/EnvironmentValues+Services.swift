@@ -11,7 +11,6 @@ extension EnvironmentValues {
         set { self[PlexAPIClientKey.self] = newValue }
     }
 
-    /// Accent color as a Color, for explicit tinting of Menu and contextMenu.
     var appAccentColor: Color {
         get { self[AppAccentColorKey.self] }
         set { self[AppAccentColorKey.self] = newValue }

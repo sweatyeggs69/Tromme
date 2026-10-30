@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Icon and message shown in the Now Playing panels when there is nothing to list
-/// (empty queue, no lyrics). The icon scales with Dynamic Type.
 struct NowPlayingEmptyState: View {
     let message: String
     let systemImage: String

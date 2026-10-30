@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// Queue and playback state persistence.
 extension AudioPlayerService {
     // MARK: - State Persistence
 
@@ -17,10 +16,6 @@ extension AudioPlayerService {
     static let shuffleKey = "playbackShuffle"
     static let repeatKey = "playbackRepeatMode"
     static let disableCellularTranscodingKey = "disableCellularTranscoding"
-    /// Cellular transcode target is fixed — no longer a user-configurable
-    /// setting. Transcoding only kicks in when the source exceeds this anyway
-    /// (see sourceBitrate(for:) callers), so there's no lower-bitrate option
-    /// to pick from in the first place.
     static let cellularTranscodeBitrateKbps = 320
     static let infiniteModeKey = "infiniteModeActive"
     static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
@@ -29,8 +24,6 @@ extension AudioPlayerService {
     static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
     static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
-    /// Application Support, not Caches: iOS may purge Caches under storage pressure, which
-    /// would leave a restored track with an empty queue.
     nonisolated static var stateDirectoryURL: URL {
         let dir = URL.applicationSupportDirectory.appending(path: "TrommePlaybackState", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -42,7 +35,6 @@ extension AudioPlayerService {
     nonisolated static var originalQueueFileURL: URL {
         stateDirectoryURL.appending(path: "playbackOriginalQueue.json")
     }
-    /// Pre-migration location, read once as a fallback.
     nonisolated static var legacyQueueFileURL: URL {
         URL.cachesDirectory.appending(path: "playbackQueue.json")
     }
@@ -82,9 +74,6 @@ extension AudioPlayerService {
         defaults.set(isShuffled, forKey: Self.shuffleKey)
         defaults.set(repeatMode.rawValue, forKey: Self.repeatKey)
 
-        // Queue encoding can be large for full-library shuffles. Capture snapshots
-        // here on the MainActor and encode them on a background thread to avoid
-        // blocking the UI when the queue contains hundreds of tracks.
         let queueHash = Self.queueIdentityHash(queue)
         let origHash = Self.queueIdentityHash(originalQueue)
         guard queueHash != lastSavedQueueHash || origHash != lastSavedOriginalQueueHash else { return }
@@ -164,8 +153,6 @@ extension AudioPlayerService {
                 }
             }
         }
-        // The track is recalled but always from the start; clear any position
-        // persisted by older builds.
         defaults.removeObject(forKey: Self.currentTimeKey)
         lastSavedQueueHash = Self.queueIdentityHash(queue)
         lastSavedOriginalQueueHash = Self.queueIdentityHash(originalQueue)

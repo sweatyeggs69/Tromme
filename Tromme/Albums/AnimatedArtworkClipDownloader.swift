@@ -1,9 +1,6 @@
 import Foundation
 
-/// Downloads an animated artwork HLS stream as the bytes of one playable MP4, for
-/// places that need a video file instead of a stream (the lock screen).
 enum AnimatedArtworkClipDownloader {
-    /// Widest variant to pick from the master playlist; the lock screen doesn't need more.
     private static let maxVariantWidth = 960
 
     static func clipData(from streamURL: URL) async -> Data? {
@@ -13,7 +10,6 @@ enum AnimatedArtworkClipDownloader {
             #if DEBUG
             print("[AnimatedArtwork] clip parts: \(parts.map(\.lastPathComponent))")
             #endif
-            // MPEG-TS segments can't be joined into an MP4 by concatenation.
             guard !parts.isEmpty, !parts.contains(where: { $0.pathExtension.lowercased() == "ts" }) else { return nil }
             var data = Data()
             for part in parts {
@@ -29,8 +25,6 @@ enum AnimatedArtworkClipDownloader {
         }
     }
 
-    /// The variant playlist to download: the widest one up to `maxVariantWidth`,
-    /// else the narrowest. A plain media playlist is returned as is.
     private static func mediaPlaylistURL(from url: URL) async throws -> URL {
         let lines = try await playlistLines(at: url)
         var variants: [(url: URL, width: Int)] = []
@@ -45,9 +39,6 @@ enum AnimatedArtworkClipDownloader {
         return (fitting ?? variants.min { $0.width < $1.width })!.url
     }
 
-    /// The files a media playlist plays, in order: the init segment first, then each
-    /// distinct media file. Apple's clips usually list one MP4 by byte ranges, so
-    /// fetching each distinct file whole yields one complete MP4.
     private static func partURLs(in playlistURL: URL) async throws -> [URL] {
         var urls: [URL] = []
         for line in try await playlistLines(at: playlistURL) {

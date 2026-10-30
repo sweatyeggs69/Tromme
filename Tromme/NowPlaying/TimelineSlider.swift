@@ -21,8 +21,6 @@ struct TimelineSlider: View {
         let duration = max(player.duration, 1)
         let isReady = player.isReadyToPlay || player.hasTrack
         let liveValue = min(max(player.currentTime, 0), duration)
-        // Only snap to zero when the item isn't ready yet — prevents the slider
-        // from jumping to 0 while the player is briefly paused during a resume seek.
         let anchoredLiveValue: TimeInterval = (!player.isPlaying && !player.isReadyToPlay && liveValue < 1) ? 0 : liveValue
         let displayValue = isDragging ? sliderValue : anchoredLiveValue
 

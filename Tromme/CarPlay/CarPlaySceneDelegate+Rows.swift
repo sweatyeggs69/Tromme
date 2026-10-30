@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay Rows templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Alphabet Helpers
@@ -70,7 +69,6 @@ extension CarPlaySceneDelegate {
         let template = CPListTemplate(title: title, sections: [CPListSection(items: allItems)])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
 
-        // If called from an image row tap, auto-play that track
         if let startAt {
             player.play(tracks: tracks, startingAt: startAt)
             pushNowPlaying()
@@ -116,7 +114,6 @@ extension CarPlaySceneDelegate {
         let limited = Array(items.prefix(maxImages))
         let placeholder = UIImage(systemName: "music.note") ?? UIImage()
 
-        // Load artwork in parallel
         var loadedImages: [Int: UIImage] = [:]
         await withTaskGroup(of: (Int, UIImage?).self) { group in
             for (i, metadata) in limited.enumerated() {

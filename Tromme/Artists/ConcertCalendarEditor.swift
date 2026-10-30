@@ -2,7 +2,6 @@ import SwiftUI
 import EventKit
 import EventKitUI
 
-/// System "Add Event" sheet prefilled with a concert. Saving adds it without a calendar permission prompt.
 struct ConcertCalendarEditor: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
 
@@ -21,7 +20,6 @@ struct ConcertCalendarEditor: UIViewControllerRepresentable {
             event.startDate = start
             event.endDate = start.addingTimeInterval(3 * 3600)
         } else {
-            // No real instant: keep the venue's wall-clock time in the device's time zone.
             var gmt = Calendar(identifier: .gregorian)
             gmt.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
             let parts = gmt.dateComponents([.year, .month, .day, .hour, .minute], from: concert.date)

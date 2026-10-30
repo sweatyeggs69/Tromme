@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay Albums templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Albums (A-Z Index)

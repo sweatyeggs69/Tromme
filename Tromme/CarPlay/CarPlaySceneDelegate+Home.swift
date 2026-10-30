@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay Home templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Home
@@ -33,13 +32,11 @@ extension CarPlaySceneDelegate {
             template.updateSections(sections)
         }
 
-        // Favorites
         Task {
             self.homeSections[0] = await loadFavoritesSection(server: server, sectionId: sectionId)
             rebuildSections()
         }
 
-        // Recently Added
         Task {
             if let recentlyAdded = try? await client.cachedRecentlyAdded(server: server, sectionId: sectionId, limit: 10),
                !recentlyAdded.isEmpty {
@@ -62,16 +59,12 @@ extension CarPlaySceneDelegate {
             rebuildSections()
         }
 
-        // Recently Played
         Task {
             self.homeSections[2] = await loadRecentlyPlayedSection(server: server, sectionId: sectionId)
             rebuildSections()
         }
     }
 
-    /// Builds the "Favorites" home row from a fresh server fetch. Shared by the
-    /// initial home load and by the live `.favoritesDidChange` refresh so
-    /// CarPlay mirrors the same rating state as the in-app Home screen.
     func loadFavoritesSection(server: PlexServer, sectionId: String) async -> CPListSection? {
         guard let favorites = try? await client.cachedFavoriteTracks(server: server, sectionId: sectionId),
               !favorites.isEmpty else { return nil }
@@ -96,9 +89,6 @@ extension CarPlaySceneDelegate {
         return CPListSection(items: [row])
     }
 
-    /// Keeps the CarPlay "Favorites" row in sync with the same
-    /// `.favoritesDidChange` signal that drives the in-app Home/Favorites
-    /// screens, so all surfaces reflect the same server-confirmed ratings.
     func startObservingFavorites() {
         favoritesObservationTask?.cancel()
         favoritesObservationTask = Task { [weak self] in
@@ -114,9 +104,6 @@ extension CarPlaySceneDelegate {
         }
     }
 
-    /// Builds the "Recently Played" home row from a fresh server fetch. Shared by
-    /// the initial home load and by the live `.recentlyPlayedDidChange` refresh so
-    /// CarPlay mirrors the same timeline-driven state as the in-app Home screen.
     func loadRecentlyPlayedSection(server: PlexServer, sectionId: String) async -> CPListSection? {
         guard let recentlyPlayed = try? await client.cachedRecentlyPlayed(server: server, sectionId: sectionId, limit: 10),
               !recentlyPlayed.isEmpty else { return nil }
@@ -140,9 +127,6 @@ extension CarPlaySceneDelegate {
         return CPListSection(items: [row])
     }
 
-    /// Keeps the CarPlay "Recently Played" row in sync with the same
-    /// `.recentlyPlayedDidChange` signal that drives the in-app Home screen,
-    /// so both surfaces reflect the same server-confirmed plays.
     func startObservingRecentlyPlayed() {
         recentlyPlayedObservationTask?.cancel()
         recentlyPlayedObservationTask = Task { [weak self] in

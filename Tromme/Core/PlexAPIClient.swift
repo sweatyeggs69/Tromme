@@ -14,9 +14,6 @@ final class PlexAPIClient: Sendable {
 
     let session: URLSession
 
-    /// Default session configured for reliability on all network types.
-    /// `waitsForConnectivity` ensures requests don't fail instantly on cellular
-    /// when connectivity is briefly interrupted (e.g., handoff between towers).
     private static let defaultSession: URLSession = {
         let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
@@ -67,9 +64,6 @@ final class PlexAPIClient: Sendable {
 
     // MARK: - Private Helpers
 
-    /// Retry a request up to `maxRetries` times for transient network errors.
-    /// Only retries on network errors (timeout, connection lost) — not on
-    /// server errors (4xx/5xx) or decoding failures.
     func retryingRequest<T>(maxRetries: Int = 2, _ operation: () async throws -> T) async throws -> T {
         var lastError: Error?
         for attempt in 0...maxRetries {
@@ -98,7 +92,6 @@ final class PlexAPIClient: Sendable {
         }
     }
 
-    /// Build a request to plex.tv with all required identification headers.
     func plexTVRequest(path: String, method: String) throws -> URLRequest {
         guard let url = URL(string: "https://plex.tv\(path)") else {
             throw PlexAPIError.invalidURL
@@ -109,7 +102,6 @@ final class PlexAPIClient: Sendable {
         return request
     }
 
-    /// Execute a typed JSON request against a Plex Media Server.
     func serverRequest<T: Decodable>(server: PlexServer, path: String, method: String = "GET") async throws -> T {
         let data = try await rawServerRequest(server: server, path: path, method: method)
         do {
@@ -119,7 +111,6 @@ final class PlexAPIClient: Sendable {
         }
     }
 
-    /// Execute a raw request against a Plex Media Server with all required headers.
     @discardableResult
     func rawServerRequest(server: PlexServer, path: String, method: String = "GET") async throws -> Data {
         guard let baseURL = server.baseURL,
@@ -152,7 +143,6 @@ final class PlexAPIClient: Sendable {
         return data
     }
 
-    /// Execute a raw request against a Plex Media Server with URL-encoded query items.
     @discardableResult
     func rawServerRequest(
         server: PlexServer,
@@ -268,8 +258,6 @@ final class PlexAPIClient: Sendable {
         }
     }
 
-    /// Uploads image bytes as the item's artwork (`POST /library/metadata/{ids}/{element}` with the binary as the body).
-    /// PMS serves the plural collection (`posters`) for uploads; the singular names are tried as fallbacks.
     func uploadArtwork(server: PlexServer, ratingKey: String, imageData: Data) async throws {
         var lastError: Error = PlexAPIError.serverError(404)
         for element in ["posters", "poster", "thumb"] {
@@ -303,7 +291,6 @@ final class PlexAPIClient: Sendable {
         throw lastError
     }
 
-    /// Execute a typed request against plex.tv.
     func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         do {
             let (data, response) = try await session.data(for: request)

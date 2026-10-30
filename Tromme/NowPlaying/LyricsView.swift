@@ -3,9 +3,7 @@ import SwiftUI
 struct LyricsScrollView: View {
     @Environment(AudioPlayerService.self) private var player
     let lyricsService: LyricsService
-    /// Larger lyric text for the wide iPad landscape layout.
     var isPadLandscape = false
-    /// Slightly smaller text for the open iPhone Duo.
     var isDuo = false
 
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
@@ -17,31 +15,19 @@ struct LyricsScrollView: View {
     @State private var clock = LyricsClock()
 
 
-    /// Height of the top/bottom fade mask NowPlayingView applies around this
-    /// view — content needs at least this much clearance so lines aren't
-    /// faded out or clipped at the edges.
     private static let edgeFadeHeight: CGFloat = 80
 
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var lineFontSize: CGFloat { isPadLandscape ? (isDuo ? 46 : 56) : (isPad ? 44 : 32) }
 
-    /// The active line is derived from the extrapolated clock and re-checked
-    /// often, otherwise closely timed lines would switch up to half a second
-    /// late and then have to catch up.
     @State private var currentIndex = 0
-    /// False until `onAppear` has positioned the view on the real active line. Until
-    /// then no line is active, so a freshly shown view (artwork to lyrics) doesn't
-    /// start with line 0 focused and animate it out while the real line animates in.
     @State private var isPositioned = false
-    /// The line the view last jumped to without animation, so the index change
-    /// that jump causes doesn't also trigger an animated scroll to the same line.
     @State private var settledIndex: Int?
 
     private func lineIndex(at date: Date = .now) -> Int {
         lyricsService.currentLineIndex(at: clock.time(at: date))
     }
 
-    /// Positions the view on the active line with no animation.
     private func jumpToActiveLine(proxy: ScrollViewProxy) {
         let index = lineIndex()
         settledIndex = index
@@ -98,14 +84,10 @@ struct LyricsScrollView: View {
                         jumpToActiveLine(proxy: proxy)
                     }
                     .onChange(of: containerHeight) { _, _ in
-                        // The buffers above and below the lines depend on the height, so the
-                        // first real measurement (or a rotation) shifts the content.
                         guard !isUserScrolling else { return }
                         jumpToActiveLine(proxy: proxy)
                     }
                     .background {
-                        // Re-checks the active line every frame while playing, since the
-                        // player's own time only updates twice a second.
                         TimelineView(.animation(paused: !player.isPlaying)) { context in
                             Color.clear.onChange(of: lineIndex(at: context.date)) { _, newIndex in
                                 if newIndex != currentIndex { currentIndex = newIndex }
@@ -147,9 +129,6 @@ struct LyricsScrollView: View {
             } else if let plainLyrics = lyricsService.plainLyrics, !plainLyrics.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        // Clears the fade mask NowPlayingView wraps around this view,
-                        // matching the buffer LyricsScrollView keeps for synced lyrics
-                        // so the first line isn't faded/clipped against the top edge.
                         Color.clear.frame(height: Self.edgeFadeHeight)
 
                         Text(plainLyrics)
@@ -172,9 +151,6 @@ struct LyricsScrollView: View {
         }
     }
 
-    /// Only auto-scrolls back to the focused lyric while playback is active;
-    /// if paused, the user's manual scroll position is left alone until
-    /// playback resumes (see the `player.isPlaying` onChange above).
     private func scheduleScrollResume(proxy: ScrollViewProxy) {
         scrollResumeTask?.cancel()
         scrollResumeTask = Task {
@@ -216,7 +192,6 @@ struct LyricsScrollView: View {
             lyricLineText(line, isActive: isActive)
                 .font(.system(size: lineFontSize, weight: .bold))
                 .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
-            // Backing vocals sing alongside the primary, smaller and just below it.
             ForEach(line.backing) { backing in
                 lyricLineText(backing, isActive: isActive)
                     .font(.system(size: lineFontSize * 0.75, weight: .semibold))
@@ -225,7 +200,6 @@ struct LyricsScrollView: View {
                     .opacity(0.7)
             }
         }
-            // Word-synced lines dim their own text in WordWipeTextRenderer.
             .foregroundStyle(.white.opacity(isActive || !line.words.isEmpty ? 1.0 : 0.3))
             .blur(radius: isActive ? 0 : 1.2)
             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
@@ -235,8 +209,6 @@ struct LyricsScrollView: View {
             .animation(.spring(duration: 0.7, bounce: 0.2), value: isActive)
     }
 
-    /// Names the source of the lyrics on screen and how many were blocked for this song,
-    /// so a block visibly moves on to a different match.
     @ViewBuilder
     private var sourceFooter: some View {
         let parts = [

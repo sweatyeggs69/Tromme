@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// One concert: calendar tile, city, then venue, weekday and time. Opens the ticket page.
 struct ArtistConcertRowView: View {
     @Environment(\.displayScale) private var displayScale
 
@@ -33,8 +32,6 @@ struct ArtistConcertRowView: View {
         }
         .buttonStyle(.plain)
         .padding(.vertical, 8)
-        // Drawn here, not by the List, so every divider starts under the text, past the
-        // date tile (48) and its spacing (12).
         .overlay(alignment: .bottom) {
             if showsDivider {
                 Rectangle()

@@ -9,11 +9,8 @@ final class LyricsService {
     private(set) var isLoading = false
     private(set) var hasSynced = false
     private(set) var hasLyrics = false
-    /// The lyrics currently shown, so the user can mark them as wrong.
     private(set) var current: ResolvedLyrics?
-    /// How many lyrics the user has blocked for the current song.
     private(set) var blockedCount = 0
-    /// Bumped each time the user blocks lyrics, to drive the confirmation haptic.
     private(set) var blockConfirmations = 0
 
     private var activeRequestID: UUID?
@@ -33,7 +30,6 @@ final class LyricsService {
         await fetch(track: track)
     }
 
-    /// Blocks the lyrics currently shown for this song and resolves the next match.
     func blockCurrent(track: PlexMetadata) async {
         guard let current else { return }
         BlockedLyricsStore.shared.block(current, forSong: Self.songKey(track))
@@ -41,7 +37,6 @@ final class LyricsService {
         await refresh(track: track)
     }
 
-    /// Forgets every block for this song and resolves its lyrics again.
     func unblockAll(track: PlexMetadata) async {
         BlockedLyricsStore.shared.clear(forSong: Self.songKey(track))
         await refresh(track: track)
@@ -65,20 +60,15 @@ final class LyricsService {
         current = nil
         blockedCount = BlockedLyricsStore.shared.blockCount(forSong: Self.songKey(track))
 
-        // Use track-level artist so compilations match by performer, not "Various Artists"
         let trackArtist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: trackArtist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: Self.songKey(track))
 
         let result: ResolvedLyrics?
-        // Only synced results are cached. Plain-only results may just mean a lookup failed or
-        // a provider hasn't indexed the synced version yet, so they're re-resolved on the next fetch.
         if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
            cached.value.hasSynced, Self.isAllowed(cached.value, blocked: blocked) {
             result = cached.value
         } else if let fetched = await Self.resolveRetryingOnce(track: track, artist: trackArtist, blocked: blocked) {
-            // A fallback reached only because lrc.red timed out isn't cached, so the
-            // next play can still find the word-synced version.
             if fetched.lyrics.hasSynced, fetched.isFinal {
                 await ExternalContentCache.shared.set(fetched.lyrics, forKey: cacheKey)
             }
@@ -95,10 +85,6 @@ final class LyricsService {
         isLoading = false
     }
 
-    /// When the vocals start and end, from synced lyrics (cached, or resolved once without retries).
-    /// Auto Mix uses it to tell an instrumental intro or outro from sung parts.
-    /// `lastLineEnd` is where the last line (before any repeated outro) finishes; `endIsMarked`
-    /// when a closing blank or music note row says exactly when the singing stops.
     static func vocalSpan(for track: PlexMetadata) async -> (start: TimeInterval, end: TimeInterval, lastLineEnd: TimeInterval, endIsMarked: Bool)? {
         let artist = track.artistDisplayName
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
@@ -117,31 +103,21 @@ final class LyricsService {
         let parsed = LRCParser.parse(synced, trackDuration: track.duration.map { Double($0) / 1000 })
         let sung = parsed.filter { !$0.isBreak }
         guard var first = sung.first, let last = sung.last else { return nil }
-        // A lone line near the start followed by a music note row (an instrumental stretch) is
-        // a count-in or spoken intro, not where the singing starts.
         if sung.count > 2, first.time < 15,
            let index = parsed.firstIndex(where: { !$0.isBreak }),
            parsed.indices.contains(index + 1), parsed[index + 1].isBreak {
             first = sung[1]
         }
-        // The closing music note row marks exactly where the last line ends.
-        // A song that ends on one line sung over and over treats the repeats after the second as
-        // its outro; one that ends on a short refrain (two to four lines) sung again treats
-        // everything from the second time through as outro.
         if let outroStart = repeatedOutroStart(sung) {
             let line = sung.last { $0.time < outroStart } ?? first
             return (first.time, outroStart, line.lastWordEnd ?? outroStart, false)
         }
-        // Line-synced lyrics only estimate how long the last line is sung, and held notes and
-        // echoes run past the final word, so leave a margin before calling the vocals done.
         let margin: TimeInterval = last.lastWordEnd != nil ? 1.5 : 4
         let lastLineEnd = last.lastWordEnd ?? parsed.last.flatMap { $0.isBreak ? $0.time : nil } ?? last.time + 4
         if let closing = parsed.last, closing.isBreak { return (first.time, closing.time, lastLineEnd, true) }
         return (first.time, (last.lastWordEnd ?? last.time + 4) + margin, lastLineEnd, false)
     }
 
-    /// Where a repeated ending starts: the third time through for a single line repeated at
-    /// least three times, or the second time through for a refrain of two to four lines.
     private nonisolated static func repeatedOutroStart(_ lines: [LyricsLine]) -> TimeInterval? {
         func key(_ line: LyricsLine) -> String {
             line.text.lowercased().filter { $0.isLetter || $0.isNumber }
@@ -159,15 +135,10 @@ final class LyricsService {
                 repeats += 1
             }
             if repeats >= neededRepeats { return lines[start + period * (neededRepeats - 1)].time }
-            // A closing line sung twice with an instrumental gap between (Secrets) is a refrain,
-            // not a stutter, so its second time through is already outro.
             if period == 1, repeats == 2, lines[start + 1].time - lines[start].time >= separatedRepeatGap {
                 return lines[start + 1].time
             }
         }
-        // An ending that mixes and ad-libs its refrain (Adore You) never repeats exactly, so a
-        // closing stretch where several lines were already sung moments earlier counts as outro
-        // from the first of them.
         guard let lastTime = lines.last?.time else { return nil }
         var seen = Set<String>()
         var repeated: [Int] = []
@@ -178,24 +149,16 @@ final class LyricsService {
         return nil
     }
 
-    /// How far back from the last line the loose repeat check looks, and how many repeated lines it needs.
     private nonisolated static let looseRepeatWindow: TimeInterval = 30
     private nonisolated static let looseRepeatCount = 3
-    /// Two sung repeats of a closing line this far apart count as a refrain.
     private nonisolated static let separatedRepeatGap: TimeInterval = 8
 
-    /// An empty result right at track start is often a slow or not-yet-ready connection, not a
-    /// real miss, so one more pass runs with longer deadlines before settling on "no lyrics".
     private nonisolated static func resolveRetryingOnce(track: PlexMetadata, artist: String, blocked: Set<String>) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
         if let first = await resolve(track: track, artist: artist, blocked: blocked) { return first }
         try? await Task.sleep(for: .milliseconds(1500))
         return await resolve(track: track, artist: artist, blocked: blocked, lrcRedDeadline: 10, lrclibDeadline: 8)
     }
 
-    // Preference order: lrc.red (word-synced, then line-synced), then LRCLIB (synced, then
-    // plain). Both sources are queried
-    // at once so a miss on lrc.red doesn't add its wait on top of LRCLIB's. Candidates the user
-    // blocked are skipped, so the next match in this order is used instead.
     private nonisolated static func resolve(track: PlexMetadata, artist: String, blocked: Set<String>,
                                           lrcRedDeadline: TimeInterval = lrcRedTimeout,
                                           lrclibDeadline: TimeInterval = sourceTimeout) async -> (lyrics: ResolvedLyrics, isFinal: Bool)? {
@@ -225,27 +188,18 @@ final class LyricsService {
             + timed.lineSynced.map(lrcRedLyrics)
             + lrclibResults
         guard let lyrics = candidates.first(where: { isAllowed($0, blocked: blocked) }) else { return nil }
-        // lrc.red results come first, so they're final. An LRCLIB fallback reached only because
-        // lrc.red timed out may be beaten next time, so it isn't.
         return (lyrics, lyrics.source == .lrcRed || !red.timedOut)
     }
 
-    /// Blocked timed lyrics are matched exactly, so other timings of the same words stay
-    /// available; plain text is also matched against blocked words.
     private nonisolated static func isAllowed(_ lyrics: ResolvedLyrics, blocked: Set<String>) -> Bool {
         if let fingerprint = lyrics.fingerprint, blocked.contains(fingerprint) { return false }
         if !lyrics.hasSynced, let textFingerprint = lyrics.textFingerprint, blocked.contains(textFingerprint) { return false }
         return true
     }
 
-    /// How long each source gets before the next one is tried.
     private nonisolated static let sourceTimeout: TimeInterval = 2
-    /// lrc.red needs a search plus an LRC fetch per matching release before it knows whether
-    /// any are word-synced, so it gets longer. LRCLIB runs alongside, so this only adds wait
-    /// when lrc.red itself is slow.
     private nonisolated static let lrcRedTimeout: TimeInterval = 4
 
-    /// Runs `operation`, giving up on it after `seconds`.
     private nonisolated static func withDeadline<T: Sendable>(
         _ seconds: TimeInterval,
         _ operation: @escaping @Sendable () async -> T?
@@ -262,15 +216,8 @@ final class LyricsService {
         }
     }
 
-    /// Synced lyrics from a recording whose length differs by more than this
-    /// are likely a different edit or master, so their timing would drift.
-    /// Matches the tolerance LRCLIB's own /api/get uses.
     nonisolated static let syncedDurationTolerance: TimeInterval = 2
 
-    // Fetches every LRCLIB match for the track and returns its candidates in preference order:
-    // synced lyrics within the duration tolerance (closest duration first), then each distinct
-    // plain text (closest duration first), since untimed text doesn't depend on the recording.
-    // Uses the fuzzy search endpoint (not /api/get) so name/album mismatches don't hide a synced record.
     private nonisolated static func resolveLRCLIB(title: String, artist: String, seconds: Double?) async -> [ResolvedLyrics] {
         var results = await search([.init(name: "track_name", value: title),
                                     .init(name: "artist_name", value: artist)])
@@ -304,10 +251,6 @@ final class LyricsService {
         return (try? JSONDecoder().decode([ResolvedLyrics].self, from: data)) ?? []
     }
 
-    // Retries transient failures (timeouts, dropped connections, 5xx) so a momentary
-    // network hiccup doesn't get treated the same as a confirmed "no lyrics" 404 and cause
-    // resolve() to settle prematurely on a worse (e.g. plain-only) fallback result. Other 4xx
-    // answers (429 included, a retry seconds later hits the same limit) are final, and a cancelled lookup (deadline hit) stops instead of re-sending.
     nonisolated static func fetchWithRetry(_ url: URL, retries: Int = 2) async -> Data? {
         for attempt in 0...retries {
             if Task.isCancelled { return nil }
@@ -339,22 +282,16 @@ final class LyricsService {
         }
     }
 
-    /// How early a word-synced line comes into focus before its first word, so it
-    /// is settled by the time the words start animating.
     private static let focusLeadTime: TimeInterval = 1.0
 
     func currentLineIndex(at time: TimeInterval) -> Int {
         lines.indices.last(where: { focusTime(of: $0) <= time }) ?? 0
     }
 
-    /// When a line takes focus. Word-synced lines get up to `focusLeadTime` of lead,
-    /// limited to the silence after the previous line's last word, so tightly timed
-    /// lines focus as the previous one finishes (or at their own start if they overlap).
     private func focusTime(of index: Int) -> TimeInterval {
         let line = lines[index]
         guard index > 0, !line.isBreak, !line.words.isEmpty else { return line.time }
         let previous = lines[index - 1]
-        // A music break row starts where the previous line ends, so the gap is all silence.
         guard let previousEnd = previous.isBreak ? previous.time : previous.lastWordEnd else { return line.time }
         let lead = min(Self.focusLeadTime, max(0, line.time - previousEnd))
         return max(line.time - lead, previous.time)

@@ -27,13 +27,9 @@ struct NowPlayingView: View {
     @State private var autoMixReport: AutoMixReportViewModel?
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @State private var isRating = false
-    /// Square Tromme+ animated artwork for the current album, when it has one.
     @State private var animatedArtworkURL: URL?
-    /// A still from the animated artwork, which takes over the blurred background.
     @State private var animatedBackdrop: UIImage?
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
-    // Caches the last valid geometry to recover from the transient invalid
-    // dimensions GeometryReader reports during CarPlay + app-switch transitions.
     @State private var geoSize: CGSize = {
         if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
             return scene.screen.bounds.size
@@ -75,7 +71,6 @@ struct NowPlayingView: View {
         (player.currentTrack?.userRating ?? 0) >= 10
     }
 
-    /// iPhone Duo while open: regular width on a phone, shown with the iPad landscape layout.
     private var isDuoOpen: Bool {
         UIDevice.current.userInterfaceIdiom == .phone && (horizontalSizeClass == .regular || min(geoSize.width, geoSize.height) >= 500)
     }
@@ -100,11 +95,9 @@ struct NowPlayingView: View {
             let bottomScreenPadding = geo.safeAreaInsets.bottom > 0
                 ? bottomScreenPaddingWithSafeArea
                 : bottomScreenPaddingWithoutSafeArea
-            // The Duo layout extends into the bottom safe area (see below), so it sets its own small inset.
             let landscapeBottomInsetPadding = isDuoOpen ? 14 : bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
             let landscapeMainHeight = max(0.0, height - landscapeHandleHeight - landscapeBottomInsetPadding)
-            // Left column mirrors the portrait layout: artwork, track info, controls, bottom buttons.
             let landscapeLeftWidth = max(96.0, min(landscapeContentWidth * 0.45, landscapeMainHeight * 0.62))
             let landscapeArtworkSize = max(96.0, min(landscapeLeftWidth, landscapeMainHeight * 0.5))
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
@@ -126,7 +119,6 @@ struct NowPlayingView: View {
                             )
                             .shadow(color: .black.opacity(player.isPlaying ? 0.35 : 0.12), radius: 20, x: 0, y: 10)
                             .shadow(color: .black.opacity(player.isPlaying ? 0.15 : 0.05), radius: 6, x: 0, y: 3)
-                            // After the shadows, so the video doesn't cast a second one.
                             .overlay {
                                 AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: AppStyle.Radius.card, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                             }
@@ -169,9 +161,6 @@ struct NowPlayingView: View {
                         .padding(.top, 10)
                         .padding(.bottom, 6)
 
-                    // Reserves the full-size artwork's resting spot; the real artwork
-                    // is rendered once, floating, and positioned over this spot (or
-                    // the small one in trackInfo) via the anchor overlay below.
                     ZStack {
                         Color.clear
                             .frame(width: artworkSize, height: artworkSize)
@@ -185,7 +174,6 @@ struct NowPlayingView: View {
                     .frame(maxHeight: .infinity)
                     .zIndex(1)
 
-                    // Bottom controls — pinned to bottom
                     VStack(spacing: 0) {
                         trackAndPlaybackControls(
                             horizontalPadding: controlsHorizontalPadding,
@@ -204,9 +192,6 @@ struct NowPlayingView: View {
                     .frame(height: bottomControlsHeight)
                     .padding(.bottom, bottomScreenPadding)
                 }
-                // Shadow lives behind the content so it never draws over the track and artist text.
-                // The shadow box follows the artwork's slot and fades out/in during the move, so its
-                // black box never shows as a square while the artwork animates to the compact slot.
                 .backgroundPreferenceValue(ArtworkSlotAnchorsKey.self) { anchors in
                     GeometryReader { proxy in
                         if let fullAnchor = anchors[.full] {
@@ -244,8 +229,6 @@ struct NowPlayingView: View {
                                 thumbPath: artworkPath,
                                 size: targetRect.width,
                                 cornerRadius: isCompact ? 4 : 6,
-                                // Keep requesting the full-size image in the compact slot too, so
-                                // shrinking never swaps to a different size that may not be loaded yet.
                                 minimumTranscodePx: ArtworkView.maxTranscodePx
                             )
                             .scaleEffect(isCompact ? 1.0 : (player.isPlaying ? 1.0 : 0.85))
@@ -253,9 +236,6 @@ struct NowPlayingView: View {
                             .position(x: targetRect.midX, y: targetRect.midY)
                             .allowsHitTesting(false)
 
-                            // Animated artwork stays in the full-size spot and never moves or
-                            // resizes: it fades out in place before the static artwork shrinks to
-                            // the Lyrics/Queue slot, and fades back in once it has returned.
                             AnimatedArtworkView(url: animatedArtworkURL, cornerRadius: 6, isHeld: !player.isPlaying) { animatedBackdrop = $0 }
                                 .frame(width: fullRect.width, height: fullRect.height)
                                 .scaleEffect(player.isPlaying ? 1.0 : 0.85)
@@ -267,8 +247,6 @@ struct NowPlayingView: View {
                     }
                 }
             }
-            // Tracks valid geometry to recover from the brief invalid dimensions
-            // reported during CarPlay + app-switch scene transitions.
             Color.clear
                 .frame(width: 0, height: 0)
                 .onChange(of: geo.size, initial: true) { _, size in
@@ -321,7 +299,6 @@ struct NowPlayingView: View {
                 await lyricsService.fetch(track: track)
             }
         }
-        // Confirms a Wrong Lyrics block took effect.
         .sensoryFeedback(.impact(weight: .light), trigger: lyricsService.blockConfirmations)
         .metadataSheets(request: $metadataRequest, isTrackEditable: false) { fresh in
             player.updateTrack(fresh)
@@ -388,14 +365,12 @@ struct NowPlayingView: View {
     }
 
     // MARK: - Lifecycle
-    // onAppear / onDisappear / onChange are attached in body above.
 
     // MARK: - Track Info
 
     private func trackInfo(showsCompactArtwork: Bool = false) -> some View {
         HStack(alignment: .center, spacing: 0) {
             if showsCompactArtwork {
-                // Always present so the text block shifts as one unit while the slot's width animates.
                 let slotOpen = isCompact
                 Color.clear
                     .frame(width: slotOpen ? 44 : 0, height: 44)

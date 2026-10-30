@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// Now Playing info and remote commands.
 extension AudioPlayerService {
     // MARK: - Now Playing Info & Remote Commands
 
@@ -31,7 +30,6 @@ extension AudioPlayerService {
             }
             return .success
         }
-        // Press-and-hold on the CarPlay / lock screen skip buttons.
         center.seekForwardCommand.addTarget { [weak self] event in
             guard let self, let event = event as? MPSeekCommandEvent else { return .commandFailed }
             switch event.type {
@@ -61,7 +59,6 @@ extension AudioPlayerService {
         center.changeRepeatModeCommand.addTarget { [weak self] event in
             guard let self, let event = event as? MPChangeRepeatModeCommandEvent else { return .commandFailed }
             switch event.repeatType {
-            // Mapped so the system repeat / repeat.1 icons match the in-app ones.
             case .off: self.repeatMode = .off
             case .all: self.repeatMode = .song
             case .one: self.repeatMode = .once
@@ -102,7 +99,6 @@ extension AudioPlayerService {
         }
     }
 
-    /// Only writes when the state changes; re-setting the same value still makes CarPlay redraw its buttons.
     func setLikeCommandActive(_ active: Bool) {
         let command = MPRemoteCommandCenter.shared().likeCommand
         if command.isActive != active { command.isActive = active }
@@ -138,8 +134,6 @@ extension AudioPlayerService {
         if trackKey == lastPublishedNowPlayingTrackKey,
            !NowPlayingAnimatedArtwork.shared.needsUpdate(for: currentTrack),
            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
-            // Every write makes CarPlay refresh its whole transport row (play/pause,
-            // shuffle, repeat), so skip writes that wouldn't change anything.
             let rate = isPlaying ? 1.0 : 0.0
             let publishedRate = info[MPNowPlayingInfoPropertyPlaybackRate] as? Double
             let publishedDuration = info[MPMediaItemPropertyPlaybackDuration] as? Double
@@ -158,8 +152,6 @@ extension AudioPlayerService {
             return
         }
 
-        // Resolve artwork first so a memory-cached image goes out in the same write
-        // as the metadata; a second write right after makes CarPlay redraw twice.
         let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
         let artworkURL = client.flatMap { client in
             server.flatMap { client.artworkURL(server: $0, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) }
@@ -212,8 +204,6 @@ extension AudioPlayerService {
         }
     }
 
-    /// Tromme+ animated artwork for the lock screen; merged into the Now Playing info
-    /// once the album's lookup comes back. The static artwork is its preview image.
     private func prepareAnimatedArtwork(for track: PlexMetadata, thumbPath: String?) {
         let pixelSize = ArtworkView.maxTranscodePx
         let previewURL = client.flatMap { client in

@@ -1,6 +1,5 @@
 import Foundation
 
-// Library, metadata, artwork, hubs and search endpoints.
 extension PlexAPIClient {
     // MARK: - Library Endpoints
 
@@ -20,9 +19,6 @@ extension PlexAPIClient {
         return allItems
     }
 
-    /// Pages through `/library/sections/{id}/all`, handing each page to `onPage` in order
-    /// as it arrives so callers (the library sync) can persist incrementally instead of
-    /// holding an entire library in memory.
     func streamLibraryContents(
         server: PlexServer,
         sectionId: String,
@@ -44,16 +40,12 @@ extension PlexAPIClient {
             }
         }
 
-        // Fetch first page to discover the total item count
         let firstResponse = try await fetchPage(start: 0)
         let firstPage = firstResponse.mediaContainer.metadata ?? []
         try await onPage(firstPage)
         let total = firstResponse.mediaContainer.totalSize ?? firstPage.count
         guard total > firstPage.count else { return }
 
-        // Remaining pages: at most 10 in flight, each handed to `onPage` the moment it
-        // arrives (page order doesn't matter to the store) so progress is steady and only
-        // a few pages are ever held in memory.
         let pageStarts = Array(stride(from: pageSize, to: total, by: pageSize))
         try await withThrowingTaskGroup(of: [PlexMetadata].self) { group in
             var iterator = pageStarts.makeIterator()
@@ -71,15 +63,12 @@ extension PlexAPIClient {
         }
     }
 
-    /// Fetch tracks considered favorites by Plex (typically user-rated 4+ stars).
     func getFavoriteTracks(server: PlexServer, sectionId: String, minUserRating: Int = 4) async throws -> [PlexMetadata] {
         let path = "/library/sections/\(sectionId)/all?type=10&track.userRating>=\(minUserRating)"
         let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
         return response.mediaContainer.metadata ?? []
     }
 
-    /// Fetch all tracks for a specific artist using server-side filtering.
-    /// Avoids loading the full library just to filter by artist.
     func getArtistTracks(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
         let pageSize = 1000
         let firstPath = "/library/sections/\(sectionId)/all?type=10&artist.id=\(artistRatingKey)&X-Plex-Container-Start=0&X-Plex-Container-Size=\(pageSize)"
@@ -120,7 +109,6 @@ extension PlexAPIClient {
         return response.mediaContainer.metadata ?? []
     }
 
-    /// Tracks of an album. Endpoint: GET /library/metadata/{ids}/allLeaves.
     func getAlbumTracks(server: PlexServer, ratingKey: String) async throws -> [PlexMetadata] {
         let response: PlexResponse<PlexMetadata> = try await serverRequest(
             server: server,
@@ -129,7 +117,6 @@ extension PlexAPIClient {
         return response.mediaContainer.metadata ?? []
     }
 
-    /// Albums of an artist. Endpoint: GET /library/sections/{sectionId}/all?type=9&artist.id=.
     func getArtistAlbums(server: PlexServer, sectionId: String, artistRatingKey: String) async throws -> [PlexMetadata] {
         let path = "/library/sections/\(sectionId)/all?type=9&artist.id=\(artistRatingKey)"
         let response: PlexResponse<PlexMetadata> = try await serverRequest(server: server, path: path)
@@ -144,7 +131,6 @@ extension PlexAPIClient {
         return response.mediaContainer.metadata?.first
     }
 
-    /// One request for several items: the path takes a comma-separated list of ids.
     func getMetadata(server: PlexServer, ratingKeys: [String]) async throws -> [PlexMetadata] {
         guard !ratingKeys.isEmpty else { return [] }
         let response: PlexResponse<PlexMetadata> = try await serverRequest(
@@ -184,7 +170,6 @@ extension PlexAPIClient {
 
             return []
         } catch {
-            // Some PMS versions still return XML for this endpoint.
             let xmlImages = parseArtworkResourcesXML(data)
             if !xmlImages.isEmpty {
                 return xmlImages
@@ -238,7 +223,6 @@ extension PlexAPIClient {
 
     // MARK: - Related Hubs
 
-    /// Returns the "You May Also Like" and other related hubs for a given metadata item.
     func getRelatedHubs(server: PlexServer, ratingKey: String) async throws -> [Hub] {
         let data = try await rawServerRequest(
             server: server,

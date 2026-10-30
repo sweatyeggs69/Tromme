@@ -33,7 +33,6 @@ struct ContentView: View {
                 }
             } else if serverConnection.currentLibrarySectionId == nil {
                 LibraryPickerView {
-                    // Library selected
                 }
             } else {
                 mainTabView
@@ -48,7 +47,6 @@ struct ContentView: View {
         }
     }
 
-    /// One-time notice for icon pack owners, shown once signed in and entitlements are read.
     private var plusNoticeBinding: Binding<Bool> {
         Binding(
             get: { hasAuthenticatedContext && plus.hasLoaded && plus.isGrandfathered && !hasSeenPlusNotice },
@@ -180,7 +178,6 @@ struct ContentView: View {
                 tabLabel("Songs", systemImage: "music.note")
             }
 
-            // Offline: only Artists, Albums and Songs (downloads) remain.
             if network.isConnected {
                 if UIDevice.current.userInterfaceIdiom == .pad {
                     Tab("Search", systemImage: "magnifyingglass", value: "search") {
@@ -227,7 +224,6 @@ struct ContentView: View {
             .onChange(of: showNowPlaying) { oldValue, newValue in
                 if oldValue && !newValue, let target = pendingNavigation {
                     pendingNavigation = nil
-                    // Wait for the fullScreenCover dismiss animation to complete before navigating.
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(400))
                         navigateToTarget(target)
@@ -259,7 +255,6 @@ struct ContentView: View {
         authToken = nil
         KeychainHelper.delete(forKey: "plexAuthToken")
         serverConnection.disconnect()
-        // Cache clearing is handled by disconnect() — no duplicate clearing needed
     }
 
     private var hasAuthenticatedContext: Bool {
@@ -287,7 +282,6 @@ struct ContentView: View {
                 selectedTab = "albums"
             }
         }
-        // Let the tab switch settle before pushing the destination.
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             if target.type == "artist" {
@@ -300,14 +294,8 @@ struct ContentView: View {
 }
 
 // MARK: - Settings Toolbar
-//
-// On the Home tab (always online), the gear appears in the trailing position.
-// On offline-capable tabs, the gear only appears when offline, in the leading position
-// so it doesn't conflict with per-view trailing toolbar items.
 
 private extension View {
-    /// Adds a gear → Settings link. Pass `alwaysVisible: true` for the Home tab;
-    /// offline-only tabs pass `false` so the gear only appears when disconnected.
     func settingsToolbar(alwaysVisible: Bool = false) -> some View {
         modifier(SettingsToolbarModifier(alwaysVisible: alwaysVisible))
     }

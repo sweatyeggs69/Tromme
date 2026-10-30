@@ -5,7 +5,6 @@ import UIKit
 import CoreImage
 
 struct NowPlayingBackground: View {
-    /// A still from the animated artwork; crossfades in over the static artwork.
     var animatedBackdrop: UIImage?
 
     @Environment(AudioPlayerService.self) private var player
@@ -17,10 +16,6 @@ struct NowPlayingBackground: View {
     @State private var backgroundImage: UIImage?
     @State private var blurredBackdrop: UIImage?
 
-    /// Blurred at a large radius, so a small thumbnail supplies plenty of quality —
-    /// decoding/blurring the full 1000px artwork wastes CPU/GPU on every track change.
-    /// The disk cache key ignores width/height, so this still shares the same
-    /// on-disk file the crisp foreground artwork downloads.
     private static let blurredBackgroundPixelSize = 128
 
     private var thumbPath: String? {
@@ -29,9 +24,6 @@ struct NowPlayingBackground: View {
 
     private var backgroundURL: URL? {
         guard let thumbPath, let server = serverConnection.currentServer else { return nil }
-        // Width/height here only influence the cache-miss download size (forced to at
-        // least 1000px by ImageCache regardless); the same URL identity is shared with
-        // the main Now Playing artwork's disk file.
         return client.artworkURL(server: server, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx)
     }
 
@@ -72,7 +64,6 @@ struct NowPlayingBackground: View {
             .aspectRatio(contentMode: .fill)
     }
 
-    /// Blurs once at the image's own (small) size; scaled up it matches a 60 pt blur.
     private nonisolated static func blur(_ image: UIImage) -> UIImage {
         guard let input = CIImage(image: image) else { return image }
         let radius = 60 * input.extent.width / 390

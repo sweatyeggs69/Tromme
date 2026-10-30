@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// The Tromme + feature list shown on the welcome and subscription sheets.
 struct PlusFeaturesView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

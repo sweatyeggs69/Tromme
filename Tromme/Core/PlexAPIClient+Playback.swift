@@ -1,6 +1,5 @@
 import Foundation
 
-// Timeline, rating and stream URL endpoints.
 extension PlexAPIClient {
     // MARK: - Playback
 
@@ -59,8 +58,6 @@ extension PlexAPIClient {
         }
     }
 
-    /// Rate a library item. rating=10 means 5 stars (favorited), rating=0 clears the rating.
-    /// Endpoint: PUT /:/rate
     func rateItem(server: PlexServer, ratingKey: String, rating: Int) async throws {
         guard let baseURL = server.baseURL,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -85,7 +82,6 @@ extension PlexAPIClient {
         }
     }
 
-    /// Build a direct download URL for a part file with the original format preserved.
     func downloadURL(server: PlexServer, partKey: String) -> URL? {
         guard let baseURL = server.baseURL,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
@@ -100,7 +96,6 @@ extension PlexAPIClient {
         return components.url
     }
 
-    /// Build a direct stream URL with full Plex identification query params.
     func streamURL(server: PlexServer, partKey: String) -> URL? {
         guard let baseURL = server.baseURL,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else { return nil }
@@ -114,7 +109,6 @@ extension PlexAPIClient {
         return components.url
     }
 
-    /// Common query items shared between the decision and start endpoints.
     private func universalQueryItems(
         server: PlexServer,
         metadataPath: String,
@@ -150,8 +144,6 @@ extension PlexAPIClient {
         ]
     }
 
-    /// Call the decision endpoint to authorize the transcode session before streaming.
-    /// PMS requires this before the start endpoint will serve content.
     func universalDecision(
         server: PlexServer,
         metadataPath: String,
@@ -206,7 +198,6 @@ extension PlexAPIClient {
         }
     }
 
-    /// Build the universal transcode HLS master playlist URL.
     func universalStreamURLCandidates(
         server: PlexServer,
         mediaPathCandidates: [String],
@@ -236,10 +227,6 @@ extension PlexAPIClient {
         return [url]
     }
 
-    /// Builds a direct-stream URL from a media part's key, serving the raw file
-    /// with byte-range support and no PMS transcode/remux involved. Used for
-    /// non-FLAC content so playback doesn't depend on PMS's HLS remuxer, which
-    /// can fail outright on source files with malformed VBR/Xing headers.
     func directStreamURL(server: PlexServer, partKey: String) -> URL? {
         let normalizedPath = partKey.hasPrefix("/") ? partKey : "/\(partKey)"
         guard var partComponents = URLComponents(string: normalizedPath),
@@ -256,13 +243,6 @@ extension PlexAPIClient {
         return components.url
     }
 
-    /// Fetches the universal transcode master playlist and resolves the actual
-    /// variant playlist URL. PMS's master playlist can declare a BANDWIDTH that
-    /// doesn't match the variant it serves, which confuses AVPlayer's ABR
-    /// selection and produces sporadic CoreMediaErrorDomain failures (-16170).
-    /// Playing the resolved variant directly sidesteps AVPlayer's bandwidth-based
-    /// variant selection entirely. Returns nil if the playlist can't be fetched
-    /// or parsed, so the caller can fall back to the master URL.
     func resolveUniversalVariantURL(masterURL: URL) async -> URL? {
         guard let (data, response) = try? await session.data(from: masterURL),
               let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
@@ -276,8 +256,6 @@ extension PlexAPIClient {
                 return URL(string: uri, relativeTo: masterURL)?.absoluteURL
             }
         }
-        // Fallback: first non-comment, non-empty line, in case the playlist
-        // omits EXT-X-STREAM-INF but still points straight at a variant.
         for line in lines where !line.hasPrefix("#") {
             return URL(string: line, relativeTo: masterURL)?.absoluteURL
         }

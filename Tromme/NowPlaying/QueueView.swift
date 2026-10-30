@@ -69,7 +69,6 @@ struct QueueView: View {
         .task(id: player.currentTrack?.grandparentRatingKey) {
             magicMixAvailable = await player.magicMixAvailable()
         }
-        // Someone who turned it on before upgrading learns what Auto Mix adds.
         .task(id: plus.isPlus) { showAutoMixNoticeIfNeeded() }
         .alert("Auto Mix", isPresented: $showingAutoMixNotice) {
             Button("OK") { autoMixNoticeShown = true }

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// One-time sheet telling Premium Icon Pack owners they have Tromme Plus for free.
 struct PlusWelcomeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showPaywall = false

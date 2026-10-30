@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// One concert: artist photo with date badge, ticket and shuffle buttons, date and venue.
 struct ArtistConcertDetailView: View {
     @Environment(\.openURL) private var openURL
 

@@ -1,11 +1,6 @@
 import Foundation
 import CryptoKit
 
-/// Cache for third-party responses that are not Plex library data (LRCLIB lyrics, Last.fm
-/// top tracks). Everything from the Plex server — library, playlists, Home — lives in
-/// `LibraryStore` instead. NSCache in memory plus JSON files on disk (Application Support).
-///
-/// In-flight deduplication: concurrent requests for the same key share one network fetch.
 actor ExternalContentCache {
     static let shared = ExternalContentCache()
 
@@ -15,18 +10,12 @@ actor ExternalContentCache {
     private let diskTTL: TimeInterval = 86400 // 24 hours for disk staleness
     private let maxDiskSize: Int = 32 * 1024 * 1024 // 32 MB
 
-    /// Tracks in-flight fetch tasks by cache key so concurrent callers
-    /// share one network request instead of firing duplicates.
     private var inFlightFetches: [String: Any] = [:]
-    /// Incremented on clearAll to invalidate in-progress fetches.
     private var generation: Int = 0
-    // Tracked incrementally so routine saves don't need a full directory scan;
-    // only refreshed by an authoritative re-scan when evictIfNeeded() runs.
     private var currentDiskBytes: Int = 0
 
     private init() {
         let fm = FileManager.default
-        // Retire the pre-LibraryStore cache (it held Plex library blobs, now in the store).
         if let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
             try? fm.removeItem(at: caches.appendingPathComponent("TrommeLibraryCache", isDirectory: true))
         }
@@ -40,8 +29,6 @@ actor ExternalContentCache {
         try? dir.setResourceValues(values)
         diskURL = dir
         memoryCache.countLimit = 100
-        // Entries hold serialized library payloads (artist/album/track lists), which can
-        // be several MB each for large libraries — cap total bytes, not just entry count.
         memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
         currentDiskBytes = Self.scanDiskBytes(at: diskURL)
     }
@@ -57,29 +44,22 @@ actor ExternalContentCache {
 
     // MARK: - Public API
 
-    /// Synchronously returns a decoded value from the in-memory cache without
-    /// an actor hop. NSCache is thread-safe so this is safe to call from any
-    /// context. Returns nil if the key is absent from memory — disk is not checked.
     nonisolated func memoryCached<T: Codable & Sendable>(_ type: T.Type, forKey key: String) -> T? {
         guard let entry = memoryCache.object(forKey: key as NSString) else { return nil }
         return entry.decode(as: type)
     }
 
-    /// Get cached data if available. Returns nil if no cache exists.
     func get<T: Codable & Sendable>(_ type: T.Type, forKey key: String) -> CachedResult<T>? {
         get(type, forKey: key, diskTTL: diskTTL)
     }
 
-    /// Get cached data with a custom disk TTL.
     func get<T: Codable & Sendable>(_ type: T.Type, forKey key: String, diskTTL: TimeInterval) -> CachedResult<T>? {
-        // 1. Memory cache
         if let entry = memoryCache.object(forKey: key as NSString),
            let value = entry.decode(as: T.self) {
             let fresh = Date().timeIntervalSince(entry.timestamp) < defaultTTL
             return CachedResult(value: value, isStale: !fresh)
         }
 
-        // 2. Disk cache
         if let entry = loadFromDisk(key: key),
            let value = entry.decode(as: T.self) {
             memoryCache.setObject(entry, forKey: key as NSString, cost: entry.data.count)
@@ -90,7 +70,6 @@ actor ExternalContentCache {
         return nil
     }
 
-    /// Store data in both memory and disk.
     func set<T: Codable & Sendable>(_ value: T, forKey key: String) {
         guard let data = try? JSONEncoder().encode(value) else { return }
         let entry = CacheEntry(data: data, timestamp: Date())
@@ -98,7 +77,6 @@ actor ExternalContentCache {
         saveToDisk(entry: entry, key: key)
     }
 
-    /// Remove a specific key.
     func remove(forKey key: String) {
         memoryCache.removeObject(forKey: key as NSString)
         let fileURL = diskURL.appendingPathComponent(key.sha256Hash)
@@ -107,7 +85,6 @@ actor ExternalContentCache {
         currentDiskBytes -= removedSize ?? 0
     }
 
-    /// Clear all cached data.
     func clearAll() {
         generation += 1
         memoryCache.removeAllObjects()
@@ -117,43 +94,28 @@ actor ExternalContentCache {
         currentDiskBytes = 0
     }
 
-    /// Clear only memory cache (keeps disk).
     func clearMemory() {
         memoryCache.removeAllObjects()
     }
 
 // MARK: - Cached Fetch (single entry point)
 
-    /// The single entry point for all cache-first data access. Encapsulates
-    /// the entire stale-while-revalidate + request coalescing pattern:
-    ///
-    /// 1. If cached and fresh → return immediately
-    /// 2. If cached but stale → return immediately, background refresh
-    /// 3. If not cached → fetch, cache, and return
-    ///
-    /// Concurrent callers for the same key share one in-flight request.
     func cachedFetch<T: Codable & Sendable>(
         _ type: T.Type = T.self,
         forKey key: String,
         policy: CachePolicy = .detail,
         fetch: @Sendable @escaping () async throws -> T
     ) async throws -> T {
-        // Check cache with policy-specific TTLs
         if let cached = get(type, forKey: key, policy: policy) {
             if !cached.isStale { return cached.value }
-            // Stale — return cached value, refresh in background
             Task { try? await coalescedFetch(fetch, forKey: key) }
             return cached.value
         }
-        // No cache — fetch synchronously
         return try await coalescedFetch(fetch, forKey: key)
     }
 
     // MARK: - In-Flight Deduplication
 
-    /// Execute a fetch closure, deduplicating concurrent requests for the same key.
-    /// If another caller is already fetching for this key, this call joins that
-    /// in-flight request rather than starting a duplicate network call.
     func withFetch<T: Codable & Sendable>(
         _ fetch: @Sendable @escaping () async throws -> T,
         forKey key: String
@@ -165,7 +127,6 @@ actor ExternalContentCache {
         _ fetch: @Sendable @escaping () async throws -> T,
         forKey key: String
     ) async throws -> T {
-        // If there's already an in-flight fetch for this key, join it
         if let existing = inFlightFetches[key] as? Task<T, Error> {
             return try await existing.value
         }
@@ -179,7 +140,6 @@ actor ExternalContentCache {
         do {
             let result = try await task.value
             inFlightFetches[key] = nil
-            // Only write to cache if it wasn't cleared during the fetch
             if generation == startGeneration {
                 set(result, forKey: key)
             }
@@ -193,14 +153,12 @@ actor ExternalContentCache {
     // MARK: - Policy-Aware Get
 
     private func get<T: Codable & Sendable>(_ type: T.Type, forKey key: String, policy: CachePolicy) -> CachedResult<T>? {
-        // 1. Memory cache
         if let entry = memoryCache.object(forKey: key as NSString),
            let value = entry.decode(as: T.self) {
             let fresh = Date().timeIntervalSince(entry.timestamp) < policy.memoryTTL
             return CachedResult(value: value, isStale: !fresh)
         }
 
-        // 2. Disk cache
         if let entry = loadFromDisk(key: key),
            let value = entry.decode(as: T.self) {
             memoryCache.setObject(entry, forKey: key as NSString, cost: entry.data.count)
@@ -228,10 +186,6 @@ actor ExternalContentCache {
         evictIfNeeded()
     }
 
-    /// Remove oldest files if disk cache exceeds size limit. Cheap check against the
-    /// incrementally-tracked byte total; only falls back to a full directory scan (needed
-    /// to find the oldest files) once actually over the cap, instead of scanning every
-    /// file on every single save — `set()` is called after every network fetch.
     private func evictIfNeeded() {
         guard currentDiskBytes > maxDiskSize else { return }
         let fm = FileManager.default
@@ -247,7 +201,6 @@ actor ExternalContentCache {
             fileInfos.append((file, size, date))
         }
 
-        // Evict oldest files first
         fileInfos.sort { $0.date < $1.date }
         for info in fileInfos {
             guard totalSize > maxDiskSize else { break }

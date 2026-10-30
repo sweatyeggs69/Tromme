@@ -140,7 +140,6 @@ struct AllSongsView: View {
             guard previewTracks == nil, !network.isConnected else { return }
             Task { await loadTracksForCurrentState() }
         }
-        // Cancels and restarts whenever sort order changes.
         .task(id: sortOrder.rawValue) {
             await applyDisplayState()
         }
@@ -206,8 +205,6 @@ struct AllSongsView: View {
 
     private func prefetchVisibleArtwork() async {
         guard !isLoading, let server = serverConnection.currentServer else { return }
-        // Skip aggressive prefetching on metered networks or in Low Power Mode —
-        // images will still load lazily as the user scrolls.
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: AppStyle.TrackList.browseArtworkSize, displayScale: displayScale)
@@ -217,10 +214,6 @@ struct AllSongsView: View {
         await ImageCache.shared.prefetch(urls: urls, targetPixelSize: pixelSize, maxConcurrent: 4)
     }
 
-    // Sorts and sections all off the main actor to keep UI responsive at 100k tracks.
-    // Skips work if the data and sort parameters haven't changed since the last sort.
-    // A generation counter ensures only the most recent sort request writes to state,
-    // preventing stale results from piled-up tasks when navigating between tabs quickly.
     private func applyDisplayState() async {
         guard !loadedTracks.isEmpty else {
             displayTracks = []
@@ -229,7 +222,6 @@ struct AllSongsView: View {
         }
         let currentSort = sortOrder
 
-        // Nothing changed since the last sort — skip the work entirely.
         if !displaySections.isEmpty,
            loadedTracks.count == lastSortedCount,
            currentSort == lastSortedOrder {

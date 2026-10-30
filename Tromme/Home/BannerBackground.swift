@@ -42,7 +42,6 @@ struct BannerBackground: View {
             image = nil
             return
         }
-        // Phase 1: show any cached image immediately while the full-size download runs.
         let hasMemoryImage = ImageCache.shared.memoryCachedImage(for: url, targetPixelSize: px) != nil
         if image == nil && !hasMemoryImage {
             if let quick = await ImageCache.shared.anyCachedImage(for: url, targetPixelSize: px) {
@@ -50,7 +49,6 @@ struct BannerBackground: View {
                 image = quick
             }
         }
-        // Phase 2: fetch proper size, keep phase 1 image if network fails.
         let resolved = await ImageCache.shared.image(for: url, targetPixelSize: px)
         guard !Task.isCancelled else { return }
         image = resolved ?? image

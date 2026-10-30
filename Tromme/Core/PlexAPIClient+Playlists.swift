@@ -1,12 +1,9 @@
 import Foundation
 
-// Playlist and library item management endpoints.
 extension PlexAPIClient {
     // MARK: - Playlists
 
     func getPlaylists(server: PlexServer) async throws -> [PlexPlaylist] {
-        // Page through the full list; a single request is capped by the container size,
-        // which silently dropped every playlist past the first page.
         let pageSize = 1000
         var allPlaylists: [PlexPlaylist] = []
         var start = 0
@@ -33,9 +30,6 @@ extension PlexAPIClient {
             basePath = "/playlists/\(playlistKey)/items"
         }
 
-        // The playlist items endpoint doesn't reliably return totalSize, so page
-        // sequentially until a page comes back shorter than requested instead of
-        // trusting the container's reported total.
         let pageSize = 1000
         var allItems: [PlexMetadata] = []
         var start = 0
@@ -127,7 +121,6 @@ extension PlexAPIClient {
         )
     }
 
-    /// Repositions a playlist item after another item, or to the front when `afterPlaylistItemID` is nil.
     func movePlaylistItem(
         server: PlexServer,
         playlistId: String,
@@ -147,7 +140,6 @@ extension PlexAPIClient {
         }
     }
 
-    /// Removes one item from a manual playlist; `playlistItemID` is the item's generator ID.
     func removePlaylistItem(server: PlexServer, playlistId: String, playlistItemID: Int) async throws {
         _ = try await rawServerRequest(
             server: server,

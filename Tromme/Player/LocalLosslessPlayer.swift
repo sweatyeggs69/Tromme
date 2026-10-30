@@ -1,7 +1,5 @@
 import AVFoundation
 
-/// Plays a downloaded FLAC/ALAC file with AVAudioPlayer, which seeks by sample
-/// and reports an exact duration (AVPlayer's FLAC seeking depends on a seek table).
 @MainActor
 final class LocalLosslessPlayer: NSObject, AVAudioPlayerDelegate {
     private let audioPlayer: AVAudioPlayer

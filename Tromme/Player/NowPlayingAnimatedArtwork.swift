@@ -2,10 +2,6 @@ import AVFoundation
 import MediaPlayer
 import UIKit
 
-/// Tromme+ animated artwork for the lock screen and system media controls. The
-/// system only takes video files, so the current album's clips are downloaded on
-/// demand into a temporary folder that is emptied whenever the album changes,
-/// playback stops, or the app launches: nothing is ever kept.
 @MainActor
 final class NowPlayingAnimatedArtwork {
     static let shared = NowPlayingAnimatedArtwork()
@@ -13,7 +9,6 @@ final class NowPlayingAnimatedArtwork {
     private let directory = FileManager.default.temporaryDirectory
         .appending(path: "NowPlayingAnimatedArtwork", directoryHint: .isDirectory)
     private var albumKey: String?
-    /// Bumped on every album change, so late lookups and downloads are discarded.
     private var generation = 0
     private var entries: [String: Any] = [:]
     private var lookupTask: Task<Void, Never>?
@@ -23,17 +18,14 @@ final class NowPlayingAnimatedArtwork {
         removeFiles()
     }
 
-    /// The animated artwork Now Playing info entries for the track's album, once ready.
     func entries(for track: PlexMetadata) -> [String: Any] {
         Self.albumKey(for: track) == albumKey ? entries : [:]
     }
 
-    /// Whether the album or the Animated Artwork setting changed since the last `prepare`.
     func needsUpdate(for track: PlexMetadata) -> Bool {
         Self.albumKey(for: track) != albumKey
     }
 
-    /// Looks up the track's album on album change, then hands the entries to `apply`.
     func prepare(
         for track: PlexMetadata,
         previewImage: @escaping @Sendable (CGSize) async -> UIImage?,
@@ -50,7 +42,6 @@ final class NowPlayingAnimatedArtwork {
         lookupTask = Task {
             guard let artwork = await AnimatedArtworkService.artwork(artist: artist, album: album),
                   !Task.isCancelled, generation == self.generation else { return }
-            // The system wants preview images quickly, so the static artwork is loaded up front.
             let staticPreview = await previewImage(.zero)
             guard !Task.isCancelled, generation == self.generation else { return }
             let supportedKeys = MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys
@@ -63,8 +54,6 @@ final class NowPlayingAnimatedArtwork {
                     id: "\(key)|1x1", stream: square, generation: generation
                 ) { _ in staticPreview }
             }
-            // The preview must match the video's 3:4 shape or the system ignores the
-            // artwork, so the tall one previews with the clip's own first frame.
             if let tall = artwork.tall, supportedKeys.contains(MPNowPlayingInfoProperty3x4AnimatedArtwork) {
                 newEntries[MPNowPlayingInfoProperty3x4AnimatedArtwork] = makeArtwork(
                     id: "\(key)|3x4", stream: tall, generation: generation
@@ -77,7 +66,6 @@ final class NowPlayingAnimatedArtwork {
         }
     }
 
-    /// Drops the current album's animated artwork and deletes its temporary clips.
     func clear() {
         generation += 1
         albumKey = nil
@@ -103,7 +91,6 @@ final class NowPlayingAnimatedArtwork {
         }
     }
 
-    /// The first frame of a clip, downloading the clip if needed.
     private func firstFrame(of stream: URL, generation: Int) async -> UIImage? {
         guard let file = await clipFile(for: stream, generation: generation) else { return nil }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
@@ -112,7 +99,6 @@ final class NowPlayingAnimatedArtwork {
         return UIImage(cgImage: frame)
     }
 
-    /// Downloads the clip the first time the system asks for it.
     private func clipFile(for stream: URL, generation: Int) async -> URL? {
         guard generation == self.generation else { return nil }
         if let download = downloads[stream] { return await download.value }
@@ -137,7 +123,6 @@ final class NowPlayingAnimatedArtwork {
         #if DEBUG
         print("[AnimatedArtwork] clip download \(result == nil ? "failed" : "finished"): \(stream.lastPathComponent)")
         #endif
-        // The album changed mid-download: don't leave its clip behind.
         guard generation == self.generation else {
             if let result { try? FileManager.default.removeItem(at: result) }
             return nil
@@ -153,7 +138,6 @@ final class NowPlayingAnimatedArtwork {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    /// Includes the setting, so turning it off drops the entries and turning it on looks up again.
     private static func albumKey(for track: PlexMetadata) -> String {
         "\(AnimatedArtworkEntitlement.isEnabled)|\(track.grandparentTitle ?? "")|\(track.parentTitle ?? "")"
     }

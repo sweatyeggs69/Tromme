@@ -1,13 +1,10 @@
 import AVFoundation
 
-// Downloaded FLAC/ALAC playback through AVAudioPlayer.
 extension AudioPlayerService {
     static func isLosslessLabel(_ codec: String?) -> Bool {
         ["FLAC", "ALAC"].contains(codec ?? "")
     }
 
-    /// Replaces the AVQueuePlayer pipeline with a LocalLosslessPlayer for this track.
-    /// Returns false (so the caller falls back to AVPlayer) if the file can't be opened.
     func startLosslessPlayback(url: URL, resumeAt: TimeInterval?) -> Bool {
         guard let lossless = try? LocalLosslessPlayer(url: url) else {
             logPlayback("lossless_open_failed")
@@ -27,7 +24,6 @@ extension AudioPlayerService {
         lossless.volume = soundCheckVolume(for: currentTrack)
         losslessPlayer = lossless
         isReadyToPlay = true
-        // The file header holds the exact length, unlike Plex's rounded metadata.
         logPlayback("lossless_duration", "plex=\(duration) file=\(lossless.duration)")
         duration = lossless.duration
 
@@ -45,8 +41,6 @@ extension AudioPlayerService {
             isPlaying = false
         }
         startLosslessTicker(generation: generation)
-        // Same session setup beginTrackSession does for AVPlayer items; skipping it
-        // left the saved track and queue position stale after a quit.
         updateNowPlayingInfo()
         prefetchGainMetadata()
         prefetchUpcomingArtwork()
@@ -109,7 +103,6 @@ extension AudioPlayerService {
         reportTimelineState(isPlaying ? "playing" : "paused")
     }
 
-    /// Play/pause for the lossless player. A finished track restarts from the beginning.
     func toggleLosslessPlayback(_ lossless: LocalLosslessPlayer) {
         if lossless.isPlaying {
             lossless.pause()

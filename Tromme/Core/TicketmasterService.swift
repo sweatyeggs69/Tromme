@@ -2,7 +2,6 @@ import Foundation
 
 struct TicketmasterService: Sendable {
 
-    /// Upcoming concerts for `artist`. Caching happens at api.tromme.app and in URLSession (Cache-Control).
     static func fetchConcerts(artist: String) async -> [ConcertEvent] {
         guard !artist.isEmpty else { return [] }
         return (try? await fetchEvents(artist: artist)) ?? []
@@ -30,12 +29,9 @@ struct TicketmasterService: Sendable {
         let wanted = normalized(artist)
         var seen = Set<String>()
         return (decoded.embedded?.events ?? []).compactMap { event in
-            // The keyword search also matches tribute acts and festivals, so require the artist
-            // itself to be a listed attraction.
             guard event.embedded?.attractions?.contains(where: { normalized($0.name) == wanted }) == true else {
                 return nil
             }
-            // The same show can be listed more than once; keep one per venue and start.
             guard let concert = concert(from: event),
                   seen.insert("\(concert.venue)|\(concert.date.timeIntervalSince1970)").inserted else { return nil }
             return concert

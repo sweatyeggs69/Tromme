@@ -1,6 +1,5 @@
 import Foundation
 
-/// Maximum bitrate for downloads. Songs above the cap are converted to AAC on the Plex server.
 enum DownloadQuality: String, CaseIterable {
     case original
     case kbps1000 = "1000"
@@ -21,22 +20,18 @@ enum DownloadQuality: String, CaseIterable {
 
     var maxBitrateKbps: Int? { Int(rawValue) }
 
-    /// Always `.original` without Tromme Plus, so a lapsed subscription stops converting downloads.
     static var current: DownloadQuality {
         guard PlusStore.cachedIsPlus else { return .original }
         let raw = UserDefaults.standard.string(forKey: storageKey) ?? DownloadQuality.original.rawValue
-        // "spaceSaver" was the earlier fixed 256 kbps setting.
         if raw == "spaceSaver" { return .kbps256 }
         return DownloadQuality(rawValue: raw) ?? .original
     }
 
-    /// The AAC bitrate to convert a song to, or nil when it downloads as the original file.
     func transcodeBitrate(codec: String?, sourceBitrate: Int?) -> Int? {
         guard let cap = maxBitrateKbps else { return nil }
         if let sourceBitrate {
             return sourceBitrate > cap ? cap : nil
         }
-        // Unknown bitrate: only lossless sources are worth converting.
         return Self.isLossless(codec: codec) ? cap : nil
     }
 

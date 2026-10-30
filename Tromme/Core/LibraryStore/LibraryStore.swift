@@ -2,13 +2,8 @@ import Foundation
 import SwiftData
 import CryptoKit
 
-/// The on-disk mirror of the user's Plex music library (SwiftData, in Application Support
-/// so the OS never purges it). Browsing reads from here; the network is only touched by
-/// `LibrarySyncService`, which keeps this mirror up to date in the background.
 @ModelActor
 actor LibraryStore {
-    /// A ModelActor made on the main thread ends up running its database work on the main
-    /// thread, which freezes the UI during a sync — so always build it off the main thread.
     static let shared: LibraryStore = {
         let container = makeContainer()
         if Thread.isMainThread {
@@ -17,7 +12,6 @@ actor LibraryStore {
         return LibraryStore(modelContainer: container)
     }()
 
-    /// Synchronous access to the artist/album lists for instant first paint.
     nonisolated static let memory = LibraryMemory()
 
     enum Kind {
@@ -26,7 +20,6 @@ actor LibraryStore {
         static let track = 10
     }
 
-    /// Single-slot cache of the full track list (AllSongs, search, compilation credits).
     private var allTracksCache: (scope: String, tracks: [PlexMetadata])?
 
     // MARK: - Container
@@ -40,7 +33,6 @@ actor LibraryStore {
         var dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("TrommeLibraryStore", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        // The mirror is rebuildable from the server — keep it out of device backups.
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try? dir.setResourceValues(values)
@@ -52,7 +44,6 @@ actor LibraryStore {
         do {
             return try make()
         } catch {
-            // Unreadable / incompatible store: it's only a mirror, so rebuild from scratch.
             for suffix in ["", "-wal", "-shm"] {
                 try? fm.removeItem(at: URL(fileURLWithPath: url.path + suffix))
             }
@@ -118,7 +109,6 @@ actor LibraryStore {
 
     // MARK: - Reads
 
-    /// All items of a kind. Artists/albums are served from the in-memory copy once loaded.
     func items(kind: Int, scope: String) -> [PlexMetadata] {
         if kind == Kind.track {
             if let cached = allTracksCache, cached.scope == scope { return cached.tracks }
@@ -137,7 +127,6 @@ actor LibraryStore {
         return decoded
     }
 
-    /// Albums of an artist, or tracks of an album — an indexed lookup on the parent key.
     func children(of parentKey: String, scope: String) -> [PlexMetadata] {
         let descriptor = FetchDescriptor<LibraryRecord>(
             predicate: #Predicate { $0.parentRatingKey == parentKey && $0.scope == scope }
@@ -151,7 +140,6 @@ actor LibraryStore {
         return items.sorted { ($0.titleSort ?? $0.title) < ($1.titleSort ?? $1.title) }
     }
 
-    /// Every track whose grandparent is `artistKey`.
     func tracks(byArtist artistKey: String, scope: String) -> [PlexMetadata] {
         let track = Kind.track
         let descriptor = FetchDescriptor<LibraryRecord>(
@@ -162,18 +150,15 @@ actor LibraryStore {
         return decodeAll((try? modelContext.fetch(descriptor)) ?? [])
     }
 
-    /// The library section an item was mirrored from, if the store has it.
     func sectionId(ofRatingKey ratingKey: String, serverId: String) -> String? {
         record(ratingKey: ratingKey, serverId: serverId)
             .flatMap { $0.scope.split(separator: "|", maxSplits: 1).last.map(String.init) }
     }
 
-    /// The listing payload for one item.
     func item(ratingKey: String, serverId: String) -> PlexMetadata? {
         record(ratingKey: ratingKey, serverId: serverId).flatMap { decode($0.payload) }
     }
 
-    /// The detail payload if it is current for the listing's `updatedAt`.
     func freshDetail(ratingKey: String, serverId: String) -> PlexMetadata? {
         guard let record = record(ratingKey: ratingKey, serverId: serverId),
               let detail = record.detail,
@@ -181,13 +166,11 @@ actor LibraryStore {
         return decode(detail)
     }
 
-    /// Whatever detail or listing payload exists, however old — for offline fallback.
     func anyMetadata(ratingKey: String, serverId: String) -> PlexMetadata? {
         guard let record = record(ratingKey: ratingKey, serverId: serverId) else { return nil }
         return decode(record.detail ?? record.payload)
     }
 
-    /// Items of `kind` whose detail payload is missing or out of date.
     func keysNeedingDetail(kind: Int, scope: String) -> [String] {
         let descriptor = FetchDescriptor<LibraryRecord>(
             predicate: #Predicate { $0.scope == scope && $0.kind == kind }
@@ -197,8 +180,6 @@ actor LibraryStore {
             .map(\.ratingKey)
     }
 
-    /// Albums with their detail payload where one exists. The listing omits `Style` tags,
-    /// so anything tag-based must read these instead of `items(kind:scope:)`.
     func albumsPreferringDetail(scope: String) -> [PlexMetadata] {
         let kind = Kind.album
         let descriptor = FetchDescriptor<LibraryRecord>(
@@ -210,8 +191,6 @@ actor LibraryStore {
         }
     }
 
-    /// Marks every artist/album detail as stale so the next enrichment pass refetches it
-    /// (tag edits on the server don't always change the item's `updatedAt`).
     func invalidateDetails(scope: String) {
         let artist = Kind.artist, album = Kind.album
         let descriptor = FetchDescriptor<LibraryRecord>(
@@ -231,8 +210,6 @@ actor LibraryStore {
         try? modelContext.save()
     }
 
-    /// Rewrites one existing row from fresh server metadata (e.g. after an artwork change)
-    /// without a full sync.
     func replaceListing(_ metadata: PlexMetadata, serverId: String) {
         guard let row = record(ratingKey: metadata.ratingKey, serverId: serverId),
               let data = encode(metadata) else { return }
@@ -247,8 +224,6 @@ actor LibraryStore {
         invalidateMemory(kind: row.kind, scope: row.scope)
     }
 
-    /// Inserts new rows and rewrites changed ones (by payload digest). Returns the page's
-    /// record ids so the caller can prune whatever the server no longer has.
     @discardableResult
     func upsert(page: [PlexMetadata], kind: Int, scope: String) -> [String] {
         let serverId = LibraryScope.serverId(of: scope)
@@ -262,7 +237,6 @@ actor LibraryStore {
             guard let data = encode(item) else { continue }
             let digest = Data(SHA256.hash(data: data))
             if let row = existing[id] {
-                // Columns are compared too so rows written before they existed get backfilled.
                 guard row.digest != digest || row.scope != scope
                         || row.lastViewedAt != item.lastViewedAt || row.userRating != item.userRating else { continue }
                 row.scope = scope
@@ -288,7 +262,6 @@ actor LibraryStore {
         return ids
     }
 
-    /// Deletes rows of `kind` in `scope` that are not in `keeping` (removed on the server).
     func prune(kind: Int, scope: String, keeping: Set<String>) {
         var descriptor = FetchDescriptor<LibraryRecord>(
             predicate: #Predicate { $0.scope == scope && $0.kind == kind }
@@ -300,7 +273,6 @@ actor LibraryStore {
         try? modelContext.save()
     }
 
-    /// Call once a kind's rows have changed so readers rebuild their in-memory copies.
     func invalidateMemory(kind: Int, scope: String) {
         if kind == Kind.track {
             allTracksCache = nil
@@ -317,7 +289,6 @@ actor LibraryStore {
         invalidateMemory(kind: kind, scope: scope)
     }
 
-    /// Frees the large in-memory track list (memory warning).
     func clearMemory() {
         allTracksCache = nil
     }
@@ -335,12 +306,10 @@ actor LibraryStore {
 
     // MARK: - Home (local queries)
 
-    /// Newest albums by `addedAt`.
     func recentlyAdded(scope: String, limit: Int) -> [PlexMetadata] {
         Array(items(kind: Kind.album, scope: scope).sorted { ($0.addedAt ?? 0) > ($1.addedAt ?? 0) }.prefix(limit))
     }
 
-    /// Most recently played tracks.
     func recentlyPlayed(scope: String, limit: Int) -> [PlexMetadata] {
         let kind = Kind.track
         var descriptor = FetchDescriptor<LibraryRecord>(
@@ -351,7 +320,6 @@ actor LibraryStore {
         return decodeAll((try? modelContext.fetch(descriptor)) ?? [])
     }
 
-    /// Tracks rated at least `minUserRating` (same threshold the server-side query used).
     func favorites(scope: String, minUserRating: Double) -> [PlexMetadata] {
         decodeAll(favoriteRows(scope: scope, minUserRating: minUserRating))
     }
@@ -368,8 +336,6 @@ actor LibraryStore {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
 
-    /// Writes fresh per-user state (play counts, ratings) for already-mirrored tracks and
-    /// patches the in-memory track list in place, so it isn't re-decoded from disk.
     func applyTrackUpdates(_ tracks: [PlexMetadata], scope: String) {
         guard !tracks.isEmpty else { return }
         upsert(page: tracks, kind: Kind.track, scope: scope)
@@ -382,7 +348,6 @@ actor LibraryStore {
         }
     }
 
-    /// Saves artist/album detail payloads in one transaction.
     func saveDetails(_ items: [PlexMetadata], serverId: String) {
         for metadata in items {
             guard let record = record(ratingKey: metadata.ratingKey, serverId: serverId),
@@ -408,8 +373,6 @@ actor LibraryStore {
         serverRecord(serverId: serverId)?.playlistsSyncedAt != nil
     }
 
-    /// Replaces the playlist listing with the server's, dropping playlists (and their
-    /// items) that no longer exist.
     func savePlaylists(_ playlists: [PlexPlaylist], serverId: String) {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
@@ -448,7 +411,6 @@ actor LibraryStore {
         return try? JSONDecoder().decode([PlexMetadata].self, from: row.payload)
     }
 
-    /// Playlist keys whose stored items are missing or older than the listing says.
     func playlistKeysNeedingItems(serverId: String) -> [String] {
         let playlistRows = (try? modelContext.fetch(FetchDescriptor<PlaylistRecord>(predicate: #Predicate { $0.serverId == serverId }))) ?? []
         let itemRows = Dictionary(

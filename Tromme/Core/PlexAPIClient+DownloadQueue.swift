@@ -1,20 +1,12 @@
 import Foundation
 
-// Playback/transcode headers and artwork URLs.
 extension PlexAPIClient {
-    /// ALAC profile for LAN — lossless, no quality loss. Only appropriate when
-    /// the source is FLAC; using it for already-compatible codecs (e.g. AAC)
-    /// would make PMS re-encode lossy audio into a bloated lossless container
-    /// for no quality gain.
     static let profileExtraLAN: String =
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=alac)"
 
-    /// AAC profile for cellular — lossy but bandwidth-friendly.
     static let profileExtraCellular: String =
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=aac)"
 
-    /// Targets the source's own audio codec so PMS remuxes into HLS instead
-    /// of re-encoding audio that's already compatible (e.g. AAC, MP3).
     static func profileExtraPassthrough(codec: String) -> String {
         "add-transcode-target(type=musicProfile&context=streaming&protocol=hls&container=mp4&audioCodec=\(codec))"
     }
@@ -57,7 +49,6 @@ extension PlexAPIClient {
         return headers
     }
 
-    /// Build a transcoded artwork URL with Plex identification.
     func artworkURL(server: PlexServer, path: String?, width: Int = 400, height: Int = 400) -> URL? {
         guard let path, !path.isEmpty else { return nil }
         guard let baseURL = server.baseURL,

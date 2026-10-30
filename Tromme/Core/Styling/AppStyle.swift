@@ -11,7 +11,6 @@ enum AppStyle {
         static let pageHorizontal: CGFloat = 20
         static let nowPlayingHorizontal: CGFloat = 0
         static let listItemGap: CGFloat = 0
-        /// Extra trailing inset for grid content so it clears the `SectionIndexBar`.
         static let sectionIndexInset: CGFloat = 8
     }
 
@@ -22,17 +21,12 @@ enum AppStyle {
     }
 
     enum Artwork {
-        /// Album and playlist header artwork in landscape.
         static let header: CGFloat = 300
-        /// Album and playlist header artwork in portrait: full width inside the page padding.
         static func portraitHeader(forWidth width: CGFloat) -> CGFloat {
             max(width - Spacing.pageHorizontal * 2, 1)
         }
-        /// Album and playlist cards in horizontal rails (Home, More by).
         static let card: CGFloat = 170
-        /// Thumbnails in search results and pickers.
         static let rowThumbnail: CGFloat = 44
-        /// Empty-state icons (no queue, no lyrics).
         static let emptyStateIcon: CGFloat = 40
     }
 
@@ -68,15 +62,10 @@ enum AppStyle {
     // MARK: - Track list rows (Songs, Favorites, Playlists)
 
     enum TrackList {
-        /// Default artwork size for album-context rows (e.g. album detail).
         static let artworkSize: CGFloat = 42
-        /// Artwork size for standalone list views (Songs, Favorites, Playlist detail).
         static let browseArtworkSize: CGFloat = 48
-        /// Corner radius for artwork in list rows.
         static let artworkCornerRadius: CGFloat = 4
-        /// Standard list row insets shared across all track list views.
         static let rowInsets = EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16)
-        /// Vertical spacing between rows.
         static let rowSpacing: CGFloat = 2
     }
 
@@ -86,11 +75,8 @@ enum AppStyle {
         static let artworkSize: CGFloat = 36
         static let artworkSizeInline: CGFloat = 30
         static let artworkCornerRadius: CGFloat = 6
-        /// Standard tap-target size for transport controls.
         static let controlSize: CGFloat = 44
-        /// Larger play/pause tap target on iPad.
         static let playPauseSizePad: CGFloat = 50
-        /// Smaller tap-target for secondary controls (shuffle, repeat, AirPlay, queue).
         static let secondaryControlSize: CGFloat = 36
         static let leadingPadding: CGFloat = 16
         static let trailingPadding: CGFloat = 12
@@ -122,10 +108,6 @@ enum AppStyle {
 // MARK: - Color contrast
 
 extension Color {
-    /// Whether this color is light enough that black foreground content reads better than white.
-    /// - Parameter colorScheme: When the color is dynamic (e.g. `Color(.label)`), pass the current
-    ///   color scheme to resolve it to concrete RGB before sampling. Pass `nil` for fixed colors
-    ///   (e.g. artwork-sampled colors) that don't vary with appearance.
     func isLightColor(in colorScheme: ColorScheme? = nil) -> Bool {
         var uiColor = UIColor(self)
         if let colorScheme {
@@ -139,7 +121,6 @@ extension Color {
         var alpha: CGFloat = 0
         guard uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return false }
 
-        // WCAG relative luminance for contrast-based black/white foreground choice.
         func linearized(_ component: CGFloat) -> CGFloat {
             component <= 0.03928 ? (component / 12.92) : pow((component + 0.055) / 1.055, 2.4)
         }
@@ -153,31 +134,24 @@ extension Color {
         let whiteContrast = 1.05 / (luminance + 0.05)
         let contrastDelta = abs(blackContrast - whiteContrast)
 
-        // Dead-band: when both options are close, bias to a slightly lighter threshold.
         if contrastDelta < 0.35 {
             return luminance > 0.45
         }
         return blackContrast >= whiteContrast
     }
 
-    /// Foreground color that reads well against this color as a background: black when light, white when dark.
     var contrastForeground: Color { isLightColor() ? .black : .white }
 
-    /// Foreground for a control drawn in the *inverse* tone of this color (e.g. a filled circle button sitting on top of artwork of this color).
     var contrastControlForeground: Color { isLightColor() ? .white : .black }
 
-    /// Solid inverse-tone background for a prominent control (e.g. the primary Play button pill).
     var contrastControlBackground: Color { isLightColor() ? Color.black.opacity(0.75) : Color.white.opacity(0.82) }
 
-    /// Translucent inverse-tone background for a secondary circular icon button (e.g. shuffle, add-to-menu).
     var contrastCircleBackground: Color { isLightColor() ? Color.black.opacity(0.12) : Color.white.opacity(0.15) }
 
-    /// Drop shadow color for controls sitting on top of artwork of this color.
     var contrastControlShadow: Color { isLightColor() ? Color.black.opacity(0.22) : Color.white.opacity(0.18) }
 }
 
 extension View {
-    /// Hairline border drawn over artwork (no shadow).
     func artworkBorder(cornerRadius: CGFloat = AppStyle.Radius.card) -> some View {
         overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -185,7 +159,6 @@ extension View {
         )
     }
 
-    /// Border and drop shadow for the large artwork at the top of album and playlist pages.
     func headerArtworkStyle() -> some View {
         artworkBorder()
             .shadow(color: .black.opacity(0.25), radius: 10, y: 4)

@@ -10,7 +10,6 @@ struct Lab {
 
     private static let white = (x: 0.95047, y: 1.0, z: 1.08883)
 
-    /// From gamma-encoded sRGB in 0...1.
     init(r: Double, g: Double, b: Double) {
         func lin(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
         let (lr, lg, lb) = (lin(r), lin(g), lin(b))
@@ -23,7 +22,6 @@ struct Lab {
         self.b = 200 * (f(y) - f(z))
     }
 
-    /// sRGB color at the given L*, chroma and hue (radians); chroma is reduced until in gamut.
     static func rgb(lightness: Double, chroma: Double, hue: Double) -> UIColor {
         func finv(_ t: Double) -> Double { t * t * t > 0.008856 ? t * t * t : (t - 16.0 / 116) / 7.787 }
         func enc(_ c: Double) -> Double { c <= 0.0031308 ? 12.92 * c : 1.055 * pow(c, 1 / 2.4) - 0.055 }

@@ -1,9 +1,6 @@
 import Foundation
 import Observation
 
-/// Per-track start/stop markers, keyed by Plex rating key. Local only: Plex has no
-/// documented marker type for music. Mirrored to iCloud key-value storage so markers
-/// survive a reinstall and follow the user to a new device.
 @Observable @MainActor
 final class TrackMarkerStore {
     private static let cloudKey = "trackMarkers"
@@ -21,7 +18,6 @@ final class TrackMarkerStore {
             MainActor.assumeIsolated { self?.pullFromCloud() }
         }
         cloud.synchronize()
-        // Cloud wins where it has a value (fresh install); otherwise seed it from this device.
         pullFromCloud(merging: true)
         pushToCloud()
     }
@@ -30,13 +26,11 @@ final class TrackMarkerStore {
         markers[ratingKey] ?? TrackMarkers()
     }
 
-    /// Where playback begins; nil when the track has no start marker or Plus is off.
     func start(for ratingKey: String) -> TimeInterval? {
         guard PlusStore.cachedIsPlus else { return nil }
         return markers[ratingKey]?.start
     }
 
-    /// Where playback ends; nil when the track has no stop marker or Plus is off.
     func stop(for ratingKey: String) -> TimeInterval? {
         guard PlusStore.cachedIsPlus else { return nil }
         return markers[ratingKey]?.stop
@@ -63,7 +57,6 @@ final class TrackMarkerStore {
 
     // MARK: - Persistence
 
-    /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
     private var fileURL: URL {
         let dir = URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -82,7 +75,6 @@ final class TrackMarkerStore {
         cloud.synchronize()
     }
 
-    /// `merging` keeps local entries the cloud lacks (launch); otherwise the cloud copy replaces them.
     private func pullFromCloud(merging: Bool = false) {
         guard let data = cloud.data(forKey: Self.cloudKey),
               let remote = try? JSONDecoder().decode([String: TrackMarkers].self, from: data) else { return }

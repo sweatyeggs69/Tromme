@@ -5,7 +5,6 @@ struct PlexServer: Codable, Sendable, Identifiable, Hashable {
     let uri: String
     let machineIdentifier: String
     let accessToken: String
-    /// All known connections for this server — used to re-probe when network conditions change.
     let connections: [PlexConnection]
 
     var id: String { machineIdentifier }

@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay NowPlaying templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Now Playing
@@ -104,8 +103,6 @@ extension CarPlaySceneDelegate {
             while !Task.isCancelled {
                 guard let self else { return }
                 let p = self.player
-                // Read the properties we want to track — withObservationTracking
-                // will call onChange when any of them mutate.
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
                         _ = p.isShuffled
@@ -126,7 +123,6 @@ extension CarPlaySceneDelegate {
         syncMixButtons()
         let nowPlaying = CPNowPlayingTemplate.shared
         guard interfaceController?.topTemplate !== nowPlaying else { return }
-        // Pop to Now Playing if it's already in the stack; otherwise push it fresh.
         interfaceController?.pop(to: nowPlaying, animated: true) { [weak self] success, _ in
             if !success {
                 self?.interfaceController?.pushTemplate(nowPlaying, animated: true, completion: nil)

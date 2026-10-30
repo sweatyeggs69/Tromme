@@ -1,6 +1,5 @@
 import Foundation
 
-// Server-side transcoded downloads through the documented /downloadQueue family.
 extension PlexAPIClient {
     static let transcodedFileExtension = "m4a"
 
@@ -34,8 +33,6 @@ extension PlexAPIClient {
         enum CodingKeys: String, CodingKey { case mediaContainer = "MediaContainer" }
     }
 
-    /// Transcodes a track on the server to AAC at the given bitrate and returns the
-    /// downloaded temp file. The queue item is removed from the server afterwards.
     func transcodedDownload(server: PlexServer, ratingKey: String, bitrateKbps: Int) async throws -> URL {
         let queue = try await queueRequest(server: server, path: "/downloadQueue", method: "POST")
         guard let queueID = queue.mediaContainer.downloadQueue?.first?.id else {
@@ -109,7 +106,6 @@ extension PlexAPIClient {
         return tempURL
     }
 
-    /// Frees the transcoded copy on the server. Fire and forget so it also runs after cancellation.
     private func removeQueueItem(server: PlexServer, queueID: Int, itemID: Int) {
         guard let request = try? makeQueueRequest(
             server: server,

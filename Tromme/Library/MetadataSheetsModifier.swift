@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Presents the album edit and combined track sheets for a `MetadataSheetRequest`.
 private struct MetadataSheetsModifier: ViewModifier {
     @Binding var request: MetadataSheetRequest?
     let isTrackEditable: Bool
@@ -19,7 +18,6 @@ private struct MetadataSheetsModifier: ViewModifier {
 }
 
 extension View {
-    /// `onSaved` receives the item re-read from the server after an edit.
     func metadataSheets(
         request: Binding<MetadataSheetRequest?>,
         isTrackEditable: Bool = true,

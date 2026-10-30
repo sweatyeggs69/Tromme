@@ -12,7 +12,6 @@ actor TimelineOutbox {
         let key: String
         let timeMs: Int
         let durationMs: Int
-        /// Unix time the play finished.
         let updated: Int
         let machineIdentifier: String
     }
@@ -29,7 +28,6 @@ actor TimelineOutbox {
         fileURL = dir.appending(path: "timelineOutbox.json")
         entries = (try? Data(contentsOf: fileURL))
             .flatMap { try? JSONDecoder().decode([Entry].self, from: $0) } ?? []
-        // Replaces the scrobble outbox from an earlier build; its entries can't be replayed as timelines.
         try? FileManager.default.removeItem(at: dir.appending(path: "scrobbleOutbox.json"))
     }
 
@@ -48,7 +46,6 @@ actor TimelineOutbox {
         persist()
     }
 
-    /// Sends queued timelines for `server`, stopping at the first failure (still offline).
     func flush(server: PlexServer, client: PlexAPIClient) async {
         guard !isFlushing, entries.contains(where: { $0.machineIdentifier == server.machineIdentifier }) else { return }
         isFlushing = true

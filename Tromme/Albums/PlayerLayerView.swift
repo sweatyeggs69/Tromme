@@ -1,12 +1,10 @@
 import UIKit
 import AVFoundation
 
-/// A UIView backed by an `AVPlayerLayer` that fills its bounds.
 final class PlayerLayerView: UIView {
     override static var layerClass: AnyClass { AVPlayerLayer.self }
 
     var playerLayer: AVPlayerLayer {
-        // layerClass guarantees the type.
         layer as! AVPlayerLayer
     }
 

@@ -2,8 +2,6 @@ import Foundation
 
 struct LastFMService: Sendable {
 
-    /// Returns the subset of `albumTrackTitles` that appear in the artist's all-time top 10
-    /// on Last.fm. Caching happens at api.tromme.app and in URLSession (Cache-Control).
     static func fetchPopularTracks(
         artist: String,
         albumTrackTitles: [String]

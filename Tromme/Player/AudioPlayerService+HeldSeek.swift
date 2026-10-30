@@ -3,15 +3,9 @@ import MediaPlayer
 import Network
 import Observation
 
-// Press-and-hold skip buttons.
 extension AudioPlayerService {
     // MARK: - Held Seek (press-and-hold skip buttons)
 
-    /// Starts a repeating ±10s scrub while a remote skip button is held
-    /// (CarPlay / lock screen send begin- and endSeeking events for this).
-    /// Only the timeline is advanced per step; the actual player seek is
-    /// committed once on release so a streamed transcode session restarts
-    /// once instead of once per step.
     func beginHeldSeek(forward: Bool) {
         guard hasTrack else { return }
         heldSeekTask?.cancel()
@@ -74,7 +68,6 @@ extension AudioPlayerService {
         loadAndPlay(queue[currentIndex])
     }
 
-    /// Jump to an upcoming track by offset without reordering the queue.
     func skipToUpcoming(at offset: Int) {
         let queueIndex = currentIndex + 1 + offset
         guard queue.indices.contains(queueIndex) else { return }
@@ -89,7 +82,6 @@ extension AudioPlayerService {
     }
 
     func toggleShuffle() {
-        // If queue is empty but we have a current track (e.g. restored state), seed the queue
         if queue.isEmpty, let track = currentTrack {
             queue = [track]
             originalQueue = [track]
@@ -112,7 +104,6 @@ extension AudioPlayerService {
                 currentIndex = idx
             }
         }
-        // The queue didSet ran before currentIndex was updated above.
         revalidatePreloadedNext()
         savePlaybackState()
         updateShuffleRepeatState()

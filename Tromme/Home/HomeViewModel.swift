@@ -1,7 +1,6 @@
 import SwiftUI
 import Observation
 
-/// Loading for `HomeView`; the view only renders this state.
 @Observable @MainActor
 final class HomeViewModel {
     let isPreviewMode: Bool
@@ -13,7 +12,6 @@ final class HomeViewModel {
     private(set) var featuredAlbums: [PlexMetadata]
     private(set) var isLoading: Bool
 
-    // Same keys the view used through @AppStorage, so existing picks carry over.
     private static let featuredAlbumRatingKeysKey = "featuredAlbumRatingKeys"
     private static let featuredAlbumLastRefreshedAtKey = "featuredAlbumLastRefreshedAt"
 
@@ -31,7 +29,6 @@ final class HomeViewModel {
         isLoading = !isPreviewMode
     }
 
-    /// Everything the loaders need from the environment.
     struct Context {
         let server: PlexServer?
         let sectionId: String?
@@ -51,21 +48,14 @@ final class HomeViewModel {
         guard !isPreviewMode else { return }
         if let server = context.server, let sectionId = context.sectionId {
             let client = context.client
-            // Full-library changes (new albums/tracks) sync in the background and arrive
-            // via libraryContentDidChange; the quick part — play counts, ratings,
-            // playlists — is awaited so the spinner covers it.
-            // Forced: deletes/merges made in Plex don't always advance the section's updatedAt.
             Task { await LibrarySyncService.shared.refreshIfNeeded(client: client, server: server, sectionId: sectionId, force: true) }
             await client.refreshDynamicContent(server: server, sectionId: sectionId)
         }
         await load(context)
     }
 
-    /// Process-lifetime flag: true after the first refresh since the app was launched, so
-    /// returning from the background (same process) never triggers it again.
     private static var didRefreshSinceLaunch = false
 
-    /// Runs the pull-to-refresh path once per cold launch so new Plex media shows up without a manual pull.
     func refreshOnColdLaunch(_ context: Context) async {
         guard !isPreviewMode, !Self.didRefreshSinceLaunch,
               context.server != nil, context.sectionId != nil else { return }
@@ -91,14 +81,12 @@ final class HomeViewModel {
         guard !isPreviewMode,
               let server = context.server,
               let sectionId = context.sectionId else { return }
-        // The player already refreshed the played item in the store; just re-read it.
         guard let fresh = try? await context.client.cachedRecentlyPlayed(server: server, sectionId: sectionId) else { return }
         withAnimation(.easeIn(duration: 0.25)) {
             recentTracks = Array(fresh.prefix(10))
         }
     }
 
-    /// The album's tracks for queue and playlist actions, or nil when there are none.
     func tracks(of album: PlexMetadata, _ context: Context) async -> [PlexMetadata]? {
         guard let server = context.server,
               let tracks = try? await context.client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt),
@@ -137,15 +125,12 @@ final class HomeViewModel {
         }
     }
 
-    /// Every row is a local query over the library store, so this is effectively instant.
     private func loadHomeContent(_ context: Context) async {
         let hadFavorites = !favoriteTracks.isEmpty
         let hadRecentTracks = !recentTracks.isEmpty
         let hadPlaylists = !playlists.isEmpty
         let hadRecentAlbums = !recentAlbums.isEmpty
 
-        // Keep existing content visible during refresh; show loading spinners only
-        // when there is no content yet.
         if !hadFavorites && !hadRecentTracks && !hadPlaylists && !hadRecentAlbums {
             isLoading = true
         }
@@ -304,8 +289,6 @@ final class HomeViewModel {
         playlists: [PlexPlaylist],
         recentAlbums: [PlexMetadata]
     ) async {
-        // Skip aggressive prefetching on metered networks or in Low Power Mode —
-        // images will still load lazily as the user scrolls.
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let trackPixelSize = ArtworkView.recommendedTranscodeSize(

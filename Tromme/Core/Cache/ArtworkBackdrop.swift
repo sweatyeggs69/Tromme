@@ -2,21 +2,9 @@ import SwiftUI
 import UIKit
 import CryptoKit
 
-/// Turns an artwork's accent (or average) color into the page backdrop.
-///
-/// Album and playlist pages keep the artwork's own color in either appearance: hue and
-/// chroma are kept, lightness is clamped only enough to avoid near-black and near-white
-/// pages, and neutral sources keep their lightness (a pale misty cover gives a pale page,
-/// a dark one a dark page). Only the text-contrast guard may nudge lightness; the page's
-/// text color follows the result.
-///
-/// Artist pages always carry white text, so they take the same color pulled into a dark
-/// range (L* 22 to 46) with most of its chroma kept.
 enum ArtworkBackdrop {
     enum Style {
-        /// Artist pages: accent or average of the photo's bottom third.
         case artist
-        /// Album and playlist pages: accent or average of the whole cover.
         case cover
     }
 
@@ -30,8 +18,6 @@ enum ArtworkBackdrop {
         return Color(relit(lightness: lightness, chroma: lab.chroma, hue: lab.hue))
     }
 
-    /// Backdrop that always carries white text (artist pages), in either appearance: the
-    /// dark-appearance tint, darkened further if white text would fall below the contrast floor.
     static func whiteTextColor(from source: UIColor) -> Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         source.getRed(&r, green: &g, blue: &b, alpha: nil)
@@ -46,8 +32,6 @@ enum ArtworkBackdrop {
         return Color(color)
     }
 
-    /// White-text target: colorful sources at L* 22 to 46 keeping 0.95x chroma, neutral ones
-    /// just above their own L*, capped.
     private static func darkTint(for lab: Lab) -> (lightness: Double, chroma: Double) {
         let colorful = lab.chroma >= 8
         let chroma = colorful ? lab.chroma * 0.95 : lab.chroma
@@ -55,8 +39,6 @@ enum ArtworkBackdrop {
         return (lightness, chroma)
     }
 
-    /// Smallest contrast ratio the page may offer: backdrops where neither white nor black
-    /// text reaches this (roughly L* 44 to 55) are nudged to the nearest lightness that does.
     private static let minimumTextContrast = 5.5
 
     private static func relit(lightness: Double, chroma: Double, hue: Double) -> UIColor {
@@ -71,13 +53,11 @@ enum ArtworkBackdrop {
         return Lab.rgb(lightness: lightness, chroma: chroma, hue: hue)
     }
 
-    /// Higher of the WCAG contrast ratios of white and black text on the color.
     private static func bestTextContrast(on color: UIColor) -> Double {
         let luminance = relativeLuminance(of: color)
         return max(1.05 / (luminance + 0.05), (luminance + 0.05) / 0.05)
     }
 
-    /// WCAG contrast ratio of white text on the color.
     private static func whiteTextContrast(on color: UIColor) -> Double {
         1.05 / (relativeLuminance(of: color) + 0.05)
     }

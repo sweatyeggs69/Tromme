@@ -1,6 +1,5 @@
 import Foundation
 
-/// Which metadata sheet to present: `.edit` for an album, `.trackInfo` for a track (info and edit in one).
 enum MetadataSheetRequest: Identifiable {
     case edit(PlexMetadata)
     case trackInfo(PlexMetadata)

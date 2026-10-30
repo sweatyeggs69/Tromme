@@ -1,15 +1,9 @@
 import SwiftUI
 
-/// Silent, looping animated artwork laid over the static artwork. Renders nothing
-/// until playback starts, then fades in, so the static artwork stays visible when there
-/// is none or loading fails. Streams over HLS, so it only shows while online. Plays
-/// only while on screen with the app active, restarting from the top each time.
 struct AnimatedArtworkView: View {
     let url: URL?
     var cornerRadius: CGFloat = 8
-    /// Freezes the clip in place while true (Now Playing passes the song being paused).
     var isHeld = false
-    /// Gets a small still of the video once it starts playing.
     var onFrame: ((UIImage) -> Void)?
 
     @Environment(NetworkStatus.self) private var network
@@ -31,7 +25,6 @@ struct AnimatedArtworkView: View {
         .onChange(of: videoURL) { isReady = false }
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
-        // Long-press and taps go to the static artwork underneath.
         .allowsHitTesting(false)
     }
 }

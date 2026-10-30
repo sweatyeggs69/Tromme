@@ -1,7 +1,5 @@
 import Foundation
 
-/// An upcoming concert. `date` holds the venue's local wall-clock time read as GMT, so it
-/// formats the same everywhere when rendered with a GMT time zone.
 struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let city: String
@@ -9,7 +7,6 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     let venue: String
     let address: String?
     let date: Date
-    /// The real start instant, when the API gives one; the calendar uses it.
     let instant: Date?
     let hasTime: Bool
     let url: URL?
@@ -18,7 +15,6 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
         [city, region].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
-    /// "263 N Center St, Mesa, AZ"
     var addressText: String {
         [address, city, region].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
@@ -29,7 +25,6 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
         return components?.url
     }
 
-    /// "January 15, 2027 · Friday"
     var longDateText: String {
         Self.format("MMMMdyyyy", date) + " · " + Self.format("EEEE", date)
     }
@@ -39,14 +34,12 @@ struct ConcertEvent: Codable, Identifiable, Hashable, Sendable {
     var monthText: String { Self.format("MMM", date) }
     var dayText: String { Self.format("d", date) }
 
-    /// "Venue · Fri · 12:00 PM", or "Venue · Fri, Jan 15 · 12 PM" with `includesDate`.
     func detailText(includesDate: Bool = false) -> String {
         var parts = [venue, Self.format(includesDate ? "EEEMMMd" : "EEE", date)]
         if hasTime { parts.append(includesDate ? shortTimeText : Self.format("jmm", date)) }
         return parts.filter { !$0.isEmpty }.joined(separator: "\u{2009}·\u{2009}")
     }
 
-    /// "12 PM" on the hour, "7:30 PM" otherwise.
     private var shortTimeText: String {
         var gmt = Calendar(identifier: .gregorian)
         gmt.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt

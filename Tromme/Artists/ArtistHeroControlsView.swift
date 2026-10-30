@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Info, play and shuffle buttons shown under the artist name.
 struct ArtistHeroControlsView: View {
     let backdropColor: Color
     var hasBio = false

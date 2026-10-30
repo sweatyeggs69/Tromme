@@ -67,9 +67,6 @@ struct ArtistsView: View {
         .task(id: loadTaskID) { await loadArtists() }
         .task(id: artworkPrefetchKey) { await prefetchVisibleArtwork() }
         .task {
-            // Re-run when a pull-to-refresh or cold-launch/foreground smartRefresh elsewhere
-            // detects the library changed — otherwise this tab, once loaded, never notices
-            // since loadTaskID doesn't change on refresh.
             for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
                 guard !Task.isCancelled else { break }
                 await loadArtists()
@@ -174,7 +171,6 @@ struct ArtistsView: View {
     }
 
     private func loadArtistsOffline() async {
-        // Offline shows only artists with downloaded songs, using cached library entries for their photos.
         var cachedByKey: [String: PlexMetadata] = [:]
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
@@ -182,7 +178,6 @@ struct ArtistsView: View {
             let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope)
             cachedByKey = Dictionary(cached.map { ($0.ratingKey, $0) }, uniquingKeysWith: { first, _ in first })
         }
-        // Fall back to artists inferred from downloaded tracks.
         var seen = Set<String>()
         var result: [PlexMetadata] = []
         for record in downloadManager.downloadedTracksSorted {
@@ -214,7 +209,6 @@ struct ArtistsView: View {
             return
         }
 
-        // Paint synchronously from the in-memory copy of the local library when available.
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         if let cached = LibraryStore.memory.items(scope: scope, kind: LibraryStore.Kind.artist), !cached.isEmpty {
             var sorted = cached
@@ -223,7 +217,6 @@ struct ArtistsView: View {
             isLoading = false
         }
 
-        // Phase 1: Read the artist list from the local library (waits only on the very first sync).
         do {
             var result = try await client.cachedArtists(server: server, sectionId: sectionId)
             result.sort { artistSortKey(for: $0.title) < artistSortKey(for: $1.title) }
@@ -238,8 +231,6 @@ struct ArtistsView: View {
             isLoading = false
         }
 
-        // Phase 2: Discover artists that only appear in track metadata (no standalone entry).
-        // Runs after the view is already visible so it never delays the initial display.
         let knownKeys = Set(artists.map(\.ratingKey))
         guard let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) else { return }
         var seen = Set<String>()
@@ -266,8 +257,6 @@ struct ArtistsView: View {
 
     private func prefetchVisibleArtwork() async {
         guard !isLoading, let server = serverConnection.currentServer else { return }
-        // Skip aggressive prefetching on metered networks or in Low Power Mode —
-        // images will still load lazily as the user scrolls.
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let prefetchCount = viewMode == .grid ? 60 : 80

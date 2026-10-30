@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// AVAudioSession configuration.
 extension AudioPlayerService {
     // MARK: - Audio Session
 
@@ -23,8 +22,6 @@ extension AudioPlayerService {
         }
     }
 
-    /// Activates the audio session using the async system API so the main
-    /// thread is never blocked waiting on the activation to complete.
     func activateAudioSession() async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             AVAudioSession.sharedInstance().activate { success, error in
@@ -37,14 +34,11 @@ extension AudioPlayerService {
         }
     }
 
-    /// Pre-fetches detailed metadata (with gain values) for upcoming queue items
-    /// so Sound Check doesn't need a network call at playback time.
     func prefetchGainMetadata() {
         guard !isConstrainedPlaybackPath, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         guard UserDefaults.standard.bool(forKey: Self.soundCheckKey),
               let client, let server else { return }
         gainPrefetchTask?.cancel()
-        // Prefetch current + next 10 tracks
         let upcoming = queue.dropFirst(currentIndex).prefix(11)
         let keys = upcoming.map(\.ratingKey)
         gainPrefetchTask = Task(priority: .utility) {

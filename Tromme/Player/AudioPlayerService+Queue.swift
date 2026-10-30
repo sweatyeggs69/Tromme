@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// Dynamic downloads and queue info.
 extension AudioPlayerService {
     // MARK: - Dynamic Downloads
 
@@ -14,11 +13,6 @@ extension AudioPlayerService {
         return mode == .queue
     }
 
-    /// When Auto-Download is in Dynamic mode, downloads the current track plus
-    /// upcoming queue tracks (capped at the configured limit) for offline
-    /// playback. The queue can hold an entire library, so the cap keeps a
-    /// rolling window that advances with playback rather than downloading
-    /// everything at once.
     func syncDynamicQueueDownloads() {
         guard isDynamicQueueDownloadEnabled else { return }
         guard let server, let client,
@@ -69,9 +63,6 @@ extension AudioPlayerService {
         player = nil
         stopLosslessPlayback()
         tearDownObservers()
-        // Turn off infinite mode before clearing the queue below — otherwise its
-        // didSet-driven refill would fire on the now-empty queue mid-reset.
-        // (cancelAllBackgroundTasks() above already cleared magicMixBuildTask.)
         isInfiniteModeActive = false
         queue = []
         originalQueue = []

@@ -1,13 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Renders truncated text with a styled "MORE" suffix that always stays inline at the end of the
-/// last visible line — never pushed to its own line, and never itself clipped by truncation.
-///
-/// SwiftUI's built-in `.lineLimit` + `.truncationMode(.tail)` truncates from the end of the string,
-/// which would cut off a trailing "MORE" suffix on any text long enough to need truncation. This
-/// view instead measures the text against the view's actual width and manually truncates at a word
-/// boundary, reserving space for the suffix so it always survives.
 struct InlineMoreText: View {
     private let text: String
     private let textStyle: UIFont.TextStyle
@@ -122,10 +115,6 @@ struct InlineMoreText: View {
         return result
     }
 
-    /// Measures the exact height `lineLimit` lines of `primaryFont` occupy, using the same
-    /// `boundingRect` method used elsewhere. `UIFont.lineHeight * lineLimit` is not a reliable
-    /// substitute — TextKit's actual line-wrapping height doesn't match it closely enough, which
-    /// previously caused truncation to stop a full line short of the allowed limit.
     private func maxHeight(width: CGFloat) -> CGFloat {
         let reference = NSAttributedString(
             string: Array(repeating: "Ag", count: lineLimit).joined(separator: "\n"),

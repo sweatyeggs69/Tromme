@@ -2,30 +2,15 @@ import SwiftUI
 import CryptoKit
 import ImageIO
 
-/// Two-tier image cache: NSCache (memory) + disk (Application Support, so the OS never
-/// purges artwork the library prefetch has already downloaded).
-/// Images are keyed by URL string, hashed to SHA256 for disk filenames.
-///
-/// The actor only guards bookkeeping (in-flight requests, disk byte count, generation).
-/// Disk reads, decoding, and file writes run off the actor in `@concurrent` helpers,
-/// so many rows can decode in parallel instead of queueing behind one another.
 actor ImageCache {
     static let shared = ImageCache()
 
-    // NSCache is documented thread-safe, so reads/writes from nonisolated contexts are fine.
     nonisolated(unsafe) private let memoryCache = NSCache<NSString, UIImage>()
     private let diskURL: URL
-    // Holds a whole library's grid-size artwork (see `storeToDisk`); least recently used go first.
     private let maxDiskBytes: Int = 400 * 1024 * 1024 // 400 MB
-    // Tracked incrementally so routine saves don't need a full directory scan;
-    // only refreshed by an authoritative re-scan when trimDiskCacheIfNeeded() runs.
     private var currentDiskBytes: Int = 0
     private var inFlightRequests: [String: Task<UIImage?, Never>] = [:]
-    // Disk files whose modification date has already been bumped this session. LRU
-    // eviction only needs a rough recency signal, so each file is touched at most once
-    // instead of paying a metadata write on every read.
     private var touchedDiskKeys: Set<String> = []
-    // Short timeout so unreachable servers don't block artwork for tens of seconds.
     private static let downloadSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral
         config.waitsForConnectivity = false
@@ -33,7 +18,6 @@ actor ImageCache {
         config.timeoutIntervalForResource = 15
         return URLSession(configuration: config)
     }()
-    /// Incremented on clearAll to invalidate in-progress downloads.
     private var generation: Int = 0
 #if DEBUG
     private var debugStats = DebugStats()
@@ -41,7 +25,6 @@ actor ImageCache {
 
     private init() {
         let fm = FileManager.default
-        // Artwork used to live in Caches, which iOS purges under storage pressure.
         if let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
             try? fm.removeItem(at: caches.appendingPathComponent("TrommeImageCache", isDirectory: true))
         }
@@ -52,12 +35,9 @@ actor ImageCache {
         values.isExcludedFromBackup = true
         try? dir.setResourceValues(values)
         diskURL = dir
-        // Cost is the real limit; the count is only a backstop so long lists of small
-        // row thumbnails aren't evicted while well under the byte budget.
         memoryCache.countLimit = 1000
         memoryCache.totalCostLimit = 100 * 1024 * 1024 // 100 MB
         currentDiskBytes = Self.scanDiskBytes(at: diskURL)
-        // Shrinks stores written under an older, larger cap.
         Task(priority: .background) { await self.trimDiskCacheIfNeeded() }
     }
 
@@ -77,11 +57,9 @@ actor ImageCache {
         let start = ContinuousClock.now
 #endif
         let key = cacheKey(for: url)
-        // Disk key strips width/height so one stored copy per artwork serves every size.
         let diskKey = diskCacheKey(for: url)
         let memoryKey = memoryCacheKey(for: key, targetPixelSize: targetPixelSize)
 
-        // 1. Memory
         if let cached = memoryCache.object(forKey: memoryKey as NSString) {
 #if DEBUG
             debugStats.memoryHits += 1
@@ -90,8 +68,6 @@ actor ImageCache {
             return cached
         }
 
-        // 2. Coalesce in-flight requests for the same artwork and size, so a disk decode
-        // or download happens once no matter how many rows ask for it at the same time.
         let requestKey = "\(diskKey)|\(targetPixelSize ?? 0)"
         if let existing = inFlightRequests[requestKey] {
 #if DEBUG
@@ -116,9 +92,6 @@ actor ImageCache {
         return result
     }
 
-    /// Returns any cached image for the URL without attempting a network download.
-    /// Checks memory first, then disk without a minimum-size requirement. Used for
-    /// a fast pre-population step so views show something immediately on slow networks.
     func anyCachedImage(for url: URL, targetPixelSize: Int?) async -> UIImage? {
         let memKey = memoryCacheKey(for: cacheKey(for: url), targetPixelSize: targetPixelSize)
         if let mem = memoryCache.object(forKey: memKey as NSString) { return mem }
@@ -129,8 +102,6 @@ actor ImageCache {
             requireFullSize: false,
             touch: touchedDiskKeys.insert(diskKey).inserted
         ) else { return nil }
-        // A copy that already covers the requested size is the final image — cache it so
-        // the caller's follow-up image(for:) is a memory hit instead of a second decode.
         if result.isFullSize {
             memoryCache.setObject(result.image, forKey: memKey as NSString, cost: result.image.decodedCost)
         }
@@ -138,20 +109,12 @@ actor ImageCache {
     }
 
     func prefetch(urls: [URL], targetPixelSize: Int? = nil, maxConcurrent: Int = 6) async {
-        // Skip anything already decoded and sitting in the memory cache. Several call
-        // sites (warmCache, repeated screen visits) prefetch overlapping artist/album
-        // sets, and re-decoding them is wasted work. Also drop duplicates — tracks on
-        // the same album share artwork.
         var seen: Set<String> = []
         let pending = urls.filter {
             let key = memoryCacheKey(for: cacheKey(for: $0), targetPixelSize: targetPixelSize)
             return memoryCache.object(forKey: key as NSString) == nil && seen.insert(key).inserted
         }
         guard !pending.isEmpty else { return }
-        // Rolling window: start the next fetch as soon as any one finishes rather than
-        // waiting on the slowest of a fixed batch. Utility priority keeps prefetch behind
-        // on-screen rows; a row that needs a prefetching image awaits the same coalesced
-        // task, which escalates its priority.
         var remaining = pending[...]
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<max(maxConcurrent, 1) {
@@ -169,10 +132,6 @@ actor ImageCache {
         }
     }
 
-    /// Downloads artwork straight to disk without decoding or touching the memory cache —
-    /// used by the library prefetch so thousands of covers are on hand before they're
-    /// scrolled to. Skips files already stored at `pixelSize` or larger. Stops early (and
-    /// can simply be re-run) if the task is cancelled or the connection drops.
     func storeToDisk(urls: [URL], pixelSize: Int, maxConcurrent: Int = 4) async {
         var seen = Set<String>()
         var pending: [(url: URL, diskKey: String)] = []
@@ -207,8 +166,6 @@ actor ImageCache {
         didWriteToDisk(fileURL: fileURL, bytesDelta: bytesDelta, generation: startGeneration)
     }
 
-    /// Synchronously returns an in-memory cached image if present. Used by views that need
-    /// to render cached art on the very first frame without waiting for an actor hop.
     nonisolated func memoryCachedImage(for url: URL, targetPixelSize: Int? = nil) -> UIImage? {
         let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
         let baseKey = hash.map { String(format: "%02x", $0) }.joined()
@@ -227,7 +184,6 @@ actor ImageCache {
     func clearAll() {
         generation += 1
         memoryCache.removeAllObjects()
-        // Cancel all in-flight downloads so they don't write back to the cleared cache
         for (key, task) in inFlightRequests {
             task.cancel()
             inFlightRequests[key] = nil
@@ -243,14 +199,9 @@ actor ImageCache {
 
     // MARK: - Private
 
-    /// Body of a coalesced lookup: disk, then network, then an undersized disk fallback.
     private func resolve(url: URL, diskKey: String, memoryKey: String, targetPixelSize: Int?) async -> UIImage? {
         let fileURL = diskURL.appendingPathComponent(diskKey)
 
-        // Disk (size-independent key). Only serve the stored file if its pixels cover
-        // the requested size — an undersized copy falls through to a re-download so
-        // large surfaces (Now Playing, album headers) don't get a small image upscaled.
-        // The undersized file remains as an offline fallback.
         if let disk = await Self.loadFromDisk(
             at: fileURL,
             targetPixelSize: targetPixelSize,
@@ -267,7 +218,6 @@ actor ImageCache {
         debugStats.misses += 1
 #endif
 
-        // Online: fetch a properly sized copy. Offline skips straight to the fallback.
         if NetworkStatus.shared.isConnected {
 #if DEBUG
             debugStats.networkRequests += 1
@@ -277,7 +227,6 @@ actor ImageCache {
             }
         }
 
-        // Offline or failed fetch: serve an undersized disk copy rather than nothing.
         if let fallback = await Self.loadFromDisk(at: fileURL, targetPixelSize: targetPixelSize, requireFullSize: false, touch: false) {
             memoryCache.setObject(fallback.image, forKey: memoryKey as NSString, cost: fallback.image.decodedCost)
             return fallback.image
@@ -287,9 +236,6 @@ actor ImageCache {
 
     private func download(url: URL, diskKey: String, memoryKey: String, targetPixelSize: Int?) async -> UIImage? {
         let startGeneration = generation
-        // Fetch at least 512px so small row requests still store a reasonably sharp shared
-        // copy. Larger surfaces re-fetch at their own size when the stored file is too small.
-        // Memory is still decoded at the originally requested size.
         let fetchURL = upgradedDownloadURL(from: url, minimumSize: 512)
         guard let (data, image) = await Self.fetchAndDecode(fetchURL, targetPixelSize: targetPixelSize) else {
 #if DEBUG
@@ -297,12 +243,9 @@ actor ImageCache {
 #endif
             return nil
         }
-        // If cache was cleared during download, don't save stale data
         guard generation == startGeneration else { return nil }
 
         memoryCache.setObject(image, forKey: memoryKey as NSString, cost: image.decodedCost)
-        // Hand the image back now; the disk write happens in the
-        // background so they never delay this or any other artwork request.
         let fileURL = diskURL.appendingPathComponent(diskKey)
         Task(priority: .background) {
             let bytesDelta = await Self.writeToDisk(data, to: fileURL)
@@ -315,7 +258,6 @@ actor ImageCache {
     }
 
     private func didWriteToDisk(fileURL: URL, bytesDelta: Int, generation writeGeneration: Int) {
-        // The cache was cleared while this file was being encoded — drop it.
         guard writeGeneration == generation else {
             try? FileManager.default.removeItem(at: fileURL)
             return
@@ -324,9 +266,6 @@ actor ImageCache {
         trimDiskCacheIfNeeded()
     }
 
-    /// Cheap check against the incrementally-tracked byte total; only falls back to a
-    /// full directory scan (needed to find the oldest files) once actually over the cap,
-    /// instead of scanning every file on every single save.
     private func trimDiskCacheIfNeeded() {
         guard currentDiskBytes > maxDiskBytes else { return }
         let fm = FileManager.default
@@ -346,7 +285,6 @@ actor ImageCache {
             fileInfos.append((file, date, size))
         }
 
-        // Evict oldest files first
         fileInfos.sort { $0.date < $1.date }
         for info in fileInfos {
             guard totalSize > maxDiskBytes * 4 / 5 else { break }
@@ -361,8 +299,6 @@ actor ImageCache {
         return hash.map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Returns a URL with `width`/`height` params raised to at least `minimumSize`.
-    /// Used so every disk-cached file is high enough quality to serve Now Playing offline.
     private func upgradedDownloadURL(from url: URL, minimumSize: Int) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let items = components.queryItems else { return url }
@@ -377,27 +313,17 @@ actor ImageCache {
         return components.url ?? url
     }
 
-    /// Cache key for disk storage. Strips `width`/`height` so one file serves every
-    /// display size, and strips the host+port so artwork cached on a local URI is still
-    /// found when the server reprobe switches to a remote URI (or vice versa).
-    /// The thumb identity is preserved via the `url` query param. Auth params are stripped
-    /// so signing out and back in doesn't orphan the whole cache (old files age out via LRU).
     private func diskCacheKey(for url: URL) -> String {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return cacheKey(for: url)
         }
         var changed = false
-        // Width/height vary per display size; the token and client id rotate on re-login
-        // and don't identify the artwork, so none of them belong in the key.
         let volatileParams: Set<String> = ["width", "height", "X-Plex-Token", "X-Plex-Client-Identifier"]
         if let items = components.queryItems,
            items.contains(where: { volatileParams.contains($0.name) }) {
             components.queryItems = items.filter { !volatileParams.contains($0.name) }
             changed = true
         }
-        // Drop the scheme/host/port so the key is stable across server URI changes
-        // (e.g. local LAN ↔ remote reprobe). The `url` query param uniquely identifies
-        // the artwork regardless of which server base URL is currently active.
         if components.host != nil {
             components.scheme = nil
             components.host = nil
@@ -419,16 +345,11 @@ actor ImageCache {
 
     private struct DiskImage: Sendable {
         let image: UIImage
-        /// Whether the stored file's pixels cover the requested size.
         let isFullSize: Bool
     }
 
-    /// Loads and decodes a disk-cached image. With `requireFullSize`, returns nil before
-    /// decoding if the stored file is smaller than `targetPixelSize` — signaling the
-    /// caller to re-fetch a larger copy instead of upscaling.
     @concurrent
     private static func loadFromDisk(at fileURL: URL, targetPixelSize: Int?, requireFullSize: Bool, touch: Bool) async -> DiskImage? {
-        // Check first: ImageIO logs an error to the console for every missing file.
         guard FileManager.default.fileExists(atPath: fileURL.path),
               let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
         var isFullSize = true
@@ -441,13 +362,11 @@ actor ImageCache {
         if requireFullSize && !isFullSize { return nil }
         guard let image = decodeImage(from: source, targetPixelSize: targetPixelSize) else { return nil }
         if touch {
-            // Bump the modification date for LRU eviction
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
         }
         return DiskImage(image: image, isFullSize: isFullSize)
     }
 
-    /// Longest edge, in pixels, of the stored file (0 if missing/unreadable). Reads only the header.
     @concurrent
     private static func storedPixelSize(at fileURL: URL) async -> Int {
         guard FileManager.default.fileExists(atPath: fileURL.path),
@@ -493,9 +412,6 @@ actor ImageCache {
         return (data, image)
     }
 
-    /// Writes the downloaded bytes to disk as-is and returns the change in on-disk size.
-    /// Artwork is stored exactly as Plex sent it — no re-encoding, so no extra CPU and no
-    /// blocking encoder calls on the concurrency pool.
     @concurrent
     private static func writeToDisk(_ data: Data, to fileURL: URL) async -> Int {
         let previousSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0

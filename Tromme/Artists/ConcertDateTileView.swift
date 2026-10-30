@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Calendar-style tile showing a concert's month and day.
 struct ConcertDateTileView: View {
     let concert: ConcertEvent
     var size: CGFloat = 64

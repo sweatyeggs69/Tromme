@@ -1,10 +1,6 @@
 import Foundation
 import Observation
 
-/// Lyrics the user marked as wrong or out of sync, per song. Each block keeps the
-/// rejected lyrics' exact fingerprint and its words-only fingerprint, so the resolver
-/// skips that version and the same words as plain text, then falls through to the
-/// next match. Persisted as JSON in Application Support.
 @MainActor
 @Observable
 final class BlockedLyricsStore {
@@ -15,7 +11,6 @@ final class BlockedLyricsStore {
         let textFingerprint: String
     }
 
-    /// Song key (artist + title) to its blocks, oldest first.
     private var blocked: [String: [Block]]
 
     private let fileURL: URL
@@ -33,7 +28,6 @@ final class BlockedLyricsStore {
         "\(artist.lowercased())\u{1F}\(title.lowercased())"
     }
 
-    /// Every fingerprint a candidate must not match for this song.
     func fingerprints(forSong key: String) -> Set<String> {
         Set((blocked[key] ?? []).flatMap { [$0.fingerprint, $0.textFingerprint] })
     }

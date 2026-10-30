@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Draws a word-synced lyric line the way Apple Music does: each word starts
-/// dimmed and a soft bright edge wipes across it as it's sung. Words are
-/// tagged with `Timing` so the line still wraps as ordinary text.
-///
-/// `activeAmount` animates between 0 (inactive) and 1 (active), so when the
-/// line hands off to the next one the highlight fades out instead of
-/// snapping off.
 struct WordWipeTextRenderer: TextRenderer {
     struct Timing: TextAttribute {
         let start: TimeInterval
@@ -21,12 +14,7 @@ struct WordWipeTextRenderer: TextRenderer {
         set { activeAmount = newValue }
     }
 
-    /// Dimmed text, matching inactive lyric lines. Word-synced lines own their
-    /// whole opacity (the line itself stays fully opaque), so a line becoming
-    /// active only fades the wipe overlay in and out and never has to
-    /// coordinate two animations of its base text.
     private static let dimOpacity = 0.3
-    /// Half-width of the soft edge, as a fraction of the line height.
     private static let featherRatio = 0.35
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
@@ -49,8 +37,6 @@ struct WordWipeTextRenderer: TextRenderer {
         let progress = min(max((time - timing.start) / span, 0), 1)
 
         let feather = rect.height * Self.featherRatio
-        // Travels from fully before the word to fully past it, so the soft
-        // edge enters and leaves cleanly.
         let travel = rect.width + 2 * feather
         let edge = rect.minX - feather + progress * travel
         var bright = context

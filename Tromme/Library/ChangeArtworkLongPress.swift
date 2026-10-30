@@ -1,7 +1,6 @@
 import SwiftUI
 
 extension View {
-    /// Long press opens the artwork changer, with a light haptic as confirmation.
     func changeArtworkOnLongPress(isEnabled: Bool = true, action: @escaping () -> Void) -> some View {
         modifier(ChangeArtworkLongPress(isEnabled: isEnabled, action: action))
     }

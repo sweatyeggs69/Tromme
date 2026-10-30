@@ -16,10 +16,7 @@ final class DownloadManager: @unchecked Sendable {
     private var activeDownloadCount = 0
     private let maxConcurrentDownloads = 3
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
-    /// Set while a debounced `persistRecordsNow()` write is pending — see `persistRecords()`.
     private var persistScheduled = false
-    /// False until the on-disk records have been read; writes are skipped before then so an
-    /// early persist can't overwrite the file with a partial set.
     private var hasLoadedRecords = false
     private let fileQueue = DispatchQueue(label: "com.tromme.downloadManager.files", qos: .utility)
 
@@ -49,8 +46,6 @@ final class DownloadManager: @unchecked Sendable {
         loadPersistedRecords()
     }
 
-    /// Maps the retired per-mode toggles ("autoDownloadAllSongs",
-    /// "dynamicQueueDownloads") onto the enabled + mode pair.
     private static func migrateLegacyAutoDownloadPreferences() {
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "autoDownloadEnabled") == nil {
@@ -118,7 +113,6 @@ final class DownloadManager: @unchecked Sendable {
         for task in downloadTasks.values { task.cancel() }
         downloadTasks.removeAll()
         pendingQueue.removeAll()
-        // activeDownloadCount is left alone: each cancelled task decrements it itself when it unwinds.
         transientStates.removeAll()
         userStoppedAutoDownload = true
     }
@@ -128,9 +122,6 @@ final class DownloadManager: @unchecked Sendable {
         downloadBatch(tracks: tracks, server: server, client: client)
     }
 
-    /// Called after a smart-refresh to pick up any tracks added or updated in the library.
-    /// Evicts stale downloads when the server's updatedAt is newer than the stored value,
-    /// then queues any missing tracks. No-ops if the user stopped auto-download or mode isn't .library.
     func syncLibraryDownloadsIfNeeded(server: PlexServer, sectionId: String, client: PlexAPIClient) async {
         guard !userStoppedAutoDownload else { return }
         let enabled = UserDefaults.standard.bool(forKey: "autoDownloadEnabled")
@@ -153,7 +144,6 @@ final class DownloadManager: @unchecked Sendable {
         for task in downloadTasks.values { task.cancel() }
         downloadTasks.removeAll()
         pendingQueue.removeAll()
-        // activeDownloadCount is left alone: each cancelled task decrements it itself when it unwinds.
         let directory = downloadsDirectory
         fileQueue.async { try? FileManager.default.removeItem(at: directory) }
         records.removeAll()
@@ -168,8 +158,6 @@ final class DownloadManager: @unchecked Sendable {
             .appendingPathComponent("TrommeDownloads", isDirectory: true)
     }
 
-    /// Creates the downloads folder and keeps it out of iCloud / device backups — the
-    /// files are re-downloadable and can be many gigabytes.
     private nonisolated static func prepareDownloadsDirectory(_ directory: URL) {
         var dir = directory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -201,7 +189,6 @@ final class DownloadManager: @unchecked Sendable {
             processQueue()
         }
 
-        // Resolve the part key — fetch full metadata if media info is absent
         let resolvedTrack: PlexMetadata
         if track.media?.first?.part?.first?.key != nil {
             resolvedTrack = track
@@ -243,7 +230,6 @@ final class DownloadManager: @unchecked Sendable {
                     )
                     return
                 } catch {
-                    // Cancelled downloads stop here; a failed transcode falls back to the original file.
                     if Task.isCancelled { throw error }
                     #if DEBUG
                     print("[Downloads] transcode failed for \(ratingKey): \(error)")
@@ -285,8 +271,6 @@ final class DownloadManager: @unchecked Sendable {
         let destURL = downloadsDirectory.appendingPathComponent(filename)
 
         let tempURL = try await fetch()
-        // A dying transcoder can return 200 with an empty body — don't record
-        // an empty file as a successful download.
         try Task.checkCancellation()
         let fileSize = try await Task.detached(priority: .utility) {
             try Self.moveDownloadedFile(from: tempURL, to: destURL)
@@ -310,9 +294,6 @@ final class DownloadManager: @unchecked Sendable {
         transientStates.removeValue(forKey: ratingKey)
         persistRecords()
 
-        // Prefetch artwork once at the largest transcode bucket. The disk cache is
-        // keyed without width/height, so this single high-res copy serves track rows,
-        // grids, and Now Playing / album headers offline.
         if let thumbPath {
             let px = ArtworkView.maxTranscodePx
             if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
@@ -321,7 +302,6 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
-    /// Validates and moves a finished download into place; returns its size. Runs off the main actor.
     private nonisolated static func moveDownloadedFile(from tempURL: URL, to destURL: URL) throws -> Int64 {
         let fm = FileManager.default
         let downloadedSize = (try? fm.attributesOfItem(atPath: tempURL.path))?[.size] as? Int64 ?? 0
@@ -339,9 +319,6 @@ final class DownloadManager: @unchecked Sendable {
 
     // MARK: - Persistence
 
-    /// Debounces bursts of `persistRecords()` calls (e.g. a library-wide auto-download
-    /// completing many tracks back to back) into a single encode+write instead of
-    /// re-encoding the entire records dictionary to disk on every completion.
     private func persistRecords() {
         guard !persistScheduled else { return }
         persistScheduled = true
@@ -352,19 +329,16 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
-    /// Call before the app becomes inactive/terminates so no debounced write is lost.
     func flushPendingPersist() {
         persistScheduled = false
         persistRecordsNow()
     }
 
-    /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
     private nonisolated static var recordsFileURL: URL {
         URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
             .appending(path: "downloadRecords.json")
     }
 
-    /// Encodes on the main actor, then writes on a serial queue so writes stay ordered.
     private func persistRecordsNow() {
         guard hasLoadedRecords,
               let data = try? JSONEncoder().encode(Array(records.values)) else { return }
@@ -375,8 +349,6 @@ final class DownloadManager: @unchecked Sendable {
         }
     }
 
-    /// Reads the records file, drops records whose file is gone, and prepares the downloads
-    /// folder, all off the main actor so a large library doesn't delay launch.
     private func loadPersistedRecords() {
         let directory = downloadsDirectory
         let legacyKey = persistenceKey
@@ -397,7 +369,6 @@ final class DownloadManager: @unchecked Sendable {
         legacyKey: String
     ) -> (records: [DownloadedTrackRecord], needsPersist: Bool) {
         let fileData = try? Data(contentsOf: recordsFileURL)
-        // Older builds kept the records in UserDefaults; move them to the file once.
         let legacyData = fileData == nil ? UserDefaults.standard.data(forKey: legacyKey) : nil
         guard let data = fileData ?? legacyData,
               let loaded = try? JSONDecoder().decode([DownloadedTrackRecord].self, from: data) else {

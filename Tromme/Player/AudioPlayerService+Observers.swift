@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// Audio route, interruption, network and AVPlayer observers.
 extension AudioPlayerService {
     func observeSoundCheckToggle() {
         soundCheckObserver = NotificationCenter.default.addObserver(
@@ -130,7 +129,6 @@ extension AudioPlayerService {
         let oldConnected = lastNetworkIsConnected
         lastNetworkInterfaceType = newType
         lastNetworkIsConnected = newConnected
-        // Adds or removes lock screen animated artwork when Low Data Mode flips.
         updateNowPlayingInfo()
 
         let interfaceChanged = newType != oldType
@@ -190,10 +188,7 @@ extension AudioPlayerService {
 
     // MARK: - Observers
 
-    /// Watches the player item's status. Once .readyToPlay fires, loads the
-    /// authoritative duration from the parsed STREAMINFO / container header.
     func observeItemStatus(_ item: AVPlayerItem) {
-        // .initial so an item that is already ready (a prepared Auto Mix song) is handled too.
         statusObservation = item.observe(\.status, options: [.initial, .new]) { [weak self] observedItem, _ in
             let status = observedItem.status
             let assetDuration = observedItem.duration.seconds
@@ -204,12 +199,6 @@ extension AudioPlayerService {
                 case .readyToPlay:
                     self.isReadyToPlay = true
                     let durationBeforeReady = self.duration
-                    // An offset stream's asset duration only covers the remainder
-                    // of the track, so keep the metadata duration in that case.
-                    // Local files keep Plex metadata duration — downloaded MP3
-                    // transcodes can have corrupt Xing/VBR headers. Lossless files
-                    // (FLAC/ALAC) carry an exact sample count, so their asset
-                    // duration is authoritative and keeps the timeline in sync.
                     let trustsAssetDuration = !self.isPlayingLocalFile
                         || ["FLAC", "ALAC"].contains(self.localFileCodec ?? "")
                     if trustsAssetDuration, self.streamTimeOffset == 0,
@@ -229,9 +218,6 @@ extension AudioPlayerService {
                         self.logPlayback("resume_seek", "to=\(bounded)")
                         self.isSeeking = true
                         let target = CMTime(seconds: bounded, preferredTimescale: 600)
-                        // Local files: 50ms tolerance — imperceptible but avoids
-                        // finished=false on VBR files that have no sample at the exact time.
-                        // HLS streams need more slack for playlist segment boundaries.
                         let tolerance = self.isPlayingLocalLossless ? CMTime.zero
                             : self.isPlayingLocalFile ? CMTime(seconds: 0.05, preferredTimescale: 600)
                             : CMTime(seconds: 0.25, preferredTimescale: 600)

@@ -17,7 +17,6 @@ struct HomeView: View {
 
     private let onSignOut: () -> Void
 
-    // Read-only views of the view model's state, so the body reads as before.
     private var favoriteTracks: [PlexMetadata] { viewModel.favoriteTracks }
     private var recentTracks: [PlexMetadata] { viewModel.recentTracks }
     private var playlists: [PlexPlaylist] { viewModel.playlists }

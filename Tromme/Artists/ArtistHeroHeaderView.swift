@@ -41,8 +41,6 @@ struct ArtistHeroHeaderView: View {
             .padding(.top, 130)
             .padding(.bottom, 12)
         } else {
-            // Title and controls sit on the bottom edge of the row and scroll with it; the
-            // photo behind them is drawn by ArtistHeroPhotoView.
             VStack(spacing: 20) {
                 Text(artist.title)
                     .font(.largeTitle.weight(.bold))

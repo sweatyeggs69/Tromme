@@ -22,7 +22,6 @@ struct PlaylistsView: View {
         return filteredPlaylists.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
     }
 
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
     private static func normalizeForSearch(_ string: String) -> String {
         let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
         return String(String.UnicodeScalarView(scalars))

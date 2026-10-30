@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-/// Loading and actions for `AlbumDetailView`; the view only renders this state.
 @Observable @MainActor
 final class AlbumDetailViewModel {
     let album: PlexMetadata
@@ -15,7 +14,6 @@ final class AlbumDetailViewModel {
     private(set) var recommendedAlbums: [PlexMetadata]
     private(set) var popularTrackTitles: Set<String> = []
     private(set) var isDeletingAlbum = false
-    /// Square Apple Music animated artwork for the header, when the album has it.
     private(set) var animatedArtworkURL: URL?
     var albumDeleteErrorMessage: String?
 
@@ -34,7 +32,6 @@ final class AlbumDetailViewModel {
         isPreviewMode = previewTracks != nil
     }
 
-    /// Everything the loaders need from the environment.
     struct Context {
         let server: PlexServer?
         let sectionId: String?
@@ -59,8 +56,6 @@ final class AlbumDetailViewModel {
 
     func load(_ context: Context) async {
         guard !isPreviewMode else { return }
-        // .task restarts when popping back to the view; showing the spinner again would
-        // collapse the track list and jump the scroll position.
         if tracks.isEmpty { isLoadingTracks = true }
         async let detailsTask: Void = loadAlbumDetails(context)
         async let tracksTask: Void = loadTracks(context)
@@ -173,7 +168,6 @@ final class AlbumDetailViewModel {
         )
     }
 
-    /// Replaces an edited track in place, or drops it when it moved to another album.
     func applyEditedTrack(_ edited: PlexMetadata) {
         guard let index = tracks.firstIndex(where: { $0.ratingKey == edited.ratingKey }) else { return }
         if let parent = edited.parentRatingKey, parent != album.ratingKey {
@@ -187,7 +181,6 @@ final class AlbumDetailViewModel {
         albumDetails = edited
     }
 
-    /// Re-reads the album and its tracks from the local library after it changed.
     func reloadFromStore(_ context: Context) async {
         guard !isPreviewMode, context.isConnected else { return }
         async let detailsTask: Void = loadAlbumDetails(context)
@@ -199,7 +192,6 @@ final class AlbumDetailViewModel {
         tracks.removeAll { $0.ratingKey == track.ratingKey }
     }
 
-    /// Deletes the album on the server and locally. Returns true when the view should dismiss.
     func deleteAlbum(_ context: Context) async -> Bool {
         guard !isPreviewMode, let server = context.server, !isDeletingAlbum else { return false }
 

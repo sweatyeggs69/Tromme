@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// Shared capsule track used by the timeline and volume sliders so they stay identical.
 struct SliderTrack: View {
     let progress: CGFloat
     let isDragging: Bool
     let width: CGFloat
-    /// Shimmers and glows while Auto Mix is blending two songs.
     var isMixing = false
 
     var body: some View {
@@ -26,7 +24,6 @@ struct SliderTrack: View {
         .animation(.easeInOut(duration: 0.5), value: isMixing)
     }
 
-    /// A soft band of light travelling along the track, with a slow pulse.
     private func shimmer(height: CGFloat) -> some View {
         TimelineView(.animation) { context in
             let time = context.date.timeIntervalSinceReferenceDate

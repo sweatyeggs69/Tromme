@@ -35,7 +35,6 @@ final class AutoMixReportViewModel: Identifiable {
 
     var canSend: Bool { previous != nil && current != nil && sendState != .sending }
 
-    /// Sends the report with the mix plan values so a bad mix can be reproduced.
     func send() async {
         guard let previous, let current else { return }
         sendState = .sending
@@ -69,7 +68,6 @@ final class AutoMixReportViewModel: Identifiable {
         .init(key: track.ratingKey, title: track.title, artist: track.artistDisplayName)
     }
 
-    /// Anonymous per-install ID, only used to rate limit reports.
     private static var installID: String {
         let key = "autoMixReportInstallID"
         if let stored = UserDefaults.standard.string(forKey: key) { return stored }

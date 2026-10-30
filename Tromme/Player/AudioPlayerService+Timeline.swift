@@ -3,12 +3,9 @@ import MediaPlayer
 import Network
 import Observation
 
-// Timeline reporting.
 extension AudioPlayerService {
     // MARK: - Timeline Reporting
 
-    /// Best-effort lifecycle signal when the app is terminating.
-    /// iOS may not deliver this on force-quit, but when it does we report stopped.
     func reportStoppedForAppTermination() {
         guard currentTrack != nil else { return }
         reportTimelineState("stopped", continuing: false)

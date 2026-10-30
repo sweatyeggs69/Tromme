@@ -11,7 +11,6 @@ final class PlexAuthService {
     private var pollTask: Task<Void, Never>?
 
     init() {
-        // Migrate from UserDefaults to Keychain if needed
         if let legacy = UserDefaults.standard.string(forKey: Self.tokenKey) {
             KeychainHelper.save(legacy, forKey: Self.tokenKey)
             UserDefaults.standard.removeObject(forKey: Self.tokenKey)
@@ -21,7 +20,6 @@ final class PlexAuthService {
 
     var isAuthenticated: Bool { authToken != nil }
 
-    /// Whether the auth sheet should be presented.
     var showAuthSheet: Bool { authURL != nil }
 
     func startAuth(client: PlexAPIClient) async {
@@ -36,22 +34,18 @@ final class PlexAuthService {
                 throw PlexAPIError.invalidURL
             }
 
-            // Present the auth sheet
             authURL = url
 
-            // Start polling for the token
             pollTask = Task {
                 do {
                     let token = try await pollForToken(client: client, pinId: pin.id)
                     self.authToken = token
                     KeychainHelper.save(token, forKey: Self.tokenKey)
                 } catch is CancellationError {
-                    // User dismissed — no error
                 } catch {
                     self.error = error.localizedDescription
                 }
 
-                // Dismiss the sheet and reset state
                 self.authURL = nil
                 self.isAuthenticating = false
             }
@@ -61,7 +55,6 @@ final class PlexAuthService {
         }
     }
 
-    /// Called when the user manually dismisses the auth sheet.
     func cancelAuth() {
         pollTask?.cancel()
         pollTask = nil

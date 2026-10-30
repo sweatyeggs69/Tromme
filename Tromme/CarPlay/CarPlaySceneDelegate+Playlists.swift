@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay Playlists templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Playlists

@@ -70,7 +70,6 @@ struct AlbumTrackRow: View {
         let trackArtist = trackArtistCredit
         guard !trackArtist.isEmpty else { return nil }
 
-        // Rule: if track artist differs from album artist, show track artist.
         if albumArtist.isEmpty { return trackArtist }
         let hasDifferentArtist = trackArtist.caseInsensitiveCompare(albumArtist) != .orderedSame
 

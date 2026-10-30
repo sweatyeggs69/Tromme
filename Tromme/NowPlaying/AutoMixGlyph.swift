@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Two overlapping rings, Apple Music's AutoMix mark. SF Symbols has no equivalent.
 struct AutoMixGlyph: View {
     @ScaledMetric(relativeTo: .callout) private var ring: CGFloat = 14
 

@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-/// Loads the media details (file, codec, bitrate) for `TrackInfoSheet`.
 @Observable @MainActor
 final class TrackInfoViewModel {
     private(set) var track: PlexMetadata
@@ -15,7 +14,6 @@ final class TrackInfoViewModel {
     var part: PlexPart? { media?.part?.first }
     var audioStream: PlexStream? { part?.stream?.first { $0.streamType == 2 } ?? part?.stream?.first }
 
-    /// The stored copy of this track when it is downloaded.
     var download: DownloadedTrackRecord? { AppContext.shared.downloadManager.records[track.ratingKey] }
 
     func load(server: PlexServer?, client: PlexAPIClient) async {

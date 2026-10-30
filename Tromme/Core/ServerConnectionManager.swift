@@ -20,7 +20,6 @@ final class ServerConnectionManager {
         self.currentServer = Self.loadPersistedServer()
         self.currentLibrarySectionId = UserDefaults.standard.string(forKey: Self.libraryKey)
 
-        // Observe network changes via shared monitor
         networkObservation = Task { [weak self] in
             var lastType = NetworkStatus.shared.interfaceType
             var lastConnected = NetworkStatus.shared.isConnected
@@ -48,7 +47,6 @@ final class ServerConnectionManager {
         Self.persist(server)
     }
 
-    /// Everything about a server except its access token, which lives in the Keychain.
     private struct StoredServer: Codable {
         let name: String
         let uri: String
@@ -69,7 +67,6 @@ final class ServerConnectionManager {
         UserDefaults.standard.removeObject(forKey: serverKey)
     }
 
-    /// Structured state lives in a disk file, not UserDefaults (see CLAUDE.md).
     private static var serverFileURL: URL {
         let dir = URL.applicationSupportDirectory.appending(path: "TrommeState", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -80,8 +77,6 @@ final class ServerConnectionManager {
         if let data = try? Data(contentsOf: serverFileURL) {
             return decodeStoredServer(data)
         }
-        // Older builds kept the server in UserDefaults: first the whole server with its
-        // token, later everything but the token. Either way, move it to the file.
         guard let data = UserDefaults.standard.data(forKey: serverKey) else { return nil }
         if let legacy = try? JSONDecoder().decode(PlexServer.self, from: data) {
             persist(legacy)
@@ -109,19 +104,16 @@ final class ServerConnectionManager {
         currentLibrarySectionId = sectionId
         UserDefaults.standard.set(sectionId, forKey: Self.libraryKey)
         if changed {
-            // Clear the stored updatedAt so the next launch treats this section as new
             if let serverId = currentServer?.machineIdentifier {
                 UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt_\(serverId)_\(sectionId)")
             }
             UserDefaults.standard.removeObject(forKey: "lastLibraryUpdatedAt") // legacy key
         }
-        // Warm cache for the selected library
         if let server = currentServer, let client {
             warmCache(server: server, sectionId: sectionId, client: client)
         }
     }
 
-    /// Preload core library data in the background so views load instantly.
     func warmCache(server: PlexServer, sectionId: String, client: PlexAPIClient) {
         warmingTask?.cancel()
         warmingTask = Task {
@@ -155,9 +147,6 @@ final class ServerConnectionManager {
 
     // MARK: - Auto-Discovery
 
-    /// Discover all reachable Plex servers with music libraries.
-    /// If exactly one is found, connects automatically. If multiple are found,
-    /// returns them so the caller can present a picker.
     func autoDiscover(authToken: String, client: PlexAPIClient) async throws {
         let servers = try await discoverServers(authToken: authToken, client: client)
         if servers.count == 1, let only = servers.first {
@@ -169,10 +158,8 @@ final class ServerConnectionManager {
         }
     }
 
-    /// All discovered servers when multiple are available.
     var availableServers: [PlexServer] = []
 
-    /// Probes all Plex resources and returns servers with music libraries.
     func discoverServers(authToken: String, client: PlexAPIClient) async throws -> [PlexServer] {
         let resources = try await client.getResources(token: authToken)
         let candidates = resources.filter {
@@ -260,9 +247,6 @@ final class ServerConnectionManager {
 
     // MARK: - Probing
 
-    /// Probes connections by priority tiers: local, then remote, then relay.
-    /// This avoids unnecessary relay/cellular-style probes when a higher-priority
-    /// path is already reachable.
     static func probe(
         connections: [PlexConnection],
         token: String,

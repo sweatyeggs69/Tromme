@@ -1,7 +1,6 @@
 import SwiftUI
 import StoreKit
 
-/// Tromme Plus subscription sheet, using the system subscription store view.
 struct PlusPaywallView: View {
     @Environment(\.dismiss) private var dismiss
 

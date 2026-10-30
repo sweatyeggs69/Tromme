@@ -15,7 +15,6 @@ struct AllAlbumsView: View {
     @AppStorage("allAlbumsSortOrder") private var sortOrder: AlbumSortOrder = .titleAscending
     @State private var addToPlaylistRequest: AddToPlaylistRequest?
 
-    // Sorted/sectioned results, computed off the main actor by applyDisplayState().
     @State private var displayAlbums: [PlexMetadata] = []
     @State private var displaySections: [(title: String, items: [PlexMetadata])] = []
     @State private var sortGeneration: Int = 0
@@ -31,10 +30,6 @@ struct AllAlbumsView: View {
         return Array(repeating: GridItem(.flexible(), spacing: AppStyle.ArtistDetailAlbumGrid.itemSpacing), count: count)
     }
 
-    // Sorts and sections all off the main actor to keep UI responsive at large library sizes.
-    // Skips work if the data and sort parameters haven't changed since the last pass.
-    // A generation counter ensures only the most recent request writes to state,
-    // preventing stale results from piled-up tasks when navigating between tabs quickly.
     private func applyDisplayState() async {
         guard !albums.isEmpty else {
             displayAlbums = []
@@ -208,7 +203,6 @@ struct AllAlbumsView: View {
                 await loadAlbums()
             }
         }
-        // Cancels and restarts whenever sort order changes.
         .task(id: sortOrder.rawValue) {
             await applyDisplayState()
         }
@@ -216,9 +210,6 @@ struct AllAlbumsView: View {
             await prefetchVisibleArtwork()
         }
         .task {
-            // Re-run when a pull-to-refresh or cold-launch/foreground smartRefresh elsewhere
-            // detects the library changed — otherwise this tab, once loaded, never notices
-            // since loadTaskID doesn't change on refresh.
             guard previewAlbums == nil else { return }
             for await _ in NotificationCenter.default.notifications(named: .libraryContentDidChange) {
                 guard !Task.isCancelled else { break }
@@ -382,7 +373,6 @@ struct AllAlbumsView: View {
     }
 
     private func loadAlbumsOffline() async {
-        // Offline shows only albums with downloaded songs, using cached library entries for their artwork.
         var cachedByKey: [String: PlexMetadata] = [:]
         if let server = serverConnection.currentServer,
            let sectionId = serverConnection.currentLibrarySectionId {
@@ -390,7 +380,6 @@ struct AllAlbumsView: View {
             let cached = await LibraryStore.shared.items(kind: LibraryStore.Kind.album, scope: scope)
             cachedByKey = Dictionary(cached.map { ($0.ratingKey, $0) }, uniquingKeysWith: { first, _ in first })
         }
-        // Fall back to albums inferred from downloaded tracks.
         var seen = Set<String>()
         var result: [PlexMetadata] = []
         for record in downloadManager.downloadedTracksSorted {
@@ -421,7 +410,6 @@ struct AllAlbumsView: View {
             return
         }
 
-        // Paint synchronously from the in-memory copy of the local library when available.
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         if let cached = LibraryStore.memory.items(scope: scope, kind: LibraryStore.Kind.album), !cached.isEmpty {
             albums = cached
@@ -444,8 +432,6 @@ struct AllAlbumsView: View {
 
     private func prefetchVisibleArtwork() async {
         guard !isLoading, let server = serverConnection.currentServer else { return }
-        // Skip aggressive prefetching on metered networks or in Low Power Mode —
-        // images will still load lazily as the user scrolls.
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let prefetchCount = viewMode == .grid ? 80 : 60

@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Shuffle / Play / add-menu button row shown under artwork on album and playlist detail
-/// screens. Colors derive from `artworkColor` so the buttons read well against any artwork.
 struct ArtworkActionButtonsRow<MenuContent: View>: View {
     let artworkColor: Color
     var isDisabled: Bool

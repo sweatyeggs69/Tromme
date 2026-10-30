@@ -1,7 +1,6 @@
 import SwiftUI
 import Observation
 
-/// Loading for `ArtistDetailView`; the view only renders this state.
 @Observable @MainActor
 final class ArtistDetailViewModel {
     let artist: PlexMetadata
@@ -29,7 +28,6 @@ final class ArtistDetailViewModel {
         similarArtists = previewData?.similarArtists ?? []
     }
 
-    /// Everything the loaders need from the environment.
     struct Context {
         let server: PlexServer?
         let sectionId: String?
@@ -55,7 +53,6 @@ final class ArtistDetailViewModel {
         let client = context.client
         let artist = artist
 
-        // Load all data in parallel instead of sequentially
         async let metadataReq = client.cachedMetadata(server: server, ratingKey: artist.ratingKey)
         async let releasesReq = client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)
         async let artistTracksReq = client.cachedArtistTracks(server: server, sectionId: sectionId, artist: artist)
@@ -82,15 +79,12 @@ final class ArtistDetailViewModel {
         }
     }
 
-    /// Upcoming concerts load on their own so a slow lookup never holds up the page.
     func loadConcerts(isConnected: Bool) async {
         guard !isPreviewMode, isConnected else { return }
         let fetched = await TicketmasterService.fetchConcerts(artist: artist.title)
         withAnimation(.easeIn(duration: 0.25)) { concerts = fetched }
     }
 
-    /// Re-reads the artist after its photo changed, so the page picks up the new thumb. The sheet
-    /// has already updated the stored listing.
     func reloadArtist(_ context: Context) async {
         guard let server = context.server,
               let fresh = try? await context.client.getMetadata(server: server, ratingKey: artist.ratingKey) else { return }
@@ -101,8 +95,6 @@ final class ArtistDetailViewModel {
         Array(tracks.sorted { ($0.viewCount ?? 0) > ($1.viewCount ?? 0) }.prefix(10))
     }
 
-    /// Reads artist data from disk cache without any network calls.
-    /// Returns true if enough data was found to populate the view.
     private func loadOfflineContent(_ context: Context) {
         let artistKey = artist.ratingKey
         let artistTitle = artist.title

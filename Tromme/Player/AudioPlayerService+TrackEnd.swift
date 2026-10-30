@@ -3,7 +3,6 @@ import MediaPlayer
 import Network
 import Observation
 
-// Track end and advance handling.
 extension AudioPlayerService {
     // MARK: - Track End
 
@@ -12,11 +11,6 @@ extension AudioPlayerService {
             let status = observedPlayer.timeControlStatus
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Discard stale callbacks from a previous player that fired just
-                // before tearDownObservers() could cancel them. Without this guard,
-                // a queued Task from the old player's .paused transition can set
-                // isPlaying = false momentarily after the new player has started,
-                // causing the play/pause button to flicker on track transitions.
                 guard observedPlayer === self.player else { return }
                 let waitingForPlayback = status == .waitingToPlayAtSpecifiedRate
                 // Preserve the current "playing intent" while AVPlayer is briefly
@@ -41,17 +35,12 @@ extension AudioPlayerService {
         }
     }
 
-    /// A new track occasionally lands paused while the user still wants playback (the
-    /// player pausing itself at an item boundary, a transient audio session hiccup).
-    /// Nothing else restarts it, so nudge it once the item has had time to load.
     func watchForStalledStart() {
         let generation = playbackGeneration
         Task { @MainActor [weak self] in
             for delay in [1.5, 3.0] {
                 try? await Task.sleep(for: .seconds(delay))
                 guard let self, self.playbackGeneration == generation else { return }
-                // A gapless item that failed while it was still queued never fires the
-                // status observer registered after the advance, so recover it here.
                 if self.playbackIntent, self.player?.currentItem?.status == .failed {
                     self.logPlayback("stalled_start_item_failed")
                     self.handlePlaybackFailure("preloaded_item_failed")
@@ -88,7 +77,6 @@ extension AudioPlayerService {
                 if observedPlayer.currentItem === preloaded.item {
                     self.advanceToPreloadedTrack(preloaded)
                 } else if observedPlayer.currentItem == nil {
-                    // The enqueued item failed and AVQueuePlayer skipped past it.
                     self.logPlayback("gapless_advance_failed", "track=\(preloaded.ratingKey)")
                     self.discardPreloadedNext()
                     self.next()
@@ -124,9 +112,6 @@ extension AudioPlayerService {
             }
             return
         }
-        // A zero-tolerance seek on a local VBR file can land at the physical end of
-        // the audio data and fire AVPlayerItemDidPlayToEndTime before the seek
-        // completion callback clears isSeeking. Ignore the notification in that case.
         guard !isSeeking else { return }
         // Cover the inverse race: the seek completion callback can clear isSeeking
         // before this notification is processed. Suppress only when both:
@@ -146,9 +131,6 @@ extension AudioPlayerService {
                 return
             }
         }
-        // If audio ended before the reported duration (e.g. bad VBR header from a
-        // Plex MP3 transcode), snap the timeline to the actual end so the UI doesn't
-        // briefly show false remaining time before advancing to the next track.
         if let playerTime = player?.currentItem?.currentTime().seconds,
            playerTime.isFinite, playerTime > 0, duration - playerTime > 1 {
             logPlayback("track_end_duration_correction", "reported=\(duration) actual=\(playerTime)")
@@ -161,8 +143,6 @@ extension AudioPlayerService {
         advanceAfterTrackEnd()
     }
 
-    /// Moves app state onto the enqueued item AVQueuePlayer has (or is about to)
-    /// advance to, without rebuilding the player — this is what makes it gapless.
     func advanceToPreloadedTrack(_ preloaded: PreloadedNextTrack) {
         guard let player, let target = nextAutoAdvanceTarget(),
               target.track.ratingKey == preloaded.ratingKey else {
@@ -235,7 +215,6 @@ extension AudioPlayerService {
         logPlayback("gapless_advance", "to=\(track.ratingKey) index=\(target.index)")
         beginTrackSession(item: item)
 
-        // Fallback if the pre-seek of the queued item didn't take.
         let start = currentTrackStartTime
         if start > 0, item.currentTime().seconds < start - 0.5 {
             seek(to: start)

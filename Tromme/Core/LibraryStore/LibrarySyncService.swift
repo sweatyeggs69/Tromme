@@ -1,15 +1,8 @@
 import Foundation
 
-/// Mirrors the Plex library into `LibraryStore` in the background.
-///
-/// A sync runs two overlapping phases — artists + albums, then tracks — each streamed to
-/// disk page by page and diffed against what's already stored (changed rows rewritten,
-/// vanished rows pruned). Existing data stays readable throughout; nothing is deleted up
-/// front, so an interrupted or offline sync never leaves the library empty.
 actor LibrarySyncService {
     static let shared = LibrarySyncService()
 
-    /// Re-sync at least this often even if the server's section `updatedAt` hasn't moved.
     private let safetyNetInterval: TimeInterval = 7 * 86_400
 
     private struct Run {
@@ -23,9 +16,6 @@ actor LibrarySyncService {
 
     // MARK: - Public
 
-    /// Syncs if the section changed since the last sync, was never synced, or hasn't been
-    /// verified for a week (or `force`). No library traffic beyond one cheap sections call
-    /// when nothing changed.
     func refreshIfNeeded(client: PlexAPIClient, server: PlexServer, sectionId: String, force: Bool = false) async {
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         guard let sections = try? await client.getLibrarySections(server: server),
@@ -37,7 +27,6 @@ actor LibrarySyncService {
         let stale = Date().timeIntervalSince(state.lastSyncedAt) > safetyNetInterval
             && !NetworkStatus.shared.isExpensive
         guard force || !complete || stale || state.serverUpdatedAt != serverUpdatedAt else {
-            // Nothing changed, but a previous prefetch may have been interrupted — resume it.
             schedulePrefetch(client: client, server: server, sectionId: sectionId)
             return
         }
@@ -48,8 +37,6 @@ actor LibrarySyncService {
         _ = try? await run.tracks.value
     }
 
-    /// Runs `client.performPlaylistRefresh`, sharing one in-flight refresh per server
-    /// between concurrent callers (launch sync, Home pull-to-refresh, prefetch).
     func refreshPlaylists(client: PlexAPIClient, server: PlexServer) async throws {
         let serverId = server.machineIdentifier
         if let existing = playlistRefreshes[serverId] {
@@ -61,9 +48,6 @@ actor LibrarySyncService {
         try await task.value
     }
 
-    /// Suspends until `kind` has been mirrored at least once, starting a sync if none is
-    /// running. Returns immediately once data exists. Throws if the first sync fails
-    /// (e.g. offline before the library was ever loaded).
     func waitUntilReady(kind: Int, client: PlexAPIClient, server: PlexServer, sectionId: String) async throws {
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         if await LibraryStore.shared.isReady(kind: kind, scope: scope) { return }
@@ -86,8 +70,6 @@ actor LibrarySyncService {
     ) -> Run {
         if let existing = runs[scope] { return existing }
 
-        // Don't inherit the caller's priority: launch-time refreshes run at .background, which
-        // iOS throttles hard. Someone is waiting on a first sync, so run that one promptly.
         let priority: TaskPriority = firstSync ? .userInitiated : .utility
         let meta = Task<Void, Error>(priority: priority) {
             try await withThrowingTaskGroup(of: Void.self) { group in
@@ -102,8 +84,6 @@ actor LibrarySyncService {
             await LibraryStore.shared.markReady(kind: LibraryStore.Kind.album, scope: scope)
             Notification.Name.postLibraryContentDidChange()
         }
-        // Tracks download alongside artists/albums but are only committed after them, so
-        // the store never holds tracks whose albums it hasn't seen yet.
         let tracks = Task<Void, Error>(priority: priority) {
             try await Self.mirror(kind: LibraryStore.Kind.track, client: client, server: server, sectionId: sectionId, scope: scope) {
                 try await meta.value
@@ -127,8 +107,6 @@ actor LibrarySyncService {
         runs[scope] = nil
         guard enrichmentTasks[scope] == nil,
               let sectionId = scope.split(separator: "|", maxSplits: 1).last.map(String.init) else { return }
-        // Stages after the library itself: 3) artist details, then 4) artwork — last, so it
-        // never competes with the data the UI actually needs.
         enrichmentTasks[scope] = Task(priority: .utility) {
             await Self.enrichDetails(client: client, server: server, scope: scope)
             self.finishEnrichment(scope: scope)
@@ -136,18 +114,13 @@ actor LibrarySyncService {
         }
     }
 
-    /// Queues the artwork pass (stage 4). Does nothing while a sync or artist-detail pass
-    /// is still running for the library — the last of those starts it when it finishes.
     private func schedulePrefetch(client: PlexAPIClient, server: PlexServer, sectionId: String) {
         let scope = LibraryScope.id(serverId: server.machineIdentifier, sectionId: sectionId)
         guard runs[scope] == nil, enrichmentTasks[scope] == nil else { return }
         let previous = prefetchTask
         prefetchTask = Task(priority: .utility) {
             await previous?.value
-            // Playlist covers are part of the artwork pass, so make sure playlists are mirrored first.
             try? await self.refreshPlaylists(client: client, server: server)
-            // Artist backdrop colors: once for photos already on disk, again for the ones
-            // this artwork pass downloads, so artist pages never wait on the pick.
             let artistThumbs = await LibraryStore.shared.items(kind: LibraryStore.Kind.artist, scope: scope).compactMap(\.thumb)
             await ArtworkColorCache.shared.precomputeArtistColors(thumbPaths: artistThumbs, client: client, server: server)
             await LibraryPrefetcher.prefetchArtwork(client: client, server: server, sectionId: sectionId)
@@ -159,7 +132,6 @@ actor LibrarySyncService {
         enrichmentTasks[scope] = nil
     }
 
-    /// Streams one kind from the server into the store and prunes rows the server dropped.
     private static func mirror(
         kind: Int, client: PlexAPIClient, server: PlexServer, sectionId: String, scope: String,
         beforeFirstWrite: (@Sendable () async throws -> Void)? = nil
@@ -195,9 +167,6 @@ actor LibrarySyncService {
         #endif
     }
 
-    /// Fetches `/library/metadata/{id}` for every artist and album so bio, similar artists,
-    /// album style tags, etc. are on disk before they're needed. Bounded and low-priority;
-    /// skipped on metered networks / Low Power Mode (pages fall back to fetching on demand).
     private static func enrichDetails(client: PlexAPIClient, server: PlexServer, scope: String) async {
         guard !NetworkStatus.shared.isExpensive, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let keys = await LibraryStore.shared.keysNeedingDetail(kind: LibraryStore.Kind.artist, scope: scope)
@@ -205,8 +174,6 @@ actor LibrarySyncService {
         guard !keys.isEmpty else { return }
         let serverId = server.machineIdentifier
 
-        // `/library/metadata/{ids}` takes a comma-separated list, so 50 artists cost one
-        // request instead of 50 — a 3,000-artist library is ~60 requests, not 3,000.
         let batchSize = 50
         let batches = stride(from: 0, to: keys.count, by: batchSize).map { Array(keys[$0..<min($0 + batchSize, keys.count)]) }
         await withTaskGroup(of: Void.self) { group in

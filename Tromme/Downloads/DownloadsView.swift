@@ -25,7 +25,6 @@ struct DownloadsView: View {
         return displayTracks.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
     }
 
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
     nonisolated private static func normalizeForSearch(_ string: String) -> String {
         let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
         return String(String.UnicodeScalarView(scalars))
@@ -126,11 +125,9 @@ struct DownloadsView: View {
         } message: {
             Text("This will remove all downloaded songs from your device.")
         }
-        // Re-run whenever search text or sort order changes.
         .task(id: "\(searchText)|\(sortOrder.rawValue)") {
             await applyDisplayState()
         }
-        // Re-run when downloads are added or removed.
         .onChange(of: downloadManager.records.count) { _, _ in
             Task { await applyDisplayState() }
         }

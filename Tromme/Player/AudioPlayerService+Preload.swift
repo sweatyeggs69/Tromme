@@ -3,11 +3,9 @@ import MediaPlayer
 import Network
 import Observation
 
-// Gapless next-track preloading.
 extension AudioPlayerService {
     // MARK: - Next Track Preload
 
-    /// The queue slot that plays when the current track ends on its own.
     func nextAutoAdvanceTarget() -> (index: Int, track: PlexMetadata)? {
         guard queue.indices.contains(currentIndex) else { return nil }
         if repeatMode != .off {
@@ -25,7 +23,6 @@ extension AudioPlayerService {
         guard nextTrackPreloadTask == nil, preloadedNext == nil else { return }
         guard player?.currentItem != nil else { return }
         guard let track = nextAutoAdvanceTarget()?.track else { return }
-        // Downloaded FLAC/ALAC load through AVAudioPlayer on advance, never preloaded.
         if let record = AppContext.shared.downloadManager.records[track.ratingKey],
            Self.isLosslessLabel(record.codecLabel(source: track.media?.first)) { return }
 
@@ -34,11 +31,7 @@ extension AudioPlayerService {
         }
     }
 
-    /// Resolves the next track's URL using the same decision tree as loadAndPlay
-    /// (local file → direct stream → HLS transcode) and enqueues a ready item.
     func performPreload(_ track: PlexMetadata) async {
-        // A cancelled preload has already been cleared by discardPreloadedNext(),
-        // and a replacement task may now own the slot.
         defer { if !Task.isCancelled { nextTrackPreloadTask = nil } }
         guard let server, let client else { return }
 
@@ -50,7 +43,6 @@ extension AudioPlayerService {
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             let codec = AppContext.shared.downloadManager.records[track.ratingKey]?
                 .codecLabel(source: track.media?.first)
-            // Downloaded FLAC/ALAC play through AVAudioPlayer, so they load on advance instead.
             guard !Self.isLosslessLabel(codec) else { return }
             enqueuePreloaded(track, url: localURL, source: .local(codec: codec), detailedTrack: detailedTrack)
             return
@@ -73,7 +65,6 @@ extension AudioPlayerService {
             return
         }
 
-        // Only the HLS path costs a PMS transcode session up front.
         guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
 
         let sessionID = UUID().uuidString
@@ -131,7 +122,6 @@ extension AudioPlayerService {
         if case .local = source {} else {
             item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: Double(track.duration ?? 0) / 1000.0)
         }
-        // The queue or player may have changed while the URL was resolving.
         guard let player, let currentItem = player.currentItem,
               nextAutoAdvanceTarget()?.track.ratingKey == track.ratingKey,
               player.canInsert(item, after: currentItem) else {
@@ -153,12 +143,8 @@ extension AudioPlayerService {
         logPlayback("preload_complete", "track=\(track.ratingKey)")
     }
 
-    /// Drops the enqueued item when it no longer matches what should play next
-    /// (queue edits, repeat changes), or when a network change makes a
-    /// streamed item's path/bitrate decision stale. The next time tick re-preloads.
     func revalidatePreloadedNext(networkChanged: Bool = false) {
         guard let preloaded = preloadedNext else { return }
-        // Already advanced into it; handleTrackEnd will move state over.
         guard player?.currentItem !== preloaded.item else { return }
         let stillNext = nextAutoAdvanceTarget()?.track.ratingKey == preloaded.ratingKey
         let isLocal = if case .local = preloaded.source { true } else { false }
@@ -198,14 +184,6 @@ extension AudioPlayerService {
         activeRouteName = carPlayOutput?.portName ?? airPlayOutput?.portName
     }
 
-    /// Computes the AVPlayer volume (0.0–1.0) based on ReplayGain data.
-    /// ReplayGain `gain` is the dB adjustment needed to reach −18 LUFS.
-    /// We add +2 dB to target −16 LUFS instead (Apple's own Sound Check reference),
-    /// then clamp to AVPlayer's range. A smaller offset than −11 LUFS means loud
-    /// tracks get attenuated less aggressively — larger attenuation exaggerates the
-    /// equal-loudness (Fletcher-Munson) effect where bass sounds thinner at lower
-    /// playback levels, even though the underlying signal's spectrum is unchanged.
-    /// Uses detailed track metadata (fetched before playback) for stream-level gain values.
     func soundCheckVolume(for track: PlexMetadata?) -> Float {
         min(max(baseSoundCheckVolume(for: track), 0), 1) * mixIncomingGain
     }

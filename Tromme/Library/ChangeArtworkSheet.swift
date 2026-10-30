@@ -6,9 +6,7 @@ struct ChangeArtworkSheet: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(\.dismiss) private var dismiss
 
-    /// Rating key of the album or artist whose picture is being changed.
     let ratingKey: String
-    /// "album" or "artist", for the empty-state text.
     var subject = "album"
     let onArtworkChanged: @MainActor () async -> Void
 
@@ -279,8 +277,6 @@ struct ChangeArtworkSheet: View {
             if let fresh = try? await client.getMetadata(server: server, ratingKey: ratingKey) {
                 await LibraryStore.shared.replaceListing(fresh, serverId: server.machineIdentifier)
             }
-            // The new artwork has a new thumb path, so it is fetched fresh; the rest of the
-            // prefetched library artwork stays on disk.
             await onArtworkChanged()
             dismiss()
         } catch {
@@ -331,7 +327,6 @@ struct ChangeArtworkSheet: View {
         }
     }
 
-    /// Runs the upload or URL request, waits for the new thumb, then refreshes the listing and closes.
     @MainActor
     private func applyCustomArtwork(_ send: (PlexServer) async throws -> Void) async throws {
         guard let server = serverConnection.currentServer else { return }

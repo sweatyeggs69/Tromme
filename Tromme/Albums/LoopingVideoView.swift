@@ -2,14 +2,9 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
-/// A muted, looping video for `AnimatedArtworkView`. Restarts from the top whenever
-/// `isPlaying` turns on, and sets `isReady` once playback has actually started
-/// (buffered and rendering), so a slow stream never shows a stalled frame. Hands
-/// `onFrame` a small still of the video once it starts, for backdrops.
 struct LoopingVideoView: UIViewRepresentable {
     let url: URL
     let isPlaying: Bool
-    /// Freezes the video in place (e.g. the song is paused); resuming continues from there.
     var isHeld = false
     @Binding var isReady: Bool
     var onFrame: ((UIImage) -> Void)?
@@ -69,8 +64,6 @@ struct LoopingVideoView: UIViewRepresentable {
                     self?.captureFrame()
                 }
             }
-            // The clip is silent, so its audio never joins the audio session: a second
-            // audio-capable player starting and stopping alongside the song can glitch it.
             itemObservation = player.observe(\.currentItem, options: [.initial, .new]) { [weak self] player, _ in
                 guard let item = player.currentItem else { return }
                 Task { @MainActor in self?.disableAudio(of: item) }
@@ -96,14 +89,10 @@ struct LoopingVideoView: UIViewRepresentable {
                 if screenChanged { player?.pause() }
                 return
             }
-            // Coming back on screen restarts from the top; a hold only pauses and resumes.
             if screenChanged { player?.seek(to: .zero) }
             if held { player?.pause() } else { player?.play() }
         }
 
-        /// Grabs one frame per video, retrying briefly until the output has one. The
-        /// output is attached to the item that's playing now: the looper creates its
-        /// items asynchronously, so they don't exist yet when the video is configured.
         private func captureFrame() {
             guard frameTask == nil, onFrame != nil, let item = player?.currentItem else { return }
             let output = AVPlayerItemVideoOutput(pixelBufferAttributes: CVPixelBufferAttributes(rawAttributes: [
@@ -129,7 +118,6 @@ struct LoopingVideoView: UIViewRepresentable {
             }
         }
 
-        /// Downscaled, since it's only used blurred.
         private static func smallImage(from buffer: CVPixelBuffer) -> UIImage? {
             var image = CIImage(cvPixelBuffer: buffer)
             let scale = min(1, 256 / max(image.extent.width, 1))

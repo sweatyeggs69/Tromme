@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Editable title, artist, album, number and year fields for `EditMetadataViewModel`.
 struct MetadataFieldsSection: View {
     @Bindable var viewModel: EditMetadataViewModel
 

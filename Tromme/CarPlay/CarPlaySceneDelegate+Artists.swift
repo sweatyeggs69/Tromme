@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 
-// CarPlay Artists templates.
 @MainActor
 extension CarPlaySceneDelegate {
     // MARK: - Artists (A-Z Index)
@@ -79,9 +78,6 @@ extension CarPlaySceneDelegate {
     func loadArtistAlbums(artist: PlexMetadata, server: PlexServer, sectionId: String, client: PlexAPIClient, into template: CPListTemplate) {
         let artistName = artist.title
         Task {
-            // Uses the same release-reconciliation as ArtistDetailView/AlbumDetailView:
-            // the artist's plain children listing can omit releases (e.g. singles)
-            // whose tracks still point back at the artist via parentRatingKey.
             let releases: [PlexMetadata]
             do {
                 releases = try await client.cachedArtistReleases(server: server, sectionId: sectionId, artist: artist)

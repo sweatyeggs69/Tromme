@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Artist photo drawn behind the list. Pinned to the top of the screen, zooms on overscroll,
-/// scrolls with the list and blurs out as the page scrolls.
 struct ArtistHeroPhotoView: View {
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -14,8 +12,6 @@ struct ArtistHeroPhotoView: View {
 
     @State private var image: UIImage?
 
-    /// Heights of the blur and color-fade bands, anchored to the bottom edge of the photo itself
-    /// so they travel with the image (zoom, scroll) instead of the name and buttons.
     private let blurBandHeight: CGFloat = 145
     private let fadeBandHeight: CGFloat = 145
 
@@ -23,22 +19,16 @@ struct ArtistHeroPhotoView: View {
         GeometryReader { geo in
             let stretch = max(-scrollOffset, 0)
             let scrolled = max(scrollOffset, 0)
-            // Photo blurs out as the title nears the top safe area.
             let blurProgress = min(max((scrolled - heroHeight * 0.4) / (heroHeight * 0.35), 0), 1)
             let scrollBlur = blurProgress * 30
-            // On-screen bottom edge of the hero row.
             let rowBottom = max(heroHeight - scrollOffset, 0)
             let width = geo.size.width
 
             if !isHidden {
                 photoWithFades(width: width, blur: scrollBlur)
-                    // Zoom from the first point of overscroll, pinned to the top edge.
                     .scaleEffect(1 + stretch / max(heroHeight, 1), anchor: .top)
-                    // Scrolls with the row (no parallax), so the photo's faded bottom edge always
-                    // lands exactly on the row's bottom edge and no hard edge shows.
                     .offset(y: -scrolled)
                     .frame(width: width, height: geo.size.height, alignment: .top)
-                    // Never paint below the hero row's current bottom edge.
                     .mask(alignment: .top) {
                         Rectangle()
                             .frame(height: rowBottom)
@@ -50,7 +40,6 @@ struct ArtistHeroPhotoView: View {
         }
     }
 
-    /// The photo with its progressive blur and color fade baked into its bottom edge.
     private func photoWithFades(width: CGFloat, blur: CGFloat) -> some View {
         ZStack(alignment: .bottom) {
             photo(width: width, blur: blur)
@@ -115,8 +104,6 @@ struct ArtistHeroPhotoView: View {
         }
         let resolvedImage = await ImageCache.shared.image(for: url)
         guard !Task.isCancelled else { return }
-        // Pick the page backdrop from this photo right away rather than waiting on the
-        // backdrop's own smaller fetch, so the color arrives with the photo.
         if let resolvedImage {
             ArtworkColorCache.shared.resolveColor(for: artworkPath, from: resolvedImage, style: .artist)
         }

@@ -1,9 +1,6 @@
 import Foundation
 import os
 
-/// Lock-protected in-memory copy of the (small) artist and album lists so views can paint
-/// synchronously on appear, without an actor hop or re-decoding thousands of rows.
-/// Tracks are deliberately not held here — a large library's tracks run to tens of MB.
 final class LibraryMemory: Sendable {
     private let lists = OSAllocatedUnfairLock<[String: [PlexMetadata]]>(initialState: [:])
 

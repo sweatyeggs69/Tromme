@@ -1,25 +1,15 @@
 import Foundation
 
-/// Looks up timed lyrics on lrc.red, which keys its catalog by ISRC.
-/// Plex doesn't expose a track's ISRC, so the track is matched through
-/// `/search.json` first, then the timed lyrics come from `/s/<ISRC>.lrc`.
-/// That file carries per-word `<mm:ss.xx>` stamps when the lyrics are
-/// word-synced and answers 404 when they have no timing at all.
 enum LrcRedLyricsProvider {
     private static let baseURL = URL(string: "https://lrc.red")!
 
-    /// How many matching releases (remasters, compilations…) are checked for
-    /// timing, since they don't all carry the same sync level.
     private static let maxCandidates = 4
 
-    /// Timed LRCs from the matching releases, best match first, split by sync level.
     struct TimedLyrics: Sendable {
         var wordSynced: [String] = []
         var lineSynced: [String] = []
     }
 
-    /// Returns every distinct timed LRC among the matching releases. Word-synced ones are
-    /// preferred, then line-synced, both ahead of LRCLIB.
     static func timedLyrics(title: String, artist: String, duration: TimeInterval?) async -> TimedLyrics {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
         guard !candidates.isEmpty else { return TimedLyrics() }
@@ -56,10 +46,6 @@ enum LrcRedLyricsProvider {
         let duration: Double?
     }
 
-    /// ISRCs of search hits for the same song by the same artist, closest
-    /// duration first. Searches with version tags dropped first, since text
-    /// like "(Taylor's Version)" can crowd the song itself out of the limited
-    /// hit list, then retries with the title exactly as given.
     private static func matchingISRCs(title: String, artist: String, duration: TimeInterval?) async -> [String] {
         let wantedTitle = normalizedTitle(title)
         guard !wantedTitle.isEmpty else { return [] }
@@ -102,7 +88,6 @@ enum LrcRedLyricsProvider {
         return ranked.map(\.isrc).filter { seen.insert($0).inserted }.prefix(maxCandidates).map { $0 }
     }
 
-    /// An LRC that parsed to at least one line, with whether it has per-word timing.
     private struct FetchedLRC: Sendable {
         let text: String
         let isWordSynced: Bool
@@ -119,7 +104,6 @@ enum LrcRedLyricsProvider {
 
     // MARK: - Matching
 
-    /// Drops version tags so "Song (Remastered 2011)" and "Song - Live" match "Song".
     private static func normalizedTitle(_ title: String) -> String {
         normalized(baseTitle(title))
     }

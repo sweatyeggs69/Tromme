@@ -25,29 +25,19 @@ final class AudioPlayerService: Sendable {
     var repeatMode: RepeatMode = .off {
         didSet { revalidatePreloadedNext() }
     }
-    /// Magic Mix isn't a toggle — it's a one-shot action you can press repeatedly to
-    /// regenerate the mix. True only while a mix is actively being built.
     var isMagicMixActive: Bool { magicMixBuildTask != nil }
-    /// Agnostic fallback: whenever the queue runs empty, top it off with a random
-    /// track. Independent of Magic Mix — neither mode forces the other off.
     var isInfiniteModeActive = false {
         didSet {
             UserDefaults.standard.set(isInfiniteModeActive, forKey: Self.infiniteModeKey)
             maybeRefillInfiniteQueueIfNeeded(trigger: "infinite_mode_toggled")
         }
     }
-    /// True once the current item's status is .readyToPlay.
     var isReadyToPlay = false
-    /// True when the active audio output route is AirPlay.
     var isAirPlayConnected = false
-    /// True when the active audio output route is CarPlay.
     var isCarPlayConnected = false
-    /// Display name of the active AirPlay or CarPlay route, if any.
     var activeRouteName: String?
 
     enum RepeatMode: String, Sendable {
-        /// `song` loops the current song until turned off; `once` replays it one
-        /// more time, then switches itself off and the queue carries on.
         case off, song, once
 
         var iconName: String {
@@ -61,7 +51,6 @@ final class AudioPlayerService: Sendable {
     }
 
     var player: AVQueuePlayer?
-    /// Set instead of `player` while a downloaded FLAC/ALAC plays through AVAudioPlayer.
     var losslessPlayer: LocalLosslessPlayer?
     var losslessTickTask: Task<Void, Never>?
     var timeObserver: Any?
@@ -106,36 +95,17 @@ final class AudioPlayerService: Sendable {
     #endif
     var isPlayingLocalFile = false
     var localFileCodec: String?
-    /// True when the current item is a direct stream (no PMS transcode/remux).
-    /// On failure, this lets handlePlaybackFailure fall back to the HLS
-    /// transcode path once instead of retrying the same direct URL twice more.
     var isDirectStreamAttempt = false
     var pendingInitialSeekTime: TimeInterval?
-    /// When a streamed transcode session is started at a seek point, AVPlayer's
-    /// timeline begins at 0 but actually represents this many seconds into the track.
     var streamTimeOffset: TimeInterval = 0
-    /// PMS offset playlists sometimes report an absolute timeline (the media
-    /// sequence already carries the offset). Until the first real time-observer
-    /// tick we don't know which variant we got, so the offset math is verified
-    /// once against the observed player time and dropped if it would double-count.
     var pendingStreamOffsetCalibration = false
     var heldSeekTask: Task<Void, Never>?
     var heldSeekTargetTime: TimeInterval = 0
     var lastSavedQueueHash: Int?
     var lastSavedOriginalQueueHash: Int?
-    /// Last time a timeline update went to the server; drives the periodic timeline report.
     var lastTimelineReport: Date = .distantPast
 
-    /// Infinite Mode continuously appends fresh tracks but nothing ever removed the
-    /// played ones, so a long listening session grew `queue` without bound. Keep a
-    /// bounded history behind the current track (enough for `previous()` to still work)
-    /// and drop anything older.
     let infiniteModeHistoryLimit = 40
-    /// Infinite Mode candidates: tracks from albums sharing at least `infiniteMinSharedStyles`
-    /// styles and `infiniteMinSharedMoods` moods with the current track's album, weighted so
-    /// tracks with more shared styles and moods come up more often. If that finds nothing
-    /// it relaxes mood, then falls back to a shared genre (also used when the seed has no
-    /// styles or moods), and finally uses the whole library.
     let infiniteMinSharedStyles = 2
     let infiniteMinSharedMoods = 2
     var gainPrefetchTask: Task<Void, Never>?
@@ -146,27 +116,20 @@ final class AudioPlayerService: Sendable {
     var infiniteRefillTask: Task<Void, Never>?
     var preloadedNext: PreloadedNextTrack?
     var autoMixPlan: AutoMixPlan?
-    /// Plans and outcomes of the last few mixes, for Report AutoMix Issue.
     var autoMixRecords: [AutoMixRecord] = []
-    /// Filter taps by item, for the Auto Mix filter sweeps.
     let mixTaps = NSMapTable<AVPlayerItem, AutoMixFilterTap>.weakToStrongObjects()
     var autoMixPlanTask: Task<Void, Never>?
     var autoMixTriggerTask: Task<Void, Never>?
     var autoMixTask: Task<Void, Never>?
     var autoMixInProgress = false
-    /// The next song whose lyrics Auto Mix already started loading.
     var autoMixLyricsPrefetchKey: String?
-    /// The faded-out tracks' players, kept sounding until the overlap ends.
     var mixOutgoingPlayer: AVQueuePlayer?
     var mixOutgoingLossless: LocalLosslessPlayer?
     var mixOutgoingVolume: Float = 1
-    /// The next song's already-loaded asset (an item can't move between players, its asset can).
+    /// An AVPlayerItem can't move between players; its asset can.
     var mixReusableAsset: AVAsset?
-    /// The next song, already loaded and silent, ready to start with the mix.
     var mixPrepared: PreparedMixIncoming?
-    /// Stream offset of the outgoing item, to turn its player time into track time.
     var mixOutgoingOffset: TimeInterval = 0
-    /// 0...1 multiplier on the incoming track's volume while a mix is fading it in.
     var mixIncomingGain: Float = 1
     var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
@@ -183,7 +146,6 @@ final class AudioPlayerService: Sendable {
         let ratingKey: String
         let streamURL: URL
         let source: Source
-        /// Pre-built item enqueued behind the current item for gapless advance.
         let item: AVPlayerItem
         let detailedTrack: PlexMetadata?
 
@@ -193,7 +155,6 @@ final class AudioPlayerService: Sendable {
         }
     }
 
-    /// Progress from 0 to 1
     var progress: Double {
         guard duration > 0 else { return 0 }
         return currentTime / duration
@@ -201,19 +162,14 @@ final class AudioPlayerService: Sendable {
 
     var hasTrack: Bool { currentTrack != nil }
 
-    /// True when the current track is being transcoded rather than direct-streamed.
     var isTranscoding: Bool { isConstrainedPlaybackPath }
 
-    /// True when the current track is playing from a locally downloaded file.
     var isPlayingLocalDownload: Bool { isPlayingLocalFile }
 
-    /// Downloaded FLAC/ALAC. Their headers give exact durations, but AVPlayer only
-    /// lands where it is told when it is asked for an exact seek (no seek table needed).
     var isPlayingLocalLossless: Bool {
         isPlayingLocalFile && ["FLAC", "ALAC"].contains(localFileCodec ?? "")
     }
 
-    /// The source file bitrate in kbps, or nil when no track is loaded.
     var activeStreamBitrate: Int? {
         guard hasTrack else { return nil }
         let media = currentTrack?.media?.first
@@ -221,25 +177,18 @@ final class AudioPlayerService: Sendable {
             .flatMap { $0.stream ?? [] }
             .first(where: { $0.streamType == 2 })
         let sourceBitrate = audioStream?.bitrate ?? media?.bitrate
-        // A transcoded download is a different file than the Plex source, so the
-        // source bitrate would be wrong; derive the real average from the file.
         if isPlayingLocalFile,
            let track = currentTrack,
            let record = AppContext.shared.downloadManager.records[track.ratingKey],
            record.fileExtension != (media?.container ?? "").lowercased() {
             return record.averageBitrateKbps ?? sourceBitrate
         }
-        // Plex metadata can lack a bitrate (e.g. a restored queue entry); the downloaded file still has one.
         if sourceBitrate == nil, isPlayingLocalFile, let track = currentTrack {
             return AppContext.shared.downloadManager.records[track.ratingKey]?.averageBitrateKbps
         }
         return sourceBitrate
     }
 
-    /// The codec currently being delivered to the audio pipeline.
-    /// Returns "AAC" for constrained (cellular) transcodes, "ALAC" for FLAC files
-    /// routed through the lossless HLS transcode, or the uppercased source codec otherwise.
-    /// Returns nil when no track is loaded.
     var activeStreamCodec: String? {
         guard hasTrack else { return nil }
         if isPlayingLocalFile { return localFileCodec }
@@ -256,8 +205,6 @@ final class AudioPlayerService: Sendable {
         }
     }
 
-    /// The source file's raw audio codec (lowercased), used to pick a transcode
-    /// profile that preserves already-compatible codecs instead of forcing ALAC.
     func sourceAudioCodec(for track: PlexMetadata) -> String? {
         let media = track.media?.first
         let audioStream = media?.part?
@@ -266,9 +213,6 @@ final class AudioPlayerService: Sendable {
         return (audioStream?.codec ?? media?.audioCodec)?.lowercased()
     }
 
-    /// The source file's bitrate in kbps, used to decide whether cellular
-    /// transcoding is actually needed — no point re-encoding a file that's
-    /// already at or under the cellular target bitrate.
     func sourceBitrate(for track: PlexMetadata) -> Int? {
         let media = track.media?.first
         let audioStream = media?.part?
@@ -278,7 +222,6 @@ final class AudioPlayerService: Sendable {
     }
 
     init() {
-        // Earlier builds kept copies of streamed songs and song analyses for Auto Mix.
         let fileManager = FileManager.default
         try? fileManager.removeItem(at: fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("AutoMix", isDirectory: true))
@@ -325,24 +268,17 @@ final class AudioPlayerService: Sendable {
         }
     }
 
-    /// Updates the current track's userRating and syncs the lock screen heart in one call.
-    /// Call this from any UI that can rate the currently playing track.
     func updateCurrentTrackRating(_ userRating: Double?) {
         currentTrack?.userRating = userRating
         setLikeCommandActive((userRating ?? 0) >= 10)
     }
 
-    /// Persists a favorite/unfavorite rating for `track`, invalidating the favorites caches,
-    /// posting `.favoritesDidChange`, and syncing the lock-screen heart if `track` is the
-    /// currently playing track. Returns `true` on success; callers own their own optimistic
-    /// UI state and should roll it back on `false`.
     @discardableResult
     func setFavorited(_ isFavorited: Bool, for track: PlexMetadata, server: PlexServer, client: PlexAPIClient, sectionId: String?) async -> Bool {
         let isCurrentTrack = track.ratingKey == currentTrack?.ratingKey
         if isCurrentTrack { updateCurrentTrackRating(isFavorited ? 10 : 0) }
         do {
             try await client.rateItem(server: server, ratingKey: track.ratingKey, rating: isFavorited ? 10 : -1)
-            // Write the new rating into the local library before announcing the change.
             await client.refreshItem(server: server, ratingKey: track.ratingKey)
             NotificationCenter.default.post(name: .favoritesDidChange, object: nil)
             return true
@@ -352,8 +288,6 @@ final class AudioPlayerService: Sendable {
         }
     }
 
-    /// Swaps in a track that was edited on the server so the queue, Now Playing and the lock
-    /// screen show the new title, artist and album.
     func updateTrack(_ updated: PlexMetadata) {
         func merged(_ old: PlexMetadata) -> PlexMetadata {
             var track = updated
@@ -451,12 +385,10 @@ final class AudioPlayerService: Sendable {
                 return
             }
 
-            // If the item has finished playing, seek to start before resuming
             if let item = player.currentItem,
                item.status == .readyToPlay,
                item.duration.seconds.isFinite,
                CMTimeGetSeconds(item.currentTime()) >= item.duration.seconds - 0.5 {
-                // An offset stream's position 0 is mid-track; restart from the real start.
                 if streamTimeOffset > 0 {
                     seek(to: 0)
                     return
@@ -496,7 +428,6 @@ final class AudioPlayerService: Sendable {
             return
         }
 
-        // If the player item has ended (song finished), re-seek to start before playing
         if let item = player?.currentItem,
            item.status == .readyToPlay,
            item.duration.seconds.isFinite,
@@ -570,9 +501,6 @@ final class AudioPlayerService: Sendable {
         return currentTime
     }
 
-    /// True when nothing is streaming, the file is local, or at least 30 s of the track is
-    /// buffered ahead of the playhead (or all of it, for short tracks), so animated
-    /// artwork can load without competing with the audio.
     var isReadyForArtworkFetch: Bool {
         guard let item = player?.currentItem else { return true }
         if (item.asset as? AVURLAsset)?.url.isFileURL == true || isCurrentItemFullyBuffered { return true }
@@ -657,9 +585,6 @@ final class AudioPlayerService: Sendable {
 
         let resumeTime = preferredResumeTimeForRecovery()
 
-        // Direct stream failed — fall back to PMS's HLS transcode path once,
-        // rather than retrying the same direct URL twice more. Doesn't consume
-        // the normal retry budget below, so HLS gets its own fresh attempts.
         if isDirectStreamAttempt {
             logPlayback("recovery_fallback_to_hls", "reason=\(reason)")
             isDirectStreamAttempt = false
@@ -745,8 +670,6 @@ final class AudioPlayerService: Sendable {
         loadAndPlay(queue[currentIndex])
     }
 
-    /// Natural end-of-track (non-gapless path): repeat modes replay the song,
-    /// otherwise move on through the queue.
     func advanceAfterTrackEnd() {
         if repeatMode != .off, queue.indices.contains(currentIndex) {
             consumeRepeatOnce()
@@ -757,7 +680,6 @@ final class AudioPlayerService: Sendable {
         next()
     }
 
-    /// Repeat Once is spent the moment its replay starts.
     func consumeRepeatOnce() {
         guard repeatMode == .once else { return }
         repeatMode = .off
@@ -773,12 +695,6 @@ final class AudioPlayerService: Sendable {
             return
         }
 
-        // Plex's live HLS transcode can't handle in-stream seeks — AVPlayer stalls
-        // waiting for segments the transcoder hasn't produced yet. Restart the
-        // transcode session with an offset so PMS begins transcoding at the seek
-        // point. Locally downloaded files and direct streams (plain byte-range-
-        // served files, no live transcode) seek in place instead — restarting
-        // those tears down and rebuilds the whole AVPlayer on every drag tick.
         if !isPlayingLocalFile, !isDirectStreamAttempt, server != nil, player != nil,
            queue.indices.contains(currentIndex) {
             logPlayback("seek_restart_stream", "target=\(boundedTime)")
@@ -804,11 +720,6 @@ final class AudioPlayerService: Sendable {
         isSeeking = true
         currentTime = boundedTime
 
-        // 50ms tolerance: precise enough to be imperceptible, but avoids the
-        // finished=false failures that zero-tolerance seeks produce on VBR files
-        // (when no sample exists at the exact requested time). Zero tolerance
-        // caused the player to not move while currentTime was already updated,
-        // producing visible slider jumps when the time observer fired.
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
         let tolerance = isPlayingLocalLossless ? CMTime.zero : CMTime(seconds: 0.05, preferredTimescale: 600)
         let seekGeneration = playbackGeneration
@@ -853,13 +764,10 @@ final class AudioPlayerService: Sendable {
         heldSeekTask = nil
     }
 
-    /// Start marker for the current track, or 0.
     var currentTrackStartTime: TimeInterval {
         currentTrack.flatMap { AppContext.shared.trackMarkers.start(for: $0.ratingKey) } ?? 0
     }
 
-    /// `trimmedTo` ends playback at that track's stop marker. Offset HLS streams skip it
-    /// because their item timeline isn't the track timeline.
     func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0, asset: AVAsset? = nil) -> AVPlayerItem {
         let item = asset.map { AVPlayerItem(asset: $0) } ?? AVPlayerItem(url: url)
         attachMixFilter(to: item, url: url)
@@ -904,11 +812,9 @@ final class AudioPlayerService: Sendable {
             logPlayback("load_begin", "requested=\(track.ratingKey) queue_count=\(queue.count)")
         }
 
-        // Report stopped for the previous track before switching
         if currentTrack != nil {
             reportTimelineState("stopped", continuing: true)
         }
-        // Repeat Once belongs to the song it was set on; moving to another song cancels it.
         if repeatMode == .once, let currentTrack, currentTrack.ratingKey != track.ratingKey {
             repeatMode = .off
             updateShuffleRepeatState()
@@ -946,10 +852,6 @@ final class AudioPlayerService: Sendable {
             player?.removeAllItems()
         }
 
-        // Fast path: locally downloaded file — skip network transcode entirely.
-        // Plex metadata duration is authoritative for local files: downloaded MP3
-        // transcodes can have corrupt Xing/VBR headers that AVFoundation would
-        // read as a wrong duration. duration is already set from track.duration above.
         if let localURL = AppContext.shared.downloadManager.localURL(for: track.ratingKey) {
             discardPreloadedNext()
             logPlayback("load_local_file", "track=\(track.ratingKey)")
@@ -977,18 +879,9 @@ final class AudioPlayerService: Sendable {
         case .lan:
             isConstrainedNetworkPath = false
         }
-        // Only actually transcode down when the source exceeds the target
-        // bitrate — unknown bitrate is treated as "might exceed it" so we
-        // stay conservative rather than risk uncapped cellular usage.
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularTranscodeBitrate } ?? true
         let shouldConstrainForNetwork = isConstrainedNetworkPath && sourceExceedsTarget
 
-        // Direct stream for non-FLAC content — bypasses PMS's HLS transcode/remux
-        // entirely. That remux path is fragile against source files with
-        // malformed VBR/Xing headers (this library has some), which produces
-        // outright playback failures rather than just an imprecise duration.
-        // FLAC (needs lossless ALAC) and cellular-bitrate-constrained playback
-        // still require PMS's transcode, so they fall through to HLS below.
         if !forceHLS, !shouldConstrainForNetwork, sourceCodec != "flac",
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
@@ -1003,13 +896,10 @@ final class AudioPlayerService: Sendable {
         }
         isDirectStreamAttempt = false
 
-        // A preloaded session always starts at 0, so it can't serve a mid-track resume.
         if boundedResume != nil {
             discardPreloadedNext()
         }
 
-        // Fast path: use preloaded next track URL/session if it matches.
-        // Saves the universalDecision API round-trip on track transitions.
         if let preloaded = consumePreloadedNextTrack(for: track.ratingKey),
            case .hls(let candidates, let sessionID, let shouldConstrain) = preloaded.source {
             universalCandidatesForCurrentItem = candidates
@@ -1028,7 +918,6 @@ final class AudioPlayerService: Sendable {
         let preferAACTranscode = shouldConstrainForNetwork
         let avoidAudioTranscode = !preferAACTranscode
 
-        // FLAC or cellular-constrained: route through Plex universal HLS.
         guard let sessionID = currentSessionID else {
             logPlayback("load_rejected", "reason=missing_session_id")
             player?.pause()
@@ -1046,8 +935,6 @@ final class AudioPlayerService: Sendable {
         )
         isConstrainedPlaybackPath = shouldConstrainForNetwork
 
-        // Start the transcode at the resume point rather than seeking after the
-        // fact — PMS otherwise has to transcode everything up to the target first.
         var offsetSeconds = 0
         if let boundedResume, boundedResume > 0 {
             let safeUpper = duration > 1 ? duration - 1 : boundedResume
@@ -1067,7 +954,6 @@ final class AudioPlayerService: Sendable {
 
         playbackLoadTask?.cancel()
         playbackLoadTask = Task {
-            // Step 1: Authorize transcode session and fetch detailed metadata (for gain) in parallel.
             async let decisionResult: Void = capturedClient.universalDecision(
                 server: capturedServer,
                 metadataPath: normalizedPath,
@@ -1097,7 +983,6 @@ final class AudioPlayerService: Sendable {
             guard !Task.isCancelled else { return }
             guard self.playbackGeneration == generation else { return }
 
-            // Step 2: Build universal HLS URL and play directly.
             let candidates = capturedClient.universalStreamURLCandidates(
                 server: capturedServer,
                 mediaPathCandidates: mediaPathCandidates,
@@ -1135,16 +1020,12 @@ final class AudioPlayerService: Sendable {
         let prepared = mixPrepared.flatMap { $0.url == url && $0.ratingKey == currentTrack?.ratingKey ? $0 : nil }
         mixPrepared = nil
         let item = prepared?.item ?? makePlayerItem(url: url, trimmedTo: currentTrack, streamOffset: streamTimeOffset, asset: reusable)
-        // Network streams need a buffer headroom hint and stall-minimization;
-        // local files are already on disk so neither applies.
         if !isPlayingLocalFile {
             item.preferredForwardBufferDuration = preferredFullTrackBufferDuration(for: duration)
         }
         player?.pause()
         player?.removeAllItems()
         let queuePlayer = prepared?.player ?? AVQueuePlayer(playerItem: item)
-        // A prepared song was usually moved to its start point already, but a seek issued
-        // before its item is ready can be dropped; then the normal on-ready seek still runs.
         if let prepared {
             let position = prepared.item.currentTime().seconds
             if let target = pendingInitialSeekTime, !(position.isFinite && abs(position - target) < 0.5) {
@@ -1154,21 +1035,11 @@ final class AudioPlayerService: Sendable {
                 pendingInitialSeekTime = nil
             }
         }
-        // Only advance on item end while a gapless next item is enqueued; otherwise
-        // keep the finished item. .none (not .pause) leaves the player in the playing
-        // state through the gap before the next track loads, so CarPlay never shows
-        // paused (and the audio session isn't released) between songs.
         queuePlayer.actionAtItemEnd = .none
         player = queuePlayer
-        // Local files are on disk — stall minimization only applies to network streams.
         player?.automaticallyWaitsToMinimizeStalling = !isPlayingLocalFile
         player?.volume = soundCheckVolume(for: currentTrack)
 
-        // Local files with a pending seek must not play from position 0 — the
-        // readyToPlay handler will start playback after the seek completes.
-        // Streams always play immediately because the offset is baked into the URL.
-        // Either way, a reload triggered by seeking while paused (e.g. an HLS
-        // seek-restart) must not resume playback the user didn't ask for.
         if pendingInitialSeekTime == nil, playbackIntent {
             player?.play()
             isPlaying = true
@@ -1196,8 +1067,6 @@ final class AudioPlayerService: Sendable {
         watchForStalledStart()
     }
 
-    /// Buffer enough of the current track to make playback resilient to network changes.
-    /// Caps at 30 minutes to avoid runaway memory on very long items.
     func preferredFullTrackBufferDuration(for known: TimeInterval) -> TimeInterval {
         let target = known > 0 ? known + 30 : 600
         return min(target, 1800)

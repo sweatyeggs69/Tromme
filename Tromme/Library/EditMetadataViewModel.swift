@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-/// Form state and save logic for `EditMetadataSheet` (tracks and albums).
 @Observable @MainActor
 final class EditMetadataViewModel {
     let item: PlexMetadata
@@ -38,7 +37,6 @@ final class EditMetadataViewModel {
         isTrack && trackNumberText.trimmingCharacters(in: .whitespaces) != (item.index.map(String.init) ?? "")
     }
 
-    /// Artist or album changed on a track, or the artist of an album: items get re-parented.
     private var reparents: Bool { isTrack ? (artistChanged || albumChanged) : artistChanged }
 
     var hasChanges: Bool { titleChanged || artistChanged || albumChanged || yearChanged || trackNumberChanged }
@@ -51,8 +49,6 @@ final class EditMetadataViewModel {
         return true
     }
 
-    /// Writes the changes, then re-reads the item and updates the local library so lists
-    /// show the new values. Returns the fresh item, or nil when the save failed.
     func save(server: PlexServer, sectionId: String, client: PlexAPIClient) async -> PlexMetadata? {
         guard hasChanges, isValid, !isSaving else { return nil }
         isSaving = true
@@ -72,7 +68,6 @@ final class EditMetadataViewModel {
             fields.append(("index.locked", "1"))
         }
         if reparents {
-            // Tracks need both artist and album named to be re-parented.
             fields.append(("artist.title.value", trimmedArtist))
             if isTrack { fields.append(("album.title.value", trimmedAlbum)) }
         }
@@ -98,8 +93,6 @@ final class EditMetadataViewModel {
         await LibraryStore.shared.invalidateMemory(kind: kind, scope: scope)
         Notification.Name.postLibraryContentDidChange()
 
-        // Titles are copied into child and sibling rows (a track carries its album and artist
-        // names), so renames and moves need the mirror re-read.
         if !isTrack || reparents {
             Task { await client.smartRefresh(server: server, sectionId: sectionId, forceLibrarySync: true) }
         }

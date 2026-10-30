@@ -125,8 +125,6 @@ struct AppIconPickerView: View {
             do {
                 try await UIApplication.shared.setAlternateIconName(option.iconName)
             } catch {
-                // iOS can throw even when the icon change succeeds — fall through
-                // and read back the actual system state below.
             }
             let actual = UIApplication.shared.alternateIconName
             currentIconName = actual

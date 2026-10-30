@@ -1,6 +1,5 @@
 import Foundation
 
-/// Identifies one server + library section in the local store.
 enum LibraryScope {
     static func id(serverId: String, sectionId: String) -> String {
         "\(serverId)|\(sectionId)"

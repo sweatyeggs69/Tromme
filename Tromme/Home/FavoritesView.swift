@@ -103,7 +103,6 @@ struct FavoritesView: View {
                 await loadTracks()
             }
         }
-        // Re-filter off the main actor whenever tracks or search text changes.
         .task(id: searchText) {
             await applyFilter()
         }
@@ -129,7 +128,6 @@ struct FavoritesView: View {
         return filteredTracks.filter { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
     }
 
-    /// Lowercases and strips punctuation so general results ignore punctuation (e.g. "back then" matches "BACK, THEN").
     nonisolated private static func normalizeForSearch(_ string: String) -> String {
         let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
         return String(String.UnicodeScalarView(scalars))
@@ -170,8 +168,6 @@ struct FavoritesView: View {
 
     private func prefetchVisibleArtwork() async {
         guard !isLoading, let server = serverConnection.currentServer else { return }
-        // Skip aggressive prefetching on metered networks or in Low Power Mode —
-        // images will still load lazily as the user scrolls.
         guard !NetworkStatus.shared.isExpensive,
               !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         let pixelSize = ArtworkView.recommendedTranscodeSize(pointSize: AppStyle.TrackList.browseArtworkSize, displayScale: displayScale)

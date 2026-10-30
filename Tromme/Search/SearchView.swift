@@ -141,15 +141,12 @@ struct SearchView: View {
             }
         }
         .onAppear {
-            // iPhone's Tab(role: .search) auto-focuses via .tabViewSearchActivation(.searchTabSelection)
-            // on the TabView; iPad's plain tab shows an always-visible field that needs focus set explicitly.
             if UIDevice.current.userInterfaceIdiom == .pad {
                 isSearchFieldFocused = true
             }
         }
     }
 
-    /// Lowercases and strips punctuation so queries like "back then" match titles like "BACK, THEN".
     private static func normalizeForSearch(_ string: String) -> String {
         let scalars = string.lowercased().unicodeScalars.filter { !CharacterSet.punctuationCharacters.contains($0) }
         return String(String.UnicodeScalarView(scalars))
@@ -258,7 +255,6 @@ struct SearchView: View {
 
         var matchedArtists = artists.filter { Self.normalizeForSearch($0.title).contains(lowered) }
 
-        // Include artists found via tracks that aren't in the artists list
         let matchedArtistNames = Set(matchedArtists.map { Self.normalizeForSearch($0.title) })
         let trackArtistKeys = Set(tracks.compactMap { track -> String? in
             guard let artistName = track.grandparentTitle,
@@ -282,7 +278,6 @@ struct SearchView: View {
             Self.normalizeForSearch($0.title).contains(lowered)
             || ($0.parentTitle.map { Self.normalizeForSearch($0).contains(lowered) } ?? false)
         }
-        // Songs only match on their own title; tracks of a matching album or artist are not pulled in.
         let matchedTracks = tracks.filter { Self.normalizeForSearch($0.title).contains(lowered) }
 
         let playlists = allPlaylists.filter {
@@ -302,8 +297,6 @@ struct SearchView: View {
         hubs = results
         matchedPlaylists = playlists
 
-        // Exact matches compare the raw title (punctuation included), unlike the
-        // punctuation-insensitive `contains` filtering used above for general results.
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         exactMatches = matchedArtists.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }
             + matchedAlbums.filter { $0.title.caseInsensitiveCompare(trimmedQuery) == .orderedSame }

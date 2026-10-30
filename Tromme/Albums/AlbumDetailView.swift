@@ -24,7 +24,6 @@ struct AlbumDetailView: View {
     @State private var showingChangeArtworkSheet = false
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
 
-    // Read-only views of the view model's state, so the body reads as before.
     private var albumDetails: PlexMetadata { viewModel.albumDetails }
     private var tracks: [PlexMetadata] { viewModel.tracks }
     private var firstTrackDetails: PlexMetadata? { viewModel.firstTrackDetails }
@@ -285,8 +284,6 @@ struct AlbumDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// Tromme+ animated artwork, fading in over the static header artwork when the
-    /// album has it.
     private var animatedArtworkOverlay: some View {
         AnimatedArtworkView(
             url: animatedArtworkEnabled && !NetworkStatus.shared.isConstrained ? viewModel.animatedArtworkURL : nil,
@@ -301,7 +298,6 @@ struct AlbumDetailView: View {
                 size: AppStyle.Artwork.portraitHeader(forWidth: width),
                 cornerRadius: AppStyle.Radius.card
             )
-                // Shadow goes on the static artwork only, so the video overlay doesn't cast a second one.
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .overlay { animatedArtworkOverlay }
                 .artworkBorder()
@@ -544,7 +540,6 @@ struct AlbumDetailView: View {
     private var landscapeHeader: some View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(thumbPath: thumbPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
-                // Shadow goes on the static artwork only, so the video overlay doesn't cast a second one.
                 .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
                 .overlay { animatedArtworkOverlay }
                 .artworkBorder()

@@ -1,9 +1,6 @@
 import Foundation
 
-// Metadata editing. Endpoints: PUT /library/sections/{sectionId}/all, falling back to PUT /library/metadata/{ids}.
 extension PlexAPIClient {
-    /// Sets fields on one track (type 10) or album (type 9). `fields` are the documented
-    /// query parameters, e.g. `title.value`, `title.locked`, `artist.title.value`.
     func updateLibraryItem(
         server: PlexServer,
         sectionId: String,
@@ -20,8 +17,6 @@ extension PlexAPIClient {
                 method: "PUT"
             )
         } catch PlexAPIError.serverError(400) {
-            // PMS rejects the section form for some items. Plain field edits can go through
-            // PUT /library/metadata/{ids}, which takes the bare field names (title, year, index).
             let plain = fields.filter { $0.name.hasSuffix(".value") && !$0.name.hasPrefix("artist.") && !$0.name.hasPrefix("album.") }
             guard !plain.isEmpty, plain.count == fields.filter({ $0.name.hasSuffix(".value") }).count else {
                 throw PlexAPIError.serverError(400)
@@ -35,8 +30,6 @@ extension PlexAPIClient {
         }
     }
 
-    /// Percent-encodes everything but unreserved characters so `&`, `+` and `=` in titles
-    /// survive the round trip.
     private static func encodeQueryValue(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .alphanumerics.union(CharacterSet(charactersIn: "-._~"))) ?? value
     }

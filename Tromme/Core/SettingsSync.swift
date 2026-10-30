@@ -1,13 +1,9 @@
 import Foundation
 
-/// Mirrors user preferences between UserDefaults and iCloud key-value storage so they
-/// survive a reinstall and follow the user to a new device. Only the keys listed in
-/// `syncedKeys` are mirrored; tokens, caches, queues and download records never leave the device.
 @MainActor
 final class SettingsSync {
     static let shared = SettingsSync()
 
-    /// Plain preference keys (same strings the `@AppStorage` properties use).
     static let syncedKeys: [String] = [
         "infiniteModeActive",
         "playbackBadgeMode",
@@ -39,7 +35,6 @@ final class SettingsSync {
 
     private init() {}
 
-    /// Call once at launch, before the UI reads any preference.
     func start() {
         guard !started else { return }
         started = true
@@ -61,7 +56,6 @@ final class SettingsSync {
         }
 
         cloud.synchronize()
-        // Cloud wins where it has a value (fresh install); otherwise seed it from this device.
         pullFromCloud(only: nil)
         pushToCloud()
     }

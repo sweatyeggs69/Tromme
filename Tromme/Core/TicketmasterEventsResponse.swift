@@ -1,6 +1,5 @@
 import Foundation
 
-/// Subset of the Ticketmaster Discovery `events.json` payload that Tromme reads.
 struct TicketmasterEventsResponse: Decodable, Sendable {
     let embedded: Embedded?
 

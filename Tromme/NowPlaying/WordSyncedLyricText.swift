@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// A line of word-synced lyrics. While it's the active line, each word is
-/// wiped bright as it's sung (see `WordWipeTextRenderer`); otherwise it's
-/// dimmed like any other line.
-///
-/// The time comes from `LyricsClock`, re-evaluated on every frame while playing.
 struct WordSyncedLyricText: View {
     let words: [LyricsWord]
     let isActive: Bool
@@ -17,8 +12,6 @@ struct WordSyncedLyricText: View {
         }
     }
 
-    /// Tags each word with its timing for the renderer. Trailing spaces are
-    /// left untagged so a word's wipe and growth are centered on its letters.
     private var lineText: Text {
         words.reduce(Text(verbatim: "")) { line, word in
             let leading = word.text.first?.isWhitespace == true ? " " : ""

@@ -35,7 +35,6 @@ struct HomeSettingsView: View {
                 Toggle("Animated Artwork", isOn: canUseAnimatedArtwork ? $animatedArtworkEnabled : .constant(false))
                     .tint(.green)
                     .disabled(!canUseAnimatedArtwork)
-                    // Adds or removes it on the lock screen right away.
                     .onChange(of: animatedArtworkEnabled) { player.updateNowPlayingInfo() }
             } header: {
                 Text("Albums")

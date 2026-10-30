@@ -25,7 +25,6 @@ extension LibrarySection {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        // key and type can come as String or Int from Plex
         if let str = try? container.decode(String.self, forKey: .key) {
             key = str
         } else if let num = try? container.decode(Int.self, forKey: .key) {
@@ -36,7 +35,6 @@ extension LibrarySection {
         if let str = try? container.decode(String.self, forKey: .type) {
             type = str
         } else if let num = try? container.decode(Int.self, forKey: .type) {
-            // Map Plex type numbers: 8 = artist (music library)
             switch num {
             case 1: type = "movie"
             case 2: type = "show"

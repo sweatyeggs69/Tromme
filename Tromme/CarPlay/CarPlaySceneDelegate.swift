@@ -11,7 +11,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var player: AudioPlayerService { AppContext.shared.audioPlayer }
 
     var shuffleNPButton: CPNowPlayingImageButton?
-    /// One button per repeat mode; the row is re-sent only when the mode changes.
     var repeatNPButtons: [AudioPlayerService.RepeatMode: CPNowPlayingImageButton] = [:]
     var lastPublishedShuffleState: Bool?
     var lastPublishedRepeatMode: AudioPlayerService.RepeatMode?
@@ -24,20 +23,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     /// property with an unchanged value, and each set flashes the whole button
     /// row (shuffle included) as CarPlay redraws it.
     var lastPublishedFavoriteState: Bool?
-    /// Last Magic Mix state actually pushed to `magicMixButton.isSelected`.
-    /// `syncMixButtons()` runs on every track change (currentTrack is one of
-    /// the tracked properties in the player observation loop), and `isSelected`
-    /// is a remote property on a CarPlay-rendered button — setting it, even to
-    /// its current value, is a real round-trip that visibly redraws the whole
-    /// button row (shuffle included), same as the unguarded favorite rebuild.
     var lastPublishedMagicMixState: Bool?
     var observationTask: Task<Void, Never>?
     var connectionObservationTask: Task<Void, Never>?
     var recentlyPlayedObservationTask: Task<Void, Never>?
     var favoritesObservationTask: Task<Void, Never>?
-    /// Slots: [0] = Favorites, [1] = Recently Added, [2] = Recently Played.
-    /// Persisted so the favorites/recently-played observers can each patch
-    /// their own slot without losing the other sections already on screen.
     var homeSections: [CPListSection?] = [nil, nil, nil]
     var lastRootSignature: String?
     var lastServerURI: String?
@@ -45,8 +35,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var artistsTemplate: CPListTemplate?
     var albumsTemplate: CPListTemplate?
     var playlistsTemplate: CPListTemplate?
-    /// Bumped whenever tab content is (re)loaded so an in-flight load against a
-    /// stale connection can't overwrite sections loaded after a reprobe.
     var contentGeneration = 0
 
     // MARK: - Scene Lifecycle
@@ -64,9 +52,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         startObservingPlayer()
         startObservingFavorites()
         startObservingRecentlyPlayed()
-        // The persisted server URI may be stale after a period of disconnection
-        // (the phone's network changed while the app was suspended). Re-probe so
-        // the connection observer can reload tab content against a reachable URI.
         Task { await AppContext.shared.serverConnection.reprobe() }
     }
 
@@ -99,9 +84,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let signature = rootSignature()
         let uri = server?.uri
         if signature == lastRootSignature {
-            // Same server and library. If the reachable connection URI changed
-            // (e.g. a reprobe after reconnecting on a different network), reload
-            // tab content in place instead of resetting the template stack.
             if uri != lastServerURI {
                 lastServerURI = uri
                 reloadTabContent()
@@ -145,9 +127,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         }
     }
 
-    /// Re-fetches the content of all four tabs against the current server
-    /// connection without replacing the root template (which would pop any
-    /// pushed templates, including Now Playing).
     func reloadTabContent() {
         contentGeneration += 1
         if let homeTemplate { loadHomeContent(into: homeTemplate) }
@@ -169,8 +148,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
                 guard let self else { return }
                 let manager = AppContext.shared.serverConnection
 
-                // Reconcile any state that was set between polling iterations,
-                // before the observer below was installed.
                 self.updateRootTemplate()
 
                 await withCheckedContinuation { continuation in

@@ -4,9 +4,6 @@ struct ArtistAllTracksListView: View {
     @Environment(AudioPlayerService.self) private var player
 
     let tracks: [PlexMetadata]
-    /// Release date/year live on the album, not the track — Plex doesn't return
-    /// `originallyAvailableAt`/`year` on track objects, so sorting off the track's own
-    /// (always-empty) fields silently no-ops. Look them up from the artist's albums instead.
     let albums: [PlexMetadata]
     @State private var trackNavigationTarget: PlexMetadata?
     @AppStorage("artistAllTracksSortNewestFirst") private var sortNewestFirst = true
@@ -18,8 +15,6 @@ struct ArtistAllTracksListView: View {
         )
     }
 
-    /// Albums ordered by release date (direction set by `sortNewestFirst`); tracks within
-    /// the same album always stay in album order (disc, then track number).
     private var sortedTracks: [PlexMetadata] {
         let releaseInfo = albumReleaseInfo
         return tracks.sorted { lhs, rhs in

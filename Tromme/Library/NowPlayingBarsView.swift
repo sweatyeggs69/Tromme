@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// Apple Music style equalizer indicator for the playing row.
 struct NowPlayingBarsView: View {
     var color: Color? = nil
     @State private var isAnimating = false
-    /// Random heights and durations are computed once on appear and stable across re-renders.
     @State private var barHeights: [CGFloat] = [0.65, 0.85, 0.45, 0.75]
     @State private var barDurations: [Double] = [0.45, 0.38, 0.52, 0.41]
 

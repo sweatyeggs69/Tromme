@@ -42,7 +42,6 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
 
     var id: String { ratingKey }
 
-    /// The release format label (e.g. "Single", "EP"). Returns nil for standard albums.
     var formatLabel: String? {
         guard let tag = subformat?.first?.tag, !tag.isEmpty else { return nil }
         let lower = tag.lowercased()
@@ -50,12 +49,10 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
         return tag.capitalized
     }
 
-    /// Whether this release is a single or EP, based on subformat tag or track count heuristic.
     var isSingleOrEP: Bool {
         if let tag = subformat?.first?.tag?.lowercased() {
             return tag == "single" || tag == "ep"
         }
-        // Heuristic: releases with 1-6 tracks are likely singles/EPs
         if let count = leafCount {
             return count <= 6
         }
@@ -81,7 +78,6 @@ struct PlexMetadata: Codable, Sendable, Identifiable, Hashable {
         grandparentTitle ?? parentTitle ?? ""
     }
 
-    /// Display name for UI. Prefer track-level artist credit when Plex provides one.
     var artistDisplayName: String {
         let trackLevelArtist = (originalTitle ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if !trackLevelArtist.isEmpty {
@@ -129,7 +125,6 @@ extension PlexMetadata {
         self.subformat = nil; self.similar = nil; self.originallyAvailableAt = nil
     }
 
-    /// Convenience init for constructing a minimal album or artist from offline records.
     init(ratingKey: String, title: String, type: String, parentTitle: String?, thumb: String?) {
         self.ratingKey = ratingKey; self.title = title; self.type = type; self.thumb = thumb
         self.parentTitle = parentTitle
@@ -144,7 +139,6 @@ extension PlexMetadata {
         self.subformat = nil; self.similar = nil; self.originallyAvailableAt = nil
     }
 
-    /// Convenience init for recreating a downloaded track from a persisted record.
     init(
         ratingKey: String,
         title: String,
@@ -174,12 +168,7 @@ extension PlexMetadata {
     }
 
     // MARK: - Navigation Stubs
-    //
-    // These factories build minimal metadata objects for use as NavigationLink values
-    // when navigating from a track row context menu. They avoid repeating 25-argument
-    // initialisers at every call site.
 
-    /// Returns a minimal album metadata object suitable for navigation, built from a track.
     static func albumStub(from track: PlexMetadata) -> PlexMetadata? {
         guard let albumKey = track.parentRatingKey else { return nil }
         return PlexMetadata(
@@ -191,7 +180,6 @@ extension PlexMetadata {
         )
     }
 
-    /// Returns a minimal artist metadata object suitable for navigation, built from a track.
     static func artistStub(from track: PlexMetadata) -> PlexMetadata? {
         guard let artistKey = track.grandparentRatingKey else { return nil }
         return PlexMetadata(
@@ -202,14 +190,12 @@ extension PlexMetadata {
         )
     }
 
-    /// Decode a value that Plex may return as either String or Int.
     private static func decodeFlexibleString(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> String? {
         if let str = try? container.decode(String.self, forKey: key) { return str }
         if let num = try? container.decode(Int.self, forKey: key) { return String(num) }
         return nil
     }
 
-    /// Decode a numeric value Plex may return as Double, Int, or String.
     private static func decodeFlexibleDouble(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Double? {
         if let value = try? container.decode(Double.self, forKey: key) { return value }
         if let value = try? container.decode(Int.self, forKey: key) { return Double(value) }

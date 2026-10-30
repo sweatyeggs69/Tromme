@@ -6,9 +6,6 @@ import CryptoKit
 final class ArtworkColorCache {
     static let shared = ArtworkColorCache()
 
-    /// Soft cap on resident entries. Colors are tiny (RGB triples), and artist colors are
-    /// precomputed for the whole library, so the cap leaves room for a large collection
-    /// while still bounding growth.
     private static let maxEntries = 5000
 
     private var cache: [String: Color] = [:]
@@ -30,12 +27,10 @@ final class ArtworkColorCache {
         style: ArtworkBackdrop.Style
     ) -> Color? {
         guard let thumbPath, let source = cache[Self.key(thumbPath, style)] else { return nil }
-        // Artist pages always carry white text, so their backdrop ignores the appearance.
         if style == .artist { return ArtworkBackdrop.whiteTextColor(from: UIColor(source)) }
         return ArtworkBackdrop.color(from: UIColor(source), colorScheme: colorScheme)
     }
 
-    /// Each style is keyed separately because each uses a different color pick.
     private static func key(_ thumbPath: String, _ style: ArtworkBackdrop.Style) -> String {
         switch style {
         case .artist: "artist:" + thumbPath
@@ -50,17 +45,11 @@ final class ArtworkColorCache {
         style: ArtworkBackdrop.Style
     ) async {
         guard let thumbPath, cache[Self.key(thumbPath, style)] == nil else { return }
-        // 512 matches the card bucket in ArtworkView.recommendedTranscodeSize, so this
-        // reuses the image already cached for Home cards / Now Playing instead of
-        // fetching a separate low-res thumbnail.
         guard let url = client.artworkURL(server: server, path: thumbPath, width: 512, height: 512) else { return }
         guard let image = await ImageCache.shared.image(for: url, targetPixelSize: 512) else { return }
         resolveColor(for: thumbPath, from: image, style: style)
     }
 
-    /// Picks the color from an image the caller already has, so the backdrop can appear
-    /// together with that image instead of waiting on a separate fetch. The pick samples a
-    /// small downscale, so the source resolution doesn't change the result.
     func resolveColor(
         for thumbPath: String?,
         from image: UIImage,
@@ -71,10 +60,6 @@ final class ArtworkColorCache {
         scheduleSave()
     }
 
-    /// Picks and saves backdrop colors for artist photos that are already in the image
-    /// cache, so artist pages open with their color instead of computing it on arrival.
-    /// Reads from disk only and never downloads; the library artwork pass is what puts the
-    /// photos there. Safe to re-run: artists with a saved color are skipped.
     func precomputeArtistColors(thumbPaths: [String], client: PlexAPIClient, server: PlexServer) async {
         for path in thumbPaths {
             guard !Task.isCancelled, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
@@ -82,7 +67,6 @@ final class ArtworkColorCache {
             guard cache[key] == nil,
                   let url = client.artworkURL(server: server, path: path, width: 512, height: 512),
                   let image = await ImageCache.shared.anyCachedImage(for: url, targetPixelSize: 512) else { continue }
-            // The pixel work runs off the main actor so a large library doesn't stall the UI.
             let picked = await Task.detached(priority: .utility) { Self.pick(from: image, style: .artist) }.value
             guard cache[key] == nil else { continue }
             store(Color(picked), forKey: key)
@@ -90,7 +74,6 @@ final class ArtworkColorCache {
         }
     }
 
-    /// The color pick for each style. Pure pixel math, so it can run on any thread.
     private nonisolated static func pick(from image: UIImage, style: ArtworkBackdrop.Style) -> UIColor {
         switch style {
         case .artist: image.accentColor(rows: (2.0 / 3.0)..<1, keepsPaleAverage: false)
@@ -98,7 +81,6 @@ final class ArtworkColorCache {
         }
     }
 
-    /// Inserts a color and evicts the oldest entry once the cap is exceeded.
     private func store(_ color: Color, forKey key: String) {
         if cache[key] == nil {
             insertionOrder.append(key)
@@ -145,21 +127,6 @@ final class ArtworkColorCache {
 }
 
 private extension UIImage {
-    /// Backdrop source color for a band of the image (`rows`, as fractions of its height; artist
-    /// pages sample the bottom third, where the photo fades into the page). Favors a strong accent: when vivid pixels of
-    /// one hue family cover at least `minimumAccentShare` of the image (the red grenade on
-    /// American Idiot, the gold logo on Dookie), returns their chroma-weighted average.
-    /// Otherwise, when muted but tinted pixels of one hue family cover at least
-    /// `minimumTintShare` of the non-white pixels (the dark green wall behind Weezer's white
-    /// jumpsuits, The 1975's dark suits), returns their average, so a colored area isn't
-    /// washed out to gray by bright subjects or a white studio backdrop. Otherwise, when dark
-    /// pixels cover at least `minimumDarkShare` of the non-white pixels, returns their
-    /// average (a dark subject on a light backdrop gives a deep page, as on Apple Music; a
-    /// black-and-white photo needs only `minimumAchromaticDarkShare` of them).
-    /// With `keepsPaleAverage` (covers only; artist pages carry white text and need a dark
-    /// page, so a white studio photo must not take this path), a pale, desaturated image
-    /// (average L* 70+, little dark area) returns its plain average before the tint and dark picks, so it gives a pale page. Otherwise returns the plain
-    /// average color. The backdrop keeps its hue and chroma.
     func accentColor(rows: Range<Double>, keepsPaleAverage: Bool) -> UIColor {
         guard let cgImage else { return .gray }
 
@@ -183,8 +150,6 @@ private extension UIImage {
         let minimumTintShare = 0.15
         let darkLightness = 25.0
         let minimumDarkShare = 0.25
-        // A black-and-white photo has no hue to pick, so a smaller dark area is enough to
-        // call the backdrop black (Being as an Ocean: dark shirts and hair on white).
         let achromaticShare = 0.05
         let minimumAchromaticDarkShare = 0.10
         let paleAverageLightness = 70.0
@@ -221,17 +186,12 @@ private extension UIImage {
             if chroma >= minimumTintChroma { chromaticCount += 1 }
             let bin = Int((lab.hue + .pi) / (2 * .pi) * Double(hueBins)) % hueBins
 
-            // A white studio backdrop or blown highlights shouldn't dilute the colors below.
             if lab.l <= 85 { nonWhiteCount += 1 }
             if lab.l < darkLightness {
                 darkCount += 1
                 darkR += r; darkG += g; darkB += b
             }
 
-            // Tinted pixels: any visible hue, dark ones included (black suits read as a deep
-            // navy, as on Apple Music), skipping grays, pure black and highlights. Skin tones
-            // are skipped too: faces are the subject, not the backdrop, and would otherwise
-            // turn band photos brown.
             let hueDegrees = lab.hue * 180 / .pi
             let looksLikeSkin = (20...80).contains(hueDegrees) && lab.l >= 25
             if chroma >= minimumTintChroma, (3...85).contains(lab.l), !looksLikeSkin {
@@ -239,7 +199,6 @@ private extension UIImage {
                 tintR[bin] += r; tintG[bin] += g; tintB[bin] += b
             }
 
-            // Vivid pixels only: skip grays, near-black and near-white.
             guard chroma >= minimumAccentChroma, (15...95).contains(lab.l) else { continue }
             binWeight[bin] += chroma
             binCount[bin] += 1
@@ -250,8 +209,6 @@ private extension UIImage {
         let average = UIColor(red: sumR / n, green: sumG / n, blue: sumB / n, alpha: 1)
         let averageLightness = Lab(r: sumR / n, g: sumG / n, b: sumB / n).l
 
-        // A hue family is a bin plus its neighbors, so an accent split across a bin edge
-        // still counts as one.
         func family(_ bin: Int) -> [Int] { [(bin + hueBins - 1) % hueBins, bin, (bin + 1) % hueBins] }
         func total(_ values: [Double], over bins: [Int]) -> Double {
             var sum = 0.0
@@ -270,8 +227,6 @@ private extension UIImage {
         let weight = total(binWeight, over: bins)
         let share = total(binCount.map(Double.init), over: bins) / n
         guard weight > 0, share >= minimumAccentShare else {
-            // A pale, desaturated image (a misty Witcher cover) keeps its pale average instead
-            // of having its few darker pixels picked, unless it holds a real dark subject.
             if keepsPaleAverage, averageLightness >= paleAverageLightness, darkCount / n < paleMaximumDarkShare, sumChroma / n < 12 {
                 return average
             }

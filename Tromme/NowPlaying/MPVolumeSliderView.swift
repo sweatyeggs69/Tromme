@@ -35,8 +35,6 @@ struct MPVolumeSliderView: UIViewRepresentable {
                 }
             }
         }
-        // Only push to the system while the user is actively dragging — never on
-        // automatic re-renders, which prevents corrupting volume on open.
         guard isEnabled, isDragging else { return }
         for subview in uiView.subviews {
             if let slider = subview as? UISlider {

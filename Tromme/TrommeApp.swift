@@ -12,16 +12,12 @@ struct TrommeApp: App {
     @State private var downloadManager = AppContext.shared.downloadManager
     @State private var configuredCatalystSceneIDs: Set<String> = []
     @State private var lastForegroundLibraryCheck: Date = .distantPast
-    /// Skip the foreground library check if it ran in the last 5 minutes —
-    /// otherwise rapid app-switcher transitions cost a network round-trip each.
     private let foregroundLibraryCheckInterval: TimeInterval = 5 * 60
 
     private var currentTint: Color {
         AppIconOption.accentColor(for: selectedAppIconId)
     }
 
-    /// These icon packs are designed against a dark background — force dark mode
-    /// while they're selected so the app doesn't clash with a light system appearance.
     private var forcedColorScheme: ColorScheme? {
         switch selectedAppIconId {
         case "trommeify", "murderedout": .dark
@@ -83,9 +79,6 @@ struct TrommeApp: App {
                     }
                 }
                 .task(priority: .background) {
-                    // On launch, check if the library changed before refreshing.
-                    // smartRefresh only invalidates list keys when updatedAt advances —
-                    // images and unchanged data are served from disk without any network traffic.
                     guard let server = serverConnection.currentServer,
                           let sectionId = serverConnection.currentLibrarySectionId else { return }
                     await plexClient.smartRefresh(server: server, sectionId: sectionId)
@@ -113,8 +106,6 @@ struct TrommeApp: App {
                     await downloadManager.syncLibraryDownloadsIfNeeded(server: server, sectionId: sectionId, client: plexClient)
                 }
             } else if phase == .background {
-                // A suspended app can be killed without willTerminate firing — flush
-                // any debounced download-record write before we lose foreground time.
                 downloadManager.flushPendingPersist()
             }
         }

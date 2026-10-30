@@ -67,8 +67,6 @@ struct ArtworkView: View {
         }
 
         if useCache {
-            // Phase 1: show any disk-cached image immediately so the view never shows
-            // a placeholder while waiting for a slow network download.
             let hasMemoryImage = ImageCache.shared.memoryCachedImage(for: url, targetPixelSize: transcodePx) != nil
             if image == nil && !hasMemoryImage {
                 if let quick = await ImageCache.shared.anyCachedImage(for: url, targetPixelSize: transcodePx) {
@@ -76,7 +74,6 @@ struct ArtworkView: View {
                     image = quick
                 }
             }
-            // Phase 2: fetch the properly-sized image (downloads if needed, upgrades phase 1).
             let resolvedImage = await ImageCache.shared.image(for: url, targetPixelSize: transcodePx)
             guard !Task.isCancelled, path == thumbPath else { return }
             image = resolvedImage ?? image
@@ -103,9 +100,6 @@ struct ArtworkView: View {
 }
 
 extension ArtworkView {
-    /// Largest transcode bucket, used for Now Playing and album/playlist headers.
-    /// A deliberate balance: slightly below native on the largest screens
-    /// (3x iPhones need ~1176px) in exchange for smaller downloads and cache files.
     static let maxTranscodePx = 1000
 
     static func recommendedTranscodeSize(pointSize: CGFloat, displayScale: CGFloat) -> Int {

@@ -32,7 +32,6 @@ struct TrackRowView: View {
     @State private var favoriteOverride: Double? = nil
     @State private var isRating = false
     @State private var metadataRequest: MetadataSheetRequest?
-    /// The track as re-read after an edit, so the row updates before its list reloads.
     @State private var editedTrack: PlexMetadata?
 
     private var shown: PlexMetadata { editedTrack ?? track }

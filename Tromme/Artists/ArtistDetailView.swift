@@ -17,19 +17,14 @@ struct ArtistDetailView: View {
     @State private var showsAllConcerts = false
     @State private var selectedConcert: ConcertEvent?
     @State private var heroIsHidden = false
-    /// Set once the backdrop color lookup has finished, found or not, so the loading
-    /// spinner never outlives a failed or offline fetch.
     @State private var backdropLookupFinished = false
     @State private var showsBioSheet = false
     @State private var showsChangePhotoSheet = false
     @State private var viewWidth: CGFloat = 393
     @State private var viewHeight: CGFloat = 852
-    /// Vertical scroll position: 0 at rest, positive scrolled down, negative on overscroll.
     @State private var scrollOffset: CGFloat = 0
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Page backdrop, derived from the artist photo through the Apple Music
-    /// tint algorithm with the artist-page lightness cap.
     private var backdropColor: Color {
         cachedBackdropColor ?? Color(.systemBackground)
     }
@@ -42,13 +37,10 @@ struct ArtistDetailView: View {
             ?? colors.color(for: artist.thumb, colorScheme: colorScheme, style: .artist)
     }
 
-    /// True only while the backdrop color still has to be computed from the photo.
-    /// Artists with a saved color skip this and open instantly.
     private var isAwaitingBackdrop: Bool {
         previewData == nil && displayArtist.thumb != nil && cachedBackdropColor == nil && !backdropLookupFinished
     }
 
-    // Read-only views of the view model's state, so the body reads as before.
     private var displayArtist: PlexMetadata { viewModel.displayArtist }
     private var allTracks: [PlexMetadata] { viewModel.allTracks }
     private var topTracks: [PlexMetadata] { viewModel.topTracks }
@@ -67,8 +59,6 @@ struct ArtistDetailView: View {
         )
     }
 
-    /// Plex artist photos are almost always square, so the hero is a full-width square; the title and
-    /// controls sit over the fade at its bottom edge.
     private var heroHeight: CGFloat { viewWidth }
     private let previewData: PreviewData?
 
@@ -90,7 +80,6 @@ struct ArtistDetailView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// iPad landscape (and an open iPhone Duo): photo, name and controls pinned on the left, content scrolling on the right.
     private var isWideLayout: Bool {
         let isPhone = UIDevice.current.userInterfaceIdiom == .phone
         if isPhone { return horizontalSizeClass == .regular || min(viewWidth, viewHeight) >= 500 }
@@ -121,7 +110,6 @@ struct ArtistDetailView: View {
         return f
     }()
 
-    /// Full release date ("Jul 31, 2026"), falling back to the year.
     private static func releaseDateText(for album: PlexMetadata) -> String {
         if let raw = album.originallyAvailableAt, let date = isoDateFormatter.date(from: String(raw.prefix(10))) {
             return date.formatted(date: .abbreviated, time: .omitted)
@@ -129,7 +117,6 @@ struct ArtistDetailView: View {
         return album.releaseYear
     }
 
-    /// Falls back to counting loaded tracks when the album has no `leafCount`.
     private func songCount(in album: PlexMetadata) -> Int? {
         let count = allTracks.filter { $0.parentRatingKey == album.ratingKey }.count
         return count > 0 ? count : nil
@@ -292,7 +279,6 @@ struct ArtistDetailView: View {
                 )
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
-                    // Clear so the photo drawn behind the list shows through.
                     .listRowBackground(Color.clear)
             }
 
@@ -403,8 +389,6 @@ struct ArtistDetailView: View {
             ZStack(alignment: .top) {
                 backdropColor
                 if showsHero {
-                    // The photo lives behind the list instead of inside a row, so it is driven
-                    // by the scroll view's own offset and never lags or gets recycled with a cell.
                     ArtistHeroPhotoView(
                         artist: displayArtist,
                         heroHeight: heroHeight,
@@ -494,10 +478,8 @@ struct ArtistDetailView: View {
         .navigationDestination(isPresented: $showsAllTracks) {
             ArtistAllTracksListView(tracks: allTracks, albums: artistAlbums + appearsOnAlbums)
         }
-        // Artist pages always use white text; the backdrop is kept dark enough for it.
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
-        // Measure the full container width including safe areas, so the square hero spans the screen.
         .onGeometryChange(for: CGSize.self) { proxy in
             CGSize(
                 width: (proxy.size.width + proxy.safeAreaInsets.leading + proxy.safeAreaInsets.trailing).rounded(),
@@ -522,11 +504,9 @@ struct ArtistDetailView: View {
             if let server = serverConnection.currentServer, previewData == nil {
                 await ArtworkColorCache.shared.resolveColor(for: displayArtist.thumb, using: client, server: server, style: .artist)
             }
-            // A newer thumb's lookup has taken over; let it decide when loading ends.
             if !Task.isCancelled { backdropLookupFinished = true }
         }
         .task(id: artist.ratingKey) {
-            // Never hold the page behind the spinner on a slow network.
             try? await Task.sleep(for: .seconds(3))
             backdropLookupFinished = true
         }
@@ -538,8 +518,6 @@ struct ArtistDetailView: View {
         }
         .sheet(isPresented: $showsChangePhotoSheet) {
             ChangeArtworkSheet(ratingKey: artist.ratingKey, subject: "artist") {
-                // The new photo has a new thumb path, so the hero reloads it and the
-                // backdrop color is picked again from it (see the thumb-keyed tasks above).
                 await viewModel.reloadArtist(loadContext)
             }
         }

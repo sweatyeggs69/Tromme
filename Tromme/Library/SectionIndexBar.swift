@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Vertical A–Z index for ScrollView-based layouts, where the stock List section index isn't available.
 struct SectionIndexBar: View {
     let titles: [String]
     let onSelect: (String) -> Void

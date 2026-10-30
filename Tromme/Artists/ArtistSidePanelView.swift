@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Left column of the artist page on wide layouts (iPad landscape): the square photo with the
-/// name and controls below it. It stays put while the content on the right scrolls.
 struct ArtistSidePanelView: View {
     let artist: PlexMetadata
     let width: CGFloat

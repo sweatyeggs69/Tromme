@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Start and stop trim controls for `TrackInfoSheet`.
 struct TrackMarkersSection: View {
     let ratingKey: String
     let duration: TimeInterval
