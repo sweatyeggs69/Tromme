@@ -227,7 +227,7 @@ extension AudioPlayerService {
             autoMixPlan = AutoMixPlan(outgoingKey: original.outgoingKey, incomingKey: original.incomingKey, startTime: .infinity, overlap: 0)
             return
         }
-        var plan = original
+        let plan = original
 
         tearDownObservers()
         if let preloaded = preloadedNext, let outgoing = player, outgoing.currentItem !== preloaded.item {
