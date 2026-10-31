@@ -127,32 +127,32 @@ struct ArtistDetailView: View {
     private func releaseGrid(_ releases: [PlexMetadata]) -> some View {
         LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
             ForEach(releases) { album in
-                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                    GeometryReader { geo in
-                        ArtworkView(
-                            thumbPath: album.thumb,
-                            size: geo.size.width,
-                            cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                        )
-                        .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
-                    }
-                    .aspectRatio(1, contentMode: .fit)
-
-                    Text(album.title)
-                        .appItemTitleStyle()
-
-                    Text(album.releaseYear)
-                        .appItemSubtitleStyle()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture { selectedAlbum = album }
-                .accessibilityAddTraits(.isButton)
-                .contextMenu {
+                Menu {
                     albumContextMenu(for: album)
-                } preview: {
-                    albumPreview(for: album)
+                } label: {
+                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                        GeometryReader { geo in
+                            ArtworkView(
+                                thumbPath: album.thumb,
+                                size: geo.size.width,
+                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                            )
+                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                        Text(album.title)
+                            .appItemTitleStyle()
+
+                        Text(album.releaseYear)
+                            .appItemSubtitleStyle()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                } primaryAction: {
+                    selectedAlbum = album
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.bottom, 24)
@@ -186,23 +186,6 @@ struct ArtistDetailView: View {
         .tint(.primary)
     }
 
-    private func albumPreview(for album: PlexMetadata) -> some View {
-        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-            ArtworkView(
-                thumbPath: album.thumb,
-                size: 200,
-                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-            )
-            .frame(width: 200, height: 200)
-            Text(album.title)
-                .appItemTitleStyle()
-            Text(album.releaseYear)
-                .appItemSubtitleStyle()
-        }
-        .frame(width: 200)
-        .padding()
-    }
-
     @MainActor
     private func albumTracks(_ album: PlexMetadata) async -> [PlexMetadata]? {
         guard let server = serverConnection.currentServer else { return nil }
@@ -213,34 +196,34 @@ struct ArtistDetailView: View {
     private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
         LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
             ForEach(albums) { album in
-                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                    GeometryReader { geo in
-                        ArtworkView(
-                            thumbPath: album.thumb,
-                            size: geo.size.width,
-                            cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                        )
-                        .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
-                    }
-                    .aspectRatio(1, contentMode: .fit)
-
-                    Text(album.title)
-                        .appItemTitleStyle()
-
-                    Text([album.releaseYear, album.parentTitle]
-                        .compactMap { s in (s?.isEmpty == false) ? s : nil }
-                        .joined(separator: " · "))
-                        .appItemSubtitleStyle()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture { selectedAppearsOnAlbum = album }
-                .accessibilityAddTraits(.isButton)
-                .contextMenu {
+                Menu {
                     albumContextMenu(for: album)
-                } preview: {
-                    albumPreview(for: album)
+                } label: {
+                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                        GeometryReader { geo in
+                            ArtworkView(
+                                thumbPath: album.thumb,
+                                size: geo.size.width,
+                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                            )
+                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+
+                        Text(album.title)
+                            .appItemTitleStyle()
+
+                        Text([album.releaseYear, album.parentTitle]
+                            .compactMap { s in (s?.isEmpty == false) ? s : nil }
+                            .joined(separator: " · "))
+                            .appItemSubtitleStyle()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                } primaryAction: {
+                    selectedAppearsOnAlbum = album
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.bottom, 24)
