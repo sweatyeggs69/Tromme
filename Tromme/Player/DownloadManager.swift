@@ -14,6 +14,8 @@ final class DownloadManager: @unchecked Sendable {
     private var downloadTasks: [String: Task<Void, Never>] = [:]
     private var pendingQueue: [(PlexMetadata, PlexServer, PlexAPIClient)] = []
     private var activeDownloadCount = 0
+    private var pendingLyrics: [PlexMetadata] = []
+    private var lyricsWorker: Task<Void, Never>?
     private let maxConcurrentDownloads = 3
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
     private var persistScheduled = false
@@ -304,10 +306,19 @@ final class DownloadManager: @unchecked Sendable {
     }
 
     private func storeLyrics(for track: PlexMetadata) {
-        Task {
-            guard let lyrics = await LyricsService.resolveForDownload(track: track),
-                  isDownloaded(track.ratingKey) else { return }
-            DownloadedLyricsStore.shared.save(lyrics, forRatingKey: track.ratingKey)
+        guard !pendingLyrics.contains(where: { $0.ratingKey == track.ratingKey }) else { return }
+        pendingLyrics.append(track)
+        guard lyricsWorker == nil else { return }
+        lyricsWorker = Task {
+            while !pendingLyrics.isEmpty {
+                let next = pendingLyrics.removeFirst()
+                guard isDownloaded(next.ratingKey) else { continue }
+                if let lyrics = await LyricsService.resolveForDownload(track: next), isDownloaded(next.ratingKey) {
+                    DownloadedLyricsStore.shared.save(lyrics, forRatingKey: next.ratingKey)
+                }
+                try? await Task.sleep(for: .seconds(2))
+            }
+            lyricsWorker = nil
         }
     }
 

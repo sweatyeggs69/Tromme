@@ -127,7 +127,7 @@ final class LyricsService {
     @MainActor
     static func resolveForDownload(track: PlexMetadata) async -> ResolvedLyrics? {
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
-        return await resolveRetryingOnce(track: track, artist: track.artistDisplayName, blocked: blocked)?.lyrics
+        return await resolve(track: track, artist: track.artistDisplayName, blocked: blocked)?.lyrics
     }
 
     private nonisolated static func cache(_ lyrics: ResolvedLyrics, forKey key: String) async {
