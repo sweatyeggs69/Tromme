@@ -7,10 +7,10 @@ struct SectionIndexPopup: View {
         ZStack {
             if let title {
                 Text(title)
-                    .font(.system(size: 56, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .frame(width: 112, height: 112)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 28))
+                    .font(.system(size: 40, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.85))
+                    .frame(width: 80, height: 80)
+                    .glassEffect(.clear, in: .rect(cornerRadius: 22))
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
         }
