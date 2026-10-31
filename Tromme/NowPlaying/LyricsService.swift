@@ -26,8 +26,10 @@ final class LyricsService {
     func refresh(track: PlexMetadata) async {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: track.artistDisplayName)
         await ExternalContentCache.shared.remove(forKey: cacheKey)
+        let wasStored = DownloadedLyricsStore.shared.hasLyrics(forRatingKey: track.ratingKey)
+        DownloadedLyricsStore.shared.remove(forRatingKey: track.ratingKey)
         inFlightTrackKey = nil
-        await fetch(track: track)
+        await fetch(track: track, storeForDownload: wasStored)
     }
 
     func blockCurrent(track: PlexMetadata) async {
@@ -46,7 +48,7 @@ final class LyricsService {
         BlockedLyricsStore.songKey(title: track.title, artist: track.artistDisplayName)
     }
 
-    func fetch(track: PlexMetadata) async {
+    func fetch(track: PlexMetadata, storeForDownload: Bool = false) async {
         if isLoading, inFlightTrackKey == track.ratingKey { return }
 
         let requestID = UUID()
@@ -65,12 +67,18 @@ final class LyricsService {
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: Self.songKey(track))
 
         let result: ResolvedLyrics?
-        if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
+        if let stored = DownloadedLyricsStore.shared.lyrics(forRatingKey: track.ratingKey),
+           Self.isAllowed(stored, blocked: blocked) {
+            result = stored
+        } else if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
            cached.value.hasSynced, Self.isAllowed(cached.value, blocked: blocked) {
             result = cached.value
         } else if let fetched = await Self.resolveRetryingOnce(track: track, artist: trackArtist, blocked: blocked) {
             if fetched.lyrics.hasSynced, fetched.isFinal {
                 await Self.cache(fetched.lyrics, forKey: cacheKey)
+            }
+            if storeForDownload {
+                DownloadedLyricsStore.shared.save(fetched.lyrics, forRatingKey: track.ratingKey)
             }
             result = fetched.lyrics
         } else {
@@ -90,7 +98,10 @@ final class LyricsService {
         let cacheKey = CacheKey.lyrics(title: track.title, artist: artist)
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
         let lyrics: ResolvedLyrics
-        if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: lyricsTTL),
+        if let stored = DownloadedLyricsStore.shared.lyrics(forRatingKey: track.ratingKey),
+           stored.hasSynced, isAllowed(stored, blocked: blocked) {
+            lyrics = stored
+        } else if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: lyricsTTL),
            cached.value.hasSynced, isAllowed(cached.value, blocked: blocked) {
             lyrics = cached.value
         } else if let fetched = await resolve(track: track, artist: artist, blocked: blocked), fetched.lyrics.hasSynced {
@@ -111,6 +122,12 @@ final class LyricsService {
         let closing = parsed.last.flatMap { $0.isBreak ? $0.time : nil }
         let end = closing ?? last.lastWordEnd ?? last.time + 4
         return (first.time, end, closing != nil)
+    }
+
+    @MainActor
+    static func resolveForDownload(track: PlexMetadata) async -> ResolvedLyrics? {
+        let blocked = BlockedLyricsStore.shared.fingerprints(forSong: songKey(track))
+        return await resolveRetryingOnce(track: track, artist: track.artistDisplayName, blocked: blocked)?.lyrics
     }
 
     private nonisolated static func cache(_ lyrics: ResolvedLyrics, forKey key: String) async {

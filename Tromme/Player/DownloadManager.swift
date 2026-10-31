@@ -104,6 +104,7 @@ final class DownloadManager: @unchecked Sendable {
             let url = downloadsDirectory.appendingPathComponent(record.relativeFilePath)
             fileQueue.async { try? FileManager.default.removeItem(at: url) }
             records.removeValue(forKey: ratingKey)
+            DownloadedLyricsStore.shared.remove(forRatingKey: ratingKey)
             persistRecords()
         }
     }
@@ -146,6 +147,7 @@ final class DownloadManager: @unchecked Sendable {
         fileQueue.async { try? FileManager.default.removeItem(at: directory) }
         records.removeAll()
         transientStates.removeAll()
+        DownloadedLyricsStore.shared.removeAll()
         persistRecords()
     }
 
@@ -291,12 +293,21 @@ final class DownloadManager: @unchecked Sendable {
         records[ratingKey] = record
         transientStates.removeValue(forKey: ratingKey)
         persistRecords()
+        storeLyrics(for: track)
 
         if let thumbPath {
             let px = ArtworkView.maxTranscodePx
             if let url = client.artworkURL(server: server, path: thumbPath, width: px, height: px) {
                 _ = await ImageCache.shared.image(for: url, targetPixelSize: px)
             }
+        }
+    }
+
+    private func storeLyrics(for track: PlexMetadata) {
+        Task {
+            guard let lyrics = await LyricsService.resolveForDownload(track: track),
+                  isDownloaded(track.ratingKey) else { return }
+            DownloadedLyricsStore.shared.save(lyrics, forRatingKey: track.ratingKey)
         }
     }
 
@@ -358,6 +369,7 @@ final class DownloadManager: @unchecked Sendable {
                 records[record.ratingKey] = record
             }
             hasLoadedRecords = true
+            DownloadedLyricsStore.shared.prune(keeping: Set(records.keys))
             if needsPersist { persistRecordsNow() }
         }
     }

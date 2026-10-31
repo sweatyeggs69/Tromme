@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1D0C0DE00000000000000F2 /* DownloadedLyricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE00000000000000F1 /* DownloadedLyricsStore.swift */; };
 		AC0000000000000000007104 /* AutoMixReportSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007104 /* AutoMixReportSender.swift */; };
 		AC0000000000000000007103 /* AutoMixReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007103 /* AutoMixReportView.swift */; };
 		AC0000000000000000007102 /* AutoMixReportViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007102 /* AutoMixReportViewModel.swift */; };
@@ -232,6 +233,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1D0C0DE00000000000000F1 /* DownloadedLyricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedLyricsStore.swift; sourceTree = "<group>"; };
 		AB0000000000000000007104 /* AutoMixReportSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportSender.swift; sourceTree = "<group>"; };
 		AB0000000000000000007103 /* AutoMixReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportView.swift; sourceTree = "<group>"; };
 		AB0000000000000000007102 /* AutoMixReportViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportViewModel.swift; sourceTree = "<group>"; };
@@ -487,6 +489,7 @@
 			children = (
 				AB2AE817FFA6FE2C2943AB0C /* LyricsSource.swift */,
 				89CF697BE3845615C095BD35 /* BlockedLyricsStore.swift */,
+				A1D0C0DE00000000000000F1 /* DownloadedLyricsStore.swift */,
 				94291A7C3860A0D31CB701B0 /* NowPlayingEmptyState.swift */,
 				58109A662AD5416E7849A5F6 /* VolumeHUDSuppressor.swift */,
 				1CF83A37981CCC81A5D1A148 /* ResolvedLyrics.swift */,
@@ -945,6 +948,7 @@
 			files = (
 				B9C716D1DAC1C497556C96A4 /* LyricsSource.swift in Sources */,
 				05C9DBE7CE5D1203024CEA46 /* BlockedLyricsStore.swift in Sources */,
+				A1D0C0DE00000000000000F2 /* DownloadedLyricsStore.swift in Sources */,
 				CF686C054592B8945030835C /* NowPlayingEmptyState.swift in Sources */,
 				09BFAEE6F8EF0FE4ACB49AA2 /* SettingsToolbarModifier.swift in Sources */,
 				877A020DD3AE9A7D9B7C8806 /* AppIconPreviewImage.swift in Sources */,
