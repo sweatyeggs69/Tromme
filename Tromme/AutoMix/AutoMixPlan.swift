@@ -10,10 +10,18 @@ struct AutoMixPlan: Sendable {
     var loudnessDifference: Double?
     var incomingFade: TimeInterval?
 
+    private static let staggeredFadeShare = 1.0 / 1.5
+
     func progress(at elapsed: TimeInterval) -> (outgoing: Double, incoming: Double) {
-        let outgoing = min(max(elapsed / overlap, 0), 1)
-        guard let incomingFade, incomingFade < overlap else { return (outgoing, outgoing) }
-        return (outgoing, min(max(elapsed / incomingFade, 0), 1))
+        if let incomingFade, incomingFade < overlap {
+            return (min(max(elapsed / overlap, 0), 1), min(max(elapsed / incomingFade, 0), 1))
+        }
+        if isPlainCrossfade {
+            let progress = min(max(elapsed / overlap, 0), 1)
+            return (progress, progress)
+        }
+        let fade = overlap * Self.staggeredFadeShare
+        return (min(max(elapsed / fade, 0), 1), min(max((elapsed - fade / 2) / fade, 0), 1))
     }
 
     func gains(_ progress: (outgoing: Double, incoming: Double)) -> (outgoing: Float, incoming: Float) {

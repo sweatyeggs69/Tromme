@@ -299,7 +299,7 @@ extension AudioPlayerService {
                 self.mixIncomingGain = gains.incoming * loudness.incoming
                 self.applyIncomingVolume()
 
-                if progress.outgoing >= 1 {
+                if elapsed >= plan.overlap {
                     self.logPlayback("automix_fade_end", "remaining=\(Self.seconds(remaining)) outRate=\(self.mixOutgoingPlayer?.rate ?? -1)")
                     self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                         "finishRemaining": Self.seconds(remaining),
