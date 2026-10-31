@@ -70,7 +70,7 @@ extension AudioPlayerService {
                 self.autoMixPlan = plan
                 self.scheduleAutoMixTrigger(plan, generation: generation)
             }
-            guard isPlus, let outgoingSpan else {
+            guard isPlus, outgoingSpan != nil || incomingSpan != nil else {
                 planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off", length: crossfadeLength)
                 return
             }
@@ -79,17 +79,17 @@ extension AudioPlayerService {
                 incomingKey: incoming.ratingKey,
                 outgoingEnd: end,
                 incomingBaseStart: incomingBaseStart,
-                outgoingLyricsEnd: outgoingSpan.end,
-                outgoingLyricsEndMarked: outgoingSpan.endIsMarked,
+                outgoingLyricsEnd: outgoingSpan?.end,
+                outgoingLyricsEndMarked: outgoingSpan?.endIsMarked ?? false,
                 incomingVocalStart: incomingSpan?.start
             ) else {
                 self.logPlayback("automix_skipped", "reason=lyrics_too_close_to_edge")
                 self.recordAutoMix(current, incoming, "skipped: lyrics too close to the edge", [
-                    "outgoingLyricsEnd": Self.seconds(outgoingSpan.end),
+                    "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
-                let length = min(crossfadeLength, end - outgoingSpan.end - AutoMixPlanner.minimumLastLyricPadding)
+                let length = min(crossfadeLength, end - (outgoingSpan?.end ?? end - crossfadeLength) - AutoMixPlanner.minimumLastLyricPadding)
                 if length >= 1.5 {
                     planPlainCrossfade(reason: "lyrics_too_close_to_edge", length: length)
                 } else {
@@ -103,7 +103,7 @@ extension AudioPlayerService {
                 "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap),
                 "incomingStart": plan.introStart.map(Self.seconds) ?? "top",
                 "incomingFade": plan.incomingFade.map(Self.seconds) ?? "none",
-                "outgoingLyricsEnd": Self.seconds(outgoingSpan.end),
+                "outgoingLyricsEnd": outgoingSpan.map { Self.seconds($0.end) } ?? "none",
                 "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                 "outgoingEnd": Self.seconds(end),
                 "loudnessDifferenceDb": plan.loudnessDifference.map(Self.seconds) ?? "none"

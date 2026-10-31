@@ -17,14 +17,20 @@ enum AutoMixPlanner {
         incomingKey: String,
         outgoingEnd: TimeInterval,
         incomingBaseStart: TimeInterval,
-        outgoingLyricsEnd: TimeInterval,
+        outgoingLyricsEnd: TimeInterval?,
         outgoingLyricsEndMarked: Bool,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
-        let padding = outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding
-        let outro = outgoingEnd - outgoingLyricsEnd
-        let startTime = min(outgoingLyricsEnd + padding + outroWaitRate * outro, outgoingEnd - shortestMix)
-        guard startTime >= outgoingLyricsEnd + minimumLastLyricPadding else { return nil }
+        let startTime: TimeInterval
+        if let outgoingLyricsEnd {
+            let padding = outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding
+            let outro = outgoingEnd - outgoingLyricsEnd
+            startTime = min(outgoingLyricsEnd + padding + outroWaitRate * outro, outgoingEnd - shortestMix)
+            guard startTime >= outgoingLyricsEnd + minimumLastLyricPadding else { return nil }
+        } else {
+            startTime = outgoingEnd - targetOverlap
+            guard startTime > 0 else { return nil }
+        }
         var overlap = min(targetOverlap, outgoingEnd - startTime)
 
         var introStart: TimeInterval?
