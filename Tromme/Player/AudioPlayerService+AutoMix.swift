@@ -163,7 +163,9 @@ extension AudioPlayerService {
 
     private func autoMixEnd(for track: PlexMetadata) -> TimeInterval {
         let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey)
-        return min(duration, stop ?? duration)
+        let plexDuration = track.duration.map { Double($0) / 1000 }.flatMap { $0 > 0 ? $0 : nil }
+        let length = plexDuration ?? duration
+        return min(length, stop ?? length)
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
