@@ -167,8 +167,7 @@ extension AudioPlayerService {
     }
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
-        let isLocal = AppContext.shared.downloadManager.localURL(for: plan.incomingKey) != nil
-        let lead: TimeInterval = isLocal ? 0.02 : 3
+        let lead: TimeInterval = 0.02
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
@@ -262,28 +261,10 @@ extension AudioPlayerService {
     private func runAutoMixFade(_ original: AutoMixPlan, generation: Int, outgoingEnd: TimeInterval) {
         autoMixTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            var plan = original
-            var beganAt = Date()
-
-            while !Task.isCancelled {
-                guard self.playbackGeneration == generation else {
-                    self.finishAutoMix()
-                    return
-                }
-                if !self.playbackIntent {
-                    beganAt += await self.holdMixWhilePaused(generation: generation)
-                    continue
-                }
-                if self.isIncomingPlaying
-                    || Date().timeIntervalSince(beganAt) > 8
-                    || self.outgoingRemaining(until: outgoingEnd) < 0.4 { break }
-                try? await Task.sleep(for: .milliseconds(30))
-            }
+            let plan = original
             var startedAt = Date()
-            let remaining = self.outgoingRemaining(until: outgoingEnd)
-            if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
             self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
-                "heldFor": Self.seconds(Date().timeIntervalSince(beganAt)), "overlapFinal": Self.seconds(plan.overlap)
+                "overlapFinal": Self.seconds(plan.overlap)
             ])
 
             while !Task.isCancelled {
@@ -295,7 +276,9 @@ extension AudioPlayerService {
                     startedAt += await self.holdMixWhilePaused(generation: generation)
                     continue
                 }
-                let progress = plan.progress(at: Date().timeIntervalSince(startedAt))
+                let remaining = self.outgoingRemaining(until: outgoingEnd)
+                let elapsed = remaining.isFinite ? plan.overlap - remaining : Date().timeIntervalSince(startedAt)
+                let progress = plan.progress(at: elapsed)
 
                 let gains = plan.gains(progress)
                 let loudness = plan.loudnessFactors(progress)
@@ -325,12 +308,6 @@ extension AudioPlayerService {
             mixOutgoingLossless?.play()
         }
         return Date().timeIntervalSince(pausedAt)
-    }
-
-    private var isIncomingPlaying: Bool {
-        if let losslessPlayer { return losslessPlayer.isPlaying }
-        guard let player else { return false }
-        return player.timeControlStatus == .playing && pendingInitialSeekTime == nil && isReadyToPlay
     }
 
     private func outgoingRemaining(until end: TimeInterval) -> TimeInterval {
