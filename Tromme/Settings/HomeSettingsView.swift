@@ -42,7 +42,7 @@ struct HomeSettingsView: View {
                 if plus.isPlus, NetworkStatus.shared.isConstrained {
                     Text("Animated artwork is unavailable in Low Data Mode.")
                 } else if plus.isPlus {
-                    Text("Animated artwork requires an internet connection.")
+                    Text("Requires an internet connection.")
                 }
             }
 
