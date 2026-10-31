@@ -9,6 +9,7 @@ struct ArtistsView: View {
 
     @State private var artists: [PlexMetadata] = []
     @State private var isLoading = true
+    @State private var indexTitle: String?
     @AppStorage("artistsViewMode") private var viewMode: ArtistsViewMode = .list
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -142,11 +143,12 @@ struct ArtistsView: View {
                 .padding(.trailing, AppStyle.Spacing.sectionIndexInset)
             }
             .overlay(alignment: .trailing) {
-                SectionIndexBar(titles: artistSections.map(\.title)) { title in
+                SectionIndexBar(titles: artistSections.map(\.title), activeTitle: $indexTitle) { title in
                     proxy.scrollTo(title, anchor: .top)
                 }
                 .padding(.trailing, 0)
             }
+            .overlay { SectionIndexPopup(title: indexTitle) }
             }
             .tint(.secondary)
         }

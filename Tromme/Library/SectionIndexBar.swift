@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SectionIndexBar: View {
     let titles: [String]
+    @Binding var activeTitle: String?
     let onSelect: (String) -> Void
 
     private static let rowHeight: CGFloat = 14
@@ -23,7 +24,10 @@ struct SectionIndexBar: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in select(at: value.location.y) }
-                .onEnded { _ in lastSelected = nil }
+                .onEnded { _ in
+                    lastSelected = nil
+                    activeTitle = nil
+                }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Section index")
@@ -42,12 +46,13 @@ struct SectionIndexBar: View {
         let title = titles[index]
         guard title != lastSelected else { return }
         lastSelected = title
+        activeTitle = title
         UISelectionFeedbackGenerator().selectionChanged()
         onSelect(title)
     }
 }
 
 #Preview {
-    SectionIndexBar(titles: ["A", "B", "C", "D", "E", "F", "G", "#"]) { _ in }
+    SectionIndexBar(titles: ["A", "B", "C", "D", "E", "F", "G", "#"], activeTitle: .constant(nil)) { _ in }
         .tint(.blue)
 }

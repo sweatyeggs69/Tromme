@@ -18,6 +18,7 @@ struct AllAlbumsView: View {
     @State private var displayAlbums: [PlexMetadata] = []
     @State private var displaySections: [(title: String, items: [PlexMetadata])] = []
     @State private var sortGeneration: Int = 0
+    @State private var indexTitle: String?
     @State private var lastSortedCount: Int = -1
     @State private var lastSortedOrder: AlbumSortOrder = .titleAscending
 
@@ -288,12 +289,13 @@ struct AllAlbumsView: View {
             }
             .overlay(alignment: .trailing) {
                 if !(isYearSortActive || isDateAddedSortActive) {
-                    SectionIndexBar(titles: displaySections.map(\.title)) { title in
+                    SectionIndexBar(titles: displaySections.map(\.title), activeTitle: $indexTitle) { title in
                         proxy.scrollTo(title, anchor: .top)
                     }
                     .padding(.trailing, 0)
                 }
             }
+            .overlay { SectionIndexPopup(title: indexTitle) }
             }
             .tint(.secondary)
 
