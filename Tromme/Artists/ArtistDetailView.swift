@@ -125,65 +125,106 @@ struct ArtistDetailView: View {
     }
 
     private func releaseGrid(_ releases: [PlexMetadata]) -> some View {
+        albumGrid(releases, subtitle: { $0.releaseYear }, onSelect: { selectedAlbum = $0 })
+    }
+
+    private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
+        albumGrid(
+            albums,
+            subtitle: { album in
+                [album.releaseYear, album.parentTitle]
+                    .compactMap { s in (s?.isEmpty == false) ? s : nil }
+                    .joined(separator: " · ")
+            },
+            onSelect: { selectedAppearsOnAlbum = $0 }
+        )
+    }
+
+    private func albumGrid(
+        _ albums: [PlexMetadata],
+        subtitle: @escaping (PlexMetadata) -> String,
+        onSelect: @escaping (PlexMetadata) -> Void
+    ) -> some View {
         LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-            ForEach(releases) { album in
-                Menu {
-                    albumContextMenu(for: album)
-                } label: {
-                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                        GeometryReader { geo in
-                            ArtworkView(
-                                thumbPath: album.thumb,
-                                size: geo.size.width,
-                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                            )
-                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
-                        }
-                        .aspectRatio(1, contentMode: .fit)
-
-                        Text(album.title)
-                            .appItemTitleStyle()
-
-                        Text(album.releaseYear)
-                            .appItemSubtitleStyle()
+            ForEach(albums) { album in
+                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                    GeometryReader { geo in
+                        ArtworkView(
+                            thumbPath: album.thumb,
+                            size: geo.size.width,
+                            cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                        )
+                        .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                } primaryAction: {
-                    selectedAlbum = album
+                    .aspectRatio(1, contentMode: .fit)
+
+                    Text(album.title)
+                        .appItemTitleStyle()
+
+                    Text(subtitle(album))
+                        .appItemSubtitleStyle()
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay {
+                    AlbumMenuInteraction(
+                        actions: albumMenuActions(for: album),
+                        preview: albumPreview(for: album),
+                        onTap: { onSelect(album) }
+                    )
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
             }
         }
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
         .listRowSeparator(.hidden)
-                .listRowBackground(backdropColor)
+        .listRowBackground(backdropColor)
     }
 
-    @ViewBuilder
-    private func albumContextMenu(for album: PlexMetadata) -> some View {
-        Group {
-            Button("Play Next", systemImage: "text.insert") {
+    private func albumMenuActions(for album: PlexMetadata) -> [AlbumMenuAction] {
+        [
+            AlbumMenuAction(title: "Play Next", systemImage: "text.insert") {
                 Task {
                     guard let tracks = await albumTracks(album) else { return }
                     for track in tracks.reversed() { player.addToQueue(track) }
                 }
-            }
-            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+            },
+            AlbumMenuAction(title: "Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
                 Task {
                     guard let tracks = await albumTracks(album) else { return }
                     for track in tracks { player.addToEndOfQueue(track) }
                 }
-            }
-            Button("Add to Playlist", systemImage: "text.badge.plus") {
+            },
+            AlbumMenuAction(title: "Add to Playlist", systemImage: "text.badge.plus") {
                 Task {
                     guard let tracks = await albumTracks(album) else { return }
                     addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
                 }
             }
+        ]
+    }
+
+    private func albumPreview(for album: PlexMetadata) -> some View {
+        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+            ArtworkView(
+                thumbPath: album.thumb,
+                size: 200,
+                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+            )
+            .frame(width: 200, height: 200)
+            Text(album.title)
+                .appItemTitleStyle()
+            Text(album.parentTitle ?? "")
+                .appItemSubtitleStyle()
         }
-        .tint(.primary)
+        .frame(width: 200)
+        .padding()
+        .foregroundStyle(.primary)
+        .background(Color(.systemBackground))
+        .environment(\.plexClient, client)
+        .environment(\.serverConnection, serverConnection)
+        .environment(\.colorScheme, colorScheme)
     }
 
     @MainActor
@@ -191,45 +232,6 @@ struct ArtistDetailView: View {
         guard let server = serverConnection.currentServer else { return nil }
         guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return nil }
         return tracks
-    }
-
-    private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
-        LazyVGrid(columns: albumGridColumns, spacing: AppStyle.ArtistDetailAlbumGrid.rowSpacing) {
-            ForEach(albums) { album in
-                Menu {
-                    albumContextMenu(for: album)
-                } label: {
-                    VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                        GeometryReader { geo in
-                            ArtworkView(
-                                thumbPath: album.thumb,
-                                size: geo.size.width,
-                                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                            )
-                            .artworkBorder(cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius)
-                        }
-                        .aspectRatio(1, contentMode: .fit)
-
-                        Text(album.title)
-                            .appItemTitleStyle()
-
-                        Text([album.releaseYear, album.parentTitle]
-                            .compactMap { s in (s?.isEmpty == false) ? s : nil }
-                            .joined(separator: " · "))
-                            .appItemSubtitleStyle()
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                } primaryAction: {
-                    selectedAppearsOnAlbum = album
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.bottom, 24)
-        .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
-        .listRowSeparator(.hidden)
-                .listRowBackground(backdropColor)
     }
 
     @ViewBuilder
