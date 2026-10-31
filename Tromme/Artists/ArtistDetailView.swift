@@ -21,6 +21,7 @@ struct ArtistDetailView: View {
     @State private var showsBioSheet = false
     @State private var showsChangePhotoSheet = false
     @State private var metadataRequest: MetadataSheetRequest?
+    @State private var addToPlaylistRequest: AddToPlaylistRequest?
     @State private var viewWidth: CGFloat = 393
     @State private var viewHeight: CGFloat = 852
     @State private var scrollOffset: CGFloat = 0
@@ -149,12 +150,66 @@ struct ArtistDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    albumContextMenu(for: album)
+                } preview: {
+                    albumPreview(for: album)
+                }
             }
         }
         .padding(.bottom, 24)
         .listRowInsets(EdgeInsets(top: 0, leading: AppStyle.Spacing.pageHorizontal, bottom: 0, trailing: AppStyle.Spacing.pageHorizontal))
         .listRowSeparator(.hidden)
                 .listRowBackground(backdropColor)
+    }
+
+    @ViewBuilder
+    private func albumContextMenu(for album: PlexMetadata) -> some View {
+        Group {
+            Button("Play Next", systemImage: "text.insert") {
+                Task {
+                    guard let tracks = await albumTracks(album) else { return }
+                    for track in tracks.reversed() { player.addToQueue(track) }
+                }
+            }
+            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                Task {
+                    guard let tracks = await albumTracks(album) else { return }
+                    for track in tracks { player.addToEndOfQueue(track) }
+                }
+            }
+            Button("Add to Playlist", systemImage: "text.badge.plus") {
+                Task {
+                    guard let tracks = await albumTracks(album) else { return }
+                    addToPlaylistRequest = AddToPlaylistRequest(itemRatingKeys: tracks.map(\.ratingKey))
+                }
+            }
+        }
+        .tint(.primary)
+    }
+
+    private func albumPreview(for album: PlexMetadata) -> some View {
+        VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+            ArtworkView(
+                thumbPath: album.thumb,
+                size: 200,
+                cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+            )
+            .frame(width: 200, height: 200)
+            Text(album.title)
+                .appItemTitleStyle()
+            Text(album.releaseYear)
+                .appItemSubtitleStyle()
+        }
+        .frame(width: 200)
+        .padding()
+    }
+
+    @MainActor
+    private func albumTracks(_ album: PlexMetadata) async -> [PlexMetadata]? {
+        guard let server = serverConnection.currentServer else { return nil }
+        guard let tracks = try? await client.cachedChildren(server: server, ratingKey: album.ratingKey, updatedAt: album.updatedAt), !tracks.isEmpty else { return nil }
+        return tracks
     }
 
     private func appearsOnGrid(_ albums: [PlexMetadata]) -> some View {
@@ -185,6 +240,11 @@ struct ArtistDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    albumContextMenu(for: album)
+                } preview: {
+                    albumPreview(for: album)
+                }
             }
         }
         .padding(.bottom, 24)
@@ -448,6 +508,9 @@ struct ArtistDetailView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $addToPlaylistRequest) { request in
+            AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
+        }
         .navigationDestination(item: $selectedAlbum) { album in
             AlbumDetailView(album: album, sourceArtistRatingKey: artist.ratingKey)
         }
