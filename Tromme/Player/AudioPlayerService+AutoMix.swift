@@ -288,6 +288,12 @@ extension AudioPlayerService {
                 self.applyIncomingVolume()
 
                 if progress.outgoing >= 1 {
+                    self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
+                        "finishRemaining": Self.seconds(remaining),
+                        "outgoingRate": "\(self.mixOutgoingPlayer?.rate ?? -1)",
+                        "outgoingStatus": "\(self.mixOutgoingPlayer?.currentItem?.status.rawValue ?? -1)",
+                        "wallElapsed": Self.seconds(Date().timeIntervalSince(startedAt))
+                    ])
                     self.finishAutoMix()
                     return
                 }
