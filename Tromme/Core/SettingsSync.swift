@@ -13,7 +13,7 @@ final class SettingsSync {
         "crossfadeEnabled",
         "crossfadeSeconds",
         "autoDownloadEnabled",
-        "autoDownloadMode",
+        "musicCacheEnabled",
         "dynamicDownloadLimit",
         "downloadQuality",
         "animatedArtworkEnabled",

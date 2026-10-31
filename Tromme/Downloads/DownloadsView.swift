@@ -7,7 +7,6 @@ struct DownloadsView: View {
     @Environment(\.serverConnection) private var serverConnection
 
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
-    @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @State private var showDeleteAllConfirmation = false
     @State private var isStartingDownloads = false
     @State private var searchText = ""
@@ -79,7 +78,7 @@ struct DownloadsView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if autoDownloadEnabled, autoDownloadMode == AutoDownloadMode.library.rawValue {
+                if autoDownloadEnabled {
                     if downloadManager.hasActiveDownloads {
                         Button {
                             downloadManager.cancelAllPendingDownloads()

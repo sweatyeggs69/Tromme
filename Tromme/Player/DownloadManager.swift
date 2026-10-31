@@ -48,15 +48,14 @@ final class DownloadManager: @unchecked Sendable {
 
     private static func migrateLegacyAutoDownloadPreferences() {
         let defaults = UserDefaults.standard
-        if defaults.object(forKey: "autoDownloadEnabled") == nil {
-            if defaults.bool(forKey: "dynamicQueueDownloads") {
-                defaults.set(true, forKey: "autoDownloadEnabled")
-                defaults.set(AutoDownloadMode.queue.rawValue, forKey: "autoDownloadMode")
-            } else if defaults.bool(forKey: "autoDownloadAllSongs") {
-                defaults.set(true, forKey: "autoDownloadEnabled")
-                defaults.set(AutoDownloadMode.library.rawValue, forKey: "autoDownloadMode")
-            }
+        let legacyMode = defaults.string(forKey: "autoDownloadMode")
+        if legacyMode == "queue" || defaults.bool(forKey: "dynamicQueueDownloads") {
+            defaults.set(true, forKey: AudioPlayerService.musicCacheEnabledKey)
+            defaults.set(false, forKey: "autoDownloadEnabled")
+        } else if defaults.object(forKey: "autoDownloadEnabled") == nil, defaults.bool(forKey: "autoDownloadAllSongs") {
+            defaults.set(true, forKey: "autoDownloadEnabled")
         }
+        defaults.removeObject(forKey: "autoDownloadMode")
         defaults.removeObject(forKey: "autoDownloadAllSongs")
         defaults.removeObject(forKey: "dynamicQueueDownloads")
     }
@@ -125,8 +124,7 @@ final class DownloadManager: @unchecked Sendable {
     func syncLibraryDownloadsIfNeeded(server: PlexServer, sectionId: String, client: PlexAPIClient) async {
         guard !userStoppedAutoDownload else { return }
         let enabled = UserDefaults.standard.bool(forKey: "autoDownloadEnabled")
-        let modeRaw = UserDefaults.standard.string(forKey: "autoDownloadMode") ?? AutoDownloadMode.defaultMode.rawValue
-        guard enabled, AutoDownloadMode(rawValue: modeRaw) == .library else { return }
+        guard enabled else { return }
         guard let tracks = try? await client.cachedTracks(server: server, sectionId: sectionId) else { return }
 
         for track in tracks {

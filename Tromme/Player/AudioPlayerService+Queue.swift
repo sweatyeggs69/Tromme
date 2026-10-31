@@ -7,10 +7,9 @@ extension AudioPlayerService {
     // MARK: - Dynamic Downloads
 
     var isDynamicQueueDownloadEnabled: Bool {
-        guard UserDefaults.standard.bool(forKey: Self.autoDownloadEnabledKey) else { return false }
-        let mode = UserDefaults.standard.string(forKey: Self.autoDownloadModeKey)
-            .flatMap(AutoDownloadMode.init(rawValue:)) ?? AutoDownloadMode.defaultMode
-        return mode == .queue
+        let defaults = UserDefaults.standard
+        return defaults.bool(forKey: Self.musicCacheEnabledKey)
+            && !defaults.bool(forKey: Self.autoDownloadEnabledKey)
     }
 
     func syncDynamicQueueDownloads() {

@@ -10,6 +10,9 @@ struct PlaybackSettingsView: View {
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @AppStorage(AudioPlayerService.crossfadeEnabledKey) private var crossfadeEnabled = false
+    @AppStorage(AudioPlayerService.musicCacheEnabledKey) private var musicCacheEnabled = false
+    @AppStorage(AudioPlayerService.dynamicDownloadLimitKey) private var dynamicDownloadLimit = 5
+    @AppStorage(AudioPlayerService.autoDownloadEnabledKey) private var downloadLibraryEnabled = false
     @AppStorage(AudioPlayerService.crossfadeLengthKey) private var crossfadeSeconds = AutoMixPlanner.defaultCrossfadeLength
 
     var body: some View {
@@ -43,6 +46,31 @@ struct PlaybackSettingsView: View {
                 }
             } footer: {
                 Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade. Requires Tromme Plus.")
+            }
+
+            Section {
+                Toggle("Music Cache", isOn: $musicCacheEnabled)
+                    .tint(.green)
+                    .disabled(downloadLibraryEnabled)
+                    .onChange(of: musicCacheEnabled) { _, enabled in
+                        if enabled { player.syncDynamicQueueDownloads() }
+                    }
+                if musicCacheEnabled, !downloadLibraryEnabled {
+                    Picker("Song Limit", selection: $dynamicDownloadLimit) {
+                        ForEach([5, 10, 20], id: \.self) { limit in
+                            Text("\(limit) songs").tag(limit)
+                        }
+                    }
+                    .onChange(of: dynamicDownloadLimit) { _, _ in
+                        player.syncDynamicQueueDownloads()
+                    }
+                }
+            } footer: {
+                if downloadLibraryEnabled {
+                    Text("Music Cache is off because Download Library keeps your entire library on this device.")
+                } else {
+                    Text("Downloads the playing song and the next songs in your queue so they play from this device, then keeps them for offline listening. The song limit sets how many are cached ahead.")
+                }
             }
 
             if supportsCellularSettings {

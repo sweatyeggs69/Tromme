@@ -17,7 +17,6 @@ struct AllSongsView: View {
     @State private var isLoading = true
     @AppStorage("allSongsSortOrder") private var sortOrder: SongSortOrder = .titleAscending
     @AppStorage("autoDownloadEnabled") private var autoDownloadEnabled = false
-    @AppStorage("autoDownloadMode") private var autoDownloadMode = AutoDownloadMode.defaultMode.rawValue
     @State private var trackNavigationTarget: PlexMetadata? = nil
     private let previewTracks: [PlexMetadata]?
 
@@ -191,7 +190,6 @@ struct AllSongsView: View {
         do {
             loadedTracks = try await client.cachedTracks(server: server, sectionId: sectionId)
             if autoDownloadEnabled,
-               autoDownloadMode == AutoDownloadMode.library.rawValue,
                !downloadManager.userStoppedAutoDownload {
                 downloadManager.downloadBatch(tracks: loadedTracks, server: server, client: client)
             }

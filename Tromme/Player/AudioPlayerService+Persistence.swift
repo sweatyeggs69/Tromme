@@ -20,7 +20,7 @@ extension AudioPlayerService {
     static let infiniteModeKey = "infiniteModeActive"
     static let diagnosticsEnabledKey = "audioDiagnosticsEnabled"
     static let autoDownloadEnabledKey = "autoDownloadEnabled"
-    static let autoDownloadModeKey = "autoDownloadMode"
+    static let musicCacheEnabledKey = "musicCacheEnabled"
     static let dynamicDownloadLimitKey = "dynamicDownloadLimit"
     static let supportedDynamicDownloadLimits: Set<Int> = [5, 10, 20]
 
