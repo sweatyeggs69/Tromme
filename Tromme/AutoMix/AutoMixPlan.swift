@@ -6,16 +6,9 @@ struct AutoMixPlan: Sendable {
     let startTime: TimeInterval
     let overlap: TimeInterval
     var introStart: TimeInterval?
-    var filter: FilterStyle = .none
     var isPlainCrossfade = false
     var loudnessDifference: Double?
     var incomingFade: TimeInterval?
-
-    enum FilterStyle: Sendable {
-        case none
-        case energetic
-        case mellow
-    }
 
     func progress(at elapsed: TimeInterval) -> (outgoing: Double, incoming: Double) {
         let outgoing = min(max(elapsed / overlap, 0), 1)
@@ -43,10 +36,10 @@ struct AutoMixPlan: Sendable {
     }
 
     func withOverlap(_ overlap: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade.map { min($0, overlap) })
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: startTime, overlap: overlap, introStart: introStart, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade.map { min($0, overlap) })
     }
 
     func startingNow(at time: TimeInterval) -> AutoMixPlan {
-        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: time, overlap: overlap, introStart: introStart, filter: filter, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade)
+        AutoMixPlan(outgoingKey: outgoingKey, incomingKey: incomingKey, startTime: time, overlap: overlap, introStart: introStart, isPlainCrossfade: isPlainCrossfade, loudnessDifference: loudnessDifference, incomingFade: incomingFade)
     }
 }

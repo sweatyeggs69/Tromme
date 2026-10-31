@@ -6,7 +6,6 @@ enum AutoMixPlanner {
     private static let lastLyricPadding: TimeInterval = 3
     private static let markedLastLyricPadding: TimeInterval = 1.5
     private static let lyricLead: TimeInterval = 1
-    private static let filteredOverlap: TimeInterval = 3
     private static let quickestFadeIn: TimeInterval = 0.5
     private static let longestTail: TimeInterval = 4
     private static let shortestMix: TimeInterval = 3
@@ -47,7 +46,6 @@ enum AutoMixPlanner {
             startTime: startTime,
             overlap: overlap,
             introStart: introStart,
-            filter: overlap >= filteredOverlap ? .mellow : .none,
             incomingFade: incomingFade
         )
     }

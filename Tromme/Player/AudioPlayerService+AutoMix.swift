@@ -98,10 +98,10 @@ extension AudioPlayerService {
                 return
             }
             plan.loudnessDifference = loudnessDifference
-            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) filter=\(plan.filter) vocals=true/\(incomingSpan != nil)")
+            self.logPlayback("automix_planned", "late=\(plan.startTime + plan.overlap < self.bestKnownPlaybackSeconds) start=\(plan.startTime) overlap=\(plan.overlap) intro=\(plan.introStart ?? -1) vocals=true/\(incomingSpan != nil)")
             self.recordAutoMix(current, incoming, "planned: lyric mix", [
                 "start": Self.seconds(plan.startTime), "overlap": Self.seconds(plan.overlap),
-                "incomingStart": plan.introStart.map(Self.seconds) ?? "top", "filter": "\(plan.filter)",
+                "incomingStart": plan.introStart.map(Self.seconds) ?? "top",
                 "incomingFade": plan.incomingFade.map(Self.seconds) ?? "none",
                 "outgoingLyricsEnd": Self.seconds(outgoingSpan.end),
                 "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
@@ -244,14 +244,11 @@ extension AudioPlayerService {
         losslessTickTask?.cancel()
         losslessTickTask = nil
 
-        if plan.filter != .none, let tonality = mixTap(for: mixOutgoingPlayer)?.tonality {
-            plan.filter = Self.filterStyle(for: tonality)
-        }
         mixIncomingGain = 0
         currentIndex = target.index
-        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap) filter=\(plan.filter)")
+        logPlayback("automix_begin", "to=\(target.track.ratingKey) overlap=\(plan.overlap)")
         noteAutoMix(incomingKey: target.track.ratingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
-            "lateBy": Self.seconds(lateness), "filterUsed": "\(plan.filter)", "overlapUsed": Self.seconds(plan.overlap)
+            "lateBy": Self.seconds(lateness), "overlapUsed": Self.seconds(plan.overlap)
         ])
         var resume = plan.introStart
         if case .hls? = preloadedNext?.source { resume = nil }
@@ -306,8 +303,6 @@ extension AudioPlayerService {
                 self.mixOutgoingLossless?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
                 self.mixIncomingGain = gains.incoming * loudness.incoming
                 self.applyIncomingVolume()
-
-                self.applyMixFilters(plan.filter, outgoing: Float(progress.outgoing))
 
                 if progress.outgoing >= 1 {
                     self.finishAutoMix()
@@ -369,7 +364,6 @@ extension AudioPlayerService {
         mixOutgoingLossless = nil
         mixIncomingGain = 1
         applyIncomingVolume()
-        mixTap(for: player)?.set(.off, cutoff: 1000)
     }
 
     // MARK: - Preparing
@@ -402,46 +396,5 @@ extension AudioPlayerService {
         prepared.volume = 0
         mixPrepared = PreparedMixIncoming(ratingKey: plan.incomingKey, url: preloaded.streamURL, player: prepared, item: item)
         logPlayback("automix_prepared", "track=\(plan.incomingKey)")
-    }
-
-    // MARK: - Filters
-
-    func attachMixFilter(to item: AVPlayerItem, url: URL) {
-        guard isFullAutoMixEnabled, url.isFileURL || !url.path.contains("transcode") else { return }
-        let tap = AutoMixFilterTap()
-        mixTaps.setObject(tap, forKey: item)
-        Task { [weak item] in
-            guard let item,
-                  let track = try? await item.asset.loadTracks(withMediaType: .audio).first,
-                  let parameters = tap.parameters(for: track) else { return }
-            let mix = AVMutableAudioMix()
-            mix.inputParameters = [parameters]
-            item.audioMix = mix
-        }
-    }
-
-    private static func filterStyle(for tonality: AutoMixFilterTap.Tonality) -> AutoMixPlan.FilterStyle {
-        guard tonality.seconds > 20, tonality.songLow > 0, tonality.songHigh > 0 else { return .mellow }
-        let lowKept = tonality.recentLow / tonality.songLow
-        let highKept = tonality.recentHigh / tonality.songHigh
-        return lowKept < 0.4 && lowKept < highKept ? .energetic : .mellow
-    }
-
-    private func mixTap(for player: AVPlayer?) -> AutoMixFilterTap? {
-        player?.currentItem.flatMap { mixTaps.object(forKey: $0) }
-    }
-
-    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, outgoing progress: Float) {
-        guard style != .none else { return }
-        func sweep(_ from: Float, _ to: Float, _ progress: Float) -> Float { from * pow(to / from, progress) }
-        let outgoing = mixTap(for: mixOutgoingPlayer)
-        switch style {
-        case .none:
-            break
-        case .energetic:
-            outgoing?.set(.highPass, cutoff: sweep(40, 900, progress))
-        case .mellow:
-            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500, progress))
-        }
     }
 }

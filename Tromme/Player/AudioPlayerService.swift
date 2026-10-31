@@ -117,7 +117,6 @@ final class AudioPlayerService: Sendable {
     var preloadedNext: PreloadedNextTrack?
     var autoMixPlan: AutoMixPlan?
     var autoMixRecords: [AutoMixRecord] = []
-    let mixTaps = NSMapTable<AVPlayerItem, AutoMixFilterTap>.weakToStrongObjects()
     var autoMixPlanTask: Task<Void, Never>?
     var autoMixTriggerTask: Task<Void, Never>?
     var autoMixTask: Task<Void, Never>?
@@ -772,7 +771,6 @@ final class AudioPlayerService: Sendable {
 
     func makePlayerItem(url: URL, trimmedTo track: PlexMetadata? = nil, streamOffset: TimeInterval = 0, asset: AVAsset? = nil) -> AVPlayerItem {
         let item = asset.map { AVPlayerItem(asset: $0) } ?? AVPlayerItem(url: url)
-        attachMixFilter(to: item, url: url)
         if let track, streamOffset == 0,
            let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey) {
             item.forwardPlaybackEndTime = CMTime(seconds: stop, preferredTimescale: 600)
