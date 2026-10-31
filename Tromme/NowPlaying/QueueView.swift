@@ -5,6 +5,7 @@ struct QueueView: View {
     @State private var magicMixAvailable = false
     @State private var plus = PlusStore.shared
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
+    @AppStorage(AudioPlayerService.crossfadeEnabledKey) private var crossfadeEnabled = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,7 +80,7 @@ struct QueueView: View {
             }
             .frame(maxWidth: .infinity)
 
-            if plus.isPlus {
+            if plus.isPlus && crossfadeEnabled {
                 QueueActionPill(isActive: autoMixEnabled) {
                     autoMixEnabled.toggle()
                 } label: {
