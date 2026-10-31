@@ -8,6 +8,7 @@ struct PlaybackSettingsView: View {
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
+    @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @AppStorage(AudioPlayerService.crossfadeEnabledKey) private var crossfadeEnabled = false
     @AppStorage(AudioPlayerService.crossfadeLengthKey) private var crossfadeSeconds = AutoMixPlanner.defaultCrossfadeLength
 
@@ -29,6 +30,8 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
+                Toggle("AutoMix", isOn: $autoMixEnabled)
+                    .tint(.green)
                 Toggle("Crossfade", isOn: $crossfadeEnabled)
                     .tint(.green)
                 if crossfadeEnabled {
@@ -38,6 +41,8 @@ struct PlaybackSettingsView: View {
                         }
                     }
                 }
+            } footer: {
+                Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade. Requires Tromme Plus.")
             }
 
             if supportsCellularSettings {
