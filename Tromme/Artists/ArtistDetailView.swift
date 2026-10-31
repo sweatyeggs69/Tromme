@@ -186,6 +186,8 @@ struct ArtistDetailView: View {
             }
         }
         .tint(.primary)
+        .foregroundStyle(.primary)
+        .environment(\.colorScheme, colorScheme)
     }
 
     private func albumPreview(for album: PlexMetadata) -> some View {
@@ -203,6 +205,8 @@ struct ArtistDetailView: View {
         }
         .frame(width: 200)
         .padding()
+        .foregroundStyle(.primary)
+        .environment(\.colorScheme, colorScheme)
     }
 
     @MainActor
