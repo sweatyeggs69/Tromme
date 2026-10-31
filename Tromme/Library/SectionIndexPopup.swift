@@ -11,7 +11,7 @@ struct SectionIndexPopup: View {
                     .foregroundStyle(.primary.opacity(0.85))
                     .frame(width: 96, height: 96)
                     .glassEffect(.clear, in: .rect(cornerRadius: 24))
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.15), value: title)
