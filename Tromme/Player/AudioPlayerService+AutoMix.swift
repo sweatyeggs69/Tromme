@@ -89,12 +89,7 @@ extension AudioPlayerService {
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
-                let length = min(crossfadeLength, end - (outgoingSpan?.end ?? end - crossfadeLength) - AutoMixPlanner.minimumLastLyricPadding)
-                if length >= 1.5 {
-                    planPlainCrossfade(reason: "lyrics_too_close_to_edge", length: length)
-                } else {
-                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
-                }
+                self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 return
             }
             plan.loudnessDifference = loudnessDifference
