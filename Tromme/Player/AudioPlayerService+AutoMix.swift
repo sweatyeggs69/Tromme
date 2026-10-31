@@ -9,11 +9,11 @@ extension AudioPlayerService {
 
     var isAutoMixing: Bool { autoMixInProgress }
 
-    var isAutoMixEnabled: Bool { UserDefaults.standard.bool(forKey: Self.autoMixKey) && PlusStore.cachedIsPlus }
+    var isAutoMixEnabled: Bool { isCrossfadeEnabled && UserDefaults.standard.bool(forKey: Self.autoMixKey) && PlusStore.cachedIsPlus }
 
     private var isCrossfadeEnabled: Bool { UserDefaults.standard.bool(forKey: Self.crossfadeEnabledKey) }
 
-    private var isMixingEnabled: Bool { isAutoMixEnabled || isCrossfadeEnabled }
+    private var isMixingEnabled: Bool { isCrossfadeEnabled }
 
     private var isFullAutoMixEnabled: Bool { isAutoMixEnabled }
 

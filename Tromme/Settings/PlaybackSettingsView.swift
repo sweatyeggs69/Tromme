@@ -30,11 +30,11 @@ struct PlaybackSettingsView: View {
             }
 
             Section {
-                Toggle("AutoMix", isOn: $autoMixEnabled)
-                    .tint(.green)
                 Toggle("Crossfade", isOn: $crossfadeEnabled)
                     .tint(.green)
                 if crossfadeEnabled {
+                    Toggle("AutoMix", isOn: $autoMixEnabled)
+                        .tint(.green)
                     Picker("Duration", selection: $crossfadeSeconds) {
                         ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
                             Text("\(Int(seconds)) sec").tag(seconds)
