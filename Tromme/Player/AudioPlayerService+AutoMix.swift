@@ -265,6 +265,9 @@ extension AudioPlayerService {
             guard let self else { return }
             let plan = original
             var startedAt = Date()
+            #if DEBUG
+            var lastTrace = Date.distantPast
+            #endif
             self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                 "overlapFinal": Self.seconds(plan.overlap)
             ])
@@ -282,6 +285,13 @@ extension AudioPlayerService {
                 let elapsed = remaining.isFinite ? plan.overlap - remaining : Date().timeIntervalSince(startedAt)
                 let progress = plan.progress(at: elapsed)
 
+                #if DEBUG
+                if Date().timeIntervalSince(lastTrace) >= 0.5 {
+                    lastTrace = Date()
+                    let out = self.mixOutgoingPlayer
+                    self.logPlayback("automix_fade", "elapsed=\(Self.seconds(elapsed)) remaining=\(Self.seconds(remaining)) outTime=\(Self.seconds(out?.currentTime().seconds ?? self.mixOutgoingLossless?.currentTime ?? -1)) outRate=\(out?.rate ?? -1) outStatus=\(out?.currentItem?.status.rawValue ?? -1) outItemDuration=\(Self.seconds(out?.currentItem?.duration.seconds ?? -1)) outVolume=\(out?.volume ?? -1) inRate=\(self.player?.rate ?? -1)")
+                }
+                #endif
                 let gains = plan.gains(progress)
                 let loudness = plan.loudnessFactors(progress)
                 self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
@@ -290,6 +300,7 @@ extension AudioPlayerService {
                 self.applyIncomingVolume()
 
                 if progress.outgoing >= 1 {
+                    self.logPlayback("automix_fade_end", "remaining=\(Self.seconds(remaining)) outRate=\(self.mixOutgoingPlayer?.rate ?? -1)")
                     self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                         "finishRemaining": Self.seconds(remaining),
                         "outgoingRate": "\(self.mixOutgoingPlayer?.rate ?? -1)",
