@@ -315,7 +315,7 @@ extension AudioPlayerService {
                 self.mixIncomingGain = gains.incoming * loudness.incoming
                 self.applyIncomingVolume()
 
-                self.applyMixFilters(plan.filter, outgoing: Float(progress.outgoing), incoming: Float(progress.incoming))
+                self.applyMixFilters(plan.filter, outgoing: Float(progress.outgoing))
 
                 if progress.outgoing >= 1 {
                     self.finishAutoMix()
@@ -439,21 +439,17 @@ extension AudioPlayerService {
         player?.currentItem.flatMap { mixTaps.object(forKey: $0) }
     }
 
-    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, outgoing outgoingProgress: Float, incoming incomingProgress: Float) {
+    private func applyMixFilters(_ style: AutoMixPlan.FilterStyle, outgoing progress: Float) {
         guard style != .none else { return }
         func sweep(_ from: Float, _ to: Float, _ progress: Float) -> Float { from * pow(to / from, progress) }
         let outgoing = mixTap(for: mixOutgoingPlayer)
-        let incoming = mixTap(for: player)
-        let incomingDone = incomingProgress >= 0.97
         switch style {
         case .none:
             break
         case .energetic:
-            outgoing?.set(.highPass, cutoff: sweep(40, 900, outgoingProgress))
-            incoming?.set(incomingDone ? .off : .lowPass, cutoff: sweep(500, 18_000, incomingProgress))
+            outgoing?.set(.highPass, cutoff: sweep(40, 900, progress))
         case .mellow:
-            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500, outgoingProgress))
-            incoming?.set(incomingDone ? .off : .highPass, cutoff: sweep(900, 30, incomingProgress))
+            outgoing?.set(.lowPass, cutoff: sweep(18_000, 500, progress))
         }
     }
 }
