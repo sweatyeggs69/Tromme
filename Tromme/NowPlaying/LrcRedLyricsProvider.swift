@@ -12,6 +12,9 @@ enum LrcRedLyricsProvider {
 
     static func timedLyrics(title: String, artist: String, duration: TimeInterval?) async -> TimedLyrics {
         let candidates = await matchingISRCs(title: title, artist: artist, duration: duration)
+        #if DEBUG
+        print("[Lyrics] lrc.red candidates for \(title): \(candidates)")
+        #endif
         guard !candidates.isEmpty else { return TimedLyrics() }
 
         let lrcs = await withTaskGroup(of: (rank: Int, lrc: FetchedLRC?).self) { group in
@@ -99,7 +102,12 @@ enum LrcRedLyricsProvider {
               let text = String(data: data, encoding: .utf8) else { return nil }
         let lines = LRCParser.parse(text)
         guard let lastTime = lines.map(\.time).max() else { return nil }
-        if let duration, lastTime > duration + LyricsService.syncedDurationTolerance { return nil }
+        if let duration, lastTime > duration + LyricsService.syncedDurationTolerance {
+            #if DEBUG
+            print("[Lyrics] lrc.red \(isrc) rejected: last line \(Int(lastTime))s, track \(Int(duration))s")
+            #endif
+            return nil
+        }
         return FetchedLRC(text: text, isWordSynced: lines.contains { !$0.words.isEmpty })
     }
 
