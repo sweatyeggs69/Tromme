@@ -7,6 +7,7 @@ struct NowPlayingView: View {
     // MARK: - Environment
 
     @Environment(AudioPlayerService.self) private var player
+    @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.dismiss) private var dismiss
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
@@ -514,6 +515,32 @@ struct NowPlayingView: View {
     // MARK: - Track Context Menu
 
     @ViewBuilder
+    private func downloadButton(for track: PlexMetadata) -> some View {
+        if downloadManager.isDownloaded(track.ratingKey) {
+            Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                downloadManager.deleteDownload(ratingKey: track.ratingKey)
+            }
+        } else {
+            Button {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.download(track: track, server: server, client: client)
+            } label: {
+                switch downloadManager.transientStates[track.ratingKey] {
+                case .queued:
+                    Label("Queued", systemImage: "clock")
+                case .downloading:
+                    Label("Downloading…", systemImage: "arrow.down.circle")
+                case .failed:
+                    Label("Retry Download", systemImage: "arrow.clockwise.circle")
+                case nil:
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            .disabled(downloadManager.transientStates[track.ratingKey] == .queued || downloadManager.transientStates[track.ratingKey] == .downloading)
+        }
+    }
+
+    @ViewBuilder
     private var trackContextMenuItems: some View {
         if let track = player.currentTrack {
             if let album = PlexMetadata.albumStub(from: track) {
@@ -540,6 +567,7 @@ struct NowPlayingView: View {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }
             Divider()
+            downloadButton(for: track)
             Button {
                 metadataRequest = .trackInfo(track)
             } label: {

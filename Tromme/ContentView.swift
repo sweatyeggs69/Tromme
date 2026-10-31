@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.serverConnection) private var serverConnection
     @Environment(AudioPlayerService.self) private var player
     @Environment(NetworkStatus.self) private var network
+    @Environment(DownloadManager.self) private var downloadManager
 
     @Environment(\.plexClient) private var client
 
@@ -210,6 +211,7 @@ struct ContentView: View {
                 }
                 .environment(player)
                 .environment(network)
+                .environment(downloadManager)
                 .onDisappear {
                     nowPlayingStartPanel = .none
                 }
