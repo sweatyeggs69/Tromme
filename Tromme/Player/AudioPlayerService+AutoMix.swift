@@ -60,8 +60,9 @@ extension AudioPlayerService {
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isMixingEnabled else { return }
-            @MainActor func planPlainCrossfade(reason: String) {
-                var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: crossfadeLength)
+            @MainActor func planPlainCrossfade(reason: String, length: TimeInterval, earliestStart: TimeInterval? = nil) {
+                var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: length)
+                if let earliestStart { plan.earliestStart = earliestStart }
                 plan.loudnessDifference = loudnessDifference
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.recordAutoMix(current, incoming, "planned: plain crossfade", [
@@ -71,7 +72,7 @@ extension AudioPlayerService {
                 self.scheduleAutoMixTrigger(plan, generation: generation)
             }
             guard isPlus, let outgoingSpan else {
-                planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off")
+                planPlainCrossfade(reason: isPlus ? "no_lyrics" : "automix_off", length: crossfadeLength)
                 return
             }
             guard var plan = AutoMixPlanner.plan(
@@ -89,7 +90,12 @@ extension AudioPlayerService {
                     "incomingVocalStart": incomingSpan.map { Self.seconds($0.start) } ?? "none",
                     "outgoingEnd": Self.seconds(end)
                 ])
-                planPlainCrossfade(reason: "lyrics_too_close_to_edge")
+                let length = min(crossfadeLength, end - outgoingSpan.end)
+                if length >= 1.5 {
+                    planPlainCrossfade(reason: "lyrics_too_close_to_edge", length: length, earliestStart: outgoingSpan.end)
+                } else {
+                    self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
+                }
                 return
             }
             plan.loudnessDifference = loudnessDifference
