@@ -28,7 +28,7 @@ struct AlbumMenuInteraction<Preview: View>: UIViewRepresentable {
         context.coordinator.makePreview = {
             let host = UIHostingController(rootView: preview)
             host.view.backgroundColor = .clear
-            host.preferredContentSize = host.sizeThatFits(in: CGSize(width: 232, height: .greatestFiniteMagnitude))
+            host.preferredContentSize = host.sizeThatFits(in: CGSize(width: 232, height: CGFloat.greatestFiniteMagnitude))
             return host
         }
     }
