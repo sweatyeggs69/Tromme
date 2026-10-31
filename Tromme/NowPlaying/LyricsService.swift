@@ -67,17 +67,22 @@ final class LyricsService {
         let blocked = BlockedLyricsStore.shared.fingerprints(forSong: Self.songKey(track))
 
         let result: ResolvedLyrics?
+        var shouldStore = storeForDownload
         if let stored = DownloadedLyricsStore.shared.lyrics(forRatingKey: track.ratingKey),
            Self.isAllowed(stored, blocked: blocked) {
             result = stored
+            shouldStore = false
         } else if let cached = await ExternalContentCache.shared.get(ResolvedLyrics.self, forKey: cacheKey, diskTTL: Self.lyricsTTL),
            cached.value.hasSynced, Self.isAllowed(cached.value, blocked: blocked) {
             result = cached.value
+            if shouldStore {
+                DownloadedLyricsStore.shared.save(cached.value, forRatingKey: track.ratingKey)
+            }
         } else if let fetched = await Self.resolveRetryingOnce(track: track, artist: trackArtist, blocked: blocked) {
             if fetched.lyrics.hasSynced, fetched.isFinal {
                 await Self.cache(fetched.lyrics, forKey: cacheKey)
             }
-            if storeForDownload {
+            if shouldStore {
                 DownloadedLyricsStore.shared.save(fetched.lyrics, forRatingKey: track.ratingKey)
             }
             result = fetched.lyrics

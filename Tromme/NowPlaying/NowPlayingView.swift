@@ -291,7 +291,7 @@ struct NowPlayingView: View {
             isVisible = true
             guard let track = player.currentTrack else { return }
             Task {
-                await lyricsService.fetch(track: track)
+                await lyricsService.fetch(track: track, storeForDownload: downloadManager.isDownloaded(track.ratingKey))
             }
         }
         .onDisappear {
@@ -300,7 +300,7 @@ struct NowPlayingView: View {
         .onChange(of: player.currentTrack?.ratingKey) { _, _ in
             guard isVisible, let track = player.currentTrack else { return }
             Task {
-                await lyricsService.fetch(track: track)
+                await lyricsService.fetch(track: track, storeForDownload: downloadManager.isDownloaded(track.ratingKey))
             }
         }
         .sensoryFeedback(.impact(weight: .light), trigger: lyricsService.blockConfirmations)
