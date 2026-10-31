@@ -60,9 +60,8 @@ extension AudioPlayerService {
             guard !Task.isCancelled, let self, self.playbackGeneration == generation else { return }
             self.autoMixPlanTask = nil
             guard self.isMixingEnabled else { return }
-            @MainActor func planPlainCrossfade(reason: String, length: TimeInterval, earliestStart: TimeInterval? = nil) {
+            @MainActor func planPlainCrossfade(reason: String, length: TimeInterval) {
                 var plan = AutoMixPlanner.crossfade(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, outgoingEnd: end, length: length)
-                if let earliestStart { plan.earliestStart = earliestStart }
                 plan.loudnessDifference = loudnessDifference
                 self.logPlayback("automix_planned", "crossfade=true reason=\(reason) start=\(plan.startTime)")
                 self.recordAutoMix(current, incoming, "planned: plain crossfade", [
@@ -92,7 +91,7 @@ extension AudioPlayerService {
                 ])
                 let length = min(crossfadeLength, end - outgoingSpan.end)
                 if length >= 1.5 {
-                    planPlainCrossfade(reason: "lyrics_too_close_to_edge", length: length, earliestStart: outgoingSpan.end)
+                    planPlainCrossfade(reason: "lyrics_too_close_to_edge", length: length)
                 } else {
                     self.autoMixPlan = AutoMixPlan(outgoingKey: current.ratingKey, incomingKey: incoming.ratingKey, startTime: .infinity, overlap: 0)
                 }
@@ -184,16 +183,6 @@ extension AudioPlayerService {
                 if self.isPlaying, !self.isSeeking, wait <= lead {
                     self.beginAutoMix(plan, lateBy: max(0, -wait))
                     return
-                }
-                if self.isPlaying, !self.isSeeking, wait > lead, wait <= AutoMixPlanner.fadeSearchWindow,
-                   let earliest = plan.earliestStart, now >= earliest,
-                   self.mixTap(for: self.player)?.tonality.isFading == true {
-                    self.maybePreloadNextTrack(within: .infinity)
-                    self.prepareMixIncoming(plan)
-                    if isLocal || self.mixPrepared?.ratingKey == plan.incomingKey {
-                        self.beginAutoMix(plan.startingNow(at: now), lateBy: 0)
-                        return
-                    }
                 }
                 let nap = self.isPlaying ? min(max(wait, 0.02), 0.25) : 0.25
                 try? await Task.sleep(for: .milliseconds(Int(nap * 1000)))

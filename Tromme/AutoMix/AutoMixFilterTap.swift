@@ -18,16 +18,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
         var songLow: Float = 0
         var songHigh: Float = 0
         var seconds: Float = 0
-        var level0: Float = 0
-        var level1: Float = 0
-        var level2: Float = 0
-        var level3: Float = 0
-        var songLevel: Float = 0
-
-        var isFading: Bool {
-            seconds > 20 && songLevel > 1e-4 && level0 < 0.2 * songLevel
-                && level0 < 0.85 * level1 && level1 < 0.85 * level2 && level2 < 0.85 * level3
-        }
     }
 
     private static let maxChannels = 8
@@ -37,8 +27,6 @@ final class AutoMixFilterTap: @unchecked Sendable {
     private let state = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels * stagesPerChannel * 2)
     private let meter = UnsafeMutablePointer<Tonality>.allocate(capacity: 1)
     private var lowBand: Float = 0
-    private var blockEnergy: Float = 0
-    private var blockFrames = 0
     private var midBand: Float = 0
 
     private var sampleRate: Float = 44_100
@@ -179,24 +167,10 @@ final class AutoMixFilterTap: @unchecked Sendable {
         let duration = Float(count) / sampleRate
         let meanSquare = total / Float(count)
         var value = meter.pointee
-        blockEnergy += total
-        blockFrames += count
-        if blockFrames >= Int(sampleRate) {
-            value.level3 = value.level2
-            value.level2 = value.level1
-            value.level1 = value.level0
-            value.level0 = blockEnergy / Float(blockFrames)
-            blockEnergy = 0
-            blockFrames = 0
-        }
-        guard meanSquare > 1e-5 else {
-            meter.pointee = value
-            return
-        }
+        guard meanSquare > 1e-5 else { return }
         let recent = 1 - exp(-duration / 3)
         value.seconds += duration
         let song = duration / value.seconds
-        value.songLevel += song * (meanSquare - value.songLevel)
         value.recentLow += recent * (low / total - value.recentLow)
         value.recentHigh += recent * (high / total - value.recentHigh)
         value.songLow += song * (low / total - value.songLow)
