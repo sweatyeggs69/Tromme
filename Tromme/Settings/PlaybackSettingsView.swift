@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaybackSettingsView: View {
     @Environment(AudioPlayerService.self) private var player
+    @State private var plus = PlusStore.shared
 
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
@@ -45,7 +46,7 @@ struct PlaybackSettingsView: View {
                     }
                 }
             } footer: {
-                Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade. Requires Tromme Plus.")
+                Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade.\(plus.isPlus ? "" : " Requires Tromme Plus.")")
             }
 
             Section {

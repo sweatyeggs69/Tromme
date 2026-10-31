@@ -67,7 +67,7 @@ struct AppIconPickerView: View {
         } header: {
             Text(title)
         } footer: {
-            Text("Included with Tromme +. New icons are added over time.")
+            Text(plus.isPlus ? "New icons are added over time." : "Included with Tromme +. New icons are added over time.")
         }
     }
 
