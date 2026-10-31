@@ -5,7 +5,7 @@ enum AutoMixPlanner {
     static let minimumLastLyricPadding: TimeInterval = 1
     private static let lastLyricPadding: TimeInterval = 3
     private static let markedLastLyricPadding: TimeInterval = 1.5
-    private static let outroWaitRate: TimeInterval = 0.2
+    private static let outroWaitRate: TimeInterval = 0.3
     private static let lyricLead: TimeInterval = 1
     private static let quickestFadeIn: TimeInterval = 0.5
     private static let longestTail: TimeInterval = 4
