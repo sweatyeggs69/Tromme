@@ -44,7 +44,7 @@ struct HomeSettingsView: View {
                 } else if plus.isPlus {
                     Text("Track popularity data is sourced from Last.fm. Animated artwork requires an internet connection.")
                 } else {
-                    Text("Track popularity data is sourced from Last.fm. Animated artwork is part of Tromme +.")
+                    Text("Track popularity data is sourced from Last.fm.")
                 }
             }
 

@@ -46,7 +46,11 @@ struct PlaybackSettingsView: View {
                     }
                 }
             } footer: {
-                Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade.\(plus.isPlus ? "" : " Requires Tromme Plus.")")
+                if plus.isPlus {
+                    Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade.")
+                } else {
+                    Text("Crossfade blends the end of each song into the start of the next.")
+                }
             }
 
             Section {
