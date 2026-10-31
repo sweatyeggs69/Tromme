@@ -50,6 +50,7 @@ struct ArtworkActionButtonsRow<MenuContent: View>: View {
                     .background(Circle().fill(artworkColor.contrastCircleBackground))
                     .shadow(color: controlShadowColor, radius: 6, y: -2)
             }
+            .tint(.primary)
             .disabled(isDisabled)
             .opacity(isDisabled ? 0.45 : 1.0)
         }

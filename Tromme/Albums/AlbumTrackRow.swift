@@ -172,38 +172,42 @@ struct AlbumTrackRow: View {
                     .foregroundStyle(tertiaryTextColor)
                     .frame(width: 28, height: 28)
             }
+            .tint(.primary)
         }
         .contextMenu {
-            Button(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star") {
-                toggleFavorite()
-            }
-            .disabled(isRating)
+            Group {
+                Button(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star") {
+                    toggleFavorite()
+                }
+                .disabled(isRating)
 
-            Divider()
+                Divider()
 
-            Button("Play Next", systemImage: "text.insert") {
-                player.addToQueue(track)
-            }
-            Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
-                player.addToEndOfQueue(track)
-            }
-            Button("Add to Playlist", systemImage: "text.badge.plus") {
-                onAddToPlaylist(track)
-            }
+                Button("Play Next", systemImage: "text.insert") {
+                    player.addToQueue(track)
+                }
+                Button("Add to Queue", systemImage: "text.line.first.and.arrowtriangle.forward") {
+                    player.addToEndOfQueue(track)
+                }
+                Button("Add to Playlist", systemImage: "text.badge.plus") {
+                    onAddToPlaylist(track)
+                }
 
-            Divider()
+                Divider()
 
-            Button("Track Info", systemImage: "info.circle") {
-                metadataRequest = .trackInfo(track)
+                Button("Track Info", systemImage: "info.circle") {
+                    metadataRequest = .trackInfo(track)
+                }
+                trackDownloadButton
+
+                Divider()
+
+                Button("Delete Track", systemImage: "trash", role: .destructive) {
+                    showDeleteTrackConfirmation = true
+                }
+                .disabled(isDeletingTrack || serverConnection.currentServer == nil)
             }
-            trackDownloadButton
-
-            Divider()
-
-            Button("Delete Track", systemImage: "trash", role: .destructive) {
-                showDeleteTrackConfirmation = true
-            }
-            .disabled(isDeletingTrack || serverConnection.currentServer == nil)
+            .tint(.primary)
         }
         .metadataSheets(request: $metadataRequest) { fresh in
             player.updateTrack(fresh)

@@ -99,6 +99,7 @@ struct ChangeArtworkSheet: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .tint(.primary)
                     .disabled(isLoadingArtwork || isApplyingArtwork)
                 }
             }

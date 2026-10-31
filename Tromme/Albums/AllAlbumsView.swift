@@ -262,7 +262,7 @@ struct AllAlbumsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
-                                    albumContextMenu(for: album)
+                                    albumContextMenu(for: album).tint(.primary)
                                 } preview: {
                                     VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
                                         ArtworkView(
@@ -326,7 +326,7 @@ struct AllAlbumsView: View {
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                albumContextMenu(for: album)
+                                albumContextMenu(for: album).tint(.primary)
                             }
                             .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                         }

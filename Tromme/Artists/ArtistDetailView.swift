@@ -527,6 +527,7 @@ struct ArtistDetailView: View {
                     } label: {
                         Image(systemName: "ellipsis")
                     }
+                    .tint(.primary)
                 }
             }
         }

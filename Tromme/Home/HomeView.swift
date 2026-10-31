@@ -215,7 +215,7 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                albumContextMenu(for: album)
+                                albumContextMenu(for: album).tint(.primary)
                             }
                         }
                     }

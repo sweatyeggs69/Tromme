@@ -443,6 +443,7 @@ struct NowPlayingView: View {
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
                 }
+                .tint(.primary)
                 .menuOrder(.fixed)
                 .buttonStyle(.plain)
             }

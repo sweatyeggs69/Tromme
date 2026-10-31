@@ -5,7 +5,6 @@ struct TrackRowView: View {
     @Environment(DownloadManager.self) private var downloadManager
     @Environment(\.plexClient) private var client
     @Environment(\.serverConnection) private var serverConnection
-    @Environment(\.appAccentColor) private var appAccentColor
 
     let track: PlexMetadata
     let tracks: [PlexMetadata]
@@ -38,7 +37,7 @@ struct TrackRowView: View {
 
     var body: some View {
         trackRow
-            .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu.tint(appAccentColor) })
+            .contextMenu(isCompact ? nil : ContextMenu { trackContextMenu.tint(.primary) })
         .metadataSheets(request: $metadataRequest) { fresh in
             editedTrack = fresh
             player.updateTrack(fresh)
@@ -281,7 +280,7 @@ struct TrackRowView: View {
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
-                .tint(appAccentColor)
+                .tint(.primary)
             }
         }
         .appPlainRowItemStyle()
