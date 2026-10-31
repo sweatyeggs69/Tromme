@@ -5,6 +5,7 @@ enum AutoMixPlanner {
     static let minimumLastLyricPadding: TimeInterval = 1
     private static let lastLyricPadding: TimeInterval = 3
     private static let markedLastLyricPadding: TimeInterval = 1.5
+    private static let outroWaitRate: TimeInterval = 0.2
     private static let lyricLead: TimeInterval = 1
     private static let quickestFadeIn: TimeInterval = 0.5
     private static let longestTail: TimeInterval = 4
@@ -21,7 +22,8 @@ enum AutoMixPlanner {
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
         let padding = outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding
-        let startTime = min(outgoingLyricsEnd + padding, outgoingEnd - shortestMix)
+        let outro = outgoingEnd - outgoingLyricsEnd
+        let startTime = min(outgoingLyricsEnd + padding + outroWaitRate * outro, outgoingEnd - shortestMix)
         guard startTime >= outgoingLyricsEnd + minimumLastLyricPadding else { return nil }
         var overlap = min(targetOverlap, outgoingEnd - startTime)
 
