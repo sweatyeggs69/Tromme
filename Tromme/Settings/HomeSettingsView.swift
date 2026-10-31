@@ -40,11 +40,9 @@ struct HomeSettingsView: View {
                 Text("Albums")
             } footer: {
                 if plus.isPlus, NetworkStatus.shared.isConstrained {
-                    Text("Track popularity data is sourced from Last.fm. Animated artwork is unavailable in Low Data Mode.")
+                    Text("Animated artwork is unavailable in Low Data Mode.")
                 } else if plus.isPlus {
-                    Text("Track popularity data is sourced from Last.fm. Animated artwork requires an internet connection.")
-                } else {
-                    Text("Track popularity data is sourced from Last.fm.")
+                    Text("Animated artwork requires an internet connection.")
                 }
             }
 
