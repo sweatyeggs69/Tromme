@@ -361,7 +361,7 @@ struct NowPlayingView: View {
                         VStack(spacing: 0) {
                             Color.white
                             LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .bottom)
-                                .frame(height: 48)
+                                .frame(height: 36)
                         }
                     )
             }
