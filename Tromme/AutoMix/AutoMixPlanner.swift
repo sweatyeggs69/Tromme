@@ -2,7 +2,7 @@ import Foundation
 
 enum AutoMixPlanner {
     private static let targetOverlap: TimeInterval = 6
-    private static let minimumOutroRoom: TimeInterval = 3
+    static let minimumLastLyricPadding: TimeInterval = 1
     private static let lastLyricPadding: TimeInterval = 3
     private static let markedLastLyricPadding: TimeInterval = 1.5
     private static let lyricLead: TimeInterval = 1
@@ -20,9 +20,9 @@ enum AutoMixPlanner {
         outgoingLyricsEndMarked: Bool,
         incomingVocalStart: TimeInterval?
     ) -> AutoMixPlan? {
-        guard outgoingEnd - outgoingLyricsEnd >= minimumOutroRoom else { return nil }
-
-        let startTime = outgoingLyricsEnd + (outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding)
+        let padding = outgoingLyricsEndMarked ? markedLastLyricPadding : lastLyricPadding
+        let startTime = min(outgoingLyricsEnd + padding, outgoingEnd - shortestMix)
+        guard startTime >= outgoingLyricsEnd + minimumLastLyricPadding else { return nil }
         var overlap = min(targetOverlap, outgoingEnd - startTime)
 
         var introStart: TimeInterval?
