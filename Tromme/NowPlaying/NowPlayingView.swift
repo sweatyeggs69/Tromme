@@ -30,6 +30,7 @@ struct NowPlayingView: View {
     #endif
     @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @State private var isRating = false
+    @State private var showRemoveDownloadAlert = false
     @State private var animatedArtworkURL: URL?
     @State private var animatedBackdrop: UIImage?
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
@@ -309,6 +310,14 @@ struct NowPlayingView: View {
         .sheet(item: $addToPlaylistRequest) { request in
             AddToPlaylistSheet(itemRatingKeys: request.itemRatingKeys)
         }
+        .alert("Remove Download?", isPresented: $showRemoveDownloadAlert) {
+            Button("Remove", role: .destructive) {
+                if let key = player.currentTrack?.ratingKey {
+                    downloadManager.deleteDownload(ratingKey: key)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         #if DEBUG
         .sheet(item: $autoMixReport) { report in
             AutoMixReportView(viewModel: report)
@@ -405,20 +414,21 @@ struct NowPlayingView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    toggleFavorite()
+                    handleDownloadTap()
                 } label: {
                     ZStack {
                         Circle()
                             .fill(.white.opacity(actionBackgroundOpacity))
-                        Image(systemName: isFavorited ? "star.fill" : "star")
+                        downloadButtonIcon
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
+                            .contentTransition(.symbolEffect(.replace))
                     }
                     .frame(width: 34, height: 34)
                     .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .disabled(isRating || player.currentTrack == nil)
+                .disabled(player.currentTrack == nil || isDownloadInProgress)
 
                 Menu {
                     trackContextMenuItems
@@ -514,35 +524,50 @@ struct NowPlayingView: View {
 
     // MARK: - Track Context Menu
 
+    private var isDownloadInProgress: Bool {
+        guard let key = player.currentTrack?.ratingKey else { return false }
+        let state = downloadManager.transientStates[key]
+        return state == .queued || state == .downloading
+    }
+
     @ViewBuilder
-    private func downloadButton(for track: PlexMetadata) -> some View {
-        if downloadManager.isDownloaded(track.ratingKey) {
-            Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
-                downloadManager.deleteDownload(ratingKey: track.ratingKey)
-            }
+    private var downloadButtonIcon: some View {
+        let key = player.currentTrack?.ratingKey ?? ""
+        if downloadManager.isDownloaded(key) {
+            Image(systemName: "arrow.down.circle.fill")
         } else {
-            Button {
-                guard let server = serverConnection.currentServer else { return }
-                downloadManager.download(track: track, server: server, client: client)
-            } label: {
-                switch downloadManager.transientStates[track.ratingKey] {
-                case .queued:
-                    Label("Queued", systemImage: "clock")
-                case .downloading:
-                    Label("Downloading…", systemImage: "arrow.down.circle")
-                case .failed:
-                    Label("Retry Download", systemImage: "arrow.clockwise.circle")
-                case nil:
-                    Label("Download", systemImage: "arrow.down.circle")
-                }
+            switch downloadManager.transientStates[key] {
+            case .queued:
+                Image(systemName: "clock")
+            case .downloading:
+                ProgressView().tint(.white)
+            case .failed:
+                Image(systemName: "exclamationmark.circle")
+            case nil:
+                Image(systemName: "arrow.down.circle")
             }
-            .disabled(downloadManager.transientStates[track.ratingKey] == .queued || downloadManager.transientStates[track.ratingKey] == .downloading)
+        }
+    }
+
+    private func handleDownloadTap() {
+        guard let track = player.currentTrack else { return }
+        if downloadManager.isDownloaded(track.ratingKey) {
+            showRemoveDownloadAlert = true
+        } else if let server = serverConnection.currentServer {
+            downloadManager.download(track: track, server: server, client: client)
         }
     }
 
     @ViewBuilder
     private var trackContextMenuItems: some View {
         if let track = player.currentTrack {
+            Button {
+                toggleFavorite()
+            } label: {
+                Label(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star")
+            }
+            .disabled(isRating)
+            Divider()
             if let album = PlexMetadata.albumStub(from: track) {
                 Button {
                     onNavigate?(album)
@@ -567,7 +592,6 @@ struct NowPlayingView: View {
                 Label("Add to Playlist", systemImage: "text.badge.plus")
             }
             Divider()
-            downloadButton(for: track)
             Button {
                 metadataRequest = .trackInfo(track)
             } label: {
