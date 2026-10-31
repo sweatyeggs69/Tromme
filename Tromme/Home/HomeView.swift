@@ -217,6 +217,21 @@ struct HomeView: View {
                             .buttonStyle(.plain)
                             .contextMenu {
                                 albumContextMenu(for: album)
+                            } preview: {
+                                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
+                                    ArtworkView(
+                                        thumbPath: album.thumb,
+                                        size: 200,
+                                        cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
+                                    )
+                                    .frame(width: 200, height: 200)
+                                    Text(album.title)
+                                        .appItemTitleStyle()
+                                    Text(album.parentTitle ?? "")
+                                        .appItemSubtitleStyle()
+                                }
+                                .frame(width: 200)
+                                .padding()
                             }
                         }
                     }
