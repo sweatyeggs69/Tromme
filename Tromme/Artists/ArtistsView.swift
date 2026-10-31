@@ -98,11 +98,12 @@ struct ArtistsView: View {
                             .listRowInsets(AppStyle.TrackList.rowInsets)
                         }
                     }
-                    .sectionIndexLabel(section.title)
+                    .id(section.title)
                 }
             }
             .listStyle(.plain)
-            .listSectionIndexVisibility(.automatic)
+            .listSectionIndexVisibility(.hidden)
+            .sectionIndexScrubber(titles: artistSections.map(\.title))
             .tint(.secondary)
 
         case .grid:

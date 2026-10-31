@@ -90,12 +90,13 @@ struct PlaylistsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title == "Exact Matches" ? nil : section.title)
+                        .id(section.title)
                     }
                 }
                 .listStyle(.plain)
                 .listRowSpacing(AppStyle.TrackList.rowSpacing)
-                .listSectionIndexVisibility(.automatic)
+                .listSectionIndexVisibility(.hidden)
+                .sectionIndexScrubber(titles: playlistSections.map(\.title).filter { $0 != "Exact Matches" })
                 .tint(.secondary)
             }
         }

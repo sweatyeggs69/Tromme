@@ -56,12 +56,13 @@ struct AllSongsView: View {
                                 .listRowInsets(AppStyle.TrackList.rowInsets)
                             }
                         }
-                        .sectionIndexLabel(section.title)
+                        .id(section.title)
                     }
                 }
                 .listStyle(.plain)
                 .listRowSpacing(AppStyle.TrackList.rowSpacing)
-                .listSectionIndexVisibility(isDateAddedSortActive ? .hidden : .automatic)
+                .listSectionIndexVisibility(.hidden)
+                .sectionIndexScrubber(titles: isDateAddedSortActive ? [] : displaySections.map(\.title))
                 .tint(.secondary)
             }
         }

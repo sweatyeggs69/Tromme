@@ -331,11 +331,12 @@ struct AllAlbumsView: View {
                             .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                         }
                     }
-                    .sectionIndexLabel(section.title)
+                    .id(section.title)
                 }
             }
             .listStyle(.plain)
-            .listSectionIndexVisibility(isYearSortActive || isDateAddedSortActive ? .hidden : .automatic)
+            .listSectionIndexVisibility(.hidden)
+            .sectionIndexScrubber(titles: isYearSortActive || isDateAddedSortActive ? [] : displaySections.map(\.title))
             .tint(.secondary)
         }
     }
