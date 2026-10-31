@@ -34,6 +34,7 @@ struct AlbumTrackRow: View {
             Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
                 downloadManager.deleteDownload(ratingKey: track.ratingKey)
             }
+            .tint(.red)
         } else {
             Button(isActive ? "Downloading…" : "Download", systemImage: "arrow.down.circle") {
                 guard let server = serverConnection.currentServer else { return }
@@ -165,6 +166,7 @@ struct AlbumTrackRow: View {
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
                 }
+                .tint(.red)
                 .disabled(isDeletingTrack || serverConnection.currentServer == nil)
             } label: {
                 Image(systemName: "ellipsis")
@@ -205,6 +207,7 @@ struct AlbumTrackRow: View {
                 Button("Delete Track", systemImage: "trash", role: .destructive) {
                     showDeleteTrackConfirmation = true
                 }
+                .tint(.red)
                 .disabled(isDeletingTrack || serverConnection.currentServer == nil)
             }
             .tint(.primary)

@@ -262,7 +262,7 @@ struct AllAlbumsView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
-                                    albumContextMenu(for: album).tint(.primary)
+                                    albumContextMenu(for: album)
                                 } preview: {
                                     VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
                                         ArtworkView(
@@ -326,7 +326,7 @@ struct AllAlbumsView: View {
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                albumContextMenu(for: album).tint(.primary)
+                                albumContextMenu(for: album)
                             }
                             .listRowInsets(AppStyle.AlbumLayout.listRowInsets)
                         }
@@ -463,7 +463,7 @@ struct AllAlbumsView: View {
                 Task { await presentAddAlbumToPlaylist(album) }
             }
         }
-        .tint(appAccentColor)
+        .tint(.primary)
     }
 
     @MainActor

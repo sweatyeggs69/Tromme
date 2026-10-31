@@ -98,6 +98,7 @@ struct AlbumDetailView: View {
             Button("Remove Downloads", systemImage: "arrow.down.circle.fill", role: .destructive) {
                 for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
             }
+            .tint(.red)
         } else {
             Button {
                 guard let server = serverConnection.currentServer else { return }
@@ -777,6 +778,7 @@ struct AlbumDetailView: View {
                         Button("Delete Album", systemImage: "trash", role: .destructive) {
                             showDeleteAlbumConfirmation = true
                         }
+                        .tint(.red)
                     }
                 } label: {
                     Image(systemName: "ellipsis")

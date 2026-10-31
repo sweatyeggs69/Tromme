@@ -146,6 +146,7 @@ struct TrackRowView: View {
         Button("Delete Track", systemImage: "trash", role: .destructive) {
             showDeleteTrackConfirmation = true
         }
+        .tint(.red)
         .disabled(isDeletingTrack || serverConnection.currentServer == nil)
     }
 
@@ -157,6 +158,7 @@ struct TrackRowView: View {
             Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
                 downloadManager.deleteDownload(ratingKey: shown.ratingKey)
             }
+            .tint(.red)
         } else {
             Button {
                 guard let server = serverConnection.currentServer else { return }

@@ -103,6 +103,7 @@ struct HomeView: View {
                     Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                         showingSignOutConfirmation = true
                     }
+                    .tint(.red)
                 } label: {
                     Text(serverConnection.currentServer?.name ?? "Home")
                         .font(.headline)
@@ -215,7 +216,7 @@ struct HomeView: View {
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
-                                albumContextMenu(for: album).tint(.primary)
+                                albumContextMenu(for: album)
                             }
                         }
                     }
@@ -265,7 +266,7 @@ struct HomeView: View {
                 Task { await presentAddAlbumToPlaylist(album) }
             }
         }
-        .tint(appAccentColor)
+        .tint(.primary)
     }
 
     @MainActor

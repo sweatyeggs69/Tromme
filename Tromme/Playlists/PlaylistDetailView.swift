@@ -64,6 +64,7 @@ struct PlaylistDetailView: View {
             Button("Remove Downloads", systemImage: "arrow.down.circle.fill", role: .destructive) {
                 for track in tracks { downloadManager.deleteDownload(ratingKey: track.ratingKey) }
             }
+            .tint(.red)
         } else {
             Button {
                 guard let server = serverConnection.currentServer else { return }
@@ -336,6 +337,7 @@ struct PlaylistDetailView: View {
                         Button("Delete Playlist", systemImage: "trash", role: .destructive) {
                             showDeletePlaylistConfirmation = true
                         }
+                        .tint(.red)
                     }
                 } label: {
                     Image(systemName: "ellipsis")
