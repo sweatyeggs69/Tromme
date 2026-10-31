@@ -14,7 +14,7 @@ struct TimelineSlider: View {
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
 
     private var showsBadge: Bool {
-        player.isPlayingLocalDownload || (playbackBadgeMode != "off" && player.activeStreamCodec != nil)
+        playbackBadgeMode != "off" && player.activeStreamCodec != nil
     }
 
     var body: some View {
@@ -118,11 +118,6 @@ struct TimelineSlider: View {
 
     private var playbackBadge: some View {
         HStack(spacing: 3) {
-            if player.isPlayingLocalDownload {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.caption2.weight(.medium))
-                    .imageScale(.small)
-            }
             if playbackBadgeMode != "off", let codec = player.activeStreamCodec {
                 let bitrateText = (playbackBadgeMode == "codecBitrate" ? player.activeStreamBitrate.map { " · \($0) kbps" } : nil) ?? ""
                 Text(codec + bitrateText)
