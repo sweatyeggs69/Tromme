@@ -169,7 +169,7 @@ extension AudioPlayerService {
 
     private func scheduleAutoMixTrigger(_ plan: AutoMixPlan, generation: Int) {
         let isLocal = AppContext.shared.downloadManager.localURL(for: plan.incomingKey) != nil
-        let lead: TimeInterval = isLocal ? 0.02 : 1.5
+        let lead: TimeInterval = isLocal ? 0.02 : 3
         autoMixTriggerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard let self, self.playbackGeneration == generation else { return }
@@ -296,6 +296,9 @@ extension AudioPlayerService {
             var startedAt = Date()
             let remaining = self.outgoingRemaining(until: outgoingEnd)
             if remaining < plan.overlap { plan = plan.withOverlap(max(1.2, remaining)) }
+            self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
+                "heldFor": Self.seconds(Date().timeIntervalSince(beganAt)), "overlapFinal": Self.seconds(plan.overlap)
+            ])
 
             while !Task.isCancelled {
                 guard self.playbackGeneration == generation else {
