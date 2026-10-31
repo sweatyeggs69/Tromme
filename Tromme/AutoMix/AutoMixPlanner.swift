@@ -8,7 +8,7 @@ enum AutoMixPlanner {
     private static let lyricLead: TimeInterval = 1
     private static let quickestFadeIn: TimeInterval = 0.5
     private static let longestTail: TimeInterval = 4
-    private static let shortestMix: TimeInterval = 3
+    private static let shortestMix: TimeInterval = 2
     static let defaultCrossfadeLength: TimeInterval = 3
 
     static func plan(
