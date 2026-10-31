@@ -185,7 +185,7 @@ extension AudioPlayerService {
     }
 
     func soundCheckVolume(for track: PlexMetadata?) -> Float {
-        min(max(baseSoundCheckVolume(for: track), 0), 1) * mixIncomingGain
+        min(max(baseSoundCheckVolume(for: track), 0), 1) * mixIncomingGain * trimFadeGain
     }
 
     private func baseSoundCheckVolume(for track: PlexMetadata?) -> Float {

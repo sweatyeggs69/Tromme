@@ -170,6 +170,7 @@ extension AudioPlayerService {
         pendingStreamOffsetCalibration = false
         duration = Double(track.duration ?? 0) / 1000.0
         currentTime = currentTrackStartTime
+        beginTrimFade(resumeAt: currentTime)
         detailedTrackForSoundCheck = preloaded.detailedTrack
         universalCandidateIndexForCurrentItem = 0
 

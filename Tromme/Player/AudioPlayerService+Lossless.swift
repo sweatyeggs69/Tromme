@@ -62,7 +62,13 @@ extension AudioPlayerService {
         losslessTickTask?.cancel()
         losslessTickTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                var nap = 500
+                if let self, let lossless = self.losslessPlayer, let track = self.currentTrack,
+                   let stop = AppContext.shared.trackMarkers.stop(for: track.ratingKey),
+                   stop - lossless.currentTime < 1 {
+                    nap = 40
+                }
+                try? await Task.sleep(for: .milliseconds(nap))
                 guard let self, self.playbackGeneration == generation,
                       let lossless = self.losslessPlayer else { return }
                 guard !self.isSeeking, lossless.isPlaying else { continue }

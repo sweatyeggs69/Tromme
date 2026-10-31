@@ -224,6 +224,7 @@
 		A1D0C0DE0006000600000006 /* PlusFeaturesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */; };
 		AA10C0DE0000000000000001 /* LocalLosslessPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */; };
 		AA10C0DE0000000000000003 /* AudioPlayerService+Lossless.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */; };
+		AA10C0DE00000000000000F1 /* AudioPlayerService+TrimFade.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10C0DE00000000000000F2 /* AudioPlayerService+TrimFade.swift */; };
 		079DC0CDC83878CE7886B28C /* AutoMixPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */; };
 		A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */; };
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
@@ -453,6 +454,7 @@
 		A1D0C0DE0005000500000005 /* PlusFeaturesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusFeaturesView.swift; sourceTree = "<group>"; };
 		AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalLosslessPlayer.swift; sourceTree = "<group>"; };
 		AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+Lossless.swift"; sourceTree = "<group>"; };
+		AA10C0DE00000000000000F2 /* AudioPlayerService+TrimFade.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+TrimFade.swift"; sourceTree = "<group>"; };
 		A6E858B4C948136D314DDAEF /* AutoMixPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlan.swift; sourceTree = "<group>"; };
 		9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlanner.swift; sourceTree = "<group>"; };
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
@@ -759,6 +761,7 @@
 				BE0157898E7499F0B84BB506 /* AudioPlayerService+TimeTracking.swift */,
 				B0DAB83A17623634E3E4026D /* AudioPlayerService+Queue.swift */,
 				AA10C0DE0000000000000004 /* AudioPlayerService+Lossless.swift */,
+				AA10C0DE00000000000000F2 /* AudioPlayerService+TrimFade.swift */,
 				AA10C0DE0000000000000002 /* LocalLosslessPlayer.swift */,
 				0BB218C96947E7B9837FAB14 /* AudioPlayerService+Preload.swift */,
 				665ADB8A4B8054759C2B52F8 /* AudioPlayerService+Persistence.swift */,
@@ -1054,6 +1057,7 @@
 				9D27BEC4EE27F5A36C9B6323 /* AudioPlayerService+TimeTracking.swift in Sources */,
 				11213515B0095AA8B0B82291 /* AudioPlayerService+Queue.swift in Sources */,
 				AA10C0DE0000000000000003 /* AudioPlayerService+Lossless.swift in Sources */,
+				AA10C0DE00000000000000F1 /* AudioPlayerService+TrimFade.swift in Sources */,
 				AA10C0DE0000000000000001 /* LocalLosslessPlayer.swift in Sources */,
 				BC955E550876D66E9696A59F /* AudioPlayerService+Preload.swift in Sources */,
 				7A189450B3826662AACDE09A /* AudioPlayerService+Persistence.swift in Sources */,

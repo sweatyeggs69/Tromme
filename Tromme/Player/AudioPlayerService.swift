@@ -131,6 +131,8 @@ final class AudioPlayerService: Sendable {
     var mixPrepared: PreparedMixIncoming?
     var mixOutgoingOffset: TimeInterval = 0
     var mixIncomingGain: Float = 1
+    var trimFadeGain: Float = 1
+    var trimFadeTask: Task<Void, Never>?
     var nextTrackPreloadTask: Task<Void, Never>?
     /// Timestamp of the most recent seek completion, used to suppress spurious
     /// AVPlayerItemDidPlayToEndTime notifications that race with seek callbacks.
@@ -830,6 +832,7 @@ final class AudioPlayerService: Sendable {
         duration = Double(track.duration ?? 0) / 1000.0
         let boundedResume: TimeInterval? = resumeAt.map { max(0, duration > 0 ? min($0, duration) : $0) }
         currentTime = boundedResume ?? 0
+        beginTrimFade(resumeAt: boundedResume)
         universalStreamURL = nil
         universalCandidatesForCurrentItem = []
         universalCandidateIndexForCurrentItem = 0
