@@ -200,7 +200,7 @@ struct ArtistDetailView: View {
             .frame(width: 200, height: 200)
             Text(album.title)
                 .appItemTitleStyle()
-            Text(album.parentTitle ?? "")
+            Text(album.releaseYear)
                 .appItemSubtitleStyle()
         }
         .frame(width: 200)
