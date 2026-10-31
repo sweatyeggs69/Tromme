@@ -16,7 +16,7 @@ enum LrcRedLyricsProvider {
 
         let lrcs = await withTaskGroup(of: (rank: Int, lrc: FetchedLRC?).self) { group in
             for (rank, isrc) in candidates.enumerated() {
-                group.addTask { (rank, await lrc(isrc: isrc)) }
+                group.addTask { (rank, await lrc(isrc: isrc, duration: duration)) }
             }
             var results: [(rank: Int, lrc: FetchedLRC)] = []
             for await (rank, lrc) in group {
@@ -93,12 +93,13 @@ enum LrcRedLyricsProvider {
         let isWordSynced: Bool
     }
 
-    private static func lrc(isrc: String) async -> FetchedLRC? {
+    private static func lrc(isrc: String, duration: TimeInterval?) async -> FetchedLRC? {
         let url = baseURL.appending(path: "s/\(isrc).lrc")
         guard let data = await LyricsService.fetchWithRetry(url),
               let text = String(data: data, encoding: .utf8) else { return nil }
         let lines = LRCParser.parse(text)
-        guard !lines.isEmpty else { return nil }
+        guard let lastTime = lines.map(\.time).max() else { return nil }
+        if let duration, lastTime > duration + LyricsService.syncedDurationTolerance { return nil }
         return FetchedLRC(text: text, isWordSynced: lines.contains { !$0.words.isEmpty })
     }
 
