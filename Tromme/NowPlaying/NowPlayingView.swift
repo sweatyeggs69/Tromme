@@ -400,6 +400,7 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)
+            .geometryGroup()
 
             HStack(spacing: 10) {
                 Button {
