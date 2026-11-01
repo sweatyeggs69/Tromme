@@ -10,12 +10,9 @@ struct TagsSection: View {
                     Text(tag)
                 }
                 .onDelete { viewModel.remove(kind, at: $0) }
-                let options = viewModel.availableSuggestions(for: kind)
-                if !options.isEmpty {
-                    Menu(kind.addPrompt, systemImage: "plus.circle") {
-                        ForEach(options, id: \.self) { option in
-                            Button(option) { viewModel.add(option, to: kind) }
-                        }
+                if !viewModel.allSuggestions(for: kind).isEmpty {
+                    NavigationLink(kind.addPrompt) {
+                        TagPickerView(kind: kind, viewModel: viewModel)
                     }
                 }
             }

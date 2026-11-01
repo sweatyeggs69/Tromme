@@ -24,20 +24,28 @@ final class EditTagsViewModel {
         tags != original
     }
 
-    func availableSuggestions(for kind: TagKind) -> [String] {
-        let current = tags[kind] ?? []
-        return (suggestions[kind] ?? []).filter { suggestion in
-            !current.contains { $0.caseInsensitiveCompare(suggestion) == .orderedSame }
+    func allSuggestions(for kind: TagKind) -> [String] {
+        let known = suggestions[kind] ?? []
+        let extra = (tags[kind] ?? []).filter { tag in
+            !known.contains { $0.caseInsensitiveCompare(tag) == .orderedSame }
+        }
+        return (known + extra).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func contains(_ value: String, in kind: TagKind) -> Bool {
+        (tags[kind] ?? []).contains { $0.caseInsensitiveCompare(value) == .orderedSame }
+    }
+
+    func toggle(_ value: String, in kind: TagKind) {
+        if let index = tags[kind]?.firstIndex(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) {
+            tags[kind]?.remove(at: index)
+        } else {
+            tags[kind, default: []].append(value)
         }
     }
 
     func loadSuggestions(server: PlexServer, sectionId: String, client: PlexAPIClient) async {
         suggestions = await client.getTagSuggestions(server: server, sectionId: sectionId, type: libraryType)
-    }
-
-    func add(_ value: String, to kind: TagKind) {
-        guard !(tags[kind] ?? []).contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) else { return }
-        tags[kind, default: []].append(value)
     }
 
     func remove(_ kind: TagKind, at offsets: IndexSet) {
