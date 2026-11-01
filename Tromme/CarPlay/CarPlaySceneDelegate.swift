@@ -112,6 +112,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             playlistsList.tabTitle = "Playlists"
             playlistsList.tabImage = UIImage(systemName: "music.note.list")
 
+            [homeList, artistsList, albumsList, playlistsList].forEach(addSearchButton(to:))
+
             homeTemplate = homeList
             artistsTemplate = artistsList
             albumsTemplate = albumsList

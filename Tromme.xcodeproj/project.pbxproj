@@ -232,6 +232,13 @@
 		A46CED3828EA7540ECFFF2ED /* AutoMixPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */; };
 		57281A1BD55C857FB1EE1694 /* AudioPlayerService+AutoMix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */; };
 		B87721FD82F8522EF59DA2BF /* PreparedMixIncoming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */; };
+		FCA3AE5BE760930B368BB83B /* MusicItemKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BBE14416070A942784057A /* MusicItemKind.swift */; };
+		5E3DF49044679366F409494F /* MusicItemEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729052352B1F9B739F5F6405 /* MusicItemEntity.swift */; };
+		9DDE66FA831392C114D4E600 /* MusicItemResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 231C4E9C25C372475FA73687 /* MusicItemResolver.swift */; };
+		044A205F0C21C003B8DD24E6 /* MusicItemQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */; };
+		E9CA6ABF3E4A416DA3BED7DD /* PlayMusicIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B162BE199C2006D550E9241B /* PlayMusicIntent.swift */; };
+		8EA94DB3C112487A4A242125 /* TrommeShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */; };
+		0EC7E7D116A16EC04D45A396 /* CarPlaySceneDelegate+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -464,6 +471,13 @@
 		9732CB14BB2CA9EF9F22E67D /* AutoMixPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixPlanner.swift; sourceTree = "<group>"; };
 		8B180085691840FC6C0692C9 /* AudioPlayerService+AutoMix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AudioPlayerService+AutoMix.swift"; sourceTree = "<group>"; };
 		74EE06776CB3ED1C167630CD /* PreparedMixIncoming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreparedMixIncoming.swift; sourceTree = "<group>"; };
+		F4BBE14416070A942784057A /* MusicItemKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemKind.swift; sourceTree = "<group>"; };
+		729052352B1F9B739F5F6405 /* MusicItemEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemEntity.swift; sourceTree = "<group>"; };
+		231C4E9C25C372475FA73687 /* MusicItemResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemResolver.swift; sourceTree = "<group>"; };
+		6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemQuery.swift; sourceTree = "<group>"; };
+		B162BE199C2006D550E9241B /* PlayMusicIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMusicIntent.swift; sourceTree = "<group>"; };
+		3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrommeShortcuts.swift; sourceTree = "<group>"; };
+		EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CarPlaySceneDelegate+Search.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -537,6 +551,7 @@
 				C4CC628505E06DD5C6C8612B /* CarPlaySceneDelegate+Artists.swift */,
 				D87CAE1AA0880059F4729326 /* CarPlaySceneDelegate+Albums.swift */,
 				0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */,
+				EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */,
 			);
 			path = CarPlay;
 			sourceTree = "<group>";
@@ -698,6 +713,7 @@
 				3BE7EE28A52515059B899086 /* Search */,
 				DA5245E2F3569ECC1F19E424 /* Settings */,
 				0E91C64A2F91ADDB00775275 /* CarPlay */,
+				0916F3C662F05D00899098CA /* Siri */,
 				0E91C64D2F91AE8800775275 /* Tromme.entitlements */,
 			);
 			path = Tromme;
@@ -879,6 +895,19 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		0916F3C662F05D00899098CA /* Siri */ = {
+			isa = PBXGroup;
+			children = (
+				F4BBE14416070A942784057A /* MusicItemKind.swift */,
+				729052352B1F9B739F5F6405 /* MusicItemEntity.swift */,
+				231C4E9C25C372475FA73687 /* MusicItemResolver.swift */,
+				6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */,
+				B162BE199C2006D550E9241B /* PlayMusicIntent.swift */,
+				3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */,
+			);
+			path = Siri;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -1053,6 +1082,13 @@
 				92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */,
 				F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */,
 				95C238731138005D31A1EAA1 /* CarPlaySceneDelegate+Playlists.swift in Sources */,
+				FCA3AE5BE760930B368BB83B /* MusicItemKind.swift in Sources */,
+				5E3DF49044679366F409494F /* MusicItemEntity.swift in Sources */,
+				9DDE66FA831392C114D4E600 /* MusicItemResolver.swift in Sources */,
+				044A205F0C21C003B8DD24E6 /* MusicItemQuery.swift in Sources */,
+				E9CA6ABF3E4A416DA3BED7DD /* PlayMusicIntent.swift in Sources */,
+				8EA94DB3C112487A4A242125 /* TrommeShortcuts.swift in Sources */,
+				0EC7E7D116A16EC04D45A396 /* CarPlaySceneDelegate+Search.swift in Sources */,
 				1B26D78BBDA250ED14861296 /* CarPlaySceneDelegate+NowPlaying.swift in Sources */,
 				E9404ADA27C05C0B5677AF3C /* CarPlaySceneDelegate+Home.swift in Sources */,
 				3FB41D376313C5BB4E1C740D /* CarPlaySceneDelegate+Artists.swift in Sources */,
