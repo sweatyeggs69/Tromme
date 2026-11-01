@@ -79,9 +79,8 @@ extension CarPlaySceneDelegate: CPSearchTemplateDelegate {
         completionHandler: @escaping () -> Void
     ) {
         nonisolated(unsafe) let completion = completionHandler
-        nonisolated(unsafe) let selected = item
         Task { @MainActor in
-            if let metadata = selected.userInfo as? PlexMetadata {
+            if let metadata = item.userInfo as? PlexMetadata {
                 openSearchResult(metadata)
             }
             completion()
