@@ -34,7 +34,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var homeTemplate: CPListTemplate?
     var artistsTemplate: CPListTemplate?
     var albumsTemplate: CPListTemplate?
-    var playlistsTemplate: CPListTemplate?
     var contentGeneration = 0
 
     // MARK: - Scene Lifecycle
@@ -77,7 +76,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         homeTemplate = nil
         artistsTemplate = nil
         albumsTemplate = nil
-        playlistsTemplate = nil
     }
 
     func updateRootTemplate() {
@@ -108,24 +106,20 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             albumsList.tabTitle = "Albums"
             albumsList.tabImage = UIImage(systemName: "square.stack")
 
-            let playlistsList = makePlaylistsList()
-            playlistsList.tabTitle = "Playlists"
-            playlistsList.tabImage = UIImage(systemName: "music.note.list")
-
-            [homeList, artistsList, albumsList, playlistsList].forEach(addSearchButton(to:))
+            let searchList = makeSearchList()
+            searchList.tabTitle = "Search"
+            searchList.tabImage = UIImage(systemName: "magnifyingglass")
 
             homeTemplate = homeList
             artistsTemplate = artistsList
             albumsTemplate = albumsList
-            playlistsTemplate = playlistsList
 
-            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, playlistsList])
+            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, searchList])
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
             homeTemplate = nil
             artistsTemplate = nil
             albumsTemplate = nil
-            playlistsTemplate = nil
             interfaceController.setRootTemplate(makeSignInTemplate(), animated: true, completion: nil)
         }
     }
@@ -135,7 +129,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if let homeTemplate { loadHomeContent(into: homeTemplate) }
         if let artistsTemplate { loadArtists(into: artistsTemplate) }
         if let albumsTemplate { loadAlbums(into: albumsTemplate) }
-        if let playlistsTemplate { loadPlaylists(into: playlistsTemplate) }
     }
 
     func rootSignature() -> String {

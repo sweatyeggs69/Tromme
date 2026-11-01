@@ -5,11 +5,14 @@ import UIKit
 extension CarPlaySceneDelegate {
     // MARK: - Search
 
-    func addSearchButton(to template: CPListTemplate) {
-        let button = CPBarButton(image: UIImage(systemName: "magnifyingglass") ?? UIImage()) { [weak self] _ in
+    func makeSearchList() -> CPListTemplate {
+        let item = CPListItem(text: "Search", detailText: nil, image: UIImage(systemName: "magnifyingglass"))
+        item.accessoryType = .disclosureIndicator
+        item.handler = { [weak self] _, completion in
             self?.showSearch()
+            completion()
         }
-        template.trailingNavigationBarButtons = [button]
+        return CPListTemplate(title: "Search", sections: [CPListSection(items: [item])])
     }
 
     func showSearch() {

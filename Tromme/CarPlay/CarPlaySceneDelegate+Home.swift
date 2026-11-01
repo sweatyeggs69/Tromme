@@ -29,6 +29,7 @@ extension CarPlaySceneDelegate {
                 }
                 sections.append(CPListSection(items: [retry]))
             }
+            sections.insert(self.makePlaylistsSection(), at: 0)
             template.updateSections(sections)
         }
 
@@ -63,6 +64,17 @@ extension CarPlaySceneDelegate {
             self.homeSections[2] = await loadRecentlyPlayedSection(server: server, sectionId: sectionId)
             rebuildSections()
         }
+    }
+
+    func makePlaylistsSection() -> CPListSection {
+        let item = CPListItem(text: "Playlists", detailText: nil, image: UIImage(systemName: "music.note.list"))
+        item.accessoryType = .disclosureIndicator
+        item.handler = { [weak self] _, completion in
+            guard let self else { completion(); return }
+            self.interfaceController?.pushTemplate(self.makePlaylistsList(), animated: true, completion: nil)
+            completion()
+        }
+        return CPListSection(items: [item])
     }
 
     func loadFavoritesSection(server: PlexServer, sectionId: String) async -> CPListSection? {
