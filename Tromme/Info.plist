@@ -38,6 +38,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tromme listens for the song or artist you say in CarPlay search.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Tromme turns what you say in CarPlay search into a song or artist to play.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Tromme connects to your Plex Media Server on your local network to browse and play your music.</string>
 	<key>UIApplicationSceneManifest</key>

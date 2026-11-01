@@ -106,11 +106,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             albumsList.tabTitle = "Albums"
             albumsList.tabImage = UIImage(systemName: "square.stack")
 
+            let searchList = makeSearchList()
+            searchList.tabTitle = "Search"
+            searchList.tabImage = UIImage(systemName: "magnifyingglass")
+
             homeTemplate = homeList
             artistsTemplate = artistsList
             albumsTemplate = albumsList
 
-            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList])
+            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, searchList])
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
             homeTemplate = nil

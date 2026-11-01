@@ -238,6 +238,8 @@
 		044A205F0C21C003B8DD24E6 /* MusicItemQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */; };
 		E9CA6ABF3E4A416DA3BED7DD /* PlayMusicIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B162BE199C2006D550E9241B /* PlayMusicIntent.swift */; };
 		8EA94DB3C112487A4A242125 /* TrommeShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */; };
+		300149A79914B5BA6E21DD36 /* CarPlayVoiceRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F9959753D5DE3283A4C57F2 /* CarPlayVoiceRecognizer.swift */; };
+		F549EDB2FE9EF361E21123ED /* CarPlaySceneDelegate+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = 532B409B722950E53915DE0A /* CarPlaySceneDelegate+Search.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -476,6 +478,8 @@
 		6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemQuery.swift; sourceTree = "<group>"; };
 		B162BE199C2006D550E9241B /* PlayMusicIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMusicIntent.swift; sourceTree = "<group>"; };
 		3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrommeShortcuts.swift; sourceTree = "<group>"; };
+		0F9959753D5DE3283A4C57F2 /* CarPlayVoiceRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayVoiceRecognizer.swift; sourceTree = "<group>"; };
+		532B409B722950E53915DE0A /* CarPlaySceneDelegate+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CarPlaySceneDelegate+Search.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -549,6 +553,8 @@
 				C4CC628505E06DD5C6C8612B /* CarPlaySceneDelegate+Artists.swift */,
 				D87CAE1AA0880059F4729326 /* CarPlaySceneDelegate+Albums.swift */,
 				0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */,
+				0F9959753D5DE3283A4C57F2 /* CarPlayVoiceRecognizer.swift */,
+				532B409B722950E53915DE0A /* CarPlaySceneDelegate+Search.swift */,
 			);
 			path = CarPlay;
 			sourceTree = "<group>";
@@ -1079,6 +1085,8 @@
 				92B8D97E8A441C8B3D250002 /* AlbumDetailViewModel.swift in Sources */,
 				F36AF277E94896CE3E65B73C /* CarPlaySceneDelegate+Rows.swift in Sources */,
 				95C238731138005D31A1EAA1 /* CarPlaySceneDelegate+Playlists.swift in Sources */,
+				300149A79914B5BA6E21DD36 /* CarPlayVoiceRecognizer.swift in Sources */,
+				F549EDB2FE9EF361E21123ED /* CarPlaySceneDelegate+Search.swift in Sources */,
 				FCA3AE5BE760930B368BB83B /* MusicItemKind.swift in Sources */,
 				5E3DF49044679366F409494F /* MusicItemEntity.swift in Sources */,
 				9DDE66FA831392C114D4E600 /* MusicItemResolver.swift in Sources */,
