@@ -167,7 +167,7 @@ extension AudioPlayerService {
         currentIndex -= dropCount
     }
 
-    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata], artists: [PlexMetadata]) -> [PlexMetadata] {
+    func infiniteCandidates(from tracks: [PlexMetadata], albums: [PlexMetadata], artists: [PlexMetadata], similarArtistKeys: Set<String> = []) -> [PlexMetadata] {
         let queuedKeys = Set(queue.map(\.ratingKey))
         let fresh = tracks.filter { !queuedKeys.contains($0.ratingKey) }
         let fallback = fresh.isEmpty ? tracks : fresh
@@ -203,17 +203,20 @@ extension AudioPlayerService {
                 .map(\.track)
         }
 
-        func scoredTracks(of albums: [PlexMetadata], minStyles: Int, minMoods: Int) -> [PlexMetadata] {
+        let similarBonus = 2
+
+        func scoredPairs(of albums: [PlexMetadata], minStyles: Int, minMoods: Int) -> [(track: PlexMetadata, weight: Int)] {
             var scored: [(track: PlexMetadata, weight: Int)] = []
             for album in albums {
                 let s = score(of: album)
-                if s.styles < minStyles { continue }
-                if s.moods < minMoods { continue }
+                let isSimilar = album.parentRatingKey.map(similarArtistKeys.contains) ?? false
+                if !isSimilar, s.styles < minStyles || s.moods < minMoods { continue }
+                let weight = s.styles + s.moods + (isSimilar ? similarBonus : 0)
                 for track in freshByAlbum[album.ratingKey] ?? [] {
-                    scored.append((track, s.styles + s.moods))
+                    scored.append((track, weight))
                 }
             }
-            return weightedShuffle(scored)
+            return scored
         }
 
         let needStyles = min(infiniteMinSharedStyles, seedStyles.count)
@@ -221,17 +224,18 @@ extension AudioPlayerService {
         var attempts: [(Int, Int)] = []
         if needStyles > 0 || needMoods > 0 { attempts.append((needStyles, needMoods)) }
         if needStyles > 0, needMoods > 0 { attempts.append((needStyles, 0)) }
+        if attempts.isEmpty, !similarArtistKeys.isEmpty { attempts.append((0, 0)) }
         for (styles, moods) in attempts {
-            let matched = scoredTracks(of: albums, minStyles: styles, minMoods: moods)
+            let matched = weightedShuffle(scoredPairs(of: albums, minStyles: styles, minMoods: moods))
             if !matched.isEmpty { return matched }
         }
 
         let seedGenres = genres(of: seed)
         if !seedGenres.isEmpty {
-            let sameGenre = scoredTracks(
+            let sameGenre = weightedShuffle(scoredPairs(
                 of: albums.filter { !genres(of: $0).isDisjoint(with: seedGenres) },
                 minStyles: 0, minMoods: 0
-            )
+            ))
             if !sameGenre.isEmpty { return sameGenre }
         }
         return fallback.shuffled()
@@ -276,12 +280,20 @@ extension AudioPlayerService {
                 allAlbums[index] = detail
             }
             let allArtists = (try? await client.cachedArtists(server: server, sectionId: sectionId)) ?? []
+            let seedArtistKey = await MainActor.run { self.currentTrack?.grandparentRatingKey }
+            var similarKeys = Set<String>()
+            if let seedArtistKey {
+                let similar = (try? await client.similarArtists(
+                    server: server, sectionId: sectionId, seedArtistKey: seedArtistKey
+                )) ?? []
+                similarKeys = Set(similar.map(\.ratingKey))
+            }
             guard !Task.isCancelled else { return }
 
             let selected: [PlexMetadata] = await MainActor.run {
                 let currentNeeded = 1 - self.upcomingTracks.count
                 guard currentNeeded > 0 else { return [] }
-                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists)
+                let pool = self.infiniteCandidates(from: allTracks, albums: allAlbums, artists: allArtists, similarArtistKeys: similarKeys)
                 return Array(pool.prefix(currentNeeded))
             }
 
