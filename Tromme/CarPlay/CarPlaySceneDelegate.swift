@@ -47,6 +47,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         lastRootSignature = nil
         lastServerURI = nil
         configureNowPlaying()
+        player.republishNowPlayingInfo()
         updateRootTemplate()
         startObservingConnection()
         startObservingPlayer()

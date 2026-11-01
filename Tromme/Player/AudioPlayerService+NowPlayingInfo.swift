@@ -117,6 +117,13 @@ extension AudioPlayerService {
         return .wan
     }
 
+    func republishNowPlayingInfo() {
+        guard currentTrack != nil else { return }
+        lastPublishedNowPlayingTrackKey = nil
+        if cachedArtwork == nil { cachedArtworkThumbPath = nil }
+        updateNowPlayingInfo()
+    }
+
     func updateNowPlayingInfo() {
         guard let currentTrack else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
