@@ -15,12 +15,12 @@ extension CarPlaySceneDelegate {
         guard let server, let sectionId else { return }
         let generation = contentGeneration
 
-        homeSections = [nil, nil, nil]
+        homeSections = [nil, nil, nil, nil]
         var completedCount = 0
 
         func rebuildSections() {
             completedCount += 1
-            guard completedCount == 3 else { return }
+            guard completedCount == 4 else { return }
             guard generation == self.contentGeneration else { return }
             var sections = self.homeSections.compactMap { $0 }
             if sections.isEmpty {
@@ -29,7 +29,6 @@ extension CarPlaySceneDelegate {
                 }
                 sections.append(CPListSection(items: [retry]))
             }
-            sections.insert(self.makePlaylistsSection(), at: 0)
             template.updateSections(sections)
         }
 
@@ -61,20 +60,38 @@ extension CarPlaySceneDelegate {
         }
 
         Task {
-            self.homeSections[2] = await loadRecentlyPlayedSection(server: server, sectionId: sectionId)
+            self.homeSections[2] = await loadPlaylistsSection(server: server)
+            rebuildSections()
+        }
+
+        Task {
+            self.homeSections[3] = await loadRecentlyPlayedSection(server: server, sectionId: sectionId)
             rebuildSections()
         }
     }
 
-    func makePlaylistsSection() -> CPListSection {
-        let item = CPListItem(text: "Playlists", detailText: nil, image: UIImage(systemName: "music.note.list"))
-        item.accessoryType = .disclosureIndicator
-        item.handler = { [weak self] _, completion in
-            guard let self else { completion(); return }
-            self.interfaceController?.pushTemplate(self.makePlaylistsList(), animated: true, completion: nil)
-            completion()
-        }
-        return CPListSection(items: [item])
+    func loadPlaylistsSection(server: PlexServer) async -> CPListSection? {
+        guard let playlists = try? await client.cachedPlaylists(server: server) else { return nil }
+        let music = playlists.filter { $0.isMusicPlaylist }
+        guard !music.isEmpty else { return nil }
+        let limited = Array(music.prefix(CPMaximumNumberOfGridImages))
+        let row = await makeImageRow(
+            title: "Playlists",
+            thumbPaths: limited.map { $0.thumb ?? $0.composite },
+            elementTitles: limited.map { $0.title },
+            elementSubtitles: limited.map { _ in nil },
+            server: server,
+            client: client,
+            onImageSelect: { [weak self] index in
+                let playlist = limited[index]
+                self?.showPlaylistTracks(playlistKey: playlist.key ?? playlist.ratingKey, playlistTitle: playlist.title)
+            },
+            onRowSelect: { [weak self] in
+                guard let self else { return }
+                self.interfaceController?.pushTemplate(self.makePlaylistsList(), animated: true, completion: nil)
+            }
+        )
+        return CPListSection(items: [row])
     }
 
     func loadFavoritesSection(server: PlexServer, sectionId: String) async -> CPListSection? {
@@ -146,7 +163,7 @@ extension CarPlaySceneDelegate {
                 guard !Task.isCancelled, let self else { return }
                 guard let homeTemplate = self.homeTemplate,
                       let server = self.server, let sectionId = self.sectionId else { continue }
-                self.homeSections[2] = await self.loadRecentlyPlayedSection(server: server, sectionId: sectionId)
+                self.homeSections[3] = await self.loadRecentlyPlayedSection(server: server, sectionId: sectionId)
                 let sections = self.homeSections.compactMap { $0 }
                 guard !sections.isEmpty else { continue }
                 homeTemplate.updateSections(sections)

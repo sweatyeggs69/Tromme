@@ -110,14 +110,34 @@ extension CarPlaySceneDelegate {
         onImageSelect: @escaping @MainActor (Int) -> Void,
         onRowSelect: @escaping @MainActor () -> Void
     ) async -> CPListImageRowItem {
-        let maxImages = CPMaximumNumberOfGridImages
-        let limited = Array(items.prefix(maxImages))
+        let limited = Array(items.prefix(CPMaximumNumberOfGridImages))
+        return await makeImageRow(
+            title: title,
+            thumbPaths: limited.map { $0.thumb ?? $0.parentThumb },
+            elementTitles: limited.map { elementTitle?($0) },
+            elementSubtitles: limited.map { elementSubtitle?($0) },
+            server: server,
+            client: client,
+            onImageSelect: onImageSelect,
+            onRowSelect: onRowSelect
+        )
+    }
+
+    func makeImageRow(
+        title: String,
+        thumbPaths: [String?],
+        elementTitles: [String?],
+        elementSubtitles: [String?],
+        server: PlexServer,
+        client: PlexAPIClient,
+        onImageSelect: @escaping @MainActor (Int) -> Void,
+        onRowSelect: @escaping @MainActor () -> Void
+    ) async -> CPListImageRowItem {
         let placeholder = UIImage(systemName: "music.note") ?? UIImage()
 
         var loadedImages: [Int: UIImage] = [:]
         await withTaskGroup(of: (Int, UIImage?).self) { group in
-            for (i, metadata) in limited.enumerated() {
-                let thumbPath = metadata.thumb ?? metadata.parentThumb
+            for (i, thumbPath) in thumbPaths.enumerated() {
                 group.addTask {
                     guard let url = client.artworkURL(server: server, path: thumbPath, width: 300, height: 300) else {
                         return (i, nil)
@@ -130,11 +150,11 @@ extension CarPlaySceneDelegate {
             }
         }
 
-        let elements = limited.enumerated().map { i, metadata -> CPListImageRowItemRowElement in
+        let elements = thumbPaths.indices.map { i in
             CPListImageRowItemRowElement(
                 image: loadedImages[i] ?? placeholder,
-                title: elementTitle?(metadata),
-                subtitle: elementSubtitle?(metadata)
+                title: elementTitles[i],
+                subtitle: elementSubtitles[i]
             )
         }
 

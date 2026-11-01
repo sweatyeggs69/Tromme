@@ -28,7 +28,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var connectionObservationTask: Task<Void, Never>?
     var recentlyPlayedObservationTask: Task<Void, Never>?
     var favoritesObservationTask: Task<Void, Never>?
-    var homeSections: [CPListSection?] = [nil, nil, nil]
+    var homeSections: [CPListSection?] = [nil, nil, nil, nil]
     var lastRootSignature: String?
     var lastServerURI: String?
     var homeTemplate: CPListTemplate?
@@ -106,15 +106,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             albumsList.tabTitle = "Albums"
             albumsList.tabImage = UIImage(systemName: "square.stack")
 
-            let searchList = makeSearchList()
-            searchList.tabTitle = "Search"
-            searchList.tabImage = UIImage(systemName: "magnifyingglass")
-
             homeTemplate = homeList
             artistsTemplate = artistsList
             albumsTemplate = albumsList
 
-            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, searchList])
+            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList])
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
             homeTemplate = nil

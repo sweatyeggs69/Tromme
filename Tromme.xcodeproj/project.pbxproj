@@ -238,7 +238,6 @@
 		044A205F0C21C003B8DD24E6 /* MusicItemQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */; };
 		E9CA6ABF3E4A416DA3BED7DD /* PlayMusicIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B162BE199C2006D550E9241B /* PlayMusicIntent.swift */; };
 		8EA94DB3C112487A4A242125 /* TrommeShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */; };
-		0EC7E7D116A16EC04D45A396 /* CarPlaySceneDelegate+Search.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -477,7 +476,6 @@
 		6EA78D97E1CC2C95F3F8370B /* MusicItemQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicItemQuery.swift; sourceTree = "<group>"; };
 		B162BE199C2006D550E9241B /* PlayMusicIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayMusicIntent.swift; sourceTree = "<group>"; };
 		3946EF2593FE75AC3E53D9E7 /* TrommeShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrommeShortcuts.swift; sourceTree = "<group>"; };
-		EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CarPlaySceneDelegate+Search.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -551,7 +549,6 @@
 				C4CC628505E06DD5C6C8612B /* CarPlaySceneDelegate+Artists.swift */,
 				D87CAE1AA0880059F4729326 /* CarPlaySceneDelegate+Albums.swift */,
 				0E91C64B2F91ADE300775275 /* CarPlaySceneDelegate.swift */,
-				EB9BED7DD069CD2702B94F62 /* CarPlaySceneDelegate+Search.swift */,
 			);
 			path = CarPlay;
 			sourceTree = "<group>";
@@ -1088,7 +1085,6 @@
 				044A205F0C21C003B8DD24E6 /* MusicItemQuery.swift in Sources */,
 				E9CA6ABF3E4A416DA3BED7DD /* PlayMusicIntent.swift in Sources */,
 				8EA94DB3C112487A4A242125 /* TrommeShortcuts.swift in Sources */,
-				0EC7E7D116A16EC04D45A396 /* CarPlaySceneDelegate+Search.swift in Sources */,
 				1B26D78BBDA250ED14861296 /* CarPlaySceneDelegate+NowPlaying.swift in Sources */,
 				E9404ADA27C05C0B5677AF3C /* CarPlaySceneDelegate+Home.swift in Sources */,
 				3FB41D376313C5BB4E1C740D /* CarPlaySceneDelegate+Artists.swift in Sources */,
