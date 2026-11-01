@@ -10,17 +10,17 @@ enum WhatsNewContent {
             WhatsNewFeature(
                 symbol: "waveform.path",
                 title: "Smarter AutoMix",
-                text: "Songs now crossfade from the last lyric of one to the first lyric of the next."
+                text: "Songs now crossfade from the last lyric of one to the first lyric of the next. (Tromme +)"
             ),
             WhatsNewFeature(
                 symbol: "slider.horizontal.3",
                 title: "Mixing in Settings",
-                text: "Turn AutoMix and Crossfade on from Settings > Playback."
+                text: "Configure AutoMix and Crossfade in Settings > Playback."
             ),
             WhatsNewFeature(
                 symbol: "tag",
                 title: "Tag Picker",
-                text: "Search your library's genre, style and mood tags when editing."
+                text: "Set genre, style and mood tags when editing."
             ),
             WhatsNewFeature(
                 symbol: "mic",
