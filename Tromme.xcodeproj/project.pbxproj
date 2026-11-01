@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1D0C0DE7700000200000000 /* WhatsNewFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE7700000100000000 /* WhatsNewFeature.swift */; };
+		A1D0C0DE7701000200000001 /* WhatsNewRelease.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE7701000100000001 /* WhatsNewRelease.swift */; };
+		A1D0C0DE7702000200000002 /* WhatsNewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE7702000100000002 /* WhatsNewContent.swift */; };
+		A1D0C0DE7703000200000003 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE7703000100000003 /* WhatsNewView.swift */; };
 		A1D0C0DE00000000000000F2 /* DownloadedLyricsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0C0DE00000000000000F1 /* DownloadedLyricsStore.swift */; };
 		AC0000000000000000007104 /* AutoMixReportSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007104 /* AutoMixReportSender.swift */; };
 		AC0000000000000000007103 /* AutoMixReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000007103 /* AutoMixReportView.swift */; };
@@ -242,6 +246,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A1D0C0DE7700000100000000 /* WhatsNewFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewFeature.swift; sourceTree = "<group>"; };
+		A1D0C0DE7701000100000001 /* WhatsNewRelease.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewRelease.swift; sourceTree = "<group>"; };
+		A1D0C0DE7702000100000002 /* WhatsNewContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewContent.swift; sourceTree = "<group>"; };
+		A1D0C0DE7703000100000003 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
 		A1D0C0DE00000000000000F1 /* DownloadedLyricsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadedLyricsStore.swift; sourceTree = "<group>"; };
 		AB0000000000000000007104 /* AutoMixReportSender.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportSender.swift; sourceTree = "<group>"; };
 		AB0000000000000000007103 /* AutoMixReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoMixReportView.swift; sourceTree = "<group>"; };
@@ -489,6 +497,17 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXGroup section */
+		A1D0C0DE7799000300000099 /* WhatsNew */ = {
+			isa = PBXGroup;
+			children = (
+				A1D0C0DE7700000100000000 /* WhatsNewFeature.swift */,
+				A1D0C0DE7701000100000001 /* WhatsNewRelease.swift */,
+				A1D0C0DE7702000100000002 /* WhatsNewContent.swift */,
+				A1D0C0DE7703000100000003 /* WhatsNewView.swift */,
+			);
+			path = WhatsNew;
+			sourceTree = "<group>";
+		};
 		E76E344614E8506188BF35DF /* AutoMix */ = {
 			isa = PBXGroup;
 			children = (
@@ -711,6 +730,7 @@
 				17A29833587CBE02F04626D4 /* Playlists */,
 				3BE7EE28A52515059B899086 /* Search */,
 				DA5245E2F3569ECC1F19E424 /* Settings */,
+				A1D0C0DE7799000300000099 /* WhatsNew */,
 				0E91C64A2F91ADDB00775275 /* CarPlay */,
 				0916F3C662F05D00899098CA /* Siri */,
 				0E91C64D2F91AE8800775275 /* Tromme.entitlements */,
@@ -1124,6 +1144,10 @@
 				0EEC07423048CA9B00ACE377 /* PlusPaywallView.swift in Sources */,
 				0EEC07443048CA9B00ACE377 /* PlusWelcomeView.swift in Sources */,
 				A1D0C0DE0006000600000006 /* PlusFeaturesView.swift in Sources */,
+				A1D0C0DE7700000200000000 /* WhatsNewFeature.swift in Sources */,
+				A1D0C0DE7701000200000001 /* WhatsNewRelease.swift in Sources */,
+				A1D0C0DE7702000200000002 /* WhatsNewContent.swift in Sources */,
+				A1D0C0DE7703000200000003 /* WhatsNewView.swift in Sources */,
 				3DB1B876BE05A4043F46BCB6 /* AlbumDetailView.swift in Sources */,
 				DABADD3E903F5CFB51D3BF79 /* AllAlbumsView.swift in Sources */,
 				0E190B412F969C20003CEE15 /* AddToPlaylistSheet.swift in Sources */,

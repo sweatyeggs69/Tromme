@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var pendingNavigation: PlexMetadata?
     @State private var plus = PlusStore.shared
     @AppStorage("hasSeenPlusGrandfatherNotice") private var hasSeenPlusNotice = false
+    @AppStorage("lastSeenWhatsNewId") private var lastSeenWhatsNewId = ""
 
     var body: some View {
         Group {
@@ -37,10 +38,18 @@ struct ContentView: View {
                 }
             } else {
                 mainTabView
+                    .sheet(item: whatsNewBinding) { release in
+                        WhatsNewView(release: release)
+                    }
             }
         }
         .sheet(isPresented: plusNoticeBinding) {
             PlusWelcomeView()
+        }
+        .task {
+            if lastSeenWhatsNewId.isEmpty && !hasAuthenticatedContext {
+                lastSeenWhatsNewId = WhatsNewContent.current.id
+            }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
@@ -52,6 +61,18 @@ struct ContentView: View {
         Binding(
             get: { hasAuthenticatedContext && plus.hasLoaded && plus.isGrandfathered && !hasSeenPlusNotice },
             set: { if !$0 { hasSeenPlusNotice = true } }
+        )
+    }
+
+    private var whatsNewBinding: Binding<WhatsNewRelease?> {
+        Binding(
+            get: {
+                guard let release = WhatsNewContent.pending,
+                      release.id != lastSeenWhatsNewId,
+                      !plusNoticeBinding.wrappedValue else { return nil }
+                return release
+            },
+            set: { if $0 == nil { lastSeenWhatsNewId = WhatsNewContent.current.id } }
         )
     }
 
