@@ -39,7 +39,15 @@ enum HomeHubConfig {
         Set(ids(UserDefaults.standard.string(forKey: enabledKey) ?? ""))
     }
 
+    private static func templatePrefix(of hub: Hub) -> String? {
+        let prepositions: Set<String> = ["in", "by", "from", "during", "for", "on", "to", "of"]
+        let words = (hub.title ?? "").split(separator: " ")
+        guard let index = words.indices.first(where: { $0 >= 1 && $0 < words.count - 1 && prepositions.contains(words[$0].lowercased()) }) else { return nil }
+        return words[...index].joined(separator: " ")
+    }
+
     static func stableID(for hub: Hub) -> String? {
+        if let prefix = templatePrefix(of: hub) { return "title:" + prefix.lowercased() }
         guard let identifier = hub.context ?? hub.hubIdentifier else { return nil }
         let kept = identifier.split(separator: ".", omittingEmptySubsequences: false)
             .filter { $0.isEmpty || !$0.allSatisfy(\.isNumber) }
@@ -47,20 +55,8 @@ enum HomeHubConfig {
     }
 
     static func displayTitle(for hub: Hub) -> String {
-        var title = hub.title ?? ""
-        let items = hub.metadata ?? []
-        let replacements: [(String?, String)] = switch rowType(of: hub) {
-        case "album": [(items.first?.parentTitle, "Artist")]
-        case "track": [(items.first?.grandparentTitle, "Artist"), (items.first?.parentTitle, "Album")]
-        case "artist": [(items.first?.title, "Artist")]
-        default: []
-        }
-        for (name, label) in replacements {
-            if let name, name.count > 1, title.contains(name), title != name {
-                title = title.replacingOccurrences(of: name, with: label)
-            }
-        }
-        return title
+        if let prefix = templatePrefix(of: hub) { return prefix + "…" }
+        return hub.title ?? ""
     }
 
     static func uniqueByKind(_ hubs: [Hub]) -> [Hub] {
