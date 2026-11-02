@@ -23,6 +23,11 @@ enum WhatsNewContent {
                 text: "Smarter crossfades timed from the last lyric of one song to the first of the next. Turn (Tromme +)"
             ),
             WhatsNewFeature(
+                symbol: "internaldrive",
+                title: "Music Cache",
+                text: "Keeps the playing song and the next ones in your queue on your device. Turn it on in Settings > Playback."
+            ),
+            WhatsNewFeature(
                 symbol: "text.quote",
                 title: "Lyrics Offline",
                 text: "Downloaded songs keep their lyrics."
