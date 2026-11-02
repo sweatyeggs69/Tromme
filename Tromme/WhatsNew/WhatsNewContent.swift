@@ -14,8 +14,13 @@ enum WhatsNewContent {
             ),
             WhatsNewFeature(
                 symbol: "waveform.path",
+                title: "Crossfade",
+                text: "Blend songs together and pick the length in Settings > Playback."
+            ),
+            WhatsNewFeature(
+                symbol: "wand.and.stars",
                 title: "AutoMix",
-                text: "Songs crossfade from the last lyric of one to the first lyric of the next. Turn it on in Settings > Playback. (Tromme +)"
+                text: "Smarter crossfades timed from the last lyric of one song to the first of the next. (Tromme +)"
             ),
             WhatsNewFeature(
                 symbol: "text.quote",
