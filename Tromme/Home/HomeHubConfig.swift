@@ -3,7 +3,33 @@ import Foundation
 enum HomeHubConfig {
     static let orderKey = "homeHubOrder"
     static let enabledKey = "homeHubsEnabled"
+    static let hiddenSectionsKey = "homeSectionsHidden"
     static let recentlyPlayedLevelKey = "recentlyPlayedLevel"
+
+    static let favorites = Hub(hubIdentifier: "builtin.favorites", title: "Favorites", type: "builtin", size: nil, metadata: nil)
+    static let playlists = Hub(hubIdentifier: "builtin.playlists", title: "Playlists", type: "builtin", size: nil, metadata: nil)
+
+    static func isBuiltin(_ hub: Hub) -> Bool {
+        hub.type == "builtin"
+    }
+
+    static func isEnabled(_ hub: Hub, enabledRaw: String, hiddenRaw: String) -> Bool {
+        guard let id = stableID(for: hub) else { return false }
+        return isBuiltin(hub) ? !ids(hiddenRaw).contains(id) : ids(enabledRaw).contains(id)
+    }
+
+    static func settingEnabled(_ hub: Hub, _ isOn: Bool, enabledRaw: inout String, hiddenRaw: inout String) {
+        guard let id = stableID(for: hub) else { return }
+        if isBuiltin(hub) {
+            var hidden = ids(hiddenRaw).filter { $0 != id }
+            if !isOn { hidden.append(id) }
+            hiddenRaw = raw(hidden)
+        } else {
+            var enabled = ids(enabledRaw).filter { $0 != id }
+            if isOn { enabled.append(id) }
+            enabledRaw = raw(enabled)
+        }
+    }
 
     private static func flattenedIdentifier(_ hub: Hub) -> String {
         (hub.hubIdentifier ?? "").lowercased().replacingOccurrences(of: ".", with: "")
@@ -88,10 +114,16 @@ enum HomeHubConfig {
         hub.type ?? hub.metadata?.first?.type ?? ""
     }
 
+    private static func position(of hub: Hub, in order: [String]) -> Int {
+        let id = stableID(for: hub) ?? ""
+        if let index = order.firstIndex(of: id) { return index }
+        return id == favorites.hubIdentifier ? -1 : Int.max
+    }
+
     static func ordered(_ hubs: [Hub], by order: [String]) -> [Hub] {
         hubs.enumerated().sorted { lhs, rhs in
-            let l = order.firstIndex(of: stableID(for: lhs.element) ?? "") ?? Int.max
-            let r = order.firstIndex(of: stableID(for: rhs.element) ?? "") ?? Int.max
+            let l = position(of: lhs.element, in: order)
+            let r = position(of: rhs.element, in: order)
             return l == r ? lhs.offset < rhs.offset : l < r
         }
         .map(\.element)

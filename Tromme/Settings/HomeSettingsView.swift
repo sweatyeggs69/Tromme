@@ -9,14 +9,14 @@ struct HomeSettingsView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
     @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
+    @AppStorage(HomeHubConfig.hiddenSectionsKey) private var hiddenSectionsRaw = ""
     @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
     @Environment(\.editMode) private var editMode
     @State private var availableHubs: [Hub] = []
-    @State private var didLoadHubs = false
 
     private var orderedHubs: [Hub] {
-        HomeHubConfig.ordered(availableHubs, by: HomeHubConfig.ids(hubOrderRaw))
+        HomeHubConfig.ordered([HomeHubConfig.favorites] + availableHubs + [HomeHubConfig.playlists], by: HomeHubConfig.ids(hubOrderRaw))
     }
 
     var body: some View {
@@ -38,24 +38,14 @@ struct HomeSettingsView: View {
             }
 
             Section {
-                if orderedHubs.isEmpty {
-                    if didLoadHubs {
-                        Text("No hubs available")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    }
-                } else {
-                    ForEach(orderedHubs) { hub in
-                        hubRow(hub)
-                    }
-                    .onMove(perform: moveHubs)
+                ForEach(orderedHubs) { hub in
+                    hubRow(hub)
                 }
+                .onMove(perform: moveHubs)
             } header: {
-                Text("Hubs")
+                Text("Sections")
             } footer: {
-                Text("Show Plex hubs on Home above Playlists. Tap Edit to enable, disable or reorder them.")
+                Text("Choose and order the sections on Home. Tap Edit to enable, disable or reorder them.")
             }
 
             Section {
@@ -69,10 +59,8 @@ struct HomeSettingsView: View {
         }
         .navigationTitle("Home")
         .toolbar {
-            if !availableHubs.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    EditButton()
-                }
+            ToolbarItem(placement: .topBarTrailing) {
+                EditButton()
             }
         }
         .task(id: serverConnection.currentLibrarySectionId) {
@@ -83,13 +71,10 @@ struct HomeSettingsView: View {
     private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
 
     private func hubRow(_ hub: Hub) -> some View {
-        let id = HomeHubConfig.stableID(for: hub) ?? ""
-        let isEnabled = HomeHubConfig.ids(hubsEnabledRaw).contains(id)
+        let isEnabled = HomeHubConfig.isEnabled(hub, enabledRaw: hubsEnabledRaw, hiddenRaw: hiddenSectionsRaw)
         return Button {
             guard isEditing else { return }
-            var ids = HomeHubConfig.ids(hubsEnabledRaw).filter { $0 != id }
-            if !isEnabled { ids.append(id) }
-            hubsEnabledRaw = HomeHubConfig.raw(ids)
+            HomeHubConfig.settingEnabled(hub, !isEnabled, enabledRaw: &hubsEnabledRaw, hiddenRaw: &hiddenSectionsRaw)
         } label: {
             HStack {
                 if isEditing {
@@ -114,14 +99,12 @@ struct HomeSettingsView: View {
     private func loadHubs() async {
         guard let server = serverConnection.currentServer,
               let sectionId = serverConnection.currentLibrarySectionId else {
-            didLoadHubs = true
             return
         }
         if let hubs = try? await client.getSectionHubs(server: server, sectionId: sectionId) {
             HomeHubConfig.seedDefaultsIfNeeded(from: hubs)
             availableHubs = HomeHubConfig.uniqueByKind(hubs.filter(HomeHubConfig.isSupported))
         }
-        didLoadHubs = true
     }
 }
 

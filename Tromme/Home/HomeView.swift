@@ -16,6 +16,7 @@ struct HomeView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
     @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
+    @AppStorage(HomeHubConfig.hiddenSectionsKey) private var hiddenSectionsRaw = ""
     @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
     private let onSignOut: () -> Void
@@ -25,10 +26,9 @@ struct HomeView: View {
     private var featuredAlbums: [PlexMetadata] { viewModel.featuredAlbums }
     private var isLoading: Bool { viewModel.isLoading }
 
-    private var visibleHubs: [Hub] {
-        let enabled = Set(HomeHubConfig.ids(hubsEnabledRaw))
-        let shown = viewModel.hubs.filter { hub in
-            HomeHubConfig.stableID(for: hub).map(enabled.contains) ?? false
+    private var visibleItems: [Hub] {
+        let shown = ([HomeHubConfig.favorites] + viewModel.hubs + [HomeHubConfig.playlists]).filter {
+            HomeHubConfig.isEnabled($0, enabledRaw: hubsEnabledRaw, hiddenRaw: hiddenSectionsRaw)
         }
         let mapped = shown.map { hub in
             HomeHubConfig.isRecentlyPlayed(hub)
@@ -67,16 +67,21 @@ struct HomeView: View {
                 if showFeaturedSection {
                     featuredSection
                 }
-                if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
-                    favoritesSection
-                }
-                ForEach(visibleHubs) { hub in
-                    HomeHubSectionView(hub: hub) { album in
-                        albumContextMenu(for: album)
+                ForEach(visibleItems) { item in
+                    switch item.hubIdentifier {
+                    case HomeHubConfig.favorites.hubIdentifier:
+                        if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
+                            favoritesSection
+                        }
+                    case HomeHubConfig.playlists.hubIdentifier:
+                        if !hideEmptySections || isLoading || !playlists.isEmpty {
+                            playlistsSection
+                        }
+                    default:
+                        HomeHubSectionView(hub: item) { album in
+                            albumContextMenu(for: album)
+                        }
                     }
-                }
-                if !hideEmptySections || isLoading || !playlists.isEmpty {
-                    playlistsSection
                 }
             }
             .padding(.bottom, 8)
