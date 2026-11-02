@@ -95,6 +95,7 @@ struct HomeSettingsView: View {
             return
         }
         if let hubs = try? await client.getSectionHubs(server: server, sectionId: sectionId) {
+            HomeHubConfig.seedDefaultsIfNeeded(from: hubs)
             availableHubs = hubs.filter(HomeHubConfig.isSupported)
         }
         didLoadHubs = true

@@ -24,10 +24,19 @@ enum HomeHubConfig {
 
     static func isSupported(_ hub: Hub) -> Bool {
         guard stableID(for: hub) != nil, hub.title != nil else { return false }
-        guard ["track", "album", "artist"].contains(rowType(of: hub)) else { return false }
-        let flattened = (hub.hubIdentifier ?? "").lowercased().replacingOccurrences(of: ".", with: "")
-        let duplicates = ["recentadded", "recentlyadded", "recentplayed", "recentlyplayed"]
-        return !duplicates.contains { flattened.contains($0) }
+        return ["track", "album", "artist"].contains(rowType(of: hub))
+    }
+
+    static func seedDefaultsIfNeeded(from hubs: [Hub]) {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: enabledKey) == nil else { return }
+        let recents = hubs.filter { hub in
+            let flattened = (hub.hubIdentifier ?? "").lowercased().replacingOccurrences(of: ".", with: "")
+            return ["recentadded", "recentlyadded", "recentplayed", "recentlyplayed"].contains { flattened.contains($0) }
+        }
+        let ids = recents.compactMap(stableID(for:))
+        defaults.set(raw(ids), forKey: enabledKey)
+        defaults.set(raw(ids), forKey: orderKey)
     }
 
     static func rowType(of hub: Hub) -> String {

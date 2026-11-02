@@ -20,9 +20,7 @@ struct HomeView: View {
     private let onSignOut: () -> Void
 
     private var favoriteTracks: [PlexMetadata] { viewModel.favoriteTracks }
-    private var recentTracks: [PlexMetadata] { viewModel.recentTracks }
     private var playlists: [PlexPlaylist] { viewModel.playlists }
-    private var recentAlbums: [PlexMetadata] { viewModel.recentAlbums }
     private var featuredAlbums: [PlexMetadata] { viewModel.featuredAlbums }
     private var isLoading: Bool { viewModel.isLoading }
 
@@ -66,15 +64,13 @@ struct HomeView: View {
                 if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
                     favoritesSection
                 }
-                recentlyAddedSection
-                recentlyPlayedSection
-                if !hideEmptySections || isLoading || !playlists.isEmpty {
-                    playlistsSection
-                }
                 ForEach(visibleHubs) { hub in
                     HomeHubSectionView(hub: hub) { album in
                         albumContextMenu(for: album)
                     }
+                }
+                if !hideEmptySections || isLoading || !playlists.isEmpty {
+                    playlistsSection
                 }
             }
             .padding(.bottom, 8)
@@ -193,50 +189,6 @@ struct HomeView: View {
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
                 tracksHorizontalRow(tracks: favoriteTracks, showFavoriteStar: false)
-            }
-        }
-    }
-
-    private var recentlyAddedSection: some View {
-        VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-            Text("Recently Added")
-                .appSectionTitleStyle()
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 200)
-            } else if recentAlbums.isEmpty {
-                ContentUnavailableView(
-                    "No Recently Added",
-                    systemImage: "square.stack",
-                    description: Text("New albums and singles will appear here.")
-                )
-                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-            } else {
-                HorizontalAlbumRow(albums: recentAlbums) { album in
-                    albumContextMenu(for: album)
-                }
-            }
-        }
-    }
-
-    private var recentlyPlayedSection: some View {
-        VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-            Text("Recently Played")
-                .appSectionTitleStyle()
-
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 120)
-            } else if recentTracks.isEmpty {
-                ContentUnavailableView(
-                    "No Recently Played",
-                    systemImage: "music.note.list",
-                    description: Text("Play tracks to see them here.")
-                )
-                .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
-            } else {
-                tracksHorizontalRow(tracks: recentTracks)
             }
         }
     }
