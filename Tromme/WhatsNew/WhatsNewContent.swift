@@ -31,11 +31,6 @@ enum WhatsNewContent {
                 symbol: "mic",
                 title: "Siri",
                 text: "Say \"Play Abbey Road in Tromme\" to start music hands-free."
-            ),
-            WhatsNewFeature(
-                symbol: "car",
-                title: "CarPlay",
-                text: "Playlists now appear on the CarPlay Home tab."
             )
         ]
     )
