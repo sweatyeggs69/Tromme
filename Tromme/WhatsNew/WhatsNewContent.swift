@@ -8,8 +8,11 @@ enum WhatsNewContent {
         title: "What's New in Tromme",
         features: [
             WhatsNewFeature(
+                symbol: <#T##String#>, title: <#T##String#>, text: <#T##String#>
+            
+            WhatsNewFeature(
                 symbol: "waveform.path",
-                title: "Smarter AutoMix",
+                title: "AutoMix",
                 text: "Songs now crossfade from the last lyric of one to the first lyric of the next. (Tromme +)"
             ),
             WhatsNewFeature(
