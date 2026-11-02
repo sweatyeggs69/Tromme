@@ -16,6 +16,7 @@ struct HomeView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
     @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
+    @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
     private let onSignOut: () -> Void
 
@@ -29,7 +30,12 @@ struct HomeView: View {
         let shown = viewModel.hubs.filter { hub in
             HomeHubConfig.stableID(for: hub).map(enabled.contains) ?? false
         }
-        return HomeHubConfig.ordered(shown, by: HomeHubConfig.ids(hubOrderRaw))
+        let mapped = shown.map { hub in
+            HomeHubConfig.isRecentlyPlayed(hub)
+                ? HomeHubConfig.recentlyPlayedHub(hub, level: recentlyPlayedLevel, tracks: viewModel.recentTracks)
+                : hub
+        }
+        return HomeHubConfig.ordered(mapped, by: HomeHubConfig.ids(hubOrderRaw))
     }
 
     private var loadContext: HomeViewModel.Context {

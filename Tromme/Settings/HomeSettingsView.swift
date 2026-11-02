@@ -9,6 +9,7 @@ struct HomeSettingsView: View {
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
     @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
+    @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
     @State private var availableHubs: [Hub] = []
     @State private var didLoadHubs = false
@@ -33,6 +34,15 @@ struct HomeSettingsView: View {
             Section {
                 Toggle("Hide Empty Sections", isOn: $hideEmptySections)
                     .tint(.green)
+            }
+
+            Section {
+                Picker("Recently Played", selection: $recentlyPlayedLevel) {
+                    Text("Songs").tag("songs")
+                    Text("Artists").tag("artists")
+                }
+            } footer: {
+                Text("Show recently played as individual songs or as the artists you listened to.")
             }
 
             Section {

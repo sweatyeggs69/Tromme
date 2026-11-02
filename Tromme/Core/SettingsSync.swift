@@ -23,6 +23,7 @@ final class SettingsSync {
         "hideEmptySections",
         "homeHubOrder",
         "homeHubsEnabled",
+        "recentlyPlayedLevel",
         "artistsViewMode",
         "artistAllTracksSortNewestFirst",
         "allSongsSortOrder",

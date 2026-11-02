@@ -3,6 +3,29 @@ import Foundation
 enum HomeHubConfig {
     static let orderKey = "homeHubOrder"
     static let enabledKey = "homeHubsEnabled"
+    static let recentlyPlayedLevelKey = "recentlyPlayedLevel"
+
+    private static func flattenedIdentifier(_ hub: Hub) -> String {
+        (hub.hubIdentifier ?? "").lowercased().replacingOccurrences(of: ".", with: "")
+    }
+
+    static func isRecentlyPlayed(_ hub: Hub) -> Bool {
+        let flattened = flattenedIdentifier(hub)
+        return flattened.contains("recentplayed") || flattened.contains("recentlyplayed")
+    }
+
+    static func recentlyPlayedHub(_ hub: Hub, level: String, tracks: [PlexMetadata]) -> Hub {
+        if level == "artists" {
+            var seen = Set<String>()
+            let artists: [PlexMetadata] = tracks.compactMap { track in
+                guard let key = track.grandparentRatingKey, let name = track.grandparentTitle,
+                      seen.insert(key).inserted else { return nil }
+                return PlexMetadata(ratingKey: key, title: name, type: "artist", thumb: track.grandparentThumb)
+            }
+            return Hub(hubIdentifier: hub.hubIdentifier, context: hub.context, title: hub.title, type: "artist", size: artists.count, metadata: artists)
+        }
+        return Hub(hubIdentifier: hub.hubIdentifier, context: hub.context, title: hub.title, type: "track", size: tracks.count, metadata: tracks)
+    }
 
     static func ids(_ raw: String) -> [String] {
         raw.split(separator: ",").map(String.init)
@@ -57,8 +80,8 @@ enum HomeHubConfig {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: enabledKey) == nil else { return }
         let recents = hubs.filter { hub in
-            let flattened = (hub.hubIdentifier ?? "").lowercased().replacingOccurrences(of: ".", with: "")
-            return ["recentadded", "recentlyadded", "recentplayed", "recentlyplayed"].contains { flattened.contains($0) }
+            let flattened = flattenedIdentifier(hub)
+            return ["recentadded", "recentlyadded"].contains { flattened.contains($0) } || isRecentlyPlayed(hub)
         }
         let ids = recents.compactMap(stableID(for:))
         defaults.set(raw(ids), forKey: enabledKey)
