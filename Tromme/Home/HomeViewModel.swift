@@ -10,6 +10,7 @@ final class HomeViewModel {
     private(set) var playlists: [PlexPlaylist]
     private(set) var recentAlbums: [PlexMetadata]
     private(set) var featuredAlbums: [PlexMetadata]
+    private(set) var hubs: [Hub] = []
     private(set) var isLoading: Bool
 
     private static let featuredAlbumRatingKeysKey = "featuredAlbumRatingKeys"
@@ -52,6 +53,7 @@ final class HomeViewModel {
             await client.refreshDynamicContent(server: server, sectionId: sectionId)
         }
         await load(context)
+        await loadHubs(context)
     }
 
     private static var didRefreshSinceLaunch = false
@@ -61,6 +63,19 @@ final class HomeViewModel {
               context.server != nil, context.sectionId != nil else { return }
         Self.didRefreshSinceLaunch = true
         await refresh(context)
+    }
+
+    func loadHubs(_ context: Context) async {
+        guard !isPreviewMode else { return }
+        guard !HomeHubConfig.enabledIDs.isEmpty,
+              let server = context.server,
+              let sectionId = context.sectionId else {
+            hubs = []
+            return
+        }
+        guard let fetched = try? await context.client.getSectionHubs(server: server, sectionId: sectionId),
+              !Task.isCancelled else { return }
+        hubs = fetched.filter(HomeHubConfig.isSupported)
     }
 
     func libraryContentDidChange(_ context: Context) async {

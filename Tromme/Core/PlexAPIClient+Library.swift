@@ -221,6 +221,19 @@ extension PlexAPIClient {
     }
 
 
+    // MARK: - Section Hubs
+
+    func getSectionHubs(server: PlexServer, sectionId: String, count: Int = 10) async throws -> [Hub] {
+        let data = try await rawServerRequest(
+            server: server,
+            path: "/hubs/sections/\(sectionId)",
+            method: "GET",
+            queryItems: [URLQueryItem(name: "count", value: "\(count)")]
+        )
+        let response = try JSONDecoder().decode(PlexResponse<PlexMetadata>.self, from: data)
+        return response.mediaContainer.hub ?? []
+    }
+
     // MARK: - Related Hubs
 
     func getRelatedHubs(server: PlexServer, ratingKey: String) async throws -> [Hub] {

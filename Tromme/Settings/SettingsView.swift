@@ -19,7 +19,8 @@ struct SettingsView: View {
             }
 
             Section {
-                NavigationLink("Interface") { HomeSettingsView() }
+                NavigationLink("Home") { HomeSettingsView() }
+                NavigationLink("Appearance") { AppearanceSettingsView() }
                 NavigationLink("Playback") { PlaybackSettingsView() }
                 NavigationLink("Downloads") { OfflineSettingsView() }
                 NavigationLink("App Icon") { AppIconPickerView() }

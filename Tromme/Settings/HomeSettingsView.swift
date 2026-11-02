@@ -1,21 +1,25 @@
 import SwiftUI
 
 struct HomeSettingsView: View {
+    @Environment(\.plexClient) private var client
+    @Environment(\.serverConnection) private var serverConnection
+
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "large"
     @AppStorage("hideEmptySections") private var hideEmptySections = false
-    @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
-    @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
-    @Environment(AudioPlayerService.self) private var player
-    @State private var plus = PlusStore.shared
+    @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
+    @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
 
-    private var canUseAnimatedArtwork: Bool {
-        plus.isPlus && !NetworkStatus.shared.isConstrained
+    @State private var availableHubs: [Hub] = []
+    @State private var didLoadHubs = false
+
+    private var orderedHubs: [Hub] {
+        HomeHubConfig.ordered(availableHubs, by: HomeHubConfig.ids(hubOrderRaw))
     }
 
     var body: some View {
         Form {
-            Section("Home") {
+            Section {
                 Toggle("Featured Section", isOn: $showFeaturedSection)
                     .tint(.green)
                 if showFeaturedSection {
@@ -32,28 +36,68 @@ struct HomeSettingsView: View {
             }
 
             Section {
-                Toggle("Animated Artwork", isOn: canUseAnimatedArtwork ? $animatedArtworkEnabled : .constant(false))
-                    .tint(.green)
-                    .disabled(!canUseAnimatedArtwork)
-                    .onChange(of: animatedArtworkEnabled) { player.updateNowPlayingInfo() }
-            } header: {
-                Text("Albums")
-            } footer: {
-                if plus.isPlus, NetworkStatus.shared.isConstrained {
-                    Text("Animated artwork is unavailable in Low Data Mode.")
-                } else if plus.isPlus {
-                    Text("Requires an internet connection.")
+                if orderedHubs.isEmpty {
+                    if didLoadHubs {
+                        Text("No hubs available")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    ForEach(orderedHubs) { hub in
+                        Toggle(hub.title ?? "", isOn: enabledBinding(for: hub))
+                            .tint(.green)
+                    }
+                    .onMove(perform: moveHubs)
                 }
-            }
-
-            Section("Lyrics") {
-                Toggle("Left Align Lyrics", isOn: $leftAlignLyrics)
-                    .tint(.green)
+            } header: {
+                Text("Hubs")
+            } footer: {
+                Text("Show Plex hubs below Playlists on Home. Tap Edit to reorder them.")
             }
         }
-        .navigationTitle("Interface")
-        .onChange(of: plus.isPlus) { player.updateNowPlayingInfo() }
-        .onChange(of: NetworkStatus.shared.isConstrained) { player.updateNowPlayingInfo() }
+        .navigationTitle("Home")
+        .toolbar {
+            if !availableHubs.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    EditButton()
+                }
+            }
+        }
+        .task(id: serverConnection.currentLibrarySectionId) {
+            await loadHubs()
+        }
+    }
+
+    private func enabledBinding(for hub: Hub) -> Binding<Bool> {
+        let id = HomeHubConfig.stableID(for: hub) ?? ""
+        return Binding(
+            get: { HomeHubConfig.ids(hubsEnabledRaw).contains(id) },
+            set: { isOn in
+                var ids = HomeHubConfig.ids(hubsEnabledRaw).filter { $0 != id }
+                if isOn { ids.append(id) }
+                hubsEnabledRaw = HomeHubConfig.raw(ids)
+            }
+        )
+    }
+
+    private func moveHubs(from source: IndexSet, to destination: Int) {
+        var hubs = orderedHubs
+        hubs.move(fromOffsets: source, toOffset: destination)
+        hubOrderRaw = HomeHubConfig.raw(hubs.compactMap(HomeHubConfig.stableID(for:)))
+    }
+
+    private func loadHubs() async {
+        guard let server = serverConnection.currentServer,
+              let sectionId = serverConnection.currentLibrarySectionId else {
+            didLoadHubs = true
+            return
+        }
+        if let hubs = try? await client.getSectionHubs(server: server, sectionId: sectionId) {
+            availableHubs = hubs.filter(HomeHubConfig.isSupported)
+        }
+        didLoadHubs = true
     }
 }
 
@@ -61,5 +105,4 @@ struct HomeSettingsView: View {
     NavigationStack {
         HomeSettingsView()
     }
-    .environment(AudioPlayerService())
 }

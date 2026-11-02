@@ -14,6 +14,8 @@ struct HomeView: View {
 
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
+    @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
+    @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
 
     private let onSignOut: () -> Void
 
@@ -23,6 +25,14 @@ struct HomeView: View {
     private var recentAlbums: [PlexMetadata] { viewModel.recentAlbums }
     private var featuredAlbums: [PlexMetadata] { viewModel.featuredAlbums }
     private var isLoading: Bool { viewModel.isLoading }
+
+    private var visibleHubs: [Hub] {
+        let enabled = Set(HomeHubConfig.ids(hubsEnabledRaw))
+        let shown = viewModel.hubs.filter { hub in
+            HomeHubConfig.stableID(for: hub).map(enabled.contains) ?? false
+        }
+        return HomeHubConfig.ordered(shown, by: HomeHubConfig.ids(hubOrderRaw))
+    }
 
     private var loadContext: HomeViewModel.Context {
         HomeViewModel.Context(
@@ -61,6 +71,11 @@ struct HomeView: View {
                 if !hideEmptySections || isLoading || !playlists.isEmpty {
                     playlistsSection
                 }
+                ForEach(visibleHubs) { hub in
+                    HomeHubSectionView(hub: hub) { album in
+                        albumContextMenu(for: album)
+                    }
+                }
             }
             .padding(.bottom, 8)
             .padding(.top, 8)
@@ -71,6 +86,9 @@ struct HomeView: View {
         .task(id: loadTaskID) {
             await viewModel.load(loadContext)
             await viewModel.refreshOnColdLaunch(loadContext)
+        }
+        .task(id: "\(loadTaskID)|\(hubsEnabledRaw)") {
+            await viewModel.loadHubs(loadContext)
         }
         .task {
             for await _ in NotificationCenter.default.notifications(named: .favoritesDidChange) {
@@ -195,54 +213,13 @@ struct HomeView: View {
                 )
                 .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 12) {
-                        ForEach(recentAlbums) { album in
-                            NavigationLink(value: album) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    ArtworkView(
-                                        thumbPath: album.thumb,
-                                        size: AppStyle.Artwork.card,
-                                        cornerRadius: AppStyle.Radius.card
-                                    )
-
-                                    Text(album.title)
-                                        .appItemTitleStyle()
-
-                                    Text(album.parentTitle ?? "")
-                                        .appItemSubtitleStyle()
-                                }
-                                .frame(width: AppStyle.Artwork.card, alignment: .topLeading)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                albumContextMenu(for: album)
-                            } preview: {
-                                VStack(alignment: .leading, spacing: AppStyle.ArtistDetailAlbumGrid.itemContentSpacing) {
-                                    ArtworkView(
-                                        thumbPath: album.thumb,
-                                        size: 200,
-                                        cornerRadius: AppStyle.ArtistDetailAlbumGrid.artworkCornerRadius
-                                    )
-                                    .frame(width: 200, height: 200)
-                                    Text(album.title)
-                                        .appItemTitleStyle()
-                                    Text(album.parentTitle ?? "")
-                                        .appItemSubtitleStyle()
-                                }
-                                .frame(width: 200)
-                                .padding()
-                            }
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
+                HorizontalAlbumRow(albums: recentAlbums) { album in
+                    albumContextMenu(for: album)
                 }
-                .scrollTargetBehavior(.viewAligned)
             }
         }
     }
-    
+
     private var recentlyPlayedSection: some View {
         VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
             Text("Recently Played")

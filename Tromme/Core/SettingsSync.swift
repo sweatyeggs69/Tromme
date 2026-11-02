@@ -21,6 +21,8 @@ final class SettingsSync {
         "showFeaturedSection",
         "featuredBannerSize",
         "hideEmptySections",
+        "homeHubOrder",
+        "homeHubsEnabled",
         "artistsViewMode",
         "artistAllTracksSortNewestFirst",
         "allSongsSortOrder",
