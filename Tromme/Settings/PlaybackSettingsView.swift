@@ -2,14 +2,12 @@ import SwiftUI
 
 struct PlaybackSettingsView: View {
     @Environment(AudioPlayerService.self) private var player
-    @State private var plus = PlusStore.shared
 
     @AppStorage("disableCellularTranscoding") private var disableCellularTranscoding = true
     @AppStorage("playbackBadgeMode") private var playbackBadgeMode = "off"
     @AppStorage("soundCheckEnabled") private var soundCheckEnabled = false
     @AppStorage("soundCheckGainSource") private var soundCheckGainSource = "track"
     @AppStorage("magicMixSeedCap") private var magicMixSeedCap = 1
-    @AppStorage(AudioPlayerService.autoMixKey) private var autoMixEnabled = false
     @AppStorage(AudioPlayerService.crossfadeEnabledKey) private var crossfadeEnabled = false
     @AppStorage(AudioPlayerService.musicCacheEnabledKey) private var musicCacheEnabled = false
     @AppStorage(AudioPlayerService.dynamicDownloadLimitKey) private var dynamicDownloadLimit = 5
@@ -37,10 +35,6 @@ struct PlaybackSettingsView: View {
                 Toggle("Crossfade", isOn: $crossfadeEnabled)
                     .tint(.green)
                 if crossfadeEnabled {
-                    if plus.isPlus {
-                        Toggle("AutoMix", isOn: $autoMixEnabled)
-                            .tint(.green)
-                    }
                     Picker("Duration", selection: $crossfadeSeconds) {
                         ForEach([3.0, 5, 7, 10], id: \.self) { seconds in
                             Text("\(Int(seconds)) sec").tag(seconds)
@@ -48,11 +42,7 @@ struct PlaybackSettingsView: View {
                     }
                 }
             } footer: {
-                if plus.isPlus {
-                    Text("AutoMix uses synced lyrics to start the next song after the last lyric and blend it in before its first lyric. Songs without synced lyrics use Crossfade.")
-                } else {
-                    Text("Crossfade blends the end of each song into the start of the next.")
-                }
+                Text("Crossfade blends the end of each song into the start of the next.")
             }
 
             Section {

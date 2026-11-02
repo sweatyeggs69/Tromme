@@ -20,7 +20,7 @@ enum WhatsNewContent {
             WhatsNewFeature(
                 symbol: "wand.and.stars",
                 title: "AutoMix",
-                text: "Smarter crossfades timed from the last lyric of one song to the first of the next. (Tromme +)"
+                text: "Smarter crossfades timed from the last lyric of one song to the first of the next. Turn it on from the queue. (Tromme +)"
             ),
             WhatsNewFeature(
                 symbol: "text.quote",
