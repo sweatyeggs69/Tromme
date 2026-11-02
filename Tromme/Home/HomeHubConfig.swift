@@ -117,7 +117,9 @@ enum HomeHubConfig {
     private static func position(of hub: Hub, in order: [String]) -> Int {
         let id = stableID(for: hub) ?? ""
         if let index = order.firstIndex(of: id) { return index }
-        return id == favorites.hubIdentifier ? -1 : Int.max
+        if id == favorites.hubIdentifier { return -2 }
+        if id == playlists.hubIdentifier { return -1 }
+        return Int.max
     }
 
     static func ordered(_ hubs: [Hub], by order: [String]) -> [Hub] {
