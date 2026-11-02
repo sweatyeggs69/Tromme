@@ -22,7 +22,6 @@ final class SettingsSync {
         "featuredBannerSize",
         "hideEmptySections",
         "homeHubOrder",
-        "homeHubsEnabled",
         "homeSectionsHidden",
         "recentlyPlayedLevel",
         "artistsViewMode",

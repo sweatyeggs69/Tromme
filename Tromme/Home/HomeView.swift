@@ -15,7 +15,6 @@ struct HomeView: View {
     @AppStorage("showFeaturedSection") private var showFeaturedSection = true
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
-    @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
     @AppStorage(HomeHubConfig.hiddenSectionsKey) private var hiddenSectionsRaw = ""
     @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
@@ -28,7 +27,7 @@ struct HomeView: View {
 
     private var visibleItems: [Hub] {
         let shown = ([HomeHubConfig.favorites] + viewModel.hubs + [HomeHubConfig.playlists]).filter {
-            HomeHubConfig.isEnabled($0, enabledRaw: hubsEnabledRaw, hiddenRaw: hiddenSectionsRaw)
+            HomeHubConfig.isEnabled($0, hiddenRaw: hiddenSectionsRaw)
         }
         let mapped = shown.map { hub in
             HomeHubConfig.isRecentlyPlayed(hub)
@@ -94,7 +93,7 @@ struct HomeView: View {
             await viewModel.load(loadContext)
             await viewModel.refreshOnColdLaunch(loadContext)
         }
-        .task(id: "\(loadTaskID)|\(hubsEnabledRaw)") {
+        .task(id: loadTaskID) {
             await viewModel.loadHubs(loadContext)
         }
         .task {

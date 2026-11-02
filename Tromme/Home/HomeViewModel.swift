@@ -72,14 +72,8 @@ final class HomeViewModel {
             hubs = []
             return
         }
-        let needsSeed = UserDefaults.standard.object(forKey: HomeHubConfig.enabledKey) == nil
-        guard needsSeed || !HomeHubConfig.enabledIDs.isEmpty else {
-            hubs = []
-            return
-        }
         guard let fetched = try? await context.client.getSectionHubs(server: server, sectionId: sectionId),
               !Task.isCancelled else { return }
-        HomeHubConfig.seedDefaultsIfNeeded(from: fetched)
         hubs = fetched.filter(HomeHubConfig.isSupported)
     }
 

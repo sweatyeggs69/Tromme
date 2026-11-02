@@ -8,7 +8,6 @@ struct HomeSettingsView: View {
     @AppStorage("featuredBannerSize") private var featuredBannerSize = "large"
     @AppStorage("hideEmptySections") private var hideEmptySections = false
     @AppStorage(HomeHubConfig.orderKey) private var hubOrderRaw = ""
-    @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
     @AppStorage(HomeHubConfig.hiddenSectionsKey) private var hiddenSectionsRaw = ""
     @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
@@ -71,10 +70,10 @@ struct HomeSettingsView: View {
     private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
 
     private func hubRow(_ hub: Hub) -> some View {
-        let isEnabled = HomeHubConfig.isEnabled(hub, enabledRaw: hubsEnabledRaw, hiddenRaw: hiddenSectionsRaw)
+        let isEnabled = HomeHubConfig.isEnabled(hub, hiddenRaw: hiddenSectionsRaw)
         return Button {
             guard isEditing else { return }
-            HomeHubConfig.settingEnabled(hub, !isEnabled, enabledRaw: &hubsEnabledRaw, hiddenRaw: &hiddenSectionsRaw)
+            HomeHubConfig.setEnabled(hub, !isEnabled, hiddenRaw: &hiddenSectionsRaw)
         } label: {
             HStack {
                 if isEditing {
@@ -102,7 +101,6 @@ struct HomeSettingsView: View {
             return
         }
         if let hubs = try? await client.getSectionHubs(server: server, sectionId: sectionId) {
-            HomeHubConfig.seedDefaultsIfNeeded(from: hubs)
             availableHubs = HomeHubConfig.uniqueByKind(hubs.filter(HomeHubConfig.isSupported))
         }
     }

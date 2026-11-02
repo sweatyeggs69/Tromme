@@ -2,7 +2,6 @@ import Foundation
 
 enum HomeHubConfig {
     static let orderKey = "homeHubOrder"
-    static let enabledKey = "homeHubsEnabled"
     static let hiddenSectionsKey = "homeSectionsHidden"
     static let recentlyPlayedLevelKey = "recentlyPlayedLevel"
 
@@ -13,22 +12,16 @@ enum HomeHubConfig {
         hub.type == "builtin"
     }
 
-    static func isEnabled(_ hub: Hub, enabledRaw: String, hiddenRaw: String) -> Bool {
+    static func isEnabled(_ hub: Hub, hiddenRaw: String) -> Bool {
         guard let id = stableID(for: hub) else { return false }
-        return isBuiltin(hub) ? !ids(hiddenRaw).contains(id) : ids(enabledRaw).contains(id)
+        return !ids(hiddenRaw).contains(id)
     }
 
-    static func settingEnabled(_ hub: Hub, _ isOn: Bool, enabledRaw: inout String, hiddenRaw: inout String) {
+    static func setEnabled(_ hub: Hub, _ isOn: Bool, hiddenRaw: inout String) {
         guard let id = stableID(for: hub) else { return }
-        if isBuiltin(hub) {
-            var hidden = ids(hiddenRaw).filter { $0 != id }
-            if !isOn { hidden.append(id) }
-            hiddenRaw = raw(hidden)
-        } else {
-            var enabled = ids(enabledRaw).filter { $0 != id }
-            if isOn { enabled.append(id) }
-            enabledRaw = raw(enabled)
-        }
+        var hidden = ids(hiddenRaw).filter { $0 != id }
+        if !isOn { hidden.append(id) }
+        hiddenRaw = raw(hidden)
     }
 
     private static func flattenedIdentifier(_ hub: Hub) -> String {
@@ -59,10 +52,6 @@ enum HomeHubConfig {
 
     static func raw(_ ids: [String]) -> String {
         ids.joined(separator: ",")
-    }
-
-    static var enabledIDs: Set<String> {
-        Set(ids(UserDefaults.standard.string(forKey: enabledKey) ?? ""))
     }
 
     private static func templatePrefix(of hub: Hub) -> String? {
@@ -96,18 +85,6 @@ enum HomeHubConfig {
     static func isSupported(_ hub: Hub) -> Bool {
         guard stableID(for: hub) != nil, hub.title != nil else { return false }
         return ["track", "album", "artist"].contains(rowType(of: hub))
-    }
-
-    static func seedDefaultsIfNeeded(from hubs: [Hub]) {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: enabledKey) == nil else { return }
-        let recents = hubs.filter { hub in
-            let flattened = flattenedIdentifier(hub)
-            return ["recentadded", "recentlyadded"].contains { flattened.contains($0) } || isRecentlyPlayed(hub)
-        }
-        let ids = recents.compactMap(stableID(for:))
-        defaults.set(raw(ids), forKey: enabledKey)
-        defaults.set(raw(ids), forKey: orderKey)
     }
 
     static func rowType(of hub: Hub) -> String {
