@@ -46,7 +46,7 @@ struct HomeSettingsView: View {
                     }
                 } else {
                     ForEach(orderedHubs) { hub in
-                        Toggle(hub.title ?? "", isOn: enabledBinding(for: hub))
+                        Toggle(HomeHubConfig.displayTitle(for: hub), isOn: enabledBinding(for: hub))
                             .tint(.green)
                     }
                     .onMove(perform: moveHubs)
@@ -96,7 +96,7 @@ struct HomeSettingsView: View {
         }
         if let hubs = try? await client.getSectionHubs(server: server, sectionId: sectionId) {
             HomeHubConfig.seedDefaultsIfNeeded(from: hubs)
-            availableHubs = hubs.filter(HomeHubConfig.isSupported)
+            availableHubs = HomeHubConfig.uniqueByKind(hubs.filter(HomeHubConfig.isSupported))
         }
         didLoadHubs = true
     }

@@ -2,6 +2,7 @@ import Foundation
 
 struct Hub: Codable, Sendable, Identifiable {
     let hubIdentifier: String?
+    let context: String?
     let title: String?
     let type: String?
     let size: Int?
@@ -9,8 +10,9 @@ struct Hub: Codable, Sendable, Identifiable {
 
     var id: String { hubIdentifier ?? (type ?? "hub") + "_" + (title ?? "unknown") }
 
-    init(hubIdentifier: String?, title: String?, type: String?, size: Int?, metadata: [PlexMetadata]?) {
+    init(hubIdentifier: String?, context: String? = nil, title: String?, type: String?, size: Int?, metadata: [PlexMetadata]?) {
         self.hubIdentifier = hubIdentifier
+        self.context = context
         self.title = title
         self.type = type
         self.size = size
@@ -18,7 +20,7 @@ struct Hub: Codable, Sendable, Identifiable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case hubIdentifier, title, type, size
+        case hubIdentifier, context, title, type, size
         case metadata = "Metadata"
     }
 }

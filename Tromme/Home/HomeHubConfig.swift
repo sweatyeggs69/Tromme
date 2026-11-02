@@ -17,9 +17,35 @@ enum HomeHubConfig {
     }
 
     static func stableID(for hub: Hub) -> String? {
-        guard let identifier = hub.hubIdentifier else { return nil }
-        guard let range = identifier.range(of: #"\.\d+$"#, options: .regularExpression) else { return identifier }
-        return String(identifier[..<range.lowerBound])
+        guard let identifier = hub.context ?? hub.hubIdentifier else { return nil }
+        let kept = identifier.split(separator: ".", omittingEmptySubsequences: false)
+            .filter { $0.isEmpty || !$0.allSatisfy(\.isNumber) }
+        return kept.joined(separator: ".")
+    }
+
+    static func displayTitle(for hub: Hub) -> String {
+        var title = hub.title ?? ""
+        let items = hub.metadata ?? []
+        let replacements: [(String?, String)] = switch rowType(of: hub) {
+        case "album": [(items.first?.parentTitle, "Artist")]
+        case "track": [(items.first?.grandparentTitle, "Artist"), (items.first?.parentTitle, "Album")]
+        case "artist": [(items.first?.title, "Artist")]
+        default: []
+        }
+        for (name, label) in replacements {
+            if let name, name.count > 1, title.contains(name), title != name {
+                title = title.replacingOccurrences(of: name, with: label)
+            }
+        }
+        return title
+    }
+
+    static func uniqueByKind(_ hubs: [Hub]) -> [Hub] {
+        var seen = Set<String>()
+        return hubs.filter { hub in
+            guard let id = stableID(for: hub) else { return false }
+            return seen.insert(id).inserted
+        }
     }
 
     static func isSupported(_ hub: Hub) -> Bool {
