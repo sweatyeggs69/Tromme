@@ -23,7 +23,6 @@ struct SettingsView: View {
                 NavigationLink("Appearance") { AppearanceSettingsView() }
                 NavigationLink("Playback") { PlaybackSettingsView() }
                 NavigationLink("Downloads") { OfflineSettingsView() }
-                NavigationLink("App Icon") { AppIconPickerView() }
             }
 
             Section {

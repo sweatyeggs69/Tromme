@@ -13,6 +13,10 @@ struct AppearanceSettingsView: View {
     var body: some View {
         Form {
             Section {
+                NavigationLink("App Icon") { AppIconPickerView() }
+            }
+
+            Section {
                 Toggle("Animated Artwork", isOn: canUseAnimatedArtwork ? $animatedArtworkEnabled : .constant(false))
                     .tint(.green)
                     .disabled(!canUseAnimatedArtwork)
