@@ -38,15 +38,6 @@ struct HomeSettingsView: View {
             }
 
             Section {
-                Picker("Recently Played", selection: $recentlyPlayedLevel) {
-                    Text("Songs").tag("songs")
-                    Text("Artists").tag("artists")
-                }
-            } footer: {
-                Text("Show recently played as individual songs or as the artists you listened to.")
-            }
-
-            Section {
                 if orderedHubs.isEmpty {
                     if didLoadHubs {
                         Text("No hubs available")
@@ -64,7 +55,16 @@ struct HomeSettingsView: View {
             } header: {
                 Text("Hubs")
             } footer: {
-                Text("Show Plex hubs below Playlists on Home. Tap Edit to enable, disable or reorder them.")
+                Text("Show Plex hubs on Home above Playlists. Tap Edit to enable, disable or reorder them.")
+            }
+
+            Section {
+                Picker("Recently Played", selection: $recentlyPlayedLevel) {
+                    Text("Songs").tag("songs")
+                    Text("Artists").tag("artists")
+                }
+            } footer: {
+                Text("Show recently played as individual songs or as the artists you listened to.")
             }
         }
         .navigationTitle("Home")
