@@ -11,7 +11,6 @@ struct HomeSettingsView: View {
     @AppStorage(HomeHubConfig.enabledKey) private var hubsEnabledRaw = ""
     @AppStorage(HomeHubConfig.recentlyPlayedLevelKey) private var recentlyPlayedLevel = "songs"
 
-    @Environment(\.editMode) private var editMode
     @State private var availableHubs: [Hub] = []
     @State private var didLoadHubs = false
 
@@ -50,12 +49,11 @@ struct HomeSettingsView: View {
                     ForEach(orderedHubs) { hub in
                         hubRow(hub)
                     }
-                    .onMove(perform: moveHubs)
                 }
             } header: {
                 Text("Hubs")
             } footer: {
-                Text("Show Plex hubs on Home above Playlists. Tap Edit to enable, disable or reorder them.")
+                Text("Show Plex hubs on Home above Playlists. Touch and hold a hub to reorder it.")
             }
 
             Section {
@@ -68,47 +66,43 @@ struct HomeSettingsView: View {
             }
         }
         .navigationTitle("Home")
-        .toolbar {
-            if !availableHubs.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    EditButton()
-                }
-            }
-        }
         .task(id: serverConnection.currentLibrarySectionId) {
             await loadHubs()
         }
     }
 
-    private var isEditing: Bool { editMode?.wrappedValue.isEditing == true }
-
     private func hubRow(_ hub: Hub) -> some View {
         let id = HomeHubConfig.stableID(for: hub) ?? ""
         let isEnabled = HomeHubConfig.ids(hubsEnabledRaw).contains(id)
         return Button {
-            guard isEditing else { return }
             var ids = HomeHubConfig.ids(hubsEnabledRaw).filter { $0 != id }
             if !isEnabled { ids.append(id) }
             hubsEnabledRaw = HomeHubConfig.raw(ids)
         } label: {
             HStack {
-                if isEditing {
-                    Image(systemName: isEnabled ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(isEnabled ? Color.green : Color.secondary)
-                        .contentTransition(.symbolEffect(.replace))
-                }
+                Image(systemName: isEnabled ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isEnabled ? Color.green : Color.secondary)
+                    .contentTransition(.symbolEffect(.replace))
                 Text(HomeHubConfig.displayTitle(for: hub))
+                    .foregroundStyle(isEnabled ? .primary : .tertiary)
             }
         }
         .buttonStyle(.plain)
-        .foregroundStyle(isEnabled ? .primary : .tertiary)
-        .animation(.default, value: isEnabled)
+        .draggable(id)
+        .dropDestination(for: String.self) { items, _ in
+            guard let dragged = items.first else { return false }
+            moveHub(dragged, onto: id)
+            return true
+        }
     }
 
-    private func moveHubs(from source: IndexSet, to destination: Int) {
-        var hubs = orderedHubs
-        hubs.move(fromOffsets: source, toOffset: destination)
-        hubOrderRaw = HomeHubConfig.raw(hubs.compactMap(HomeHubConfig.stableID(for:)))
+    private func moveHub(_ draggedID: String, onto targetID: String) {
+        var ids = orderedHubs.compactMap(HomeHubConfig.stableID(for:))
+        guard draggedID != targetID,
+              let from = ids.firstIndex(of: draggedID),
+              let to = ids.firstIndex(of: targetID) else { return }
+        ids.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        withAnimation { hubOrderRaw = HomeHubConfig.raw(ids) }
     }
 
     private func loadHubs() async {
