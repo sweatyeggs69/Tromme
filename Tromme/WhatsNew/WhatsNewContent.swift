@@ -4,13 +4,13 @@ enum WhatsNewContent {
     static let isEnabled = true
 
     static let current = WhatsNewRelease(
-        id: "2026.11.2",
+        id: "2026.11.3",
         title: "What's New in Tromme",
         features: [
             WhatsNewFeature(
                 symbol: "house",
                 title: "Your Home",
-                text: "Choose and reorder Plex hubs in Settings > Home."
+                text: "Choose and reorder Plex hubs in Settings > Home. Home now loads instantly, even offline."
             ),
             WhatsNewFeature(
                 symbol: "waveform.path",
@@ -20,7 +20,12 @@ enum WhatsNewContent {
             WhatsNewFeature(
                 symbol: "wand.and.stars",
                 title: "AutoMix",
-                text: "Smarter crossfades timed from the last lyric of one song to the first of the next. Turn (Tromme +)"
+                text: "Smarter crossfades timed from the last lyric of one song to the first of the next. (Tromme +)"
+            ),
+            WhatsNewFeature(
+                symbol: "gift",
+                title: "Try Tromme +",
+                text: "New subscribers get a free week of AutoMix, animated artwork, track trim and more."
             ),
             WhatsNewFeature(
                 symbol: "internaldrive",
