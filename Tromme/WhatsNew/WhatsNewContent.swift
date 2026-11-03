@@ -10,7 +10,7 @@ enum WhatsNewContent {
             WhatsNewFeature(
                 symbol: "gift",
                 title: "Try Tromme +",
-                text: "New subscribers get a free week of AutoMix, animated artwork, track trim and more."
+                text: "New subscribers get a free trial of AutoMix, animated artwork, track trim and more."
             ),
             WhatsNewFeature(
                 symbol: "house",
