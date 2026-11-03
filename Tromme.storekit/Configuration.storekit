@@ -83,7 +83,7 @@
             {
               "internalID" : "B3A41C01",
               "paymentMode" : "free",
-              "subscriptionPeriod" : "P1W"
+              "subscriptionPeriod" : "P1M"
             }
           ],
           "localizations" : [
