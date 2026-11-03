@@ -39,6 +39,7 @@ extension AudioPlayerService {
             }()
             Task { @MainActor in
                 self.refreshAirPlayConnectionState()
+                self.republishNowPlayingInfo()
                 if reason == .oldDeviceUnavailable, self.isPlaying {
                     self.logPlayback("route_old_device_unavailable_pausing")
                     self.pauseCurrent()

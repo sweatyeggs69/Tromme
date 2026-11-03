@@ -137,8 +137,14 @@ extension AudioPlayerService {
         }
 
         let trackKey = currentTrack.ratingKey
+        let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
+        let artworkURL = client.flatMap { client in
+            server.flatMap { client.artworkURL(server: $0, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) }
+        }
+        let artworkMissing = cachedArtwork == nil && nowPlayingArtworkTask == nil && artworkURL != nil
 
         if trackKey == lastPublishedNowPlayingTrackKey,
+           !artworkMissing,
            !NowPlayingAnimatedArtwork.shared.needsUpdate(for: currentTrack),
            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo {
             let rate = isPlaying ? 1.0 : 0.0
@@ -154,20 +160,20 @@ extension AudioPlayerService {
             info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = currentTime
             info[MPNowPlayingInfoPropertyPlaybackRate] = rate
             info[MPMediaItemPropertyPlaybackDuration] = duration
+            if info[MPMediaItemPropertyArtwork] == nil, let cachedArtwork {
+                info[MPMediaItemPropertyArtwork] = cachedArtwork
+            }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
             lastPublishedNowPlayingDate = Date()
             return
         }
 
-        let thumbPath = currentTrack.thumb ?? currentTrack.parentThumb
-        let artworkURL = client.flatMap { client in
-            server.flatMap { client.artworkURL(server: $0, path: thumbPath, width: ArtworkView.maxTranscodePx, height: ArtworkView.maxTranscodePx) }
-        }
         var needsArtworkFetch = false
-        if thumbPath != cachedArtworkThumbPath {
+        if thumbPath != cachedArtworkThumbPath || artworkMissing {
             cachedArtworkThumbPath = thumbPath
             cachedArtwork = nil
             nowPlayingArtworkTask?.cancel()
+            nowPlayingArtworkTask = nil
             if let artworkURL {
                 if let image = ImageCache.shared.memoryCachedImage(for: artworkURL, targetPixelSize: ArtworkView.maxTranscodePx) {
                     cachedArtwork = Self.makeArtwork(from: image)
@@ -200,8 +206,10 @@ extension AudioPlayerService {
             let generation = playbackGeneration
             let capturedTrackKey = trackKey
             nowPlayingArtworkTask = Task {
-                guard let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx) else { return }
+                let image = await ImageCache.shared.image(for: url, targetPixelSize: ArtworkView.maxTranscodePx)
                 guard !Task.isCancelled else { return }
+                self.nowPlayingArtworkTask = nil
+                guard let image else { return }
                 guard self.playbackGeneration == generation else { return }
                 guard self.currentTrack?.ratingKey == capturedTrackKey else { return }
                 let artwork = Self.makeArtwork(from: image)
