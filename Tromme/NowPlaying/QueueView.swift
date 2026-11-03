@@ -86,6 +86,8 @@ struct QueueView: View {
                 } label: {
                     AutoMixGlyph()
                 }
+                .disabled(player.isAirPlayConnected)
+                .opacity(player.isAirPlayConnected ? 0.45 : 1)
                 .frame(maxWidth: .infinity)
             }
 
