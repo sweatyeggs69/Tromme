@@ -80,7 +80,11 @@
           "groupNumber" : 2,
           "internalID" : "7C2D9A12",
           "introductoryOffers" : [
-
+            {
+              "internalID" : "B3A41C01",
+              "paymentMode" : "free",
+              "subscriptionPeriod" : "P1W"
+            }
           ],
           "localizations" : [
             {
@@ -119,7 +123,11 @@
           "groupNumber" : 1,
           "internalID" : "7C2D9A13",
           "introductoryOffers" : [
-
+            {
+              "internalID" : "B3A41C02",
+              "paymentMode" : "free",
+              "subscriptionPeriod" : "P1W"
+            }
           ],
           "localizations" : [
             {
