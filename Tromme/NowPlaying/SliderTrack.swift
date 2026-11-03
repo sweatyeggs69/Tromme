@@ -12,7 +12,6 @@ struct SliderTrack: View {
             Color.white.opacity(0.3)
             Color.white
                 .frame(width: max(0, width * min(max(progress, 0), 1)))
-                .transaction { $0.animation = nil }
         }
         .frame(height: height)
         .clipShape(Capsule())
