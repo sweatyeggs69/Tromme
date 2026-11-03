@@ -21,10 +21,6 @@ extension AudioPlayerService {
 
     func maybePlanAutoMix() {
         prefetchAutoMixLyrics()
-        if autoMixTask == nil, let plan = autoMixPlan, plan.outgoingKey == currentTrack?.ratingKey,
-           plan.incomingKey != nextAutoAdvanceTarget()?.track.ratingKey {
-            cancelAutoMixPlanning()
-        }
         guard isMixingEnabled, repeatMode == .off,
               autoMixTask == nil, autoMixPlanTask == nil, autoMixTriggerTask == nil,
               duration > 20, duration - currentTime <= Self.planningLeadTime,
