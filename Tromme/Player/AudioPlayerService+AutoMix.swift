@@ -278,9 +278,7 @@ extension AudioPlayerService {
                     continue
                 }
                 let remaining = self.outgoingRemaining(until: outgoingEnd)
-                var elapsed = remaining.isFinite ? plan.overlap - remaining : Date().timeIntervalSince(startedAt)
-                let incomingPlaying = self.player?.timeControlStatus == .playing || self.losslessPlayer?.isPlaying == true
-                if !incomingPlaying, remaining.isFinite, remaining > 0.75 { elapsed = 0 }
+                let elapsed = remaining.isFinite ? plan.overlap - remaining : Date().timeIntervalSince(startedAt)
                 let progress = plan.progress(at: elapsed)
 
                 #if DEBUG
