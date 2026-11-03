@@ -293,8 +293,6 @@ extension AudioPlayerService {
                     didSnapshot = true
                     self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                         "earlyRate": "\(self.player?.rate ?? -1)",
-                        "earlyControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
-                        "earlyTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
                         "earlyVolume": "\(self.player?.volume ?? -1)"
                     ])
                 }
@@ -311,13 +309,11 @@ extension AudioPlayerService {
                     self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                         "finishRemaining": Self.seconds(remaining),
                         "outgoingRate": "\(self.mixOutgoingPlayer?.rate ?? -1)",
-                        "outgoingStatus": "\(self.mixOutgoingPlayer?.currentItem?.status.rawValue ?? -1)",
                         "wallElapsed": Self.seconds(Date().timeIntervalSince(startedAt)),
                         "incomingRate": "\(self.player?.rate ?? -1)",
                         "incomingControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
                         "incomingTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
                         "incomingVolume": "\(self.player?.volume ?? -1)",
-                        "incomingGain": "\(self.mixIncomingGain)"
                     ])
                     self.finishAutoMix()
                     return
