@@ -147,6 +147,7 @@
 		67F9C81A6C9DB14536FA38FC /* EditMetadataViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AA90126F131D3378B26159 /* EditMetadataViewModel.swift */; };
 		1FDDF07E00978EA25EA6AC01 /* MetadataSheetRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D89813C033DC1008E8B23523 /* MetadataSheetRequest.swift */; };
 		8CEE55B7AA21FEC31C93F816 /* PlexServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DA977C8D66B3B5DDC5329C5 /* PlexServer.swift */; };
+		BA09FFD5DE3F3B58C72FFF4D /* HomeHubCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730187D3202DA8B73B45FCC0 /* HomeHubCache.swift */; };
 		35D9CCEC1322878DEE6095F6 /* HomeHubConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8876FE299454AB32E3AE76 /* HomeHubConfig.swift */; };
 		17027EA9AED62C83FA8F5FA7 /* HorizontalAlbumRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCA2A9D487EDE244A3B3CE96 /* HorizontalAlbumRow.swift */; };
 		93FD33476E6A8AD02B9567BA /* HorizontalArtistRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC3C5FC2CE035D4089CCF0C3 /* HorizontalArtistRow.swift */; };
@@ -469,6 +470,7 @@
 		EFF4CF2474855912FA0144CE /* AppIconOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconOption.swift; sourceTree = "<group>"; };
 		F61E387C500D85211FFA7DA2 /* PlaylistItemsRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaylistItemsRecord.swift; sourceTree = "<group>"; };
 		F7AC00A246F85737CD6ED27F /* CarPlaySceneDelegate+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CarPlaySceneDelegate+NowPlaying.swift"; sourceTree = "<group>"; };
+		730187D3202DA8B73B45FCC0 /* HomeHubCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHubCache.swift; sourceTree = "<group>"; };
 		5C8876FE299454AB32E3AE76 /* HomeHubConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHubConfig.swift; sourceTree = "<group>"; };
 		CCA2A9D487EDE244A3B3CE96 /* HorizontalAlbumRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalAlbumRow.swift; sourceTree = "<group>"; };
 		BC3C5FC2CE035D4089CCF0C3 /* HorizontalArtistRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalArtistRow.swift; sourceTree = "<group>"; };
@@ -888,6 +890,7 @@
 				3F2EA4DBE583284FE7CBB285 /* HomeViewModel.swift */,
 				DC307E2345C91DC7DBC7E889 /* FeaturedCarouselView.swift */,
 				0E54E64C303CEAFD0064C6AA /* FeaturedBannerView.swift */,
+				730187D3202DA8B73B45FCC0 /* HomeHubCache.swift */,
 				5C8876FE299454AB32E3AE76 /* HomeHubConfig.swift */,
 				CCA2A9D487EDE244A3B3CE96 /* HorizontalAlbumRow.swift */,
 				BC3C5FC2CE035D4089CCF0C3 /* HorizontalArtistRow.swift */,
@@ -1056,6 +1059,7 @@
 				14053F34316038CC4F9D8FEB /* ArtistConcertRowView.swift in Sources */,
 				A981CA7D0E064840E4E10C9F /* NowPlayingBarsView.swift in Sources */,
 				380C4E76A4C3553A27183702 /* FeaturedCarouselView.swift in Sources */,
+				BA09FFD5DE3F3B58C72FFF4D /* HomeHubCache.swift in Sources */,
 				35D9CCEC1322878DEE6095F6 /* HomeHubConfig.swift in Sources */,
 				17027EA9AED62C83FA8F5FA7 /* HorizontalAlbumRow.swift in Sources */,
 				93FD33476E6A8AD02B9567BA /* HorizontalArtistRow.swift in Sources */,

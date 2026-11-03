@@ -66,14 +66,16 @@ final class HomeViewModel {
     }
 
     func loadHubs(_ context: Context) async {
-        guard !isPreviewMode else { return }
-        guard let server = context.server,
-              let sectionId = context.sectionId else {
-            hubs = []
-            return
+        guard !isPreviewMode,
+              let server = context.server,
+              let sectionId = context.sectionId else { return }
+        let scope = "\(server.uri)|\(sectionId)"
+        if hubs.isEmpty {
+            hubs = HomeHubCache.load(scope: scope).filter(HomeHubConfig.isSupported)
         }
         guard let fetched = try? await context.client.getSectionHubs(server: server, sectionId: sectionId),
               !Task.isCancelled else { return }
+        HomeHubCache.save(fetched, scope: scope)
         hubs = fetched.filter(HomeHubConfig.isSupported)
     }
 
