@@ -13,7 +13,7 @@ extension AudioPlayerService {
 
     private var isCrossfadeEnabled: Bool { UserDefaults.standard.bool(forKey: Self.crossfadeEnabledKey) }
 
-    private var isMixingEnabled: Bool { isCrossfadeEnabled }
+    private var isMixingEnabled: Bool { isCrossfadeEnabled && !isAirPlayConnected }
 
     private var isFullAutoMixEnabled: Bool { isAutoMixEnabled }
 
