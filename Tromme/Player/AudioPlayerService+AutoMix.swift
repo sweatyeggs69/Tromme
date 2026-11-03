@@ -13,7 +13,7 @@ extension AudioPlayerService {
 
     private var isCrossfadeEnabled: Bool { UserDefaults.standard.bool(forKey: Self.crossfadeEnabledKey) }
 
-    private var isMixingEnabled: Bool { isCrossfadeEnabled }
+    private var isMixingEnabled: Bool { isCrossfadeEnabled && !isAirPlayConnected }
 
     private var isFullAutoMixEnabled: Bool { isAutoMixEnabled }
 
@@ -262,7 +262,6 @@ extension AudioPlayerService {
             var startedAt = Date()
             #if DEBUG
             var lastTrace = Date.distantPast
-            var didSnapshot = false
             #endif
             self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
                 "overlapFinal": Self.seconds(plan.overlap)
@@ -288,17 +287,6 @@ extension AudioPlayerService {
                     self.logPlayback("automix_fade", "elapsed=\(Self.seconds(elapsed)) remaining=\(Self.seconds(remaining)) outTime=\(Self.seconds(out?.currentTime().seconds ?? self.mixOutgoingLossless?.currentTime ?? -1)) outRate=\(out?.rate ?? -1) outStatus=\(out?.currentItem?.status.rawValue ?? -1) outItemDuration=\(Self.seconds(out?.currentItem?.duration.seconds ?? -1)) outVolume=\(out?.volume ?? -1) inRate=\(self.player?.rate ?? -1)")
                 }
                 #endif
-                #if DEBUG
-                if elapsed >= 1, !didSnapshot {
-                    didSnapshot = true
-                    self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
-                        "at1sRate": "\(self.player?.rate ?? -1)",
-                        "at1sControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
-                        "at1sTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
-                        "at1sVolume": "\(self.player?.volume ?? -1)"
-                    ])
-                }
-                #endif
                 let gains = plan.gains(progress)
                 let loudness = plan.loudnessFactors(progress)
                 self.mixOutgoingPlayer?.volume = self.mixOutgoingVolume * gains.outgoing * loudness.outgoing
@@ -312,12 +300,7 @@ extension AudioPlayerService {
                         "finishRemaining": Self.seconds(remaining),
                         "outgoingRate": "\(self.mixOutgoingPlayer?.rate ?? -1)",
                         "outgoingStatus": "\(self.mixOutgoingPlayer?.currentItem?.status.rawValue ?? -1)",
-                        "wallElapsed": Self.seconds(Date().timeIntervalSince(startedAt)),
-                        "incomingRate": "\(self.player?.rate ?? -1)",
-                        "incomingControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
-                        "incomingTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
-                        "incomingVolume": "\(self.player?.volume ?? -1)",
-                        "incomingGain": "\(self.mixIncomingGain)"
+                        "wallElapsed": Self.seconds(Date().timeIntervalSince(startedAt))
                     ])
                     self.finishAutoMix()
                     return
