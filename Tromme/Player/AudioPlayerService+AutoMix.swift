@@ -292,10 +292,10 @@ extension AudioPlayerService {
                 if elapsed >= 1, !didSnapshot {
                     didSnapshot = true
                     self.noteAutoMix(incomingKey: plan.incomingKey, plan.isPlainCrossfade ? "mixed: plain crossfade" : "mixed: lyric mix", [
-                        "at1sRate": "\(self.player?.rate ?? -1)",
-                        "at1sControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
-                        "at1sTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
-                        "at1sVolume": "\(self.player?.volume ?? -1)"
+                        "earlyRate": "\(self.player?.rate ?? -1)",
+                        "earlyControl": "\(self.player?.timeControlStatus.rawValue ?? -1)",
+                        "earlyTime": Self.seconds(self.player?.currentTime().seconds ?? -1),
+                        "earlyVolume": "\(self.player?.volume ?? -1)"
                     ])
                 }
                 #endif
