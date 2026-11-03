@@ -47,7 +47,7 @@ struct SettingsView: View {
                         showPaywall = true
                     }
                 } label: {
-                    Text("Tromme +")
+                    Text(plus.isPlus && !plus.isGrandfathered ? "Tromme +" : "Get Tromme +")
                         .bold()
                 }
                 .tint(.primary)
