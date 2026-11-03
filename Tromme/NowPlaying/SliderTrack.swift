@@ -9,15 +9,14 @@ struct SliderTrack: View {
     var body: some View {
         let height: CGFloat = isDragging ? 16 : 7
         ZStack(alignment: .leading) {
-            Capsule()
-                .fill(.white.opacity(0.3))
-                .frame(height: height)
-                .frame(maxHeight: .infinity)
-            Capsule()
-                .fill(.white)
-                .frame(width: max(0, width * min(max(progress, 0), 1)), height: height)
-                .frame(maxHeight: .infinity, alignment: .leading)
+            Color.white.opacity(0.3)
+            Color.white
+                .frame(width: max(0, width * min(max(progress, 0), 1)))
+                .transaction { $0.animation = nil }
         }
+        .frame(height: height)
+        .clipShape(Capsule())
+        .frame(maxHeight: .infinity)
         .overlay { if isMixing { shimmer(height: height) } }
         .shadow(color: .white.opacity(isMixing ? 0.55 : 0), radius: isMixing ? 9 : 0)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
