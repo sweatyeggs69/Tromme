@@ -195,8 +195,8 @@ struct LyricsScrollView: View {
             ForEach(line.backing) { backing in
                 lyricLineText(backing, isActive: isActive)
                     .font(.system(size: lineFontSize * 0.75, weight: .semibold))
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
+                    .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)
                     .opacity(0.7)
             }
         }
