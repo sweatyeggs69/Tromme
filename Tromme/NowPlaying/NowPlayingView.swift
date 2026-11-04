@@ -134,8 +134,7 @@ struct NowPlayingView: View {
                                 trackAndPlaybackControls(
                                     horizontalPadding: 0,
                                     isPadPortrait: false,
-                                    trackInfoBottomPadding: 0,
-                                    timelineTopPadding: 3
+                                    trackInfoBottomPadding: portraitTrackInfoBottomPadding
                                 )
                                 .frame(maxHeight: .infinity)
 
@@ -460,7 +459,6 @@ struct NowPlayingView: View {
         horizontalPadding: CGFloat,
         isPadPortrait: Bool,
         trackInfoBottomPadding: CGFloat,
-        timelineTopPadding: CGFloat = 12,
         showsCompactArtwork: Bool = false
     ) -> some View {
         VStack(spacing: 0) {
@@ -471,8 +469,7 @@ struct NowPlayingView: View {
             controlsStack(
                 horizontalPadding: horizontalPadding,
                 isPadPortrait: isPadPortrait,
-                usesEvenSpacing: true,
-                timelineTopPadding: timelineTopPadding
+                usesEvenSpacing: true
             )
             .frame(maxHeight: .infinity)
         }
@@ -483,8 +480,7 @@ struct NowPlayingView: View {
         bottomPadding: CGFloat = 20,
         isPadPortrait: Bool = false,
         usesEvenSpacing: Bool = false,
-        usesCompactSpacing: Bool = false,
-        timelineTopPadding: CGFloat = 12
+        usesCompactSpacing: Bool = false
     ) -> some View {
         let sliderBottomPadding: CGFloat = usesCompactSpacing ? 10 : (isPadPortrait ? 42 : 18)
         let transportBottomPadding: CGFloat = usesCompactSpacing ? 16 : (isPadPortrait ? 64 : 32)
@@ -495,7 +491,7 @@ struct NowPlayingView: View {
                 VStack(spacing: 0) {
                     TimelineSlider(usesOverlayedTimeLabels: true)
                         .padding(.horizontal, horizontalPadding)
-                        .padding(.top, timelineTopPadding)
+                        .padding(.top, 12)
 
                     Spacer(minLength: 0)
 
