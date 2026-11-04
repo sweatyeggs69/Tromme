@@ -89,7 +89,7 @@ final class DownloadManager: @unchecked Sendable {
             return
         }
         guard !isDownloaded(track.ratingKey) else { return }
-        guard transientStates[track.ratingKey] == nil else { return }
+        if let state = transientStates[track.ratingKey], state != .failed { return }
         transientStates[track.ratingKey] = .queued
         pendingQueue.append((track, server, client))
         processQueue()
