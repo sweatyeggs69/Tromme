@@ -134,8 +134,8 @@ struct NowPlayingView: View {
                                 trackAndPlaybackControls(
                                     horizontalPadding: 0,
                                     isPadPortrait: false,
-                                    trackInfoBottomPadding: portraitTrackInfoBottomPadding / 2,
-                                    timelineTopPadding: 6
+                                    trackInfoBottomPadding: 0,
+                                    timelineTopPadding: 3
                                 )
                                 .frame(maxHeight: .infinity)
 
