@@ -88,7 +88,7 @@ struct NowPlayingView: View {
             let baseArtworkWidth = width - 48.0
             let baseArtworkHeight = height * 0.5
             let artworkSize = max(min(baseArtworkWidth, baseArtworkHeight), 2.0)
-            let isPadLandscape = isDuoOpen || (UIDevice.current.userInterfaceIdiom == .pad && width > height)
+            let isPadLandscape = (isDuoOpen || UIDevice.current.userInterfaceIdiom == .pad) && width > height
             let isPadPortrait = UIDevice.current.userInterfaceIdiom == .pad && height > width
             let controlsContainerWidth = artworkSize
             let controlsHorizontalPadding: CGFloat = 0
