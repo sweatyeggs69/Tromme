@@ -20,6 +20,7 @@ final class DownloadManager: @unchecked Sendable {
     private let persistenceKey = "com.tromme.downloadedRecords.v1"
     private var persistScheduled = false
     private var hasLoadedRecords = false
+    private var loadTask: Task<Void, Never>?
     private let fileQueue = DispatchQueue(label: "com.tromme.downloadManager.files", qos: .utility)
 
     var hasActiveDownloads: Bool { !transientStates.isEmpty }
@@ -80,6 +81,13 @@ final class DownloadManager: @unchecked Sendable {
     }
 
     func download(track: PlexMetadata, server: PlexServer, client: PlexAPIClient) {
+        guard hasLoadedRecords else {
+            Task {
+                await loadTask?.value
+                download(track: track, server: server, client: client)
+            }
+            return
+        }
         guard !isDownloaded(track.ratingKey) else { return }
         guard transientStates[track.ratingKey] == nil else { return }
         transientStates[track.ratingKey] = .queued
@@ -125,6 +133,7 @@ final class DownloadManager: @unchecked Sendable {
     }
 
     func syncLibraryDownloadsIfNeeded(server: PlexServer, sectionId: String, client: PlexAPIClient) async {
+        await loadTask?.value
         guard !userStoppedAutoDownload else { return }
         let enabled = UserDefaults.standard.bool(forKey: "autoDownloadEnabled")
         guard enabled else { return }
@@ -372,7 +381,7 @@ final class DownloadManager: @unchecked Sendable {
     private func loadPersistedRecords() {
         let directory = downloadsDirectory
         let legacyKey = persistenceKey
-        Task {
+        loadTask = Task {
             let (loaded, needsPersist) = await Task.detached(priority: .utility) {
                 Self.readPersistedRecords(directory: directory, legacyKey: legacyKey)
             }.value
