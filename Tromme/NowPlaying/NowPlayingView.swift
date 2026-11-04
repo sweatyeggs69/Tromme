@@ -134,7 +134,8 @@ struct NowPlayingView: View {
                                 trackAndPlaybackControls(
                                     horizontalPadding: 0,
                                     isPadPortrait: false,
-                                    trackInfoBottomPadding: portraitTrackInfoBottomPadding
+                                    trackInfoBottomPadding: portraitTrackInfoBottomPadding / 2,
+                                    timelineTopPadding: 6
                                 )
                                 .frame(maxHeight: .infinity)
 
@@ -459,6 +460,7 @@ struct NowPlayingView: View {
         horizontalPadding: CGFloat,
         isPadPortrait: Bool,
         trackInfoBottomPadding: CGFloat,
+        timelineTopPadding: CGFloat = 12,
         showsCompactArtwork: Bool = false
     ) -> some View {
         VStack(spacing: 0) {
@@ -469,7 +471,8 @@ struct NowPlayingView: View {
             controlsStack(
                 horizontalPadding: horizontalPadding,
                 isPadPortrait: isPadPortrait,
-                usesEvenSpacing: true
+                usesEvenSpacing: true,
+                timelineTopPadding: timelineTopPadding
             )
             .frame(maxHeight: .infinity)
         }
@@ -480,7 +483,8 @@ struct NowPlayingView: View {
         bottomPadding: CGFloat = 20,
         isPadPortrait: Bool = false,
         usesEvenSpacing: Bool = false,
-        usesCompactSpacing: Bool = false
+        usesCompactSpacing: Bool = false,
+        timelineTopPadding: CGFloat = 12
     ) -> some View {
         let sliderBottomPadding: CGFloat = usesCompactSpacing ? 10 : (isPadPortrait ? 42 : 18)
         let transportBottomPadding: CGFloat = usesCompactSpacing ? 16 : (isPadPortrait ? 64 : 32)
@@ -491,7 +495,7 @@ struct NowPlayingView: View {
                 VStack(spacing: 0) {
                     TimelineSlider(usesOverlayedTimeLabels: true)
                         .padding(.horizontal, horizontalPadding)
-                        .padding(.top, 12)
+                        .padding(.top, timelineTopPadding)
 
                     Spacer(minLength: 0)
 
