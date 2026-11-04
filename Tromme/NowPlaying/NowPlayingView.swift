@@ -102,8 +102,8 @@ struct NowPlayingView: View {
             let landscapeBottomInsetPadding = isDuoOpen ? 14 : bottomScreenPadding
             let landscapeHandleHeight: CGFloat = 21
             let landscapeMainHeight = max(0.0, height - landscapeHandleHeight - landscapeBottomInsetPadding)
-            let landscapeLeftWidth = max(96.0, min(landscapeContentWidth * 0.45, landscapeMainHeight * 0.62))
-            let landscapeArtworkSize = max(96.0, min(landscapeLeftWidth, landscapeMainHeight * 0.5))
+            let landscapeArtworkSize = max(96.0, min(landscapeContentWidth * 0.45, landscapeMainHeight - bottomControlsHeight - 6))
+            let landscapeLeftWidth = landscapeArtworkSize
             let landscapeRightWidth = max(0.0, landscapeContentWidth - landscapeLeftWidth - landscapeColumnSpacing)
 
             let _ = applyInitialLandscapeLyrics(isPadLandscape: isPadLandscape)
@@ -130,15 +130,18 @@ struct NowPlayingView: View {
                             .animation(.spring(response: 0.5, dampingFraction: 0.7), value: player.isPlaying)
                             .padding(.bottom, 6)
 
-                            trackAndPlaybackControls(
-                                horizontalPadding: 0,
-                                isPadPortrait: false,
-                                trackInfoBottomPadding: portraitTrackInfoBottomPadding
-                            )
-                            .frame(maxHeight: .infinity)
+                            VStack(spacing: 0) {
+                                trackAndPlaybackControls(
+                                    horizontalPadding: 0,
+                                    isPadPortrait: false,
+                                    trackInfoBottomPadding: portraitTrackInfoBottomPadding
+                                )
+                                .frame(maxHeight: .infinity)
 
-                            bottomActions
-                                .padding(.top, bottomActionsTopPadding)
+                                bottomActions
+                                    .padding(.top, bottomActionsTopPadding)
+                            }
+                            .frame(height: bottomControlsHeight)
                         }
                         .frame(width: landscapeLeftWidth, height: landscapeMainHeight)
 
