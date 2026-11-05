@@ -58,7 +58,7 @@ extension AudioPlayerService {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularBitrate } ?? true
         let shouldConstrain = isConstrainedNetworkPath && sourceExceedsTarget
 
-        if !shouldConstrain, sourceAudioCodec(for: track) != "flac",
+        if !shouldConstrain, canDirectStream(codec: sourceAudioCodec(for: track)),
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
             enqueuePreloaded(track, url: directURL, source: .direct, detailedTrack: detailedTrack)

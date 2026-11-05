@@ -214,6 +214,11 @@ final class AudioPlayerService: Sendable {
         return (audioStream?.codec ?? media?.audioCodec)?.lowercased()
     }
 
+    // AVPlayer drifts on raw FLAC and cannot open Ogg Opus, so both always go through the HLS transcode.
+    func canDirectStream(codec: String?) -> Bool {
+        !["flac", "opus"].contains(codec ?? "")
+    }
+
     func sourceBitrate(for track: PlexMetadata) -> Int? {
         let media = track.media?.first
         let audioStream = media?.part?
@@ -698,6 +703,7 @@ final class AudioPlayerService: Sendable {
 
         if !isPlayingLocalFile, !isDirectStreamAttempt, server != nil, player != nil,
            queue.indices.contains(currentIndex) {
+            if seekWithinLoadedStream(to: boundedTime) { return }
             logPlayback("seek_restart_stream", "target=\(boundedTime)")
             recoveryAttemptsForTrack = 0
             currentTime = boundedTime
@@ -735,6 +741,40 @@ final class AudioPlayerService: Sendable {
                 self.reportTimelineState(self.isPlaying ? "playing" : "paused")
             }
         }
+    }
+
+    private func seekWithinLoadedStream(to time: TimeInterval) -> Bool {
+        guard isReadyToPlay, !pendingStreamOffsetCalibration,
+              let player, let item = player.currentItem else { return false }
+        let localTime = time - streamTimeOffset
+        guard localTime >= 0 else { return false }
+        // Plex only serves what it has transcoded so far; seek in place only inside data AVPlayer already holds.
+        let isLoaded = item.loadedTimeRanges.contains { value in
+            let range = value.timeRangeValue
+            let end = CMTimeAdd(range.start, range.duration).seconds
+            return range.start.seconds <= localTime && localTime <= end - 1
+        }
+        guard isLoaded else { return false }
+
+        logPlayback("seek_in_stream", "target=\(time) local=\(localTime)")
+        recoveryAttemptsForTrack = 0
+        isSeeking = true
+        currentTime = time
+        let target = CMTime(seconds: localTime, preferredTimescale: 600)
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let seekGeneration = playbackGeneration
+        player.seek(to: target, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] finished in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isSeeking = false
+                self.lastSeekCompletedAt = Date()
+                guard self.playbackGeneration == seekGeneration, finished else { return }
+                self.currentTime = time
+                self.updateNowPlayingInfo()
+                self.reportTimelineState(self.isPlaying ? "playing" : "paused")
+            }
+        }
+        return true
     }
 
     func seekToProgress(_ progress: Double) {
@@ -883,7 +923,7 @@ final class AudioPlayerService: Sendable {
         let sourceExceedsTarget = sourceBitrate(for: track).map { $0 > cellularTranscodeBitrate } ?? true
         let shouldConstrainForNetwork = isConstrainedNetworkPath && sourceExceedsTarget
 
-        if !forceHLS, !shouldConstrainForNetwork, sourceCodec != "flac",
+        if !forceHLS, !shouldConstrainForNetwork, canDirectStream(codec: sourceCodec),
            let partKey = track.media?.first?.part?.first?.key,
            let directURL = client.directStreamURL(server: server, partKey: partKey) {
             discardPreloadedNext()
