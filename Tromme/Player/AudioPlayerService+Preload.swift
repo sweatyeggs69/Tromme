@@ -203,7 +203,7 @@ extension AudioPlayerService {
         case .album:
             gainDB = stream.albumGain ?? stream.gain ?? 0.0
         }
-        let adjustedDB = gainDB + 2.0
+        let adjustedDB = gainDB + 6.0
         let linear = Float(pow(10.0, adjustedDB / 20.0))
         return min(max(linear, 0.0), 1.0)
     }
