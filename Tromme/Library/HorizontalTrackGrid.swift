@@ -7,10 +7,12 @@ struct HorizontalTrackGrid: View {
     var showFavoriteStar: Bool = true
     var subtitleProvider: ((PlexMetadata) -> String?)? = nil
 
-    private var gridHeight: CGFloat {
+    static func height(rowCount: Int) -> CGFloat {
         CGFloat(rowCount) * AppStyle.TrackGrid.artworkSize
             + CGFloat(rowCount - 1) * AppStyle.TrackGrid.rowSpacing
     }
+
+    private var gridHeight: CGFloat { Self.height(rowCount: rowCount) }
 
     var body: some View {
         GeometryReader { proxy in

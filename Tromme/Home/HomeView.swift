@@ -188,7 +188,8 @@ struct HomeView: View {
 
             if viewModel.isLoadingFavorites {
                 ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 120)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: HorizontalTrackGrid.height(rowCount: 2))
             } else if favoriteTracks.isEmpty {
                 ContentUnavailableView(
                     "No Favorites",
@@ -269,8 +270,14 @@ struct HomeView: View {
             .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
             if viewModel.isLoadingPlaylists {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 200)
+                VStack(alignment: .leading, spacing: 4) {
+                    Color.clear.frame(width: AppStyle.Artwork.card, height: AppStyle.Artwork.card)
+                    Text(" ").appItemTitleStyle()
+                    Text(" ").appItemSubtitleStyle()
+                }
+                .hidden()
+                .frame(maxWidth: .infinity)
+                .overlay { ProgressView() }
             } else if playlists.isEmpty {
                 ContentUnavailableView(
                     "No Playlists",
