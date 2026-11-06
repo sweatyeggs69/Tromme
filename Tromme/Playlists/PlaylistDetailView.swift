@@ -20,6 +20,8 @@ struct PlaylistDetailView: View {
     @State private var showRenameAlert = false
     @State private var renameText = ""
     @State private var displayTitle: String
+    @State private var artworkPath: String?
+    @State private var showingChangeArtworkSheet = false
     @State private var editMode: EditMode = .inactive
     @State private var selection = Set<String>()
     @State private var showRemoveConfirmation = false
@@ -27,10 +29,6 @@ struct PlaylistDetailView: View {
     @State private var removeErrorMessage: String?
     private let previewTracks: [PlexMetadata]?
     private let isPreviewMode: Bool
-
-    private var artworkPath: String? {
-        playlist.thumb ?? playlist.composite
-    }
 
     private var playlistItemRequestKey: String {
         playlist.key ?? playlist.ratingKey
@@ -80,7 +78,7 @@ struct PlaylistDetailView: View {
         !isPreviewMode
     }
 
-    private var playlistFooterRight: String {
+    private var playlistInfoText: String {
         var parts: [String] = []
         let count = tracks.count
         if count > 0 {
@@ -108,6 +106,7 @@ struct PlaylistDetailView: View {
         _tracks = State(initialValue: previewTracks ?? [])
         _isLoading = State(initialValue: previewTracks == nil)
         _displayTitle = State(initialValue: playlist.title)
+        _artworkPath = State(initialValue: playlist.thumb ?? playlist.composite)
     }
 
     private func playlistActionButtons(bottomPadding: CGFloat = 20) -> some View {
@@ -144,6 +143,7 @@ struct PlaylistDetailView: View {
                 cornerRadius: AppStyle.Radius.card
             )
                 .headerArtworkStyle()
+                .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .padding(.top, 12)
 
             titleText
@@ -151,6 +151,10 @@ struct PlaylistDetailView: View {
                 .foregroundStyle(titleColor)
                 .multilineTextAlignment(.center)
                 .padding(.top, 12)
+                .padding(.horizontal, 20)
+
+            playlistInfoLine(alignment: .center)
+                .padding(.top, 2)
                 .padding(.horizontal, 20)
 
             playlistActionButtons()
@@ -162,6 +166,7 @@ struct PlaylistDetailView: View {
         HStack(alignment: .bottom, spacing: 20) {
             ArtworkView(thumbPath: artworkPath, size: AppStyle.Artwork.header, cornerRadius: AppStyle.Radius.card)
                 .headerArtworkStyle()
+                .changeArtworkOnLongPress(isEnabled: !isPreviewMode) { showingChangeArtworkSheet = true }
                 .frame(width: AppStyle.Artwork.header)
                 .padding(.bottom, 20)
 
@@ -173,6 +178,9 @@ struct PlaylistDetailView: View {
                     .foregroundStyle(titleColor)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
+
+                playlistInfoLine(alignment: .leading)
+                    .padding(.top, 4)
 
                 playlistActionButtons()
                     .padding(.top, 12)
@@ -189,13 +197,7 @@ struct PlaylistDetailView: View {
     }
 
     private var titleText: some View {
-        (isEditing ? Text("\(displayTitle) \(Image(systemName: "pencil"))") : Text(displayTitle))
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard isEditing else { return }
-                renameText = displayTitle
-                showRenameAlert = true
-            }
+        Text(displayTitle)
     }
 
     private var isEditing: Bool { editMode.isEditing }
@@ -235,15 +237,14 @@ struct PlaylistDetailView: View {
         }
     }
 
-    private var playlistFooter: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            if !playlistFooterRight.isEmpty {
-                Text(playlistFooterRight)
-            }
+    @ViewBuilder
+    private func playlistInfoLine(alignment: TextAlignment) -> some View {
+        if !playlistInfoText.isEmpty {
+            Text(playlistInfoText)
+                .font(.caption)
+                .foregroundStyle(tertiaryTextColor)
+                .multilineTextAlignment(alignment)
         }
-        .font(.caption)
-        .foregroundStyle(tertiaryTextColor)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var body: some View {
@@ -262,10 +263,6 @@ struct PlaylistDetailView: View {
                             .listRowBackground(artworkColor)
 
                         trackListRows
-
-                        playlistFooter
-                            .listRowBackground(artworkColor)
-                            .listRowSeparator(.hidden)
                     }
                     .scrollContentBackground(.hidden)
                     .background(artworkColor)
@@ -286,10 +283,6 @@ struct PlaylistDetailView: View {
                                 .listRowBackground(artworkColor)
 
                             trackListRows
-
-                            playlistFooter
-                                .listRowBackground(artworkColor)
-                                .listRowSeparator(.hidden)
                         }
                     }
                     .scrollContentBackground(.hidden)
@@ -325,8 +318,12 @@ struct PlaylistDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     playlistDownloadButton
-                    if canReorderPlaylist || canDeletePlaylist {
+                    if canDeletePlaylist {
                         Divider()
+                        Button("Rename", systemImage: "pencil") {
+                            renameText = displayTitle
+                            showRenameAlert = true
+                        }
                     }
                     if canReorderPlaylist {
                         Button("Edit Playlist", systemImage: "checklist") {
@@ -385,6 +382,14 @@ struct PlaylistDetailView: View {
                 Task { await performRename() }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showingChangeArtworkSheet) {
+            ChangeArtworkSheet(
+                ratingKey: playlist.ratingKey,
+                subject: "playlist"
+            ) {
+                await reloadArtwork()
+            }
         }
         .task(id: artworkPath) {
             guard !isPreviewMode else { return }
@@ -506,6 +511,15 @@ struct PlaylistDetailView: View {
         } catch {
             tracks = previousTracks
         }
+    }
+
+    @MainActor
+    private func reloadArtwork() async {
+        guard let server = serverConnection.currentServer else { return }
+        if let fresh = try? await client.getMetadata(server: server, ratingKey: playlist.ratingKey) {
+            artworkPath = fresh.thumb ?? artworkPath
+        }
+        await client.refreshPlaylist(server: server, playlistKey: playlist.ratingKey)
     }
 
     @MainActor
