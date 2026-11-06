@@ -16,6 +16,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var lastPublishedRepeatMode: AudioPlayerService.RepeatMode?
     var magicMixButton: CPNowPlayingImageButton?
     var autoMixNPButton: CPNowPlayingImageButton?
+    var moreNPButton: CPNowPlayingImageButton?
     var lastPublishedAutoMixState: Bool?
     var lastPublishedAutoMixEnabled: Bool?
     var lastPublishedAutoMixVisible: Bool?

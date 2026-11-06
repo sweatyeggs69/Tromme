@@ -42,6 +42,11 @@ extension CarPlaySceneDelegate {
         }
         self.autoMixNPButton = autoMix
 
+        let more = CPNowPlayingImageButton(image: UIImage(systemName: "ellipsis") ?? UIImage()) { [weak self] _ in
+            self?.showTrackActions()
+        }
+        self.moreNPButton = more
+
         shuffleButton.isSelected = player.isShuffled
         lastPublishedShuffleState = player.isShuffled
         lastPublishedRepeatMode = nil
@@ -83,11 +88,27 @@ extension CarPlaySceneDelegate {
         let showsAutoMix = PlusStore.shared.isPlus && defaults.bool(forKey: AudioPlayerService.crossfadeEnabledKey)
         guard lastPublishedRepeatMode != player.repeatMode || lastPublishedAutoMixVisible != showsAutoMix,
               let repeatButton = repeatNPButtons[player.repeatMode],
-              let shuffle = shuffleNPButton, let autoMix = autoMixNPButton, let mix = magicMixButton else { return }
+              let shuffle = shuffleNPButton, let autoMix = autoMixNPButton, let mix = magicMixButton,
+              let more = moreNPButton else { return }
         lastPublishedRepeatMode = player.repeatMode
         lastPublishedAutoMixVisible = showsAutoMix
-        let buttons: [CPNowPlayingButton] = showsAutoMix ? [shuffle, repeatButton, autoMix, mix] : [shuffle, repeatButton, mix]
+        let buttons: [CPNowPlayingButton] = showsAutoMix ? [shuffle, repeatButton, autoMix, mix, more] : [shuffle, repeatButton, mix, more]
         CPNowPlayingTemplate.shared.updateNowPlayingButtons(buttons)
+    }
+
+    func showTrackActions() {
+        guard let track = player.currentTrack, let server else { return }
+        let isFavorited = (track.userRating ?? 0) >= 10
+        let favorite = CPAlertAction(title: isFavorited ? "Unfavorite" : "Favorite", style: .default) { [weak self] _ in
+            guard let self else { return }
+            self.interfaceController?.dismissTemplate(animated: true, completion: nil)
+            Task { _ = await self.player.setFavorited(!isFavorited, for: track, server: server, client: self.client, sectionId: self.sectionId) }
+        }
+        let cancel = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
+        }
+        let sheet = CPActionSheetTemplate(title: track.title, message: track.artistDisplayName, actions: [favorite, cancel])
+        interfaceController?.presentTemplate(sheet, animated: true, completion: nil)
     }
 
     func startObservingMixSettings() {
