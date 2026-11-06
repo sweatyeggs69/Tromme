@@ -112,7 +112,7 @@ extension CarPlaySceneDelegate {
             self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
             self?.player.addToEndOfQueue(track)
         }
-        let cancel = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+        let cancel = CPAlertAction(title: "Cancel", style: .default) { [weak self] _ in
             self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
         }
         let sheet = CPActionSheetTemplate(title: nil, message: nil, actions: [favorite, playNext, addToQueue, cancel])
