@@ -36,18 +36,19 @@ extension CarPlaySceneDelegate {
         }
         self.magicMixButton = mixBtn
 
-        // One button whose selected state marks a favorite. Swapping two buttons via
-        // updateNowPlayingButtons() re-sends the whole row and flashes shuffle/repeat.
-        let favorite = CPNowPlayingImageButton(image: UIImage(systemName: "star.fill") ?? UIImage()) { [weak self] _ in
-            self?.toggleFavorite()
+        let autoMix = CPNowPlayingImageButton(image: Self.autoMixImage) { _ in
+            let defaults = UserDefaults.standard
+            defaults.set(!defaults.bool(forKey: AudioPlayerService.autoMixKey), forKey: AudioPlayerService.autoMixKey)
         }
-        self.favoriteButton = favorite
+        self.autoMixNPButton = autoMix
 
         shuffleButton.isSelected = player.isShuffled
         lastPublishedShuffleState = player.isShuffled
-        lastPublishedRepeatMode = player.repeatMode
-        nowPlaying.updateNowPlayingButtons([shuffleButton, repeatNPButtons[player.repeatMode] ?? repeatNPButtons[.off]!, favorite, mixBtn])
-        lastPublishedFavoriteState = false
+        lastPublishedRepeatMode = nil
+        lastPublishedMagicMixState = nil
+        lastPublishedAutoMixState = nil
+        lastPublishedAutoMixEnabled = nil
+        lastPublishedAutoMixVisible = nil
         syncMixButtons()
     }
 
@@ -57,11 +58,6 @@ extension CarPlaySceneDelegate {
             lastPublishedMagicMixState = isMagicMixActive
             magicMixButton?.isSelected = isMagicMixActive
         }
-        syncFavoriteButton()
-    }
-
-    func syncFavoriteButton() {
-        currentTrackFavorited = (player.currentTrack?.userRating ?? 0) >= 10
         rebuildNowPlayingButtons()
     }
 
@@ -70,32 +66,55 @@ extension CarPlaySceneDelegate {
             lastPublishedShuffleState = player.isShuffled
             shuffle.isSelected = player.isShuffled
         }
-        if let favorite = favoriteButton, lastPublishedFavoriteState != currentTrackFavorited {
-            lastPublishedFavoriteState = currentTrackFavorited
-            favorite.isSelected = currentTrackFavorited
+
+        let defaults = UserDefaults.standard
+        let isAutoMixOn = defaults.bool(forKey: AudioPlayerService.autoMixKey)
+        if let autoMix = autoMixNPButton, lastPublishedAutoMixState != isAutoMixOn {
+            lastPublishedAutoMixState = isAutoMixOn
+            autoMix.isSelected = isAutoMixOn
         }
-        if lastPublishedRepeatMode != player.repeatMode,
-           let repeatButton = repeatNPButtons[player.repeatMode],
-           let shuffle = shuffleNPButton, let favorite = favoriteButton, let mix = magicMixButton {
-            lastPublishedRepeatMode = player.repeatMode
-            CPNowPlayingTemplate.shared.updateNowPlayingButtons([shuffle, repeatButton, favorite, mix])
+        let isAutoMixEnabled = !player.isAirPlayConnected
+        if let autoMix = autoMixNPButton, lastPublishedAutoMixEnabled != isAutoMixEnabled {
+            lastPublishedAutoMixEnabled = isAutoMixEnabled
+            autoMix.isEnabled = isAutoMixEnabled
         }
+
+        // Re-sending the row flashes every button, so only do it when its contents change.
+        let showsAutoMix = PlusStore.shared.isPlus && defaults.bool(forKey: AudioPlayerService.crossfadeEnabledKey)
+        guard lastPublishedRepeatMode != player.repeatMode || lastPublishedAutoMixVisible != showsAutoMix,
+              let repeatButton = repeatNPButtons[player.repeatMode],
+              let shuffle = shuffleNPButton, let autoMix = autoMixNPButton, let mix = magicMixButton else { return }
+        lastPublishedRepeatMode = player.repeatMode
+        lastPublishedAutoMixVisible = showsAutoMix
+        let buttons: [CPNowPlayingButton] = showsAutoMix ? [shuffle, repeatButton, autoMix, mix] : [shuffle, repeatButton, mix]
+        CPNowPlayingTemplate.shared.updateNowPlayingButtons(buttons)
     }
 
-    func toggleFavorite() {
-        guard let track = player.currentTrack,
-              let server else { return }
-        let wasFavorited = currentTrackFavorited
-        currentTrackFavorited.toggle()
-        rebuildNowPlayingButtons()
-        Task {
-            let success = await player.setFavorited(!wasFavorited, for: track, server: server, client: client, sectionId: sectionId)
-            if !success {
-                currentTrackFavorited = wasFavorited
-                rebuildNowPlayingButtons()
+    func startObservingMixSettings() {
+        mixSettingsObservationTask?.cancel()
+        mixSettingsObservationTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: UserDefaults.didChangeNotification) {
+                guard !Task.isCancelled, let self else { return }
+                self.rebuildNowPlayingButtons()
             }
         }
     }
+
+    private static let autoMixImage: UIImage = {
+        let ring: CGFloat = 18
+        let lineWidth = ring * 0.13
+        let size = CGSize(width: ring * 1.6 + lineWidth, height: ring + lineWidth)
+        let image = UIGraphicsImageRenderer(size: size).image { _ in
+            let offset = ring * 0.6
+            for x in [lineWidth / 2, lineWidth / 2 + offset] {
+                let path = UIBezierPath(ovalIn: CGRect(x: x, y: lineWidth / 2, width: ring, height: ring))
+                path.lineWidth = lineWidth
+                UIColor.black.setStroke()
+                path.stroke()
+            }
+        }
+        return image.withRenderingMode(.alwaysTemplate)
+    }()
 
     func startObservingPlayer() {
         observationTask?.cancel()
@@ -108,7 +127,8 @@ extension CarPlaySceneDelegate {
                         _ = p.isShuffled
                         _ = p.repeatMode
                         _ = p.isMagicMixActive
-                        _ = p.currentTrack
+                        _ = p.isAirPlayConnected
+                        _ = PlusStore.shared.isPlus
                     } onChange: {
                         continuation.resume()
                     }

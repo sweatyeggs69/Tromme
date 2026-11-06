@@ -15,20 +15,17 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var lastPublishedShuffleState: Bool?
     var lastPublishedRepeatMode: AudioPlayerService.RepeatMode?
     var magicMixButton: CPNowPlayingImageButton?
-    var favoriteButton: CPNowPlayingImageButton?
-    var currentTrackFavorited = false
-    /// Last favorited state actually pushed to `favoriteButton.isSelected`. Several
-    /// listeners (pushNowPlaying, the player-state observation loop) react to
-    /// the same track-change event; without this guard they redundantly set the
-    /// property with an unchanged value, and each set flashes the whole button
-    /// row (shuffle included) as CarPlay redraws it.
-    var lastPublishedFavoriteState: Bool?
+    var autoMixNPButton: CPNowPlayingImageButton?
+    var lastPublishedAutoMixState: Bool?
+    var lastPublishedAutoMixEnabled: Bool?
+    var lastPublishedAutoMixVisible: Bool?
     var lastPublishedMagicMixState: Bool?
     var observationTask: Task<Void, Never>?
     var connectionObservationTask: Task<Void, Never>?
     var recentlyPlayedObservationTask: Task<Void, Never>?
     var favoritesObservationTask: Task<Void, Never>?
     var homeSettingsObservationTask: Task<Void, Never>?
+    var mixSettingsObservationTask: Task<Void, Never>?
     var homeHubs: [Hub] = []
     var homeHubsRevision = 0
     var homeRecentTracks: [PlexMetadata] = []
@@ -59,6 +56,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         startObservingFavorites()
         startObservingRecentlyPlayed()
         startObservingHomeSettings()
+        startObservingMixSettings()
         Task { await AppContext.shared.serverConnection.reprobe() }
     }
 
@@ -76,6 +74,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         favoritesObservationTask = nil
         homeSettingsObservationTask?.cancel()
         homeSettingsObservationTask = nil
+        mixSettingsObservationTask?.cancel()
+        mixSettingsObservationTask = nil
         CPNowPlayingTemplate.shared.remove(self)
         if self.interfaceController === interfaceController {
             self.interfaceController = nil
