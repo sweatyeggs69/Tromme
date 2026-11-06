@@ -3,7 +3,7 @@ import UIKit
 
 @MainActor
 extension CarPlaySceneDelegate {
-    // MARK: - Albums (A-Z Index)
+    // MARK: - Albums (A-Z)
 
     func makeAlbumsList() -> CPListTemplate {
         let template = CPListTemplate(title: "Albums", sections: [])
@@ -32,44 +32,20 @@ extension CarPlaySceneDelegate {
     }
 
     func populateAlbums(_ albums: [PlexMetadata], into template: CPListTemplate) {
-        let grouped = Dictionary(grouping: albums) { firstLetter(of: $0.titleSort ?? $0.title) }
-        let sortedKeys = grouped.keys.sorted { a, b in
-            if a == "#" { return false }
-            if b == "#" { return true }
-            return a < b
+        let sections = makeLetterIndex(albums) { [weak self] album in
+            let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
+            item.accessoryType = .disclosureIndicator
+            let ratingKey = album.ratingKey
+            let albumTitle = album.title
+            let artistName = album.parentTitle
+            let albumThumb = album.thumb
+            let albumYear = album.releaseYear
+            item.handler = { [weak self] _, completion in
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
+                completion()
+            }
+            return item
         }
-
-        let maxItems = CPListTemplate.maximumItemCount
-        var totalItems = 0
-        var sections: [CPListSection] = []
-
-        for letter in sortedKeys {
-            guard totalItems < maxItems, let letterAlbums = grouped[letter] else { break }
-            let sorted = letterAlbums.sorted {
-                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
-            }
-            var items: [CPListItem] = []
-            for album in sorted {
-                guard totalItems < maxItems else { break }
-                let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
-                item.accessoryType = .disclosureIndicator
-                let ratingKey = album.ratingKey
-                let albumTitle = album.title
-                let artistName = album.parentTitle
-                let albumThumb = album.thumb
-                let albumYear = album.releaseYear
-                item.handler = { [weak self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
-                    completion()
-                }
-                items.append(item)
-                totalItems += 1
-            }
-            if !items.isEmpty {
-                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
-            }
-        }
-
         template.updateSections(sections)
     }
 

@@ -9,9 +9,44 @@ extension CarPlaySceneDelegate {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = trimmed.unicodeScalars.first else { return "#" }
         if CharacterSet.letters.contains(first) {
-            return String(trimmed.prefix(1)).uppercased()
+            return String(trimmed.prefix(1)).folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).uppercased()
         }
         return "#"
+    }
+
+    func letterGroups(_ items: [PlexMetadata]) -> [(letter: String, items: [PlexMetadata])] {
+        let grouped = Dictionary(grouping: items) { firstLetter(of: $0.titleSort ?? $0.title) }
+        let letters = grouped.keys.sorted { a, b in
+            if a == "#" { return false }
+            if b == "#" { return true }
+            return a < b
+        }
+        return letters.map { letter in
+            let sorted = (grouped[letter] ?? []).sorted {
+                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
+            }
+            return (letter, sorted)
+        }
+    }
+
+    func makeLetterIndex(
+        _ items: [PlexMetadata],
+        makeItem: @escaping @MainActor (PlexMetadata) -> CPListItem
+    ) -> [CPListSection] {
+        let rows = letterGroups(items).map { group -> CPListItem in
+            let row = CPListItem(text: group.letter, detailText: nil)
+            row.accessoryType = .disclosureIndicator
+            let groupItems = group.items
+            let letter = group.letter
+            row.handler = { [weak self] _, completion in
+                let listItems = groupItems.prefix(CPListTemplate.maximumItemCount).map(makeItem)
+                let template = CPListTemplate(title: letter, sections: [CPListSection(items: Array(listItems))])
+                self?.interfaceController?.pushTemplate(template, animated: true, completion: nil)
+                completion()
+            }
+            return row
+        }
+        return [CPListSection(items: rows)]
     }
 
     // MARK: - Track List (with Shuffle)

@@ -3,7 +3,7 @@ import UIKit
 
 @MainActor
 extension CarPlaySceneDelegate {
-    // MARK: - Artists (A-Z Index)
+    // MARK: - Artists (A-Z)
 
     func makeArtistsList() -> CPListTemplate {
         let template = CPListTemplate(title: "Artists", sections: [])
@@ -32,39 +32,15 @@ extension CarPlaySceneDelegate {
     }
 
     func populateArtists(_ artists: [PlexMetadata], into template: CPListTemplate) {
-        let grouped = Dictionary(grouping: artists) { firstLetter(of: $0.titleSort ?? $0.title) }
-        let sortedKeys = grouped.keys.sorted { a, b in
-            if a == "#" { return false }
-            if b == "#" { return true }
-            return a < b
+        let sections = makeLetterIndex(artists) { [weak self] artist in
+            let item = CPListItem(text: artist.title, detailText: nil)
+            item.accessoryType = .disclosureIndicator
+            item.handler = { [weak self] _, completion in
+                self?.showArtistAlbums(artist: artist)
+                completion()
+            }
+            return item
         }
-
-        let maxItems = CPListTemplate.maximumItemCount
-        var totalItems = 0
-        var sections: [CPListSection] = []
-
-        for letter in sortedKeys {
-            guard totalItems < maxItems, let letterArtists = grouped[letter] else { break }
-            let sorted = letterArtists.sorted {
-                ($0.titleSort ?? $0.title).localizedCaseInsensitiveCompare($1.titleSort ?? $1.title) == .orderedAscending
-            }
-            var items: [CPListItem] = []
-            for artist in sorted {
-                guard totalItems < maxItems else { break }
-                let item = CPListItem(text: artist.title, detailText: nil)
-                item.accessoryType = .disclosureIndicator
-                item.handler = { [weak self] _, completion in
-                    self?.showArtistAlbums(artist: artist)
-                    completion()
-                }
-                items.append(item)
-                totalItems += 1
-            }
-            if !items.isEmpty {
-                sections.append(CPListSection(items: items, header: letter, sectionIndexTitle: letter))
-            }
-        }
-
         template.updateSections(sections)
     }
 
