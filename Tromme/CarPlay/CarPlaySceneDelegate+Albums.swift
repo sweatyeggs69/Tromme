@@ -35,6 +35,9 @@ extension CarPlaySceneDelegate {
         let sections = makeLetterIndex(albums) { [weak self] album in
             let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
             item.accessoryType = .disclosureIndicator
+            if let self, let server = self.server {
+                self.loadArtwork(path: album.thumb, into: item, server: server, client: self.client)
+            }
             let ratingKey = album.ratingKey
             let albumTitle = album.title
             let artistName = album.parentTitle
