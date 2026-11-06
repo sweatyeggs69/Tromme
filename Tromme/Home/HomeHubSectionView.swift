@@ -8,7 +8,7 @@ struct HomeHubSectionView<Menu: View>: View {
         let items = hub.metadata ?? []
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: AppStyle.Spacing.sectionGap) {
-                Text(hub.title ?? "")
+                Text(HomeHubConfig.title(for: hub))
                     .appSectionTitleStyle()
 
                 switch HomeHubConfig.rowType(of: hub) {

@@ -33,6 +33,17 @@ enum HomeHubConfig {
         return flattened.contains("recentplayed") || flattened.contains("recentlyplayed")
     }
 
+    static func isRecentlyAdded(_ hub: Hub) -> Bool {
+        let flattened = flattenedIdentifier(hub)
+        return flattened.contains("recentadded") || flattened.contains("recentlyadded")
+    }
+
+    static func title(for hub: Hub) -> String {
+        if isRecentlyPlayed(hub) { return "Recently Played" }
+        if isRecentlyAdded(hub) { return "Recently Added" }
+        return hub.title ?? ""
+    }
+
     static func recentlyPlayedHub(_ hub: Hub, level: String, recentTracks: [PlexMetadata]) -> Hub {
         let items = recentTracks.isEmpty ? (hub.metadata ?? []) : recentTracks
         let itemType = recentTracks.isEmpty ? rowType(of: hub) : "track"
@@ -75,7 +86,9 @@ enum HomeHubConfig {
     }
 
     static func stableID(for hub: Hub) -> String? {
-        if let prefix = templatePrefix(of: hub) { return "title:" + prefix.lowercased() }
+        if !isRecentlyPlayed(hub), !isRecentlyAdded(hub), let prefix = templatePrefix(of: hub) {
+            return "title:" + prefix.lowercased()
+        }
         guard let identifier = hub.context ?? hub.hubIdentifier else { return nil }
         let kept = identifier.split(separator: ".", omittingEmptySubsequences: false)
             .filter { $0.isEmpty || !$0.allSatisfy(\.isNumber) }
@@ -83,8 +96,8 @@ enum HomeHubConfig {
     }
 
     static func displayTitle(for hub: Hub) -> String {
-        if let prefix = templatePrefix(of: hub) { return prefix + "…" }
-        return hub.title ?? ""
+        if !isRecentlyPlayed(hub), !isRecentlyAdded(hub), let prefix = templatePrefix(of: hub) { return prefix + "…" }
+        return title(for: hub)
     }
 
     static func uniqueByKind(_ hubs: [Hub]) -> [Hub] {
