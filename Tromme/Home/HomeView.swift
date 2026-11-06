@@ -23,7 +23,6 @@ struct HomeView: View {
     private var favoriteTracks: [PlexMetadata] { viewModel.favoriteTracks }
     private var playlists: [PlexPlaylist] { viewModel.playlists }
     private var featuredAlbums: [PlexMetadata] { viewModel.featuredAlbums }
-    private var isLoading: Bool { viewModel.isLoading }
 
     private var visibleItems: [Hub] {
         let shown = ([HomeHubConfig.favorites] + viewModel.hubs + [HomeHubConfig.playlists]).filter {
@@ -31,7 +30,7 @@ struct HomeView: View {
         }
         let mapped = shown.map { hub in
             HomeHubConfig.isRecentlyPlayed(hub)
-                ? HomeHubConfig.recentlyPlayedHub(hub, level: recentlyPlayedLevel, tracks: viewModel.recentTracks)
+                ? HomeHubConfig.recentlyPlayedHub(hub, level: recentlyPlayedLevel, recentTracks: viewModel.recentTracks)
                 : hub
         }
         return HomeHubConfig.ordered(mapped, by: HomeHubConfig.ids(hubOrderRaw))
@@ -69,11 +68,11 @@ struct HomeView: View {
                 ForEach(visibleItems) { item in
                     switch item.hubIdentifier {
                     case HomeHubConfig.favorites.hubIdentifier:
-                        if !hideEmptySections || isLoading || !favoriteTracks.isEmpty {
+                        if !hideEmptySections || viewModel.isLoadingFavorites || !favoriteTracks.isEmpty {
                             favoritesSection
                         }
                     case HomeHubConfig.playlists.hubIdentifier:
-                        if !hideEmptySections || isLoading || !playlists.isEmpty {
+                        if !hideEmptySections || viewModel.isLoadingPlaylists || !playlists.isEmpty {
                             playlistsSection
                         }
                     default:
@@ -187,7 +186,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
-            if isLoading {
+            if viewModel.isLoadingFavorites {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else if favoriteTracks.isEmpty {
@@ -269,7 +268,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, AppStyle.Spacing.pageHorizontal)
 
-            if isLoading {
+            if viewModel.isLoadingPlaylists {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else if playlists.isEmpty {

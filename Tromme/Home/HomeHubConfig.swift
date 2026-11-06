@@ -33,17 +33,30 @@ enum HomeHubConfig {
         return flattened.contains("recentplayed") || flattened.contains("recentlyplayed")
     }
 
-    static func recentlyPlayedHub(_ hub: Hub, level: String, tracks: [PlexMetadata]) -> Hub {
+    static func recentlyPlayedHub(_ hub: Hub, level: String, recentTracks: [PlexMetadata]) -> Hub {
+        let items = recentTracks.isEmpty ? (hub.metadata ?? []) : recentTracks
+        let itemType = recentTracks.isEmpty ? rowType(of: hub) : "track"
         if level == "artists" {
             var seen = Set<String>()
-            let artists: [PlexMetadata] = tracks.compactMap { track in
-                guard let key = track.grandparentRatingKey, let name = track.grandparentTitle,
-                      seen.insert(key).inserted else { return nil }
-                return PlexMetadata(ratingKey: key, title: name, type: "artist", thumb: track.grandparentThumb)
+            let artists: [PlexMetadata] = items.compactMap { item -> PlexMetadata? in
+                let key: String?
+                let name: String?
+                let thumb: String?
+                switch itemType {
+                case "artist":
+                    key = item.ratingKey; name = item.title; thumb = item.thumb
+                case "album":
+                    key = item.parentRatingKey; name = item.parentTitle; thumb = item.parentThumb
+                default:
+                    key = item.grandparentRatingKey; name = item.grandparentTitle; thumb = item.grandparentThumb
+                }
+                guard let key, let name, seen.insert(key).inserted else { return nil }
+                return PlexMetadata(ratingKey: key, title: name, type: "artist", thumb: thumb)
             }
             return Hub(hubIdentifier: hub.hubIdentifier, context: hub.context, title: hub.title, type: "artist", size: artists.count, metadata: artists)
         }
-        return Hub(hubIdentifier: hub.hubIdentifier, context: hub.context, title: hub.title, type: "track", size: tracks.count, metadata: tracks)
+        guard itemType == "track" else { return hub }
+        return Hub(hubIdentifier: hub.hubIdentifier, context: hub.context, title: hub.title, type: "track", size: items.count, metadata: items)
     }
 
     static func ids(_ raw: String) -> [String] {

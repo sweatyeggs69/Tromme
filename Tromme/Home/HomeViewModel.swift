@@ -11,7 +11,8 @@ final class HomeViewModel {
     private(set) var recentAlbums: [PlexMetadata]
     private(set) var featuredAlbums: [PlexMetadata]
     private(set) var hubs: [Hub] = []
-    private(set) var isLoading: Bool
+    private(set) var isLoadingFavorites: Bool
+    private(set) var isLoadingPlaylists: Bool
 
     private static let featuredAlbumRatingKeysKey = "featuredAlbumRatingKeys"
     private static let featuredAlbumLastRefreshedAtKey = "featuredAlbumLastRefreshedAt"
@@ -27,7 +28,8 @@ final class HomeViewModel {
         recentAlbums = previewRecentAlbums ?? []
         featuredAlbums = Array((previewRecentAlbums ?? []).shuffled().prefix(5))
         isPreviewMode = previewRecentTracks != nil || previewPlaylists != nil || previewRecentAlbums != nil
-        isLoading = !isPreviewMode
+        isLoadingFavorites = !isPreviewMode
+        isLoadingPlaylists = !isPreviewMode
     }
 
     struct Context {
@@ -75,8 +77,13 @@ final class HomeViewModel {
         }
         guard let fetched = try? await context.client.getSectionHubs(server: server, sectionId: sectionId),
               !Task.isCancelled else { return }
-        HomeHubCache.save(fetched, scope: scope)
-        hubs = fetched.filter(HomeHubConfig.isSupported)
+        let previous = Dictionary(hubs.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let merged = fetched.filter(HomeHubConfig.isSupported).map { hub in
+            guard hub.metadata?.isEmpty ?? true, let kept = previous[hub.id], !(kept.metadata?.isEmpty ?? true) else { return hub }
+            return kept
+        }
+        HomeHubCache.save(merged, scope: scope)
+        hubs = merged
     }
 
     func libraryContentDidChange(_ context: Context) async {
@@ -142,24 +149,11 @@ final class HomeViewModel {
     }
 
     private func loadHomeContent(_ context: Context) async {
-        let hadFavorites = !favoriteTracks.isEmpty
-        let hadRecentTracks = !recentTracks.isEmpty
-        let hadPlaylists = !playlists.isEmpty
-        let hadRecentAlbums = !recentAlbums.isEmpty
-
-        if !hadFavorites && !hadRecentTracks && !hadPlaylists && !hadRecentAlbums {
-            isLoading = true
-        }
+        if favoriteTracks.isEmpty { isLoadingFavorites = true }
+        if playlists.isEmpty { isLoadingPlaylists = true }
 
         guard let server = context.server,
-              let sectionId = context.sectionId else {
-            favoriteTracks = []
-            recentTracks = []
-            playlists = []
-            recentAlbums = []
-            isLoading = false
-            return
-        }
+              let sectionId = context.sectionId else { return }
         let client = context.client
 
         enum HomeLoadResult: Sendable {
@@ -169,82 +163,48 @@ final class HomeViewModel {
             case recentlyAdded([PlexMetadata]?)
         }
 
-        let loadResults: [HomeLoadResult] = await withTaskGroup(of: HomeLoadResult.self, returning: [HomeLoadResult].self) { group in
+        await withTaskGroup(of: HomeLoadResult.self) { group in
             group.addTask {
-                let value = await Self.fetchWithRetryOnFailure {
+                .favorites(await Self.fetchWithRetryOnFailure {
                     try await client.cachedFavoriteTracks(server: server, sectionId: sectionId)
-                }
-                return .favorites(value)
+                })
             }
             group.addTask {
-                let value = await Self.fetchWithRetryOnFailure {
+                .recentlyPlayed(await Self.fetchWithRetryOnFailure {
                     try await client.cachedRecentlyPlayed(server: server, sectionId: sectionId)
-                }
-                return .recentlyPlayed(value)
+                })
             }
             group.addTask {
-                let value = await Self.fetchWithRetryOnFailure {
+                .playlists(await Self.fetchWithRetryOnFailure {
                     try await client.cachedPlaylists(server: server)
-                }
-                return .playlists(value)
+                })
             }
             group.addTask {
-                let value = await Self.fetchWithRetryOnFailure {
+                .recentlyAdded(await Self.fetchWithRetryOnFailure {
                     try await client.cachedRecentlyAdded(server: server, sectionId: sectionId)
-                }
-                return .recentlyAdded(value)
+                })
             }
 
-            var aggregated: [HomeLoadResult] = []
             for await result in group {
-                aggregated.append(result)
-            }
-            return aggregated
-        }
-
-        var favoritesResult: [PlexMetadata]?
-        var recentlyPlayedResult: [PlexMetadata]?
-        var playlistsResult: [PlexPlaylist]?
-        var recentlyAddedResult: [PlexMetadata]?
-        for result in loadResults {
-            switch result {
-            case .favorites(let value): favoritesResult = value
-            case .recentlyPlayed(let value): recentlyPlayedResult = value
-            case .playlists(let value): playlistsResult = value
-            case .recentlyAdded(let value): recentlyAddedResult = value
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.25)) {
+                    switch result {
+                    case .favorites(let value):
+                        if let value { applyFavorites(plexFavorites: value) }
+                        isLoadingFavorites = false
+                    case .recentlyPlayed(let value):
+                        if let value { recentTracks = Array(value.prefix(10)) }
+                    case .playlists(let value):
+                        if let value { playlists = Array(value.filter(\.isMusicPlaylist).prefix(10)) }
+                        isLoadingPlaylists = false
+                    case .recentlyAdded(let value):
+                        if let value { recentAlbums = Array(value.prefix(10)) }
+                    }
+                }
             }
         }
 
         guard !Task.isCancelled else { return }
-
-        withAnimation(.easeIn(duration: 0.25)) {
-            if let favoritesResult {
-                applyFavorites(plexFavorites: favoritesResult)
-            } else if favoriteTracks.isEmpty {
-                favoriteTracks = []
-            }
-
-            if let recentlyPlayedResult {
-                recentTracks = Array(recentlyPlayedResult.prefix(10))
-            } else if recentTracks.isEmpty {
-                recentTracks = []
-            }
-
-            if let playlistsResult {
-                playlists = Array(playlistsResult.filter(\.isMusicPlaylist).prefix(10))
-            } else if playlists.isEmpty {
-                playlists = []
-            }
-
-            if let recentlyAddedResult {
-                recentAlbums = Array(recentlyAddedResult.prefix(10))
-            } else if recentAlbums.isEmpty {
-                recentAlbums = []
-            }
-
-            isLoading = false
-        }
-
         let snapshotFavorites = favoriteTracks
         let snapshotRecentTracks = recentTracks
         let snapshotPlaylists = playlists
