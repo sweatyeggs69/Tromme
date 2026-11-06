@@ -99,24 +99,25 @@ extension CarPlaySceneDelegate {
     func showTrackActions() {
         guard let track = player.currentTrack, let server else { return }
         let isFavorited = (track.userRating ?? 0) >= 10
-        let favorite = CPAlertAction(title: isFavorited ? "Unfavorite" : "Favorite", style: .default) { [weak self] _ in
-            guard let self else { return }
-            self.interfaceController?.dismissTemplate(animated: true, completion: nil)
-            Task { _ = await self.player.setFavorited(!isFavorited, for: track, server: server, client: self.client, sectionId: self.sectionId) }
+        let rows: [(String, String, () -> Void)] = [
+            (isFavorited ? "Unfavorite" : "Favorite", isFavorited ? "star.slash" : "star", { [weak self] in
+                guard let self else { return }
+                Task { _ = await self.player.setFavorited(!isFavorited, for: track, server: server, client: self.client, sectionId: self.sectionId) }
+            }),
+            ("Play Next", "text.insert", { [weak self] in self?.player.addToQueue(track) }),
+            ("Add to Queue", "text.append", { [weak self] in self?.player.addToEndOfQueue(track) }),
+        ]
+        let items = rows.map { title, symbol, action -> CPListItem in
+            let item = CPListItem(text: title, detailText: nil, image: UIImage(systemName: symbol))
+            item.handler = { [weak self] _, completion in
+                action()
+                self?.interfaceController?.popTemplate(animated: true, completion: nil)
+                completion()
+            }
+            return item
         }
-        let playNext = CPAlertAction(title: "Play Next", style: .default) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
-            self?.player.addToQueue(track)
-        }
-        let addToQueue = CPAlertAction(title: "Add to Queue", style: .default) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
-            self?.player.addToEndOfQueue(track)
-        }
-        let cancel = CPAlertAction(title: "Cancel", style: .default) { [weak self] _ in
-            self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
-        }
-        let sheet = CPActionSheetTemplate(title: nil, message: nil, actions: [favorite, playNext, addToQueue, cancel])
-        interfaceController?.presentTemplate(sheet, animated: true, completion: nil)
+        let template = CPListTemplate(title: "More", sections: [CPListSection(items: items)])
+        interfaceController?.pushTemplate(template, animated: true, completion: nil)
     }
 
     func startObservingMixSettings() {
