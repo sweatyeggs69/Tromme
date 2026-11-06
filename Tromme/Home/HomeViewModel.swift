@@ -72,6 +72,7 @@ final class HomeViewModel {
               let server = context.server,
               let sectionId = context.sectionId else { return }
         let scope = "\(server.uri)|\(sectionId)"
+        seedRecentTracksIfNeeded(scope: scope)
         if hubs.isEmpty {
             hubs = HomeHubCache.load(scope: scope).filter(HomeHubConfig.isSupported)
         }
@@ -84,6 +85,18 @@ final class HomeViewModel {
         }
         HomeHubCache.save(merged, scope: scope)
         hubs = merged
+    }
+
+    private func seedRecentTracksIfNeeded(scope: String) {
+        guard recentTracks.isEmpty else { return }
+        recentTracks = HomeHubCache.loadRecentTracks(scope: scope)
+    }
+
+    private func setRecentTracks(_ tracks: [PlexMetadata], scope: String) {
+        let trimmed = Array(tracks.prefix(10))
+        guard trimmed.map(\.ratingKey) != recentTracks.map(\.ratingKey) else { return }
+        recentTracks = trimmed
+        HomeHubCache.saveRecentTracks(trimmed, scope: scope)
     }
 
     func libraryContentDidChange(_ context: Context) async {
@@ -106,7 +119,7 @@ final class HomeViewModel {
               let sectionId = context.sectionId else { return }
         guard let fresh = try? await context.client.cachedRecentlyPlayed(server: server, sectionId: sectionId) else { return }
         withAnimation(.easeIn(duration: 0.25)) {
-            recentTracks = Array(fresh.prefix(10))
+            setRecentTracks(fresh, scope: "\(server.uri)|\(sectionId)")
         }
     }
 
@@ -155,6 +168,7 @@ final class HomeViewModel {
         guard let server = context.server,
               let sectionId = context.sectionId else { return }
         let client = context.client
+        seedRecentTracksIfNeeded(scope: "\(server.uri)|\(sectionId)")
 
         enum HomeLoadResult: Sendable {
             case favorites([PlexMetadata]?)
@@ -193,7 +207,7 @@ final class HomeViewModel {
                         if let value { applyFavorites(plexFavorites: value) }
                         isLoadingFavorites = false
                     case .recentlyPlayed(let value):
-                        if let value { recentTracks = Array(value.prefix(10)) }
+                        if let value { setRecentTracks(value, scope: "\(server.uri)|\(sectionId)") }
                     case .playlists(let value):
                         if let value { playlists = Array(value.filter(\.isMusicPlaylist).prefix(10)) }
                         isLoadingPlaylists = false
