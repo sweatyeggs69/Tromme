@@ -107,7 +107,7 @@ extension CarPlaySceneDelegate {
         let cancel = CPAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
             self?.interfaceController?.dismissTemplate(animated: true, completion: nil)
         }
-        let sheet = CPActionSheetTemplate(title: track.title, message: track.artistDisplayName, actions: [favorite, cancel])
+        let sheet = CPActionSheetTemplate(title: nil, message: nil, actions: [favorite, cancel])
         interfaceController?.presentTemplate(sheet, animated: true, completion: nil)
     }
 
