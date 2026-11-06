@@ -152,6 +152,6 @@ extension CarPlaySceneDelegate: @preconcurrency CPNowPlayingTemplateObserver {
     func nowPlayingTemplateAlbumArtistButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
         guard let track = player.currentTrack,
               let albumRatingKey = track.parentRatingKey else { return }
-        showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName, artistName: track.artistDisplayName, albumThumb: track.parentThumb)
+        showAlbumTracks(albumRatingKey: albumRatingKey, albumTitle: track.albumName)
     }
 }

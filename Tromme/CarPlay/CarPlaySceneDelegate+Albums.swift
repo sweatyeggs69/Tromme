@@ -40,11 +40,8 @@ extension CarPlaySceneDelegate {
             }
             let ratingKey = album.ratingKey
             let albumTitle = album.title
-            let artistName = album.parentTitle
-            let albumThumb = album.thumb
-            let albumYear = album.releaseYear
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
                 completion()
             }
             return item
@@ -54,7 +51,7 @@ extension CarPlaySceneDelegate {
 
     // MARK: - Album Tracks
 
-    func showAlbumTracks(albumRatingKey: String, albumTitle: String, artistName: String? = nil, albumThumb: String? = nil, releaseYear: String? = nil) {
+    func showAlbumTracks(albumRatingKey: String, albumTitle: String) {
         guard let server else { return }
         let loadingTemplate = CPListTemplate(title: albumTitle, sections: [])
         interfaceController?.pushTemplate(loadingTemplate, animated: true, completion: nil)
@@ -71,16 +68,6 @@ extension CarPlaySceneDelegate {
 
             let playableTracks = Array(children.filter { $0.type == "track" })
             guard !playableTracks.isEmpty else { return }
-
-            var artworkImage = UIImage(systemName: "square.stack") ?? UIImage()
-            if let albumThumb, let url = client.artworkURL(server: server, path: albumThumb, width: 300, height: 300),
-               let loadedImage = await ImageCache.shared.image(for: url, targetPixelSize: 300) {
-                artworkImage = loadedImage
-            }
-
-            let headerText = artistName.map { "\(albumTitle) • \($0)" } ?? albumTitle
-            let headerItem = CPListItem(text: headerText, detailText: nil, image: artworkImage)
-            headerItem.handler = { _, completion in completion() }
 
             let playElement = CPListImageRowItemCondensedElement(
                 image: (UIImage(systemName: "play.fill") ?? UIImage()).withTintColor(.label, renderingMode: .alwaysOriginal),
@@ -126,8 +113,8 @@ extension CarPlaySceneDelegate {
                     return item
                 }
 
-            let template = CPListTemplate(title: "", sections: [
-                CPListSection(items: [headerItem, actionRow]),
+            let template = CPListTemplate(title: albumTitle, sections: [
+                CPListSection(items: [actionRow]),
                 CPListSection(items: trackItems)
             ])
             interfaceController?.popTemplate(animated: false, completion: nil)

@@ -52,7 +52,6 @@ extension CarPlaySceneDelegate {
     }
 
     func loadArtistAlbums(artist: PlexMetadata, server: PlexServer, sectionId: String, client: PlexAPIClient, into template: CPListTemplate) {
-        let artistName = artist.title
         Task {
             let releases: [PlexMetadata]
             do {
@@ -111,10 +110,8 @@ extension CarPlaySceneDelegate {
                 loadArtwork(path: album.thumb, into: item, server: server, client: client)
                 let ratingKey = album.ratingKey
                 let albumTitle = album.title
-                let albumThumb = album.thumb
-                let albumYear = album.releaseYear
                 item.handler = { [weak self = self] _, completion in
-                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
+                    self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
                     completion()
                 }
                 return item

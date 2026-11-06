@@ -210,7 +210,7 @@ extension CarPlaySceneDelegate {
                 client: client,
                 onImageSelect: { [weak self] index in
                     let album = limited[index]
-                    self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title, artistName: album.parentTitle, albumThumb: album.thumb, releaseYear: album.releaseYear)
+                    self?.showAlbumTracks(albumRatingKey: album.ratingKey, albumTitle: album.title)
                 },
                 onRowSelect: { [weak self] in
                     self?.showAlbumList(title: title, albums: items)

@@ -120,11 +120,8 @@ extension CarPlaySceneDelegate {
             loadArtwork(path: album.thumb, into: item, server: server, client: client)
             let ratingKey = album.ratingKey
             let albumTitle = album.title
-            let artistName = album.parentTitle
-            let albumThumb = album.thumb
-            let albumYear = album.releaseYear
             item.handler = { [weak self] _, completion in
-                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle, artistName: artistName, albumThumb: albumThumb, releaseYear: albumYear)
+                self?.showAlbumTracks(albumRatingKey: ratingKey, albumTitle: albumTitle)
                 completion()
             }
             return item
