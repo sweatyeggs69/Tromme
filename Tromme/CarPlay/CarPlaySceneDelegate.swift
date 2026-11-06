@@ -28,12 +28,18 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     var connectionObservationTask: Task<Void, Never>?
     var recentlyPlayedObservationTask: Task<Void, Never>?
     var favoritesObservationTask: Task<Void, Never>?
-    var homeSections: [CPListSection?] = [nil, nil, nil, nil]
+    var homeSettingsObservationTask: Task<Void, Never>?
+    var homeHubs: [Hub] = []
+    var homeHubsRevision = 0
+    var homeRecentTracks: [PlexMetadata] = []
+    var homeRowSections: [String: CPListSection] = [:]
+    var homeSettingsSignature: String?
     var lastRootSignature: String?
     var lastServerURI: String?
     var homeTemplate: CPListTemplate?
     var artistsTemplate: CPListTemplate?
     var albumsTemplate: CPListTemplate?
+    var playlistsTemplate: CPListTemplate?
     var contentGeneration = 0
 
     // MARK: - Scene Lifecycle
@@ -52,6 +58,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         startObservingPlayer()
         startObservingFavorites()
         startObservingRecentlyPlayed()
+        startObservingHomeSettings()
         Task { await AppContext.shared.serverConnection.reprobe() }
     }
 
@@ -67,6 +74,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         recentlyPlayedObservationTask = nil
         favoritesObservationTask?.cancel()
         favoritesObservationTask = nil
+        homeSettingsObservationTask?.cancel()
+        homeSettingsObservationTask = nil
         CPNowPlayingTemplate.shared.remove(self)
         if self.interfaceController === interfaceController {
             self.interfaceController = nil
@@ -76,6 +85,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         homeTemplate = nil
         artistsTemplate = nil
         albumsTemplate = nil
+        playlistsTemplate = nil
     }
 
     func updateRootTemplate() {
@@ -106,16 +116,22 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
             albumsList.tabTitle = "Albums"
             albumsList.tabImage = UIImage(systemName: "square.stack")
 
+            let playlistsList = makePlaylistsList()
+            playlistsList.tabTitle = "Playlists"
+            playlistsList.tabImage = UIImage(systemName: "music.note.list")
+
             homeTemplate = homeList
             artistsTemplate = artistsList
             albumsTemplate = albumsList
+            playlistsTemplate = playlistsList
 
-            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList])
+            let tabBar = CPTabBarTemplate(templates: [homeList, artistsList, albumsList, playlistsList])
             interfaceController.setRootTemplate(tabBar, animated: true, completion: nil)
         } else {
             homeTemplate = nil
             artistsTemplate = nil
             albumsTemplate = nil
+            playlistsTemplate = nil
             interfaceController.setRootTemplate(makeSignInTemplate(), animated: true, completion: nil)
         }
     }
@@ -125,6 +141,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         if let homeTemplate { loadHomeContent(into: homeTemplate) }
         if let artistsTemplate { loadArtists(into: artistsTemplate) }
         if let albumsTemplate { loadAlbums(into: albumsTemplate) }
+        if let playlistsTemplate { loadPlaylists(into: playlistsTemplate) }
     }
 
     func rootSignature() -> String {

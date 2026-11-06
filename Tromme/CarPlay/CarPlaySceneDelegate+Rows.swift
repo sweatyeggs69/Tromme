@@ -75,9 +75,9 @@ extension CarPlaySceneDelegate {
         }
     }
 
-    // MARK: - Recently Added List
+    // MARK: - Album and Artist Lists
 
-    func showRecentlyAddedList(_ albums: [PlexMetadata]) {
+    func showAlbumList(title: String, albums: [PlexMetadata]) {
         guard let server else { return }
         let items = albums.map { album -> CPListItem in
             let item = CPListItem(text: album.title, detailText: album.parentTitle ?? "")
@@ -94,7 +94,23 @@ extension CarPlaySceneDelegate {
             }
             return item
         }
-        let template = CPListTemplate(title: "Recently Added", sections: [CPListSection(items: items)])
+        let template = CPListTemplate(title: title, sections: [CPListSection(items: items)])
+        interfaceController?.pushTemplate(template, animated: true, completion: nil)
+    }
+
+    func showArtistList(title: String, artists: [PlexMetadata]) {
+        guard let server else { return }
+        let items = artists.prefix(CPListTemplate.maximumItemCount).map { artist -> CPListItem in
+            let item = CPListItem(text: artist.title, detailText: nil)
+            item.accessoryType = .disclosureIndicator
+            loadArtwork(path: artist.thumb, into: item, server: server, client: client)
+            item.handler = { [weak self] _, completion in
+                self?.showArtistAlbums(artist: artist)
+                completion()
+            }
+            return item
+        }
+        let template = CPListTemplate(title: title, sections: [CPListSection(items: items)])
         interfaceController?.pushTemplate(template, animated: true, completion: nil)
     }
 
