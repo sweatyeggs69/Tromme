@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppearanceSettingsView: View {
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
+    @AppStorage("lyricsTextSize") private var lyricsTextSize = "normal"
     @AppStorage(AnimatedArtworkEntitlement.settingKey) private var animatedArtworkEnabled = true
     @Environment(AudioPlayerService.self) private var player
     @State private var plus = PlusStore.shared
@@ -31,9 +32,17 @@ struct AppearanceSettingsView: View {
                 }
             }
 
-            Section("Lyrics") {
+            Section {
+                Picker("Text Size", selection: $lyricsTextSize) {
+                    Text("Normal").tag("normal")
+                    Text("Large").tag("large")
+                }
                 Toggle("Left Align Lyrics", isOn: $leftAlignLyrics)
                     .tint(.green)
+            } header: {
+                Text("Lyrics")
+            } footer: {
+                Text("Large shows lyrics in a bigger font.")
             }
         }
         .navigationTitle("Appearance")

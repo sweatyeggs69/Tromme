@@ -7,6 +7,7 @@ struct LyricsScrollView: View {
     var isDuo = false
 
     @AppStorage("leftAlignLyrics") private var leftAlignLyrics = false
+    @AppStorage("lyricsTextSize") private var lyricsTextSize = "normal"
 
     @State private var containerHeight: CGFloat = 400
     @State private var isUserScrolling = false
@@ -21,7 +22,20 @@ struct LyricsScrollView: View {
     private static let edgeFadeHeight: CGFloat = 80
 
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
-    private var lineFontSize: CGFloat { isPadLandscape ? (isDuo ? 46 : 56) : (isPad ? 44 : 32) }
+    private var isLarge: Bool { lyricsTextSize == "large" }
+    private var lineFontSize: CGFloat {
+        let base: CGFloat = isPadLandscape ? (isDuo ? 46 : 56) : (isPad ? 44 : 32)
+        return isLarge ? (base * 1.3).rounded() : base
+    }
+
+    private var plainLyricsFont: Font {
+        if isPadLandscape {
+            let base: CGFloat = isDuo ? 32 : 40
+            return .system(size: isLarge ? (base * 1.3).rounded() : base, weight: .semibold)
+        }
+        if isPad { return isLarge ? .system(size: 44, weight: .semibold) : .largeTitle.weight(.semibold) }
+        return isLarge ? .title.weight(.semibold) : .title2.weight(.semibold)
+    }
 
     @State private var currentIndex = 0
     @State private var isPositioned = false
@@ -139,7 +153,7 @@ struct LyricsScrollView: View {
                         Color.clear.frame(height: Self.edgeFadeHeight)
 
                         Text(plainLyrics)
-                            .font(isPadLandscape ? .system(size: isDuo ? 32 : 40, weight: .semibold) : (isPad ? .largeTitle.weight(.semibold) : .title2.weight(.semibold)))
+                            .font(plainLyricsFont)
                             .foregroundStyle(.white.opacity(0.85))
                             .multilineTextAlignment(leftAlignLyrics ? .leading : .center)
                             .frame(maxWidth: .infinity, alignment: leftAlignLyrics ? .leading : .center)

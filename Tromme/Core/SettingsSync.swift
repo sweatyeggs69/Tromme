@@ -18,6 +18,7 @@ final class SettingsSync {
         "downloadQuality",
         "animatedArtworkEnabled",
         "leftAlignLyrics",
+        "lyricsTextSize",
         "showFeaturedSection",
         "featuredBannerSize",
         "hideEmptySections",
