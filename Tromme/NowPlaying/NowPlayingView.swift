@@ -354,6 +354,11 @@ struct NowPlayingView: View {
                                         .frame(height: 80)
                                 }
                             )
+                            .overlay(alignment: .bottomTrailing) {
+                                if lyricsService.hasSynced {
+                                    LyricsOffsetButton()
+                                }
+                            }
                             .transition(.opacity)
                     } else {
                         NowPlayingEmptyState(

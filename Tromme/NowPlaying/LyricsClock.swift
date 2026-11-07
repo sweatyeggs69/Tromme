@@ -6,8 +6,6 @@ struct LyricsClock: Equatable {
     var isPlaying = false
     var advance: TimeInterval = 0
 
-    static let defaultAdvance: TimeInterval = 0.15
-
     private static let maxExtrapolation: TimeInterval = 1
 
     func time(at date: Date = .now) -> TimeInterval {

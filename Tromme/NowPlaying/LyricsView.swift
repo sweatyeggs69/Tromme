@@ -14,6 +14,9 @@ struct LyricsScrollView: View {
 
     @State private var clock = LyricsClock()
 
+    private var advance: TimeInterval {
+        Double(LyricsOffsetStore.shared.offset(for: player.currentTrack)) / 1000
+    }
 
     private static let edgeFadeHeight: CGFloat = 80
 
@@ -80,7 +83,7 @@ struct LyricsScrollView: View {
                         containerHeight = max(0, height)
                     }
                     .onAppear {
-                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: player.isPlaying, advance: LyricsClock.defaultAdvance)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: player.isPlaying, advance: advance)
                         jumpToActiveLine(proxy: proxy)
                     }
                     .onChange(of: containerHeight) { _, _ in
@@ -115,11 +118,15 @@ struct LyricsScrollView: View {
                             }
                     )
                     .onChange(of: player.currentTime) { _, time in
-                        clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying, advance: LyricsClock.defaultAdvance)
+                        clock = LyricsClock(anchorTime: time, anchorDate: .now, isPlaying: player.isPlaying, advance: advance)
+                        updateCurrentIndex()
+                    }
+                    .onChange(of: advance) { _, newAdvance in
+                        clock.advance = newAdvance
                         updateCurrentIndex()
                     }
                     .onChange(of: player.isPlaying) { _, isPlaying in
-                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: isPlaying, advance: LyricsClock.defaultAdvance)
+                        clock = LyricsClock(anchorTime: player.currentTime, anchorDate: .now, isPlaying: isPlaying, advance: advance)
                         guard isPlaying, isUserScrolling else { return }
                         scheduleScrollResume(proxy: proxy)
                     }
