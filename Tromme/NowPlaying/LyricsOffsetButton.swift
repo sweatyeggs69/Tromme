@@ -30,8 +30,7 @@ struct LyricsOffsetButton: View {
                 .disabled(!isAdjusted)
             }
         } label: {
-            Image(systemName: isAdjusted ? "clock.fill" : "clock")
-                .contentTransition(.symbolEffect(.replace))
+            Image(systemName: "clock")
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.glass)
