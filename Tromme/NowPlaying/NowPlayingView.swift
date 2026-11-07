@@ -415,41 +415,22 @@ struct NowPlayingView: View {
             .padding(.trailing, 12)
             .geometryGroup()
 
-            HStack(spacing: 10) {
-                Button {
-                    handleDownloadTap()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.white.opacity(actionBackgroundOpacity))
-                        downloadButtonIcon
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .frame(width: 34, height: 34)
-                    .contentShape(Circle())
+            Menu {
+                trackContextMenuItems
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(actionBackgroundOpacity))
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
                 }
-                .buttonStyle(.plain)
-                .disabled(player.currentTrack == nil || isDownloadInProgress)
-
-                Menu {
-                    trackContextMenuItems
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.white.opacity(actionBackgroundOpacity))
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 34, height: 34)
-                    .contentShape(Circle())
-                }
-                .tint(.primary)
-                .menuOrder(.fixed)
-                .buttonStyle(.plain)
+                .frame(width: 34, height: 34)
+                .contentShape(Circle())
             }
+            .tint(.primary)
+            .menuOrder(.fixed)
+            .buttonStyle(.plain)
         }
     }
 
@@ -535,30 +516,28 @@ struct NowPlayingView: View {
     }
 
     @ViewBuilder
-    private var downloadButtonIcon: some View {
-        let key = player.currentTrack?.ratingKey ?? ""
-        if downloadManager.isDownloaded(key) {
-            Image(systemName: "arrow.down.circle.fill")
-        } else {
-            switch downloadManager.transientStates[key] {
-            case .queued:
-                Image(systemName: "clock")
-            case .downloading:
-                ProgressView().tint(.white)
-            case .failed:
-                Image(systemName: "exclamationmark.circle")
-            case nil:
-                Image(systemName: "arrow.down.circle")
-            }
-        }
-    }
-
-    private func handleDownloadTap() {
-        guard let track = player.currentTrack else { return }
+    private func downloadMenuButton(for track: PlexMetadata) -> some View {
         if downloadManager.isDownloaded(track.ratingKey) {
-            showRemoveDownloadAlert = true
-        } else if let server = serverConnection.currentServer {
-            downloadManager.download(track: track, server: server, client: client)
+            Button("Remove Download", systemImage: "arrow.down.circle.fill", role: .destructive) {
+                showRemoveDownloadAlert = true
+            }
+        } else {
+            Button {
+                guard let server = serverConnection.currentServer else { return }
+                downloadManager.download(track: track, server: server, client: client)
+            } label: {
+                switch downloadManager.transientStates[track.ratingKey] {
+                case .queued:
+                    Label("Queued", systemImage: "clock")
+                case .downloading:
+                    Label("Downloading…", systemImage: "arrow.down.circle")
+                case .failed:
+                    Label("Retry Download", systemImage: "arrow.clockwise.circle")
+                case nil:
+                    Label("Download", systemImage: "arrow.down.circle")
+                }
+            }
+            .disabled(isDownloadInProgress)
         }
     }
 
@@ -571,6 +550,7 @@ struct NowPlayingView: View {
                 Label(isFavorited ? "Unfavorite" : "Favorite", systemImage: isFavorited ? "star.fill" : "star")
             }
             .disabled(isRating)
+            downloadMenuButton(for: track)
             Divider()
             if let album = PlexMetadata.albumStub(from: track) {
                 Button {
