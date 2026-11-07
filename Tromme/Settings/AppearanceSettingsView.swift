@@ -41,8 +41,6 @@ struct AppearanceSettingsView: View {
                     .tint(.green)
             } header: {
                 Text("Lyrics")
-            } footer: {
-                Text("Large shows lyrics in a bigger font.")
             }
         }
         .navigationTitle("Appearance")
